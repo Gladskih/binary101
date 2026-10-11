@@ -14,8 +14,10 @@ void test("formats default, hidden, required and unresolved versions", async () 
   const versions = (await parseElfSymbolVersions(fixture.file(), fixture.elf, [], 2))!;
   fixture.elf.symbolVersions = versions;
   assert.equal(createElfVersionedSymbolName(fixture.elf)(symbol), "example@LIB_1");
+  assert.equal(createElfVersionedSymbolName(fixture.elf)(symbol, "f(int)"), "f(int)@LIB_1");
   versions.symbols[1] = 2;
   assert.equal(createElfVersionedSymbolName(fixture.elf)(symbol), "example@@LIB_1");
+  assert.equal(createElfVersionedSymbolName(fixture.elf)(symbol, "f(int)"), "f(int)@@LIB_1");
   versions.symbols[1] = 3;
   assert.equal(createElfVersionedSymbolName(fixture.elf)({ ...symbol, shndx: 0 }), "example@LIB_2");
   versions.symbols[1] = 99;

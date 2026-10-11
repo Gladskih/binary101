@@ -20,8 +20,9 @@ void test("keeps encoded class names and RTTI base offsets in their labeled colu
   const bases = getItaniumRttiTableModel(analysis, "pe-itanium-bases")!;
 
   assert.deepEqual(types.columns.map(column => column.label),
-    ["RVA", "Encoded name", "Kind", "Hierarchy flags"]);
-  assert.deepEqual(types.rowAt(0)!.cells.map(cell => cell.html), ["0x1234", "4Type", "vmi", "0x3"]);
+    ["RVA", "Encoded name", "Kind", "Hierarchy flags", "Type"]);
+  assert.deepEqual(types.rowAt(0)!.cells.map(cell => cell.html),
+    ["0x1234", "4Type", "vmi", "0x3", "4Type"]);
   assert.equal(types.rowAt(1)!.cells[3]!.html, "—");
   assert.deepEqual(bases.columns.map(column => column.label),
     ["Type RVA", "Base RVA", "Access", "Offset kind", "Offset"]);

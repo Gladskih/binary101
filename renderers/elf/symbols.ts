@@ -5,6 +5,8 @@ import { escapeHtml } from "../../html-utils.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
 import { createElfVersionedSymbolName } from "./symbol-versions.js";
+import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
+import { renderSymbolName } from "../symbol-name.js";
 
 const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfParseResult): string => {
   if (!symbols.length) return `<div class="smallNote dim">${escapeHtml(title)}: none.</div>`;
@@ -16,7 +18,8 @@ const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfP
 
   const rows = slice
     .map(sym => {
-      const name = sym.name ? escapeHtml(versionedName(sym)) : "-";
+      const name = sym.name ? renderSymbolName(versionedName(sym),
+        versionedName(sym, getElfSymbolDisplayName(sym))) : "-";
       const bind = escapeHtml(sym.bindName);
       const type = escapeHtml(sym.typeName);
       const vis = escapeHtml(sym.visibilityName);

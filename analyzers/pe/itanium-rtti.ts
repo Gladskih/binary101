@@ -1,5 +1,6 @@
 import type { FileRangeReader } from "../file-range-reader.js";
 import { discoverItaniumRtti } from "../itanium-rtti/discovery.js";
+import { decodeItaniumRttiTypeNames } from "../itanium-rtti/type-name.js";
 import type { ItaniumRttiAnalysis, ItaniumRttiImage } from "../itanium-rtti/types.js";
 import type {
   PeBaseRelocationBlock, PeBaseRelocationEntry, PeBaseRelocationResult
@@ -72,7 +73,9 @@ const readAnalysis = async (
   if (!sites?.length || !image) return null;
   try {
     await indexPointers(image, sites, core);
-    return await discoverItaniumRtti(image);
+    const analysis = await discoverItaniumRtti(image);
+    if (analysis) await decodeItaniumRttiTypeNames(analysis);
+    return analysis;
   } catch {
     return { types: [], warnings: ["Itanium RTTI analysis could not read file data."] };
   }

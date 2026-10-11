@@ -15,6 +15,32 @@ import {
   createImportNameThunksFile, createPeImportNamesFile
 } from "../../../../fixtures/pe-import-names-file.js";
 
+void test("PE imports decode Itanium names while preserving their linker identity", async () => {
+  const decode = createImportFunctionNameDecoder(assert.fail);
+  const symbol = { name: "_Z1fi" };
+
+  await decode(symbol);
+
+  assert.equal(getImportFunctionDisplayName(symbol), "f(int)");
+  assert.deepEqual(symbol, { name: "_Z1fi" });
+});
+
+void test("failed Itanium loading warns once while MSVC imports still decode", async () => {
+  const warnings: string[] = [];
+  const decode = createImportFunctionNameDecoder(message => warnings.push(message), undefined,
+    () => Promise.reject(new Error("offline")));
+  const itanium = { name: "_Z1fi" };
+  const microsoft = { name: "?f@@YAHH@Z" };
+
+  await decode(itanium);
+  await decode({ name: "_Z1fv" });
+  await decode(microsoft);
+
+  assert.equal(getImportFunctionDisplayName(itanium), "_Z1fi");
+  assert.equal(getImportFunctionDisplayName(microsoft), "int __cdecl f(int)");
+  assert.deepEqual(warnings, ["Import name demangling unavailable: offline"]);
+});
+
 void test("import presentation leaves exact raw names, metadata and ordinal identity intact", async () => {
   const warnings: string[] = [];
   const decode = createImportFunctionNameDecoder(message => warnings.push(message));

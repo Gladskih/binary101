@@ -8,6 +8,12 @@ export default defineConfig({
     name: "disassembler-notices",
     generateBundle() {
       for (const [packageName, names] of Object.entries({
+        "llvm-itanium-demangle": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
+          "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
+          "licenses/libcxx.txt", "licenses/libcxxabi.txt", "licenses/libunwind.txt",
+          "licenses/compiler-rt.txt", "licenses/musl.txt", "upstream.json"
+        ],
         "llvm-msvc-demangle": [
           "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
           "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
@@ -37,6 +43,9 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
+      "#itanium-demangler-loader": fileURLToPath(
+        new URL("./analyzers/itanium-demangle/load.browser.ts", import.meta.url)
+      ),
       "#msvc-demangler-loader": fileURLToPath(
         new URL("./analyzers/pe/msvc-demangle/load.browser.ts", import.meta.url)
       ),

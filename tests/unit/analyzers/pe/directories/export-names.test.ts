@@ -8,6 +8,39 @@ import {
   createPeExportNameDecoder, getPeExportDisplayName, isPeExportData
 } from "../../../../../analyzers/pe/directories/export-names.js";
 
+void test("Itanium exports distinguish data, functions, thunks and invalid names", async () => {
+  const issues: string[] = [];
+  const decode = createPeExportNameDecoder(issues);
+  const names = ["_Z1fi", "_ZTVN4demo6WidgetE", "_ZThn8_N1A1fEv", "_Z4294967297Av"];
+
+  await decode(names, 0);
+  assert.equal(isPeExportData(names), false);
+  await decode(names, 2);
+  assert.equal(isPeExportData(names), false);
+  await decode(names, 3);
+  assert.equal(getPeExportDisplayName(names, 3), names[3]);
+  await decode(names, 1);
+  assert.equal(isPeExportData(names), true);
+  assert.equal(getPeExportDisplayName(names, 0), "f(int)");
+  assert.equal(getPeExportDisplayName(names, 1), "vtable for demo::Widget");
+  assert.equal(names[0], "_Z1fi");
+  assert.deepEqual(issues, []);
+});
+
+void test("failed Itanium exports preserve names and report a visible warning", async () => {
+  const issues: string[] = [];
+  const names = ["_Z1fi", "_Z1fv"];
+  const decode = createPeExportNameDecoder(issues, undefined,
+    () => Promise.reject(new Error("offline")));
+
+  await decode(names, 0);
+  await decode(names, 1);
+
+  assert.deepEqual(issues, ["Export name demangling unavailable: offline"]);
+  assert.equal(getPeExportDisplayName(names, 0), "_Z1fi");
+  assert.equal(isPeExportData(names), false);
+});
+
 const stubDemangler = (result: DemangleWithTextResult): Demangler => ({
   demangle: () => result, demangleType: () => result,
   demangleWithText: () => result, demangleTypeWithText: () => result

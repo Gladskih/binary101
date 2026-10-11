@@ -1,4 +1,5 @@
 import type { ItaniumRttiAnalysis } from "../../analyzers/itanium-rtti/types.js";
+import { getItaniumRttiTypeName } from "../../analyzers/itanium-rtti/type-name.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from
@@ -25,9 +26,9 @@ export const getItaniumRttiTableModel = (
   if (!analysis) return null;
   switch (id) {
     case "pe-itanium-types": return tableModel(id,
-      ["RVA", "Encoded name", "Kind", "Hierarchy flags"],
+      ["RVA", "Encoded name", "Kind", "Hierarchy flags", "Type"],
       analysis.types.map(type => [address(type.address), type.name, type.kind,
-        type.flags == null ? "—" : address(type.flags)]));
+        type.flags == null ? "—" : address(type.flags), getItaniumRttiTypeName(type)]));
     case "pe-itanium-bases": return tableModel(id,
       ["Type RVA", "Base RVA", "Access", "Offset kind", "Offset"],
       analysis.types.flatMap(type => type.bases.map(base => [
@@ -42,7 +43,7 @@ export const renderItaniumRtti = (analysis: ItaniumRttiAnalysis | null | undefin
   if (!analysis) return "";
   return renderPeSectionStart("Itanium C++ RTTI", `${analysis.types.length} types`) +
     `<p class="smallNote">Conservative subset: class RTTI with relocation-backed pointers ` +
-    `and a closed runtime type graph. Names retain their ABI encoding. ` +
+    `and a closed runtime type graph. Decoded types appear beside their ABI names. ` +
     `User vtables and virtual methods are not inferred.</p>` +
     analysis.warnings.map(warning => `<p class="smallNote">${escapeHtml(warning)}</p>`).join("") +
     [["pe-itanium-types", "Class types"], ["pe-itanium-bases", "Direct bases"]].map(([id, label]) =>

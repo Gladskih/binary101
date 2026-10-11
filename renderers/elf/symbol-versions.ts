@@ -4,19 +4,19 @@ import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-sectio
 
 export const createElfVersionedSymbolName = (
   elf: ElfParseResult
-): ((symbol: ElfDynamicSymbol) => string) => {
+): ((symbol: ElfDynamicSymbol, baseName?: string) => string) => {
   const definitions = new Map(elf.symbolVersions?.definitions.map(item => [item.index, item.names[0]]));
   const requirements = new Map(elf.symbolVersions?.requirements.flatMap(item => item.versions)
     .map(item => [item.index & 0x7fff, item.name]));
-  return symbol => {
+  return (symbol, baseName = symbol.name) => {
   const raw = elf.symbolVersions?.symbols[symbol.index];
-  if (raw == null) return symbol.name;
+  if (raw == null) return baseName;
   // GNU versym: high bit marks a non-default version; low 15 bits are the index.
   // https://sourceware.org/binutils/docs/binutils/readelf.html (--symbols)
   const index = raw & 0x7fff;
-  if (index <= 1) return symbol.name;
+  if (index <= 1) return baseName;
   const name = definitions.get(index) ?? requirements.get(index) ?? `#${index}`;
-  return `${symbol.name}${definitions.has(index) && !(raw & 0x8000) && symbol.shndx !== 0 ? "@@" : "@"}${name}`;
+  return `${baseName}${definitions.has(index) && !(raw & 0x8000) && symbol.shndx !== 0 ? "@@" : "@"}${name}`;
   };
 };
 

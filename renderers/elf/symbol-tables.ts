@@ -4,6 +4,8 @@ import type { ElfSymbolTable } from "../../analyzers/elf/symbol-tables.js";
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
+import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
+import { renderSymbolName } from "../symbol-name.js";
 
 // gABI 5: st_info binding/type nibbles, st_other visibility, reserved section indices.
 // https://gabi.xinuos.com/elf/05-symtab.html
@@ -30,7 +32,9 @@ export const createElfSymbolTableModel = (table: ElfSymbolTable,
     columns: ["Index", "Name", "Bind", "Type", "Visibility", "Value", "Size", "Section"]
       .map((label, index) => ({ label, className: [0, 5, 6, 7].includes(index) ? "peNumeric" : "" })),
     rowAt: index => table.entries[index] ? {
-      cells: symbolValues(table, index, names).map((value, column) => ({ html: escapeHtml(value),
+      cells: symbolValues(table, index, names).map((value, column) => ({ html: column === 1
+        ? renderSymbolName(value, getElfSymbolDisplayName(table.entries[index]!) || value)
+        : escapeHtml(value),
         sortValue: value, className: [0, 5, 6, 7].includes(column) ? "peNumeric" : "" }))
     } : null,
     sortValueAt: (index, column) => symbolValues(table, index, names)[column] ?? ""

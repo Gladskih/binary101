@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { isPeWindowsParseResult, parsePe } from "../../analyzers/pe/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { getItaniumRttiTypeName } from "../../analyzers/itanium-rtti/type-name.js";
 
 const compiler = process.env["MINGW_CXX"] ?? "C:/msys64/ucrt64/bin/g++.exe";
 const assertRttiOnlyType = (
@@ -53,6 +54,7 @@ for (const optimization of ["-O0", "-O2", "-O3"]) {
       assert.ok(longName && longName.length > 511);
       assertRttiOnlyType(parsed, bytes, map, longName, null);
       const types = new Map(parsed.itaniumRtti.types.map(type => [type.name, type]));
+      assert.equal(getItaniumRttiTypeName(types.get("7Derived")!), "Derived");
       assert.equal(types.get("4Base")?.kind, "class");
       assert.equal(types.get("7Derived")?.kind, "si");
       assert.equal(types.get("8Multiple")?.bases.length, 2);

@@ -7,6 +7,8 @@ import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { formatElfHex } from "./value-format.js";
 import { ELF_FILE_TYPE, ELF_SYMBOL_INDEX } from "../../analyzers/elf/abi-constants.js";
+import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
+import { renderSymbolName } from "../symbol-name.js";
 
 const targetText = (sections: Map<number, ElfSectionHeader>, entry: ElfRelocation): string => {
   const target = entry.target;
@@ -46,7 +48,9 @@ export const createElfRelocationTableModel = (elf: ElfParseResult): PagedSortabl
       return entry ? { cells: values.map((read, column) => {
         const value = read(entry);
         return {
-          html: escapeHtml(typeof value === "bigint" ?
+          html: column === 4 && entry.symbol?.name ? renderSymbolName(String(value),
+            `#${entry.symbolIndex} ${getElfSymbolDisplayName(entry.symbol)}`) :
+            escapeHtml(typeof value === "bigint" ?
             (value < 0n ? `-0x${(-value).toString(16)}` : formatElfHex(value)) : value),
           sortValue: String(value), className: [2, 5, 7].includes(column) ? "peNumeric" : ""
         };

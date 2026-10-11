@@ -25,6 +25,7 @@ import { parseElfLsda } from "./lsda.js";
 import { readElfNativeAotGc } from "./native-aot-gc.js";
 import { parseElfArmEhabi } from "./arm-ehabi.js";
 import { parseGoBuildInfo } from "./go-build-info.js";
+import { decodeElfSymbolNames } from "./symbol-names.js";
 
 const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult,
   key: Key, value: ElfParseResult[Key] | null): void => {
@@ -57,6 +58,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
   retainMetadata(result, "dynSymbols", symbols);
   validateElfHashSymbols(hashes, symbols, result.is64 ? 64 : 32);
   await parseLinkingTables(file, result, entries, cache, layout, logicalSizes);
+  await decodeElfSymbolNames(result);
   if (result.relocations) result.relocations.issues.unshift(...issues);
   else result.issues.push(...issues);
   if (!issues.length) retainMetadata(result, "nativeAot", await analyzeElfNativeAot(
