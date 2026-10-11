@@ -2,7 +2,8 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { IcedInstructionObject, IcedX86Module } from "../../x86/disassembly-iced.js";
-import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
+import { addDecodedInstructionRange, mergeDecodedInstructionRanges,
+  overlapsDecodedInstructions, type DecodedInstructionRange } from "./code-string-instruction-ranges.js";
 import type { RvaToOffset } from "../types.js";
 import {
   peApiStringAddressToRva,
@@ -22,11 +23,6 @@ import type {
 
 type PendingCodeStringReference = PeApiStringAddressCandidate & {
   instructionRvas: Set<number>;
-};
-
-type DecodedInstructionRange = {
-  startRva: number;
-  endRva: number;
 };
 
 export type PeCodeStringReferenceCollector = {
@@ -141,58 +137,6 @@ const mergeInstructionRvas = (
 const apiReferenceKeys = (
   references: readonly PeApiStringReference[]
 ): Set<string> => new Set(references.map(peApiStringReferenceKey));
-
-const addDecodedInstructionRange = (
-  ranges: DecodedInstructionRange[],
-  instructionRva: number,
-  length: number
-): void => {
-  if (!Number.isSafeInteger(length) || length <= 0) return;
-  const endRva = instructionRva + length;
-  if (endRva <= instructionRva || endRva > PE_RVA_EXCLUSIVE_LIMIT) return;
-  ranges.push({ startRva: instructionRva, endRva });
-};
-
-const mergeDecodedInstructionRanges = (
-  ranges: readonly DecodedInstructionRange[]
-): DecodedInstructionRange[] => {
-  const out: DecodedInstructionRange[] = [];
-  const ordered = [...ranges].sort((left, right) =>
-    left.startRva - right.startRva || left.endRva - right.endRva);
-  for (const range of ordered) {
-    const previous = out.at(-1);
-    if (!previous || range.startRva > previous.endRva) {
-      out.push({ ...range });
-      continue;
-    }
-    previous.endRva = Math.max(previous.endRva, range.endRva);
-  }
-  return out;
-};
-
-const overlapsDecodedInstructions = (
-  ranges: readonly DecodedInstructionRange[],
-  rva: number,
-  byteLength: number
-): boolean => {
-  const endRva = rva + byteLength;
-  if (endRva <= rva || endRva > PE_RVA_EXCLUSIVE_LIMIT) return true;
-  let low = 0;
-  let high = ranges.length - 1;
-  while (low <= high) {
-    const index = Math.floor((low + high) / 2);
-    const range = ranges[index];
-    if (!range) return false;
-    if (range.endRva <= rva) {
-      low = index + 1;
-    } else if (range.startRva >= endRva) {
-      high = index - 1;
-    } else {
-      return true;
-    }
-  }
-  return false;
-};
 
 const isUsefulCodeString = (decoded: PeApiStringDecoded): boolean =>
   [...decoded.text].length >= MINIMUM_CODE_STRING_CHARS &&
