@@ -73,7 +73,7 @@
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
-    "iced-x86-disasm": "^0.1.2",
+    "iced-x86-disasm": "^0.1.3",
     "llvm-aarch64-disasm": "^0.2.0",
     "llvm-itanium-demangle": "0.1.0",
     "llvm-msvc-demangle": "0.2.0",
