@@ -41,18 +41,20 @@ void test("renderImportFunctionTable only adds paging controls above the inline 
 });
 
 void test("import table displays demangled signatures with literal raw names and raw sorting", async () => {
+  // Cover uppercase tag names and mixed-case names with attributes.
+  // https://codeql.github.com/codeql-query-help/javascript/js-bad-tag-filter/
   const functions = [{ hint: 1, name: "??$square@H@demo@@YAHH@Z" },
-    { name: "Literal&lt;<script>" }, { ordinal: 9 }, {}];
+    { name: "Literal&lt;<script><SCRIPT><ScRiPt src=x>" }, { ordinal: 9 }, {}];
   await createImportFunctionNameDecoder(assert.fail)(functions[0]!);
 
   const html = renderImportFunctionTable(functions, "cpp-imports", 0x2000, new Map(), 4);
 
+  assert.doesNotMatch(html, /<script\b/i);
   assert.match(html, /<code class="winapiMetadataSignature">int __cdecl demo::square&lt;int>\(int\)<\/code>/);
   assert.match(html, /<td[^>]*>\?\?\$square@H@demo@@YAHH@Z<\/td>/);
   assert.match(html, /MSVC C\+\+ \(LLVM\)/);
-  assert.match(html, /Literal&amp;lt;&lt;script>/);
+  assert.match(html, /Literal&amp;lt;&lt;script>&lt;SCRIPT>&lt;ScRiPt src=x>/);
   assert.match(html, /ORD 9/);
-  assert.doesNotMatch(html, /<script>/);
   const model = createImportFunctionTableModel(functions, "cpp-imports", 0, new Map(), 4);
   assert.equal(model.sortValueAt!(0, 2), "??$square@H@demo@@YAHH@Z");
   assert.equal(model.sortValueAt!(0, 3), "int __cdecl demo::square<int>(int)");

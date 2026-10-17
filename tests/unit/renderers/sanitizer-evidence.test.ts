@@ -31,11 +31,14 @@ void test("renders a semantic table and distinguishes runtime presence from exec
 });
 
 void test("escapes evidence and source text", () => {
+  // Cover uppercase tag names and mixed-case names with attributes.
+  // https://codeql.github.com/codeql-query-help/javascript/js-bad-tag-filter/
   const html = renderSanitizerEvidence([{ tool: "ASan", kind: "reference",
-    source: "<script>unsafe</script>", name: "<img src=x onerror=alert(1)>" }]);
-  assert.doesNotMatch(html, /<script>|<img/);
-  assert.match(html, /&lt;script>/);
-  assert.match(html, /&lt;img/);
+    source: "<script>unsafe</script><SCRIPT><ScRiPt src=x>",
+    name: "<img src=x onerror=alert(1)><IMG><ImG src=x>" }]);
+  assert.doesNotMatch(html, /<(?:script|img)\b/i);
+  assert.match(html, /&lt;script>unsafe&lt;\/script>&lt;SCRIPT>&lt;ScRiPt src=x>/);
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)>&lt;IMG>&lt;ImG src=x>/);
 });
 
 void test("explains that coverage instrumentation is not an error detector", () => {

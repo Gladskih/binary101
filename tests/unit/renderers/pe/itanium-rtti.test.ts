@@ -43,17 +43,19 @@ void test("omits absent RTTI and unrelated tables", () => {
 });
 void test("renders class names, bases and warnings without vtables or methods", async () => {
   const analysis = (await discoverItaniumRtti(createItaniumFixture().image))!;
-  analysis.types[0]!.name = "<script>";
+  // Cover uppercase tag names and mixed-case names with attributes.
+  // https://codeql.github.com/codeql-query-help/javascript/js-bad-tag-filter/
+  analysis.types[0]!.name = "<script><SCRIPT><ScRiPt src=x>";
   analysis.types[0]!.bases.push({ typeAddress: 1, offset: 16, isPublic: false, isVirtual: false });
   analysis.warnings.push("<failure>");
   const html = renderItaniumRtti(analysis);
+  assert.doesNotMatch(html, /<script\b/i);
   assert.match(html, /Itanium C\+\+ RTTI/);
-  assert.match(html, /&lt;script/);
+  assert.match(html, /&lt;script>&lt;SCRIPT>&lt;ScRiPt src=x>/);
   assert.match(html, /&lt;failure/);
   assert.match(html, /Virtual: vtable slot/);
   assert.match(html, /Non-public/);
   assert.match(html, /peNumeric/);
-  assert.doesNotMatch(html, /<script>/);
   assert.doesNotMatch(html, /Function prefix|verified prefix/);
   assert.doesNotMatch(html, /Offset to top|Primary vtables|Address point RVA/);
   assert.equal(getItaniumRttiTableModel(analysis, "pe-itanium-vtables"), null);
