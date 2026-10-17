@@ -20,6 +20,18 @@ export default defineConfig({
           "licenses/libcxx.txt", "licenses/libcxxabi.txt", "licenses/libunwind.txt",
           "licenses/compiler-rt.txt", "licenses/musl.txt", "upstream.json"
         ],
+        "llvm-rust-demangle": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
+          "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
+          "licenses/libcxx.txt", "licenses/libcxxabi.txt", "licenses/libunwind.txt",
+          "licenses/compiler-rt.txt", "licenses/musl.txt", "upstream.json"
+        ],
+        "llvm-dlang-demangle": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
+          "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
+          "licenses/libcxx.txt", "licenses/libcxxabi.txt", "licenses/libunwind.txt",
+          "licenses/compiler-rt.txt", "licenses/musl.txt", "upstream.json"
+        ],
         "llvm-aarch64-disasm": [
           "LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json", "licenses/LLVM.txt",
           "licenses/compiler-rt.txt", "licenses/emscripten-AUTHORS.txt",
@@ -51,6 +63,9 @@ export default defineConfig({
       ),
       "#msvc-demangler-loader": fileURLToPath(
         new URL("./analyzers/pe/msvc-demangle/load.browser.ts", import.meta.url)
+      ),
+      "#rust-dlang-demangler-loader": fileURLToPath(
+        new URL("./analyzers/symbol-demangle/load.browser.ts", import.meta.url)
       ),
       "#aarch64-disassembler-loader": fileURLToPath(
         new URL("./analyzers/aarch64/load-disassembler.browser.ts", import.meta.url)

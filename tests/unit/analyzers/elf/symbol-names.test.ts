@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeElfSymbolNames, getElfSymbolDisplayName } from
+import { decodeElfSymbolNames, getElfSymbolDisplayName, isElfSymbolData } from
   "../../../../analyzers/elf/symbol-names.js";
 import { parseElf } from "../../../../analyzers/elf/index.js";
 import { parseElfSymbolTables } from "../../../../analyzers/elf/symbol-tables.js";
 import { loadItaniumDemangler } from "../../../../analyzers/itanium-demangle/load.node.js";
 import { relocationFixture, relocationStorage } from "../../../fixtures/elf-relocations.js";
 import { createElfItaniumFile } from "../../../fixtures/elf-itanium-file.js";
+import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { renderElfSymbols } from "../../../../renderers/elf/symbols.js";
 import { createElfSymbolTableModel } from "../../../../renderers/elf/symbol-tables.js";
 import { createElfRelocationTableModel } from "../../../../renderers/elf/relocations.js";
@@ -22,6 +23,44 @@ void test("full ELF parsing decodes dynamic symbols and renders both names", asy
   renderElfSymbols(elf, html);
   assert.match(html.join(""), /<code>f\(int\)<\/code><br><code class="dim">_Z1fi<\/code>/);
 });
+
+void test("ELF imports and exports decode Rust v0 and D with original linker names", async () => {
+  const fixture = createElfMetadataFile(undefined, "_RNvC1a4main", "_D3foo3barf");
+  const elf = await parseElf(new File([Uint8Array.from(fixture.file.data)], "languages.so"));
+
+  assert.ok(elf?.dynSymbols);
+  assert.equal(elf.dynSymbols.importSymbols[0]!.name, "_RNvC1a4main");
+  assert.equal(getElfSymbolDisplayName(elf.dynSymbols.importSymbols[0]!), "a::main");
+  assert.equal(elf.dynSymbols.exportSymbols[0]!.name, "_D3foo3barf");
+  assert.equal(getElfSymbolDisplayName(elf.dynSymbols.exportSymbols[0]!), "float foo.bar");
+  assert.equal(isElfSymbolData(elf.dynSymbols.importSymbols[0]!), false);
+  assert.equal(isElfSymbolData(elf.dynSymbols.exportSymbols[0]!), true);
+});
+
+for (const [name, text] of [["_RNvC1a4main", "a::main"], ["_D3foo3barf", "float foo.bar"]] as const) {
+  void test(`ELF static and relocation symbol names include ${name} with raw sorting`, async () => {
+    const fixture = relocationFixture();
+    fixture.elf.symbolTables = await parseElfSymbolTables(fixture.file(), fixture.elf);
+    const entry = fixture.elf.symbolTables[0]!.entries[1]!;
+    entry.name = name;
+    const reference = { name, value: 0n, sectionIndex: 1 };
+    fixture.elf.relocations = { tables: [{ offset: 0, size: 24, entrySize: 24, encoding: "RELA",
+      sources: [".rela.text"], sectionIndex: 4, symbolTableIndex: 2, targetSectionIndex: 1 }],
+    entries: [{ tableIndex: 0, recordOffset: 0,
+      offset: 0n, type: 1, symbolIndex: 1, symbol: reference, addend: 0n, target: null }], issues: [] };
+
+    await decodeElfSymbolNames(fixture.elf, assert.fail);
+
+    assert.equal(getElfSymbolDisplayName(entry), text);
+    assert.equal(getElfSymbolDisplayName(reference), text);
+    const symbols = createElfSymbolTableModel(fixture.elf.symbolTables[0]!);
+    assert.ok(symbols.rowAt(1)!.cells[1]!.html.includes(text));
+    assert.equal(symbols.sortValueAt(1, 1), name);
+    const relocations = createElfRelocationTableModel(fixture.elf);
+    assert.ok(relocations.rowAt(0)!.cells[4]!.html.includes(text));
+    assert.equal(relocations.sortValueAt(0, 4), "#1 " + name);
+  });
+}
 
 void test("static symbols and relocation references share parsing but retain raw sorting", async () => {
   const fixture = relocationFixture();

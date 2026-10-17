@@ -2,7 +2,9 @@
 
 import { createHeadersOnlyPeWithAlignedImageSize } from "./minimal-pe-headers.js";
 
-export const createPeImportNamesFile = (): Uint8Array<ArrayBuffer> => {
+export const createPeImportNamesFile = (
+  mangledName = "??$square@H@demo@@YAHH@Z"
+): Uint8Array<ArrayBuffer> => {
   const bytes = new Uint8Array(8192);
   bytes.set(createHeadersOnlyPeWithAlignedImageSize());
   const view = new DataView(bytes.buffer);
@@ -25,7 +27,7 @@ export const createPeImportNamesFile = (): Uint8Array<ArrayBuffer> => {
   const encoder = new TextEncoder();
   bytes.set(encoder.encode("eager.dll\0"), 700);
   bytes.set(encoder.encode("delayed.dll\0"), 720);
-  const names = ["Sleep", "??$square@H@demo@@YAHH@Z", "?f@@YAHH@Ztail", "Literal&lt;<"];
+  const names = ["Sleep", mangledName, "?f@@YAHH@Ztail", "Literal&lt;<"];
   names.forEach((name, index) => {
     view.setUint16(4096 + index * 128, index, true);
     bytes.set(encoder.encode(`${name}\0`), 4098 + index * 128);

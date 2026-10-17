@@ -1,6 +1,7 @@
 "use strict";
 
-import { getImportFunctionDisplayName } from "../../analyzers/pe/imports/function-name.js";
+import { getImportFunctionDisplayName, getImportFunctionNameLanguage } from
+  "../../analyzers/pe/imports/function-name.js";
 import { getIatSlotRva } from "../../analyzers/pe/disassembly/import-references.js";
 import { escapeHtml } from "../../html-utils.js";
 import type { PeImportMetadataEntry } from "../../pe-import-metadata-schema.js";
@@ -57,7 +58,7 @@ const renderImportApi = (fn: ImportFunctionRow): string => {
   const display = getImportFunctionDisplayName(fn);
   if (!display || display === fn.name) return "-";
   return `<code class="winapiMetadataSignature">${importNameText(display)}</code>` +
-    `<span class="winapiMetadataConvention">MSVC C++ (LLVM)</span>`;
+    `<span class="winapiMetadataConvention">${escapeHtml(getImportFunctionNameLanguage(fn))} (LLVM)</span>`;
 };
 
 const importNameSortValue = (fn: ImportFunctionRow): string =>

@@ -1,5 +1,7 @@
 "use strict";
 
+import { getCoffSymbolDisplayName } from "../../analyzers/coff/symbol-names.js";
+
 import { hex, humanSize } from "../../binary-utils.js";
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import { COFF_SYMBOL_RECORD_BYTE_LENGTH } from "../../analyzers/coff/layout.js";
@@ -108,9 +110,15 @@ const renderHeader = (info: CoffDebugInfo, out: string[]): void => {
   out.push(`</dl>`);
 };
 
+const renderSymbolName = (symbol: CoffSymbol): string => {
+  const display = getCoffSymbolDisplayName(symbol);
+  return display === symbol.name ? escapeHtml(symbol.name) :
+    `<code>${escapeHtml(display)}</code><br><code class="dim">${escapeHtml(symbol.name)}</code>`;
+};
+
 const renderSymbolCells = (symbol: CoffSymbol): PagedSortableTableCell[] => [
   { html: String(symbol.index), sortValue: String(symbol.index) },
-  { html: escapeHtml(symbol.name), sortValue: symbol.name },
+  { html: renderSymbolName(symbol), sortValue: symbol.name },
   { html: hex(symbol.value, 8), sortValue: String(symbol.value) },
   { html: String(symbol.sectionNumber), sortValue: String(symbol.sectionNumber) },
   { html: escapeHtml(getTypeName(symbol.type)), sortValue: getTypeName(symbol.type) },

@@ -1,13 +1,13 @@
 "use strict";
 
-import { createPeSymbolNameDecoder } from "../symbol-name.js";
+import { createPeSymbolNameDecoder, type PeSymbolName } from "../symbol-name.js";
 import type { Demangler } from "llvm-msvc-demangle";
 import type { Demangler as ItaniumDemangler } from "llvm-itanium-demangle";
 import { loadMsvcDemangler } from "#msvc-demangler-loader";
 import { loadItaniumDemangler } from "#itanium-demangler-loader";
 
 // Keep linker names intact; presentation follows each parsed function through lazy rendering.
-const displayNames = new WeakMap<{ name?: string }, string>();
+const displayNames = new WeakMap<{ name?: string }, PeSymbolName>();
 export type DecodeImportFunctionName = (fn: { name?: string }) => Promise<void>;
 
 export const createImportFunctionNameDecoder = (
@@ -20,9 +20,12 @@ export const createImportFunctionNameDecoder = (
   );
   return async fn => {
     const decoded = await decode(fn.name);
-    if (decoded !== null) displayNames.set(fn, decoded.text);
+    if (decoded !== null) displayNames.set(fn, decoded);
   };
 };
 
 export const getImportFunctionDisplayName = (fn: { name?: string }): string =>
-  displayNames.get(fn) ?? fn.name ?? "";
+  displayNames.get(fn)?.text ?? fn.name ?? "";
+
+export const getImportFunctionNameLanguage = (fn: { name?: string }): string | undefined =>
+  displayNames.get(fn)?.language;

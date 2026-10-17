@@ -282,9 +282,10 @@ const writePayloadSections = (bytes: Uint8Array, layout: ElfMetadataFixtureLayou
   bytes.set(new Uint8Array(20).map((_, index) => index & 0xff), layout.offsets.note + 16);
 };
 export const createElfMetadataFile = (
-  needed: string[] = ["libc.so.6", "libm.so.6"]
+  needed: string[] = ["libc.so.6", "libm.so.6"],
+  importSymbol = "puts", exportSymbol = "my_func"
 ): ElfMetadataFixture => {
-  const names = createFixtureNames(needed);
+  const names = { ...createFixtureNames(needed), importSymbol, exportSymbol };
   const layout = createElfMetadataLayout(names);
   const bytes = new Uint8Array(layout.fileSize).fill(0);
   const dataView = new DataView(bytes.buffer);

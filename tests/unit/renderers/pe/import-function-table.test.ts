@@ -9,6 +9,21 @@ import {
   renderImportFunctionTable
 } from "../../../../renderers/pe/import-function-table.js";
 
+for (const [name, text, language] of [["_RNvC1a4main", "a::main", "Rust v0"],
+  ["_D3foo3barf", "float foo.bar", "D"], ["_Z1fi", "f(int)", "Itanium C++"]] as const) {
+  void test(`import table labels ${language} using the decoder that succeeded`, async () => {
+    const fn = { name };
+    await createImportFunctionNameDecoder(assert.fail)(fn);
+
+    const model = createImportFunctionTableModel([fn], "languages", 0, new Map(), 4);
+
+    assert.ok(model.rowAt(0)!.cells[3]!.html.includes(text));
+    assert.ok(model.rowAt(0)!.cells[3]!.html.includes(language + " (LLVM)"));
+    assert.equal(model.sortValueAt!(0, 2), name);
+    assert.equal(model.sortValueAt!(0, 3), text);
+  });
+}
+
 void test("renderImportFunctionTable only adds paging controls above the inline limit", () => {
   const smallHtml = renderImportFunctionTable(
     [{ hint: 1, name: "Sleep" }],

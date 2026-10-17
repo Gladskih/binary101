@@ -1,18 +1,24 @@
 import type { Demangler } from "llvm-itanium-demangle";
 import { loadItaniumDemangler } from "#itanium-demangler-loader";
-import { createItaniumNameDecoder, type ItaniumName } from "../itanium-demangle/name-decoder.js";
+import type { Demangler as RustDemangler } from "llvm-rust-demangle";
+import type { Demangler as DlangDemangler } from "llvm-dlang-demangle";
+import { loadRustDemangler, loadDlangDemangler } from "#rust-dlang-demangler-loader";
+import { createSymbolNameDecoder, type SymbolName } from "../symbol-demangle/name-decoder.js";
 import type { ElfParseResult } from "./types.js";
 
 // Sidecar presentation keeps linker identity intact for versions, hashes and relocations.
-const displayNames = new WeakMap<{ name: string }, ItaniumName>();
+const displayNames = new WeakMap<{ name: string }, SymbolName>();
 
 export const decodeElfSymbolNames = async (
-  elf: ElfParseResult, loadDemangler: () => Promise<Demangler> = loadItaniumDemangler
+  elf: ElfParseResult, loadDemangler: () => Promise<Demangler> = loadItaniumDemangler,
+  loadRust: () => Promise<RustDemangler> = loadRustDemangler,
+  loadDlang: () => Promise<DlangDemangler> = loadDlangDemangler
 ): Promise<void> => {
-  const decoder = createItaniumNameDecoder(
-    message => elf.issues.push("ELF symbol demangling unavailable: " + message), loadDemangler);
+  const decoder = createSymbolNameDecoder(
+    message => elf.issues.push("ELF symbol demangling unavailable: " + message),
+    loadDemangler, loadRust, loadDlang);
   const decode = async (symbol: { name: string }): Promise<void> => {
-    const decoded = await decoder.symbol(symbol.name);
+    const decoded = await decoder(symbol.name);
     if (decoded) displayNames.set(symbol, decoded);
   };
   for (const symbol of elf.dynSymbols?.importSymbols ?? []) await decode(symbol);
@@ -29,4 +35,4 @@ export const getElfSymbolDisplayName = (symbol: { name: string }): string =>
   displayNames.get(symbol)?.text ?? symbol.name;
 
 export const isElfSymbolData = (symbol: { name: string }): boolean =>
-  displayNames.get(symbol)?.symbolKind === "ItaniumData";
+  displayNames.get(symbol)?.symbolKind != null;

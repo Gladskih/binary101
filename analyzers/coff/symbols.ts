@@ -4,6 +4,7 @@ import { readAsciiString } from "../../binary-utils.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import { COFF_STORAGE_CLASS } from "./storage-classes.js";
 import { createCoffDebugStringTable } from "./debug-string-table.js";
+import { createCoffSymbolNameDecoder } from "./symbol-names.js";
 import {
   type CoffAuxiliaryRecord,
   type CoffStringTable,
@@ -46,18 +47,22 @@ const resolveSymbolName = async (
   offset: number,
   stringTable: CoffStringTable | null,
   addWarning: (message: string) => void
-): Promise<Pick<CoffSymbol, "name" | "nameSource" | "stringTableOffset">> => {
+): Promise<{ fields: Pick<CoffSymbol, "name" | "nameSource" | "stringTableOffset">;
+  complete: boolean }> => {
   if (readCoffField(view, offset, COFF_SYMBOL_NAME_FIELDS.ShortNameOrZeroes) !== 0) {
-    return { name: readAsciiString(view, offset, COFF_SHORT_NAME_BYTE_LENGTH), nameSource: "short" };
+    return { fields: { name: readAsciiString(view, offset, COFF_SHORT_NAME_BYTE_LENGTH),
+      nameSource: "short" }, complete: true };
   }
   const stringTableOffset = readCoffField(view, offset, COFF_SYMBOL_NAME_FIELDS.StringTableOffset);
   if (!stringTable) {
     addWarning(`COFF symbol name offset /${stringTableOffset} cannot be resolved without a string table.`);
-    return { name: `/${stringTableOffset}`, nameSource: "unresolved", stringTableOffset };
+    return { fields: { name: `/${stringTableOffset}`, nameSource: "unresolved", stringTableOffset },
+      complete: false };
   }
   const resolved = await stringTable.resolve(stringTableOffset);
   if (resolved.warning) addWarning(resolved.warning);
-  return { name: resolved.value, nameSource: "string-table", stringTableOffset };
+  return { fields: { name: resolved.value, nameSource: "string-table", stringTableOffset },
+    complete: resolved.warning == null };
 };
 
 const parseAuxRecord = (
@@ -113,22 +118,26 @@ const parseSymbol = async (
   index: number,
   stringTable: CoffStringTable | null,
   addWarning: (message: string) => void
-): Promise<Omit<CoffSymbol, "auxiliaryRecords">> => ({
-  index,
-  ...await resolveSymbolName(view, offset, stringTable, addWarning),
-  value: readCoffField(view, offset, COFF_SYMBOL_FIELDS.Value),
-  sectionNumber: readCoffField(view, offset, COFF_SYMBOL_FIELDS.SectionNumber),
-  type: readCoffField(view, offset, COFF_SYMBOL_FIELDS.Type),
-  storageClass: readCoffField(view, offset, COFF_SYMBOL_FIELDS.StorageClass),
-  auxiliarySymbolCount: readCoffField(view, offset, COFF_SYMBOL_FIELDS.NumberOfAuxSymbols)
-});
+): Promise<{ symbol: Omit<CoffSymbol, "auxiliaryRecords">; complete: boolean }> => {
+  const resolved = await resolveSymbolName(view, offset, stringTable, addWarning);
+  return { complete: resolved.complete, symbol: {
+    index,
+    ...resolved.fields,
+    value: readCoffField(view, offset, COFF_SYMBOL_FIELDS.Value),
+    sectionNumber: readCoffField(view, offset, COFF_SYMBOL_FIELDS.SectionNumber),
+    type: readCoffField(view, offset, COFF_SYMBOL_FIELDS.Type),
+    storageClass: readCoffField(view, offset, COFF_SYMBOL_FIELDS.StorageClass),
+    auxiliarySymbolCount: readCoffField(view, offset, COFF_SYMBOL_FIELDS.NumberOfAuxSymbols)
+  } };
+};
 
 const parseSymbolTableBytes = async (
   reader: FileRangeReader,
   symbolTableOffset: number,
   wholeRecordBytes: number,
   stringTable: CoffStringTable | null,
-  addWarning: (message: string) => void
+  addWarning: (message: string) => void,
+  decodeName: ReturnType<typeof createCoffSymbolNameDecoder>
 ): Promise<CoffSymbol[]> => {
   const view = await reader.read(symbolTableOffset, wholeRecordBytes);
   const recordCount = wholeRecordBytes / COFF_SYMBOL_RECORD_BYTE_LENGTH;
@@ -140,7 +149,7 @@ const parseSymbolTableBytes = async (
   let index = 0;
   while (index < recordCount) {
     const offset = index * COFF_SYMBOL_RECORD_BYTE_LENGTH;
-    const base = await parseSymbol(view, offset, index, stringTable, addWarning);
+    const { symbol: base, complete } = await parseSymbol(view, offset, index, stringTable, addWarning);
     const remainingRecords = recordCount - index - 1;
     const auxCount = Math.min(base.auxiliarySymbolCount, remainingRecords);
     const auxiliaryRecords = Array.from({ length: auxCount }, (_, auxIndex) => {
@@ -153,7 +162,9 @@ const parseSymbolTableBytes = async (
     if (auxCount < base.auxiliarySymbolCount) {
       addWarning(`COFF symbol #${index} auxiliary records are truncated.`);
     }
-    symbols[symbols.length] = { ...base, auxiliaryRecords };
+    const symbol = { ...base, auxiliaryRecords };
+    if (complete) await decodeName(symbol);
+    symbols[symbols.length] = symbol;
     index += 1 + auxCount;
   }
   return symbols;
@@ -182,7 +193,8 @@ export const parseCoffSymbols = async (
       symbolTableOffset,
       wholeRecordBytes,
       stringTable,
-      addWarning
+      addWarning,
+      createCoffSymbolNameDecoder(addWarning)
     ),
     stringTable
   };

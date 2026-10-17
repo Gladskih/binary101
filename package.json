@@ -5,6 +5,7 @@
   "type": "module",
   "imports": {
     "#itanium-demangler-loader": "./analyzers/itanium-demangle/load.node.ts",
+    "#rust-dlang-demangler-loader": "./analyzers/symbol-demangle/load.node.ts",
     "#msvc-demangler-loader": "./analyzers/pe/msvc-demangle/load.node.ts",
     "#aarch64-disassembler-loader": "./analyzers/aarch64/load-disassembler.node.ts"
   },
@@ -40,6 +41,7 @@
     "test:unit": "tsx --test --test-reporter=dot tests/unit/**/*.ts",
     "test:coverage": "c8 --config .c8rc.json tsx --test --test-reporter=dot tests/unit/**/*.ts",
     "test:mutation": "stryker run",
+    "test:mutation:symbol-demangle": "npm run test:mutation -- --mutate analyzers/symbol-demangle/*.ts,analyzers/pe/symbol-name.ts,analyzers/coff/symbol-names.ts --testFiles tests/unit/analyzers/symbol-demangle/*.test.ts,tests/unit/analyzers/coff/symbol-names.test.ts,tests/unit/analyzers/pe/rust-dlang-names.test.ts,tests/unit/renderers/pe/import-function-table.test.ts --incrementalFile reports/mutation/stryker-incremental.rust-dlang.json",
     "test:mutation:pe": "npm run test:mutation",
     "test:mutation:pe:dry-run": "npm run test:mutation -- --dryRunOnly",
     "test:mutation:pe:bound-imports": "npm run test:mutation -- --mutate analyzers/pe/imports/bound.ts --testFiles tests/unit/analyzers/pe/imports/bound.test.ts --incrementalFile reports/mutation/stryker-incremental.pe.bound-imports.json",
@@ -80,8 +82,10 @@
     "@noble/hashes": "2.4.0",
     "iced-x86-disasm": "^0.1.3",
     "llvm-aarch64-disasm": "^0.2.0",
+    "llvm-dlang-demangle": "0.1.0",
     "llvm-itanium-demangle": "0.1.0",
     "llvm-msvc-demangle": "0.2.0",
+    "llvm-rust-demangle": "0.1.0",
     "lzma-web": "^4.0.0-rc.5",
     "pkijs": "^3.4.0",
     "zstddec": "0.3.1"

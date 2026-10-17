@@ -35,7 +35,7 @@ export const getPeExportDisplayName = (names: readonly string[], index: number):
 // Positive data kinds from LLVM's MicrosoftDemangleNodes.h; unknown kinds stay eligible.
 // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Demangle/MicrosoftDemangleNodes.h
 const dataSymbolKinds = new Set<PeSymbolName["symbolKind"]>(["VariableSymbol", "SpecialTableSymbol",
-  "LocalStaticGuardVariable", "EncodedStringLiteral", "ItaniumData"]);
+  "LocalStaticGuardVariable", "EncodedStringLiteral", "ItaniumData", "DlangData"]);
 
 export const isPeExportData = (names: readonly string[]): boolean =>
   names.some((_name, index) => dataSymbolKinds.has(decodedNames.get(names)?.get(index)?.symbolKind));
