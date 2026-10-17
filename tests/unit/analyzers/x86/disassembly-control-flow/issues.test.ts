@@ -101,29 +101,6 @@ const fakeIced: FakeIced = {
   Instruction: TestInstruction as unknown as FakeIced["Instruction"]
 };
 
-void test("disassembleControlFlowForInstructionSets caps repeated decode-stop issues", async () => {
-  const issues: string[] = [];
-  const featureCounts = new Map<number, number>();
-  const data = new Uint8Array(1000).fill(0);
-  const entrypoints = Array.from({ length: data.length }, (_, index) => 0x1000 + index);
-
-  const result = await disassembleControlFlowForInstructionSets({
-    iced: fakeIced as unknown as Parameters<typeof disassembleControlFlowForInstructionSets>[0]["iced"],
-    bitness: 64,
-    imageBase: 0n,
-    sections: [{ rvaStart: 0x1000, data }],
-    entrypoints,
-    yieldEveryInstructions: 0,
-    featureCounts,
-    issues
-  });
-
-  assert.equal(result.instructionCount, data.length);
-  assert.equal(result.invalidInstructionCount, data.length);
-  assert.equal(issues.length, 201);
-  assert.match(issues.at(-1) ?? "", /omitted/i);
-});
-
 void test("disassembleControlFlowForInstructionSets counts overlapping entrypoints once", async () => {
   const issues: string[] = [];
   const featureCounts = new Map<number, number>();

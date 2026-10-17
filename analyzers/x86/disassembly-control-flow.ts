@@ -38,11 +38,10 @@ type ControlFlowDecodeState = {
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
-  recordDecodeStopIssue(message: string): void;
+  issues: string[];
 };
 
 const MAX_RVA = 0xffff_ffff;
-const MAX_DECODE_STOP_ISSUES = 200;
 
 const toRva = (ip: bigint, imageBase: bigint): number | null => {
   if (ip < imageBase) return null;
@@ -134,13 +133,13 @@ const recordDecodedInstruction = (
   const len = instr.length;
   if (len <= 0) {
     state.invalidInstructionCount += 1;
-    state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+    state.issues.push("Stopping at a zero-length instruction decode.");
     return false;
   }
   state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
   if (instr.code === state.iced.Code["INVALID"]) {
     state.invalidInstructionCount += 1;
-    state.recordDecodeStopIssue(`Stopping at an invalid instruction at RVA 0x${rva.toString(16)}.`);
+    state.issues.push(`Stopping at an invalid instruction at RVA 0x${rva.toString(16)}.`);
     return false;
   }
   state.onInstruction?.(instr);
@@ -172,7 +171,7 @@ const decodeLinearRun = async (
     state.visited.add(instrRva);
     const dataRva = crossedDataRva(state, instrRva, instr.length);
     if (dataRva != null) {
-      state.recordDecodeStopIssue(`Stopped before known data at RVA 0x${dataRva.toString(16)}.`);
+      state.issues.push(`Stopped before known data at RVA 0x${dataRva.toString(16)}.`);
       break;
     }
     if (!recordDecodedInstruction(state, instr, instrRva)) break;
@@ -227,17 +226,6 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     decoder: new opts.iced.Decoder(opts.bitness, entry.data, opts.iced.DecoderOptions.None)
   }));
 
-  let decodeStopIssuesLogged = 0;
-  let decodeStopIssuesSuppressed = 0;
-  const recordDecodeStopIssue = (message: string): void => {
-    if (decodeStopIssuesLogged < MAX_DECODE_STOP_ISSUES) {
-      opts.issues.push(message);
-      decodeStopIssuesLogged += 1;
-    } else {
-      decodeStopIssuesSuppressed += 1;
-    }
-  };
-
   const visited = createX86RvaSet();
   const queued = createX86RvaSet();
   const queue = [...opts.entrypoints].reverse();
@@ -265,7 +253,7 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
-    recordDecodeStopIssue
+    issues: opts.issues
   };
 
   const instr = new opts.iced.Instruction();
@@ -282,11 +270,6 @@ export async function disassembleControlFlowForInstructionSets(opts: {
     }
     return snapshot(state);
   } finally {
-    if (decodeStopIssuesSuppressed > 0) {
-      opts.issues.push(
-        `Additional ${decodeStopIssuesSuppressed} decode stop(s) omitted; showing first ${MAX_DECODE_STOP_ISSUES}.`
-      );
-    }
     safeFree(instr);
     for (const entry of decoders) {
       safeFree(entry.decoder);

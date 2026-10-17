@@ -36,10 +36,8 @@ type ControlFlowDecodeStateVaddr = {
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
-  recordDecodeStopIssue(message: string): void;
+  issues: string[];
 };
-
-const MAX_DECODE_STOP_ISSUES = 200;
 
 const safeFree = (resource: { free(): void } | null | undefined): void => {
   if (!resource) return;
@@ -114,14 +112,14 @@ const decodeLinearRun = async (
     state.visited.add(instrVaddr);
     const dataAddress = state.crossedData(instrVaddr, instr.length);
     if (dataAddress != null) {
-      state.recordDecodeStopIssue(`Stopped before known data at address 0x${dataAddress.toString(16)}.`);
+      state.issues.push(`Stopped before known data at address 0x${dataAddress.toString(16)}.`);
       break;
     }
     state.instructionCount += 1;
     const len = instr.length;
     if (len <= 0) {
       state.invalidInstructionCount += 1;
-      state.recordDecodeStopIssue("Stopping at a zero-length instruction decode.");
+      state.issues.push("Stopping at a zero-length instruction decode.");
       break;
     }
     state.bytesDecoded = Math.min(state.bytesSampled, state.bytesDecoded + len);
@@ -130,7 +128,7 @@ const decodeLinearRun = async (
     const isHardException = instr.flowControl === state.iced.FlowControl["Exception"] && !isUd2Trap;
     if (isInvalidDecode || isHardException) {
       state.invalidInstructionCount += 1;
-      state.recordDecodeStopIssue(`Stopping at an invalid instruction at address 0x${instrVaddr.toString(16)}.`);
+      state.issues.push(`Stopping at an invalid instruction at address 0x${instrVaddr.toString(16)}.`);
       break;
     }
     state.onInstruction?.(instr);
@@ -189,17 +187,6 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     decoder: new opts.iced.Decoder(opts.bitness, entry.data, opts.iced.DecoderOptions.None)
   }));
 
-  let decodeStopIssuesLogged = 0;
-  let decodeStopIssuesSuppressed = 0;
-  const recordDecodeStopIssue = (message: string): void => {
-    if (decodeStopIssuesLogged < MAX_DECODE_STOP_ISSUES) {
-      opts.issues.push(message);
-      decodeStopIssuesLogged += 1;
-    } else {
-      decodeStopIssuesSuppressed += 1;
-    }
-  };
-
   const visited = createX86VaddrSet();
   const queued = createX86VaddrSet();
   const queue = [...opts.entrypoints].reverse();
@@ -223,7 +210,7 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     bytesDecoded: 0,
     instructionCount: 0,
     invalidInstructionCount: 0,
-    recordDecodeStopIssue
+    issues: opts.issues
   };
 
   const instr = new opts.iced.Instruction();
@@ -241,11 +228,6 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     }
     return snapshot(state);
   } finally {
-    if (decodeStopIssuesSuppressed > 0) {
-      opts.issues.push(
-        `Additional ${decodeStopIssuesSuppressed} decode stop(s) omitted; showing first ${MAX_DECODE_STOP_ISSUES}.`
-      );
-    }
     safeFree(instr);
     for (const entry of decoders) {
       safeFree(entry.decoder);

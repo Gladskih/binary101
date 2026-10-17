@@ -120,29 +120,6 @@ const fakeIced: FakeIced = {
   Instruction: TestInstruction as unknown as FakeIced["Instruction"]
 };
 
-void test("disassembleControlFlowForInstructionSetsVaddr caps repeated decode-stop issues", async () => {
-  const issues: string[] = [];
-  const featureCounts = new Map<number, number>();
-  const data = new Uint8Array(1000).fill(0);
-  const entrypoints = Array.from({ length: data.length }, (_, index) => 0x1000n + BigInt(index));
-
-  const result = await disassembleControlFlowForInstructionSetsVaddr({
-    iced: fakeIced as unknown as Parameters<typeof disassembleControlFlowForInstructionSetsVaddr>[0]["iced"],
-    bitness: 64,
-    sections: [{ vaddrStart: 0x1000n, data }],
-    entrypoints,
-    yieldEveryInstructions: 0,
-    featureCounts,
-    issues
-  });
-
-  assert.equal(result.bytesDecoded, data.length);
-  assert.equal(result.instructionCount, data.length);
-  assert.equal(result.invalidInstructionCount, data.length);
-  assert.equal(issues.length, 201);
-  assert.match(issues.at(-1) ?? "", /omitted/i);
-});
-
 void test("disassembleControlFlowForInstructionSetsVaddr counts overlapping entrypoints once", async () => {
   const issues: string[] = [];
   const featureCounts = new Map<number, number>();
