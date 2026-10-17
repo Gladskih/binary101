@@ -6,7 +6,9 @@ export default defineConfig({
   webServer: {
     command: "npm run preview",
     url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI
+    reuseExistingServer: false,
+    // Preparing SDK metadata on a fresh checkout can take several minutes.
+    timeout: 300_000
   },
   use: {
     headless: true,

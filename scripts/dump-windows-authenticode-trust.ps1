@@ -1,5 +1,5 @@
 param(
-  [string]$OutputPath = (Join-Path $PSScriptRoot "..\analyzers\pe\authenticode\windows-trust-store.generated.json")
+  [string]$OutputPath = (Join-Path $PSScriptRoot "..\generated\windows-trust-store.generated.json")
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,7 +74,11 @@ foreach ($storeName in @("Root", "AuthRoot")) {
 $snapshot = [ordered]@{
   schemaVersion = 1
   generatedAt  = (Get-Date).ToUniversalTime().ToString("o")
-  source       = "GitHub Actions windows-latest LocalMachine certificate stores"
+  source       = if ($env:GITHUB_ACTIONS -eq "true") {
+    "GitHub Actions Windows LocalMachine certificate stores"
+  } else {
+    "Local Windows LocalMachine certificate stores"
+  }
   trustedCAs   = @(Merge-CertificateRecords -Certificates $trustedInput)
   revokedCAs   = @(Merge-CertificateRecords -Certificates @(Read-CertificateStore -StoreName "Disallowed"))
 }
