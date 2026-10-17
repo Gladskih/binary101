@@ -33,9 +33,19 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - View detailed analysis of the file structure and computed hashes.
 
 ## Development
-- `npm run dev` &mdash; start the Vite dev server.
-- `npm run build` &mdash; create the production build in `dist/`.
-- `npm run preview` &mdash; serve the built site locally on `http://127.0.0.1:4173`.
+- `npm run dev` &mdash; prepare API metadata and Windows certificate lists, then start Vite.
+- `npm run build` &mdash; prepare those assets and create the production build in `dist/`.
+- `npm run preview` &mdash; rebuild and serve the site on `http://127.0.0.1:4173`.
+- `npm run test:e2e` &mdash; rebuild with those assets and run browser tests against a new server.
+  An existing server on port 4173 must be stopped first.
+- `npm test` &mdash; run unit tests with coverage, then the browser checks above.
+- `npm run prepare:assets` &mdash; prepare and validate build assets without starting Vite.
+  SDK metadata generation requires `clang` and downloads pinned packages on the first run.
+  On Windows, a missing or invalid certificate snapshot is exported automatically from
+  LocalMachine stores. On other systems, copy the `windows-authenticode-trust` CI artifact to
+  `generated/windows-trust-store.generated.json` first. Preparation fails if the snapshot is absent,
+  empty, malformed, or reports incomplete store reads. Generated snapshots stay out of Git.
+  See [the build asset flow](docs/pe-import-metadata.md#build-flow) for details.
 - `npx tsx scripts/rustPeMatrix.ts` &mdash; build a Rust PE matrix with the local
   `rustc` toolchain and run each output through the PE analyzer/renderer.
   Results are written to
@@ -52,8 +62,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   packages and generate UCRT PE import-enrichment JSON assets.
 - `npm run validate:api-metadata` &mdash; validate generated WinAPI and UCRT
   metadata manifests and per-DLL chunks.
-- `npm run build:with-api-metadata` &mdash; generate and validate PE import
-  metadata, then build the static site.
+- `npm run build:with-api-metadata` &mdash; compatibility alias for `npm run build`.
 - PE import metadata details live in
   [`docs/pe-import-metadata.md`](docs/pe-import-metadata.md).
 - Microsoft C++ RTTI support and its strict relocation-backed detection contract are documented

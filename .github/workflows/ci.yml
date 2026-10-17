@@ -77,13 +77,13 @@ jobs:
         shell: pwsh
         run: >
           .\scripts\dump-windows-authenticode-trust.ps1
-          -OutputPath .\analyzers\pe\authenticode\windows-trust-store.generated.json
+          -OutputPath .\generated\windows-trust-store.generated.json
 
       - name: Upload Windows Authenticode trust snapshot
         uses: actions/upload-artifact@v7
         with:
           name: windows-authenticode-trust
-          path: analyzers/pe/authenticode/windows-trust-store.generated.json
+          path: generated/windows-trust-store.generated.json
           if-no-files-found: error
 
   e2e-build:
@@ -100,7 +100,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: windows-authenticode-trust
-          path: analyzers/pe/authenticode
+          path: generated
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -113,9 +113,6 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-
-      - name: Build
-        run: npm run build:with-api-metadata
 
       - name: Test (e2e)
         run: npm run test:e2e

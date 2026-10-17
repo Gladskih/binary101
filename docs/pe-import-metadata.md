@@ -27,11 +27,31 @@ used so CI does not need a Visual Studio include directory.
    UCRT headers and `ucrt.lib`, runs clang AST extraction, and writes
    `public/ucrt-metadata/*.json`.
 3. `npm run validate:api-metadata` validates manifests and chunk counts.
-4. `npm run build:with-api-metadata` regenerates, validates, then runs the Vite
-   build so static assets are copied into `dist/`.
+4. `npm run prepare:windows-trust` validates
+   `generated/windows-trust-store.generated.json`. On Windows it exports missing or invalid
+   snapshots from LocalMachine Root, AuthRoot and Disallowed stores. A populated trusted-root
+   list, a generation date, certificate DER data and no store-read warnings are required;
+   an empty Disallowed list is valid. On Linux/macOS, supply a snapshot exported on Windows
+   or extract the `windows-authenticode-trust` CI artifact to that path.
+5. `npm run prepare:assets` prepares the certificate snapshot, regenerates both metadata
+   families and validates their manifests, index and chunk counts. The existing NuGet cache
+   avoids repeated package downloads. Generation still requires `clang`.
 
-GitHub Actions uses `build:with-api-metadata`, so Pages receives both WinAPI and
-UCRT metadata assets.
+The ordinary `dev` and `build` commands run preparation automatically through
+[npm lifecycle scripts](https://docs.npmjs.com/cli/v11/using-npm/scripts/#pre--post-scripts).
+Both `build:with-api-metadata` and `build:with-winapi-metadata` are compatibility aliases
+for this complete build. Build-time downloads do not change the browser's local analysis.
+
+`preview` rebuilds before serving. Playwright starts it with a five-minute startup timeout
+for asset preparation and refuses to reuse an existing server. Consequently, `test:e2e`
+and direct Playwright runs test the current source and prepared assets. `npm test` runs unit
+coverage followed by these browser tests. The CI browser job uses this same path, after
+downloading the Windows-generated certificate artifact.
+
+Vite resolves the browser's certificate snapshot to the ignored `generated/` file.
+The checked-in empty snapshot is a fixture for isolated Node tests; it is never bundled by Vite.
+Preparation reuses an already valid certificate snapshot. To refresh it explicitly on Windows, run
+`powershell.exe -NoProfile -File scripts/dump-windows-authenticode-trust.ps1`.
 
 ## Asset Layout
 

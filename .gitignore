@@ -16,6 +16,7 @@ tests/external/aot-gc-sample/obj/
 
 # Build output
 dist/
+generated/
 
 # Generated WinAPI metadata assets
 public/winapi-metadata/*.json

@@ -43,6 +43,9 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
+      "./windows-trust-store.generated.json": fileURLToPath(
+        new URL("./generated/windows-trust-store.generated.json", import.meta.url)
+      ),
       "#itanium-demangler-loader": fileURLToPath(
         new URL("./analyzers/itanium-demangle/load.browser.ts", import.meta.url)
       ),
