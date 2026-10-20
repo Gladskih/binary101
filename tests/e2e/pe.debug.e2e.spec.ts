@@ -1,0 +1,51 @@
+import { expect, test } from "@playwright/test";
+import { createPeDebugFile } from "../fixtures/pe-debug-file.js";
+
+test("PE debug shows embedded source mappings and readable layout statistics", async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const file = createPeDebugFile();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByText("Entry #1:", { exact: false }).click();
+  await expect(panel).toContainText("1 source document, 1 method with source mappings");
+  await expect(panel).toContainText("Visible sequence points");
+  await expect(panel).toContainText("Source documents: C#");
+  await expect(panel).toContainText("source.cs");
+  await expect(panel.getByRole("cell", { name: "local", exact: true })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "constant", exact: true })).toBeVisible();
+  await panel.getByText("Entry #2:", { exact: false }).click();
+  await expect(panel).toContainText("Frames with SEH");
+  await expect(panel).toContainText("26");
+  await panel.getByText("Entry #3:", { exact: false }).click();
+  await expect(panel).toContainText("Unmapped regions");
+  await panel.getByText("Entry #4:", { exact: false }).click();
+  await expect(panel).toContainText(".text$largest");
+  await expect(panel).toContainText(".text$first");
+  await panel.getByText("Entry #5:", { exact: false }).click();
+  await expect(panel).toContainText("first.dbg");
+  await expect(panel).toContainText("second.dbg");
+  await expect(panel.getByRole("columnheader", { name: "Start RVA", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("columnheader", { name: "Raw RVA", exact: true })).toHaveCount(0);
+  await expect(panel).not.toContainText("decompression failed");
+  await expect(panel).not.toContainText("not decoded");
+  expect(errors).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("pe-debug.png"), fullPage: true });
+});
+
+test("POGO keeps names and sizes accessible through pagination", async ({ page }) => {
+  const file = createPeDebugFile(101);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByText("Entry #4:", { exact: false }).click();
+  const table = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-3-pogo"]');
+  await expect(table).toContainText(".text$first");
+  await expect(table.locator("tbody tr")).toHaveCount(100);
+  await table.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(table.locator("tbody tr")).toHaveCount(1);
+  await expect(table).toContainText(".text$largest");
+});

@@ -62,38 +62,46 @@ export const getDebugStorageInfo = (
   };
 };
 
-const formatPogoRecordCount = (count: number): string =>
-  `${count} record${count === 1 ? "" : "s"}`;
+const formatDebugCount = (count: number, label: string): string =>
+  `${count} ${label}${count === 1 ? "" : "s"}`;
 
-const formatParsedPrimarySymbolCount = (count: number): string =>
-  `${count} parsed primary symbol${count === 1 ? "" : "s"}`;
+const embeddedPdbSummary = (entry: PeDebugDirectoryEntry): string | null => {
+  if (!entry.embeddedPortablePdb) return null;
+  const pdb = entry.embeddedPortablePdb.portablePdb;
+  return pdb ? `Embedded Portable PDB: ${formatDebugCount(pdb.documents.length, "source document")}, ` +
+    `${formatDebugCount(pdb.methodsWithSequencePoints, "method")} with source mappings.`
+    : "Embedded Portable PDB header; debug metadata was not decoded.";
+};
+
+const payloadSummaries: ReadonlyArray<(entry: PeDebugDirectoryEntry) => string | null> = [
+  entry => entry.coff
+    ? `COFF symbol table with ${formatDebugCount(entry.coff.symbols.length, "parsed primary symbol")}.` : null,
+  entry => entry.codeView ? `CodeView ${entry.codeView.signature} record with PDB identity and path.` : null,
+  entry => entry.fpo
+    ? `Frame-pointer omission table with ${formatDebugCount(entry.fpo.records.length, "record")}.` : null,
+  entry => entry.misc ? `Legacy DBG-file locations: ` +
+    `${formatDebugCount(entry.misc.records.filter(record => record.text).length, "decoded path")} in ` +
+    `${formatDebugCount(entry.misc.records.length, "MISC record")}.` : null,
+  entry => entry.omap ? `Address map with ${formatDebugCount(entry.omap.records.length, "record")}.` : null,
+  entry => entry.vcFeature ? "MSVC toolchain counters such as /GS, /sdl, and guardN." : null,
+  entry => entry.pogo ? `Linker layout map with ${formatDebugCount(entry.pogo.entries.length, "record")}.` : null,
+  entry => entry.repro ? "Deterministic build marker." : null,
+  embeddedPdbSummary,
+  entry => entry.pdbChecksum ? `${entry.pdbChecksum.algorithmName || "PDB"} checksum.` : null,
+  entry => entry.exDllCharacteristics ? "Extended DLL characteristics bit field." : null,
+  entry => entry.r2rPerfMap ? `ReadyToRun PerfMap pointer to ${entry.r2rPerfMap.path || "(no path)"}.` : null,
+  entry => entry.rawPayload
+    ? "Payload format is unsupported or malformed; no semantic decoding is available." : null
+];
 
 export const getEntrySummary = (entry: PeDebugDirectoryEntry): string => {
   if (entry.type === IMAGE_DEBUG_TYPE_ILTCG) {
     return getDebugTypeInfo(entry.type).description +
       (entry.sizeOfData === 0 ? " This entry has no payload." : " Payload format is not documented here.");
   }
-  if (entry.coff) return `COFF symbol table with ${formatParsedPrimarySymbolCount(entry.coff.symbols.length)}.`;
-  if (entry.codeView) {
-    return entry.codeView.signature === "NB10"
-      ? "CodeView NB10 record with PDB identity and path."
-      : "CodeView RSDS record with PDB identity and path.";
+  for (const summary of payloadSummaries) {
+    const text = summary(entry);
+    if (text) return text;
   }
-  if (entry.fpo) return `Frame-pointer omission table with ${entry.fpo.records.length} records.`;
-  if (entry.misc) return "Legacy DBG-file location record.";
-  if (entry.omap) return `Address map with ${entry.omap.records.length} records.`;
-  if (entry.vcFeature) return "MSVC toolchain counters such as /GS, /sdl, and guardN.";
-  if (entry.pogo) {
-    return `Linker layout map with ` +
-      `${formatPogoRecordCount(entry.pogo.entries.length)}.`;
-  }
-  if (entry.repro) return "Deterministic build marker.";
-  if (entry.embeddedPortablePdb) return "Deflate-compressed Portable PDB embedded in the PE file.";
-  if (entry.pdbChecksum) return `${entry.pdbChecksum.algorithmName || "PDB"} checksum.`;
-  if (entry.exDllCharacteristics) return "Extended DLL characteristics bit field.";
-  if (entry.r2rPerfMap) {
-    return `ReadyToRun PerfMap pointer to ${entry.r2rPerfMap.path || "(no path)"}.`;
-  }
-  if (entry.rawPayload) return "Raw debug payload preview for a reserved or unrecognized format.";
   return getDebugTypeInfo(entry.type >>> 0).description;
 };

@@ -1,5 +1,3 @@
-"use strict";
-
 import type { PeClrMetadataIndex, PeClrTableRowCount } from "./types.js";
 import { listColumnTable, LIST_POINTER_TABLES } from "./metadata-list-columns.js";
 import {
@@ -11,7 +9,6 @@ import {
   type ClrMetadataColumnSchema,
   type ClrMetadataTableSchema
 } from "./metadata-schema.js";
-
 export type ClrMetadataCell = number | PeClrMetadataIndex;
 export type ClrMetadataRow = Record<string, ClrMetadataCell>;
 
@@ -218,9 +215,11 @@ const parseTables = (
   state: ReaderState,
   rowCounts: Map<number, number>,
   heapIndexSizes: ClrParsedTableStream["heapIndexSizes"],
-  issues: string[]
+  issues: string[],
+  referencedRows: ReadonlyMap<number, number>
 ): Map<number, ClrParsedTable> => {
   const tables = new Map<number, ClrParsedTable>();
+  const indexRows = new Map([...referencedRows, ...rowCounts]);
   for (let tableId = 0; tableId < 64; tableId += 1) {
     const rows = rowCountFor(rowCounts, tableId);
     if (rows === 0) continue;
@@ -230,7 +229,7 @@ const parseTables = (
       break;
     }
     const rowSize = schema.columns.reduce(
-      (total, column) => total + columnSize(column, rowCounts, heapIndexSizes, issues),
+      (total, column) => total + columnSize(column, indexRows, heapIndexSizes, issues),
       0
     );
     const availableRows = Math.min(rows, Math.floor((state.view.byteLength - state.offset) / rowSize));
@@ -241,7 +240,7 @@ const parseTables = (
       schema,
       rowSize,
       rows: Array.from({ length: availableRows }, () =>
-        readRow(state, schema, rowCounts, heapIndexSizes, issues))
+        readRow(state, schema, indexRows, heapIndexSizes, issues))
     });
     if (availableRows < rows) break;
   }
@@ -279,7 +278,8 @@ const readTableHeader = (
 export const parseMetadataTableStream = (
   bytes: Uint8Array,
   streamName: "#~" | "#-",
-  issues: string[]
+  issues: string[],
+  referencedRows: ReadonlyMap<number, number> = new Map()
 ): ClrParsedTableStream | null => {
   if (bytes.length < 24) {
     issues.push(`CLR metadata ${streamName} stream is smaller than the ECMA-335 table header.`);
@@ -300,6 +300,6 @@ export const parseMetadataTableStream = (
     ...header,
     ...(typeof extraData === "number" ? { extraData } : {}),
     rowCounts: rowCounts.rowCountList,
-    tables: parseTables(state, rowCounts.rowCountMap, heapIndexSizes, issues)
+    tables: parseTables(state, rowCounts.rowCountMap, heapIndexSizes, issues, referencedRows)
   };
 };

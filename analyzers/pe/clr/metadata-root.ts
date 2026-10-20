@@ -1,5 +1,3 @@
-"use strict";
-
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeClrMeta, PeClrStreamInfo } from "./types.js";
 import { parseClrMetadataTablesFromStreams } from "./metadata-streams.js";
@@ -244,12 +242,10 @@ const parseMetadataRootWithReader = async (
     signature: header.signature,
     streams
   };
-  const tables = await parseClrMetadataTablesFromStreams(reader, meta, declaredMetaSize, issues);
-  if (tables) meta.tables = tables;
   return meta;
 };
 
-export const parseClrMetadataRoot = async (
+export const parseClrMetadataRootStreams = async (
   fileReader: FileRangeReader,
   metaOffset: number,
   metaSize: number,
@@ -267,7 +263,6 @@ export const parseClrMetadataRoot = async (
     issues.push("Metadata root is smaller than the minimum size (0x18 bytes); header is truncated.");
     return null;
   }
-
   const reader: MetadataReader = {
     availableSize,
     readAt: async (relativeOffset, byteLength) => {
@@ -277,9 +272,28 @@ export const parseClrMetadataRoot = async (
       return view.byteLength < byteLength ? null : view;
     }
   };
-
   try {
     return await parseMetadataRootWithReader(reader, metaSize, issues);
+  } catch {
+    issues.push("Metadata root could not be read.");
+    return null;
+  }
+};
+
+export const parseClrMetadataRoot = async (
+  fileReader: FileRangeReader, metaOffset: number, metaSize: number, issues: string[]
+): Promise<PeClrMeta | null> => {
+  const meta = await parseClrMetadataRootStreams(fileReader, metaOffset, metaSize, issues);
+  if (!meta) return null;
+  const availableSize = Math.min(metaSize, fileReader.size - metaOffset);
+  try {
+    const tables = await parseClrMetadataTablesFromStreams({
+      availableSize,
+      readAt: async (offset, size) => offset < 0 || size < 0 || offset + size > availableSize
+        ? null : fileReader.read(metaOffset + offset, size)
+    }, meta, metaSize, issues);
+    if (tables) meta.tables = tables;
+    return meta;
   } catch {
     issues.push("Metadata root could not be read.");
     return null;

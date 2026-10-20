@@ -1,17 +1,16 @@
 "use strict";
 
-import { readDebugPayload } from "./payload-reader.js";
+import { readDebugPayload, readDebugPayloadBytes } from "./payload-reader.js";
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
 
 // Microsoft PE/COFF debug data:
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
 // RSDS CodeView records are:
 // signature (4) + GUID (16) + age (4) + NUL-terminated path.
-// Legacy NB10 records are documented by dotnet/runtime PE-COFF.md,
-// section "CodeView Debug Directory Entry (type 2)".
+// Legacy NB10: Microsoft's NB10I in microsoft-pdb/PDB/dbi/locator.h.
+// https://github.com/microsoft/microsoft-pdb/blob/master/PDB/dbi/locator.h
 const CODEVIEW_RSDS_MIN_SIZE = 24;
 const CODEVIEW_NB10_MIN_SIZE = 16;
 const CODEVIEW_SIGNATURE_RSDS = 0x53445352;
@@ -46,54 +45,32 @@ export interface PeCodeViewNb10Entry {
 
 export type PeCodeViewEntry = PeCodeViewRsdsEntry | PeCodeViewNb10Entry;
 
-const readCodeViewPathFromMappedData = async (
-  reader: FileRangeReader,
-  fileSize: number,
-  rvaToOff: RvaToOffset,
-  addressOfRawDataRva: number,
-  pathByteLength: number,
-  addWarning: (message: string) => void
+const readCodeViewPath = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset,
+  addressOfRawDataRva: number, pointerToRawDataOff: number,
+  headerSize: number, dataSize: number, encoding: string, addWarning: (message: string) => void
 ): Promise<string> => {
-  const pathInfo = await readMappedNullTerminatedAsciiString(
-    reader,
-    fileSize,
-    rvaToOff,
-    addressOfRawDataRva,
-    pathByteLength,
-    CODEVIEW_PATH_READ_CHUNK_SIZE
-  );
-  if (!pathInfo) {
-    addWarning("CodeView path does not map to file data.");
-    return "";
-  }
-  if (!pathInfo.terminated) {
-    addWarning("CodeView path is not NUL-terminated within SizeOfData.");
-  }
-  return pathInfo.text;
-};
-
-const readCodeViewPathFromFilePointer = async (
-  reader: FileRangeReader,
-  dataOffset: number,
-  dataSize: number,
-  headerSize: number,
-  addWarning: (message: string) => void
-): Promise<string> => {
+  // RSDS Path is UTF-8; streaming preserves code points split across read windows.
+  // https://github.com/dotnet/runtime/blob/main/docs/design/specs/PE-COFF.md
+  const decoder = new TextDecoder(encoding, { fatal: true, ignoreBOM: true });
   let path = "";
-  let pos = dataOffset + headerSize;
-  const pathEnd = dataOffset + dataSize;
-  while (pos < pathEnd) {
-    const chunkLength = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, pathEnd - pos);
-    const chunk = await reader.readBytes(pos, chunkLength);
-    const zeroIndex = chunk.indexOf(0);
-    if (zeroIndex === -1) {
-      path += String.fromCharCode(...chunk);
-      pos += chunkLength;
-      continue;
+  try {
+    for (let offset = headerSize; offset < dataSize; offset += CODEVIEW_PATH_READ_CHUNK_SIZE) {
+      const size = Math.min(CODEVIEW_PATH_READ_CHUNK_SIZE, dataSize - offset);
+      const chunk = await readDebugPayloadBytes(reader, rvaToOff,
+        addressOfRawDataRva, pointerToRawDataOff, offset, size);
+      const zeroIndex = chunk.indexOf(0);
+      const textBytes = zeroIndex < 0 ? chunk : chunk.subarray(0, zeroIndex);
+      if (encoding === "windows-1252" && textBytes.some(value => value >= 128)) {
+        addWarning("NB10 ANSI code page is not recorded; non-ASCII text is shown as Windows-1252.");
+      }
+      if (zeroIndex !== -1) return path + decoder.decode(chunk.subarray(0, zeroIndex));
+      path += decoder.decode(chunk, { stream: true });
+      if (chunk.length < size) break;
     }
-    if (zeroIndex > 0) {
-      path += String.fromCharCode(...chunk.slice(0, zeroIndex));
-    }
+    path += decoder.decode();
+  } catch {
+    addWarning(`CodeView path is not valid ${encoding}.`);
     return path;
   }
   addWarning("CodeView path is not NUL-terminated within SizeOfData.");
@@ -145,6 +122,10 @@ const readCodeViewHeader = async (
     addWarning("CodeView debug entry is truncated before the full NB10 header.");
     return null;
   }
+  if (header.getUint32(0, true) === CODEVIEW_SIGNATURE_NB10 &&
+      header.getUint32(CODEVIEW_NB10_OFF_OFFSET, true) !== 0) {
+    addWarning("NB10 reserved offset must be zero.");
+  }
   return header;
 };
 
@@ -178,11 +159,9 @@ export const parseCodeViewEntry = async (
     addWarning("CodeView debug entry is truncated before the full RSDS header.");
     return null;
   }
-  const path = pointerToRawDataOff
-    ? await readCodeViewPathFromFilePointer(reader, pointerToRawDataOff,
-      dataSize, headerSize, addWarning)
-    : await readCodeViewPathFromMappedData(reader, fileSize, rvaToOff,
-      addressOfRawDataRva + headerSize, dataSize - headerSize, addWarning);
+  const path = await readCodeViewPath(reader, rvaToOff, addressOfRawDataRva,
+    pointerToRawDataOff, headerSize, dataSize,
+    signature === CODEVIEW_SIGNATURE_RSDS ? "utf-8" : "windows-1252", addWarning);
   return signature === CODEVIEW_SIGNATURE_NB10 ? {
     signature: "NB10",
     offset: header.getUint32(CODEVIEW_NB10_OFF_OFFSET, true),

@@ -98,7 +98,16 @@ export const CLRMETADATA_TABLES: readonly ClrMetadataTableSchema[] = [
   { id: 0x29, name: "NestedClass", columns: [table("NestedClass", 0x02), table("EnclosingClass", 0x02)] },
   { id: 0x2a, name: "GenericParam", columns: [u16("Number"), u16("Flags"), coded("Owner", "TypeOrMethodDef"), str("Name")] },
   { id: 0x2b, name: "MethodSpec", columns: [coded("Method", "MethodDefOrRef"), blob("Instantiation")] },
-  { id: 0x2c, name: "GenericParamConstraint", columns: [table("Owner", 0x2a), coded("Constraint", "TypeDefOrRef")] }
+  { id: 0x2c, name: "GenericParamConstraint", columns: [table("Owner", 0x2a), coded("Constraint", "TypeDefOrRef")] },
+  // https://github.com/dotnet/runtime/blob/main/docs/design/specs/PortablePdb-Metadata.md
+  { id: 0x30, name: "Document", columns: [blob("Name"), guid("HashAlgorithm"), blob("Hash"), guid("Language")] },
+  { id: 0x31, name: "MethodDebugInformation", columns: [table("Document", 0x30), blob("SequencePoints")] },
+  { id: 0x32, name: "LocalScope", columns: [table("Method", 0x06), table("ImportScope", 0x35), table("VariableList", 0x33), table("ConstantList", 0x34), u32("StartOffset"), u32("Length")] },
+  { id: 0x33, name: "LocalVariable", columns: [u16("Attributes"), u16("Index"), str("Name")] },
+  { id: 0x34, name: "LocalConstant", columns: [str("Name"), blob("Signature")] },
+  { id: 0x35, name: "ImportScope", columns: [table("Parent", 0x35), blob("Imports")] },
+  { id: 0x36, name: "StateMachineMethod", columns: [table("MoveNextMethod", 0x06), table("KickoffMethod", 0x06)] },
+  { id: 0x37, name: "CustomDebugInformation", columns: [coded("Parent", "HasCustomDebugInformation"), guid("Kind"), blob("Value")] }
 ];
 
 // ECMA-335 Partition II table columns define these coded-index tag layouts.
@@ -115,7 +124,8 @@ export const CLR_CODED_INDEXES: readonly ClrCodedIndexSchema[] = [
   { name: "Implementation", tagBits: 2, tables: [0x26, 0x23, 0x27] },
   { name: "CustomAttributeType", tagBits: 3, tables: [-1, -1, 0x06, 0x0a, -1] },
   { name: "ResolutionScope", tagBits: 2, tables: [0x00, 0x1a, 0x23, 0x01] },
-  { name: "TypeOrMethodDef", tagBits: 1, tables: [0x02, 0x06] }
+  { name: "TypeOrMethodDef", tagBits: 1, tables: [0x02, 0x06] },
+  { name: "HasCustomDebugInformation", tagBits: 5, tables: [0x06, 0x04, 0x01, 0x02, 0x08, 0x09, 0x0a, 0x00, 0x0e, 0x17, 0x14, 0x11, 0x1a, 0x1b, 0x20, 0x23, 0x26, 0x27, 0x28, 0x2a, 0x2c, 0x2b, 0x30, 0x32, 0x33, 0x34, 0x35] }
 ];
 
 export const tableSchemaById = (tableId: number): ClrMetadataTableSchema | null =>

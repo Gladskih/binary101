@@ -41,12 +41,10 @@ void test("renderDebug shows directory characteristics, timestamp and both versi
 
   const html = renderDebugHtml(pe);
 
-  assertIncludesAll(html, [
-    "<th>Characteristics</th><th>TimeDateStamp</th>",
-    '<th style="text-align:right">MajorVersion</th>',
-    '<th style="text-align:right">MinorVersion</th>',
-    ">0x00000001</td><td>0xfedcba98</td>", ">43981</td>", ">61202</td>"
-  ]);
+  assert.match(html, /Characteristics<\/dt><dd>0x00000001/);
+  assert.match(html, /identity stamp<\/dt><dd>0xfedcba98/);
+  assert.match(html, /Directory version<\/dt><dd>43981\.61202/);
+  assert.doesNotMatch(html, /<th>Raw RVA|<th>TimeDateStamp/);
   assert.match(html, /<div class="tableWrap"><table/);
 });
 
@@ -95,7 +93,7 @@ void test("renderDebug keeps repeated types in the table instead of a counted su
   const html = renderDebugHtml(pe);
 
   assert.equal(countMatches(html, />POGO<div class="valueHint">/g), 2);
-  assert.equal(countMatches(html, />UNMAPPED</g), 2);
+  assert.equal(countMatches(html, />UNMAPPED<\/td>/g), 2);
   assert.doesNotMatch(html, /POGO x2/);
   assert.doesNotMatch(html, /UNMAPPED x2/);
   assert.doesNotMatch(html, /TYPE_13/);
@@ -187,10 +185,8 @@ void test("renderDebug renders decoded VC_FEATURE and POGO payload details", () 
     "Entry #2: POGO \\(UNMAPPED\\)",
     "The table above stays as a compact index",
     "POGO \\(profile-guided optimization\\) / LTCG \\(link-time code generation\\)",
-    `${pogo.signatureName} \\(${escapeRegExp(`0x${pogo.signature.toString(16).padStart(8, "0")}`)}\\)`,
     String(pogo.entries.length),
-    "Start RVA",
-    escapeRegExp(pogo.entries[0]!.name),
+    "Largest region",
     escapeRegExp(pogo.entries[1]!.name)
   ]);
   assert.doesNotMatch(html, /Types present/);
@@ -264,7 +260,7 @@ void test("renderDebug renders decoded details for extra debug payload formats",
       }] } },
       {
         ...createDebugViewEntry(4, 0, 0xa0, 26),
-        misc: { dataType: 1, length: 26, unicode: false, text: "mfc40_opt.DBG" }
+        misc: { records: [{ dataType: 1, length: 26, unicode: false, text: "mfc40_opt.DBG" }] }
       },
       { ...createDebugViewEntry(16, 0, 0xb0, 0), repro: { hashLength: null, hashBytes: [] } },
       {
@@ -287,7 +283,7 @@ void test("renderDebug renders decoded details for extra debug payload formats",
   assertIncludesAll(html, [
     "CodeView NB10 record with PDB identity and path",
     "crtdll\\.pdb",
-    "Frame-pointer omission table with 1 records",
+    "Frame-pointer omission table with 1 record",
     "mfc40_opt\\.DBG",
     "Deterministic build marker",
     "MPDB",
@@ -295,6 +291,6 @@ void test("renderDebug renders decoded details for extra debug payload formats",
     "0x00000041",
     "R2RM",
     "sample\\.ni\\.r2rmap",
-    "b4 9c"
+    "no semantic decoding is available"
   ]);
 });

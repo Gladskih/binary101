@@ -62,7 +62,7 @@ void test("renderDecodedEntryDetails renders tabular FPO and POGO payloads", () 
   ]);
 
   assert.match(html, /FPO/);
-  assert.match(html, /0x00001000/);
+  assert.match(html, /Frames with SEH/);
   assert.match(html, /POGO \(profile-guided optimization\)/);
   assert.match(html, /LTCG \(link-time code generation\)/);
   assert.match(html, /code or data/);
@@ -92,7 +92,7 @@ void test("renderDecodedEntryDetails renders small decoded payload fields", () =
   assert.match(html, /CET_COMPAT/);
   assert.match(html, /FORWARD_CFI_COMPAT/);
   assert.match(html, /HOTPATCH_COMPATIBLE/);
-  assert.match(html, /b4 9c/);
+  assert.match(html, /no semantic decoding is available/);
 });
 
 void test("renderDecodedEntryDetails renders EXCEPTION pdata analysis", () => {

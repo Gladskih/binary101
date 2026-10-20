@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
+import { createDebugDirectorySubject } from "../../../../fixtures/pe-debug-payload-subject.js";
 
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 
@@ -32,4 +33,24 @@ void test("parseDebugDirectory warns when entry Characteristics is non-zero", as
   assert.equal(result.entries[0]?.majorVersion, 0xabcd);
   assert.equal(result.entries[0]?.minorVersion, 0xef12);
   assert.ok(result.warning?.includes("Characteristics field is non-zero"));
+});
+
+void test("debug payload ranges include earlier offsets when entries are not in file order", async () => {
+  const subject = createDebugDirectorySubject([
+    { type: 0, payload: new Uint8Array(8) }, { type: 0, payload: new Uint8Array(8) }
+  ]);
+  const bytes = subject.file.data.slice();
+  const view = new DataView(bytes.buffer);
+  const first = subject.dataDirs[0]!.rva;
+  const firstData = view.getUint32(first + 24, true);
+  const secondData = view.getUint32(first + 28 + 24, true);
+  view.setUint32(first + 20, secondData, true);
+  view.setUint32(first + 24, secondData, true);
+  view.setUint32(first + 28 + 20, firstData, true);
+  view.setUint32(first + 28 + 24, firstData, true);
+  const result = await parseDebugDirectory(new MockFile(bytes), subject.dataDirs, value => value, 0);
+
+  assert.deepEqual(result.rawDataRanges, [{ start: firstData, end: secondData + 8 }]);
+  assert.match(result.warning ?? "", /Debug entry #1:.*not decoded/);
+  assert.match(result.warning ?? "", /Debug entry #2:.*not decoded/);
 });

@@ -13,6 +13,20 @@ import {
 
 const identityRvaToOff = (value: number): number => value;
 
+void test("POGO reads large names in bounded windows", async () => {
+  const expected = createPogoSubjectInfo(1);
+  expected.entries[0]!.name = "n".repeat(65537);
+  const subject = createOffsetPayloadSubject(createPogoPayload(expected.signature, expected.entries));
+  const reads: number[] = [];
+  const reader = { size: subject.file.size, readBytes: subject.file.readBytes.bind(subject.file),
+    read: (offset: number, size: number) => { reads.push(size); return subject.file.read(offset, size); } };
+  const result = await parsePogoInfo(reader, reader.size, identityRvaToOff,
+    0, subject.offset, reader.size - subject.offset, () => undefined);
+
+  assert.equal(result?.entries[0]?.name.length, 65537);
+  assert.ok(Math.max(...reads) <= 64 * 1024);
+});
+
 void test("parsePogoInfo reads the signature and aligned entries", async () => {
   const warnings: string[] = [];
   const expected = createPogoSubjectInfo();

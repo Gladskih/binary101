@@ -50,7 +50,7 @@ void test("parseVcFeatureInfo warns on truncated payloads", async () => {
   assert.match(warnings.join(" | "), /VC_FEATURE|truncated|smaller/i);
 });
 
-void test("parseVcFeatureInfo decodes legacy four-counter payloads", async () => {
+void test("parseVcFeatureInfo preserves available counters when guardN is truncated", async () => {
   const warnings: string[] = [];
   const counters = createVcFeatureSubjectCounters();
   const { file, offset } = createOffsetPayloadSubject(createVcFeaturePayload(counters).slice(0, 16));
@@ -71,5 +71,16 @@ void test("parseVcFeatureInfo decodes legacy four-counter payloads", async () =>
     gs: counters[2],
     sdl: counters[3]
   });
-  assert.match(warnings.join(" | "), /legacy four-counter/i);
+  assert.match(warnings.join(" | "), /truncated before guardN/i);
+});
+
+void test("VC_FEATURE reports trailing bytes beyond the five-counter layout", async () => {
+  const warnings: string[] = [];
+  const payload = Uint8Array.from([...createVcFeaturePayload(createVcFeatureSubjectCounters()), 0]);
+  const { file, offset } = createOffsetPayloadSubject(payload);
+  const result = await parseVcFeatureInfo(file, file.size, identityRvaToOff, 0, offset,
+    payload.length, message => warnings.push(message));
+
+  assert.ok(result);
+  assert.match(warnings.join(" | "), /trailing bytes/);
 });

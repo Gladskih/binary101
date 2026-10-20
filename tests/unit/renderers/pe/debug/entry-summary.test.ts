@@ -90,7 +90,7 @@ void test("getEntrySummary describes decoded payload families", () => {
   assert.deepEqual(summaries, [
     "CodeView NB10 record with PDB identity and path.",
     "SHA256 checksum.",
-    "Raw debug payload preview for a reserved or unrecognized format.",
+    "Payload format is unsupported or malformed; no semantic decoding is available.",
     "Linker layout map with 0 records."
   ]);
 });

@@ -7,6 +7,19 @@ import { createExtraDebugPayloadSubject, identityRvaToOff, writeU32 } from "../.
 
 const FPO_RECORD_SIZE = 16;
 
+void test("FPO reads large tables in bounded windows", async () => {
+  const payload = new Uint8Array(4097 * FPO_RECORD_SIZE);
+  const subject = createExtraDebugPayloadSubject(payload);
+  const reads: number[] = [];
+  const reader = { size: subject.file.size, readBytes: subject.file.readBytes.bind(subject.file),
+    read: (offset: number, size: number) => { reads.push(size); return subject.file.read(offset, size); } };
+  const result = await parseFpoInfo(reader, reader.size, identityRvaToOff,
+    0, subject.offset, payload.length, () => undefined);
+
+  assert.equal(result?.records.length, 4097);
+  assert.ok(Math.max(...reads) <= 64 * 1024);
+});
+
 const createFpoRecordPayload = (packed: number): Uint8Array => {
   const bytes = new Uint8Array(FPO_RECORD_SIZE);
   const view = new DataView(bytes.buffer);
@@ -63,6 +76,16 @@ void test("parseFpoInfo decodes multiple records", async () => {
 
   assert.equal(result?.records.length, 2);
   assert.deepEqual(warnings, []);
+});
+
+void test("FPO diagnoses reserved bits, impossible prologs and overflowing function ranges", async () => {
+  const payload = createFpoRecordPayload(0x20ff);
+  writeU32(payload, 0, 0xfffffff0);
+  const { warnings } = await parseSubject(payload);
+
+  assert.match(warnings.join(" | "), /reserved bit/);
+  assert.match(warnings.join(" | "), /prolog.*procedure/);
+  assert.match(warnings.join(" | "), /32-bit/);
 });
 
 void test("parseFpoInfo rejects payloads smaller than one FPO_DATA record", async () => {

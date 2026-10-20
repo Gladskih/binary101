@@ -13,5 +13,5 @@ export const createOmapPayload = (records: readonly (readonly [number, number])[
 };
 
 export const createOmapSubject = () => createExtraDebugPayloadSubject(
-  createOmapPayload([[0, 0], [0x12345678, 0xfedcba98], [0xffffffff, 0]])
+  createOmapPayload([[0, 0], [0x12345678, 0xfedcba98], [0x12345680, 0]])
 );

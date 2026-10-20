@@ -2,10 +2,35 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseClrMetadataRoot } from "../../../../../../../analyzers/pe/clr/metadata-root.js";
+import { parseClrMetadataRoot, parseClrMetadataRootStreams } from "../../../../../../../analyzers/pe/clr/metadata-root.js";
+import { createPortablePdbRoot, createPortablePdbStreams } from "../../../../../../fixtures/portable-pdb.js";
 import { MockFile } from "../../../../../../helpers/mock-file.js";
 
 const encoder = new TextEncoder();
+
+void test("metadata stream-only parsing does not interpret table contents", async () => {
+  const file = new MockFile(createPortablePdbRoot(createPortablePdbStreams()));
+  const issues: string[] = [];
+  const meta = await parseClrMetadataRootStreams(file, 0, file.size, issues);
+
+  assert.equal(meta?.streams.length, 5);
+  assert.equal(meta?.tables, undefined);
+  assert.deepEqual(issues, []);
+});
+
+void test("metadata table read failures remain warnings instead of rejected parses", async () => {
+  const file = new MockFile(createPortablePdbRoot(createPortablePdbStreams()));
+  const meta = await parseClrMetadataRootStreams(file, 0, file.size, []);
+  const tableOffset = meta!.streams.find(stream => stream.name === "#~")!.offset;
+  const issues: string[] = [];
+  const reader = { size: file.size, readBytes: file.readBytes.bind(file),
+    read: (offset: number, size: number) => offset === tableOffset
+      ? Promise.reject(new Error("read failed")) : file.read(offset, size) };
+  const result = await parseClrMetadataRoot(reader, 0, file.size, issues);
+
+  assert.equal(result, null);
+  assert.match(issues.join(" | "), /could not be read/);
+});
 const align4 = (value: number): number => (value + 3) & ~3;
 // ECMA-335 II.24.2.1 ("Metadata root"): signature "BSJB" = 0x424A5342.
 const CLR_METADATA_SIGNATURE_BSJB = 0x424a5342;

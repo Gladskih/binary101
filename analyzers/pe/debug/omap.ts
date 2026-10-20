@@ -29,6 +29,10 @@ const appendOmapRecords = (
     if (previous && rva <= previous.rva) {
       warnings.add("OMAP input RVAs are not strictly increasing; mapping is ambiguous.");
     }
+    if (previous && rva > previous.rva && previous.rvaTo !== 0 &&
+        previous.rvaTo + rva - previous.rva > PE_RVA_EXCLUSIVE_LIMIT) {
+      warnings.add("OMAP target region extends beyond the 32-bit RVA space.");
+    }
     // The second ULONG starts four bytes after the input RVA (OMAP definition above).
     records.push({ rva, rvaTo: view.getUint32(offset + 4, true) });
   }

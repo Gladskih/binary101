@@ -9,28 +9,18 @@ import { getDebugTypeInfo } from "./debug-type-info.js";
 import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
 import { renderCoffDebugInfo } from "../coff/debug.js";
 import { renderException } from "./exception.js";
+import { renderFpoStatistics, renderPogoStatistics } from "./debug-statistics.js";
+import { renderPortablePdb } from "./portable-pdb.js";
+import { renderPogoRegions } from "./pogo.js";
+import { renderMiscDebug } from "./debug-misc.js";
 import { renderOmap } from "./omap.js";
 
-const hasDecodedPayload = (entry: PeDebugDirectoryEntry): boolean =>
-  !!(
-    entry.coff ||
-    entry.codeView ||
-    entry.fpo ||
-    entry.misc ||
-    entry.omap ||
-    entry.vcFeature ||
-    entry.pogo ||
-    entry.repro ||
-    entry.embeddedPortablePdb ||
-    entry.exception ||
-    entry.pdbChecksum ||
-    entry.exDllCharacteristics ||
-    entry.r2rPerfMap ||
-    entry.rawPayload
-  );
+const hasEntryDetails = (entry: PeDebugDirectoryEntry): boolean => Boolean(
+  entry.sizeOfData || entry.characteristics || entry.timeDateStamp || entry.majorVersion ||
+  entry.minorVersion || entry.addressOfRawData || entry.pointerToRawData || entry.repro || entry.omap
+);
 
 const formatByteHex = (value: number): string => value.toString(16).padStart(2, "0");
-const formatBytes = (bytes: number[]): string => bytes.map(formatByteHex).join(" ");
 const formatByteString = (bytes: number[]): string => bytes.map(formatByteHex).join("");
 
 const renderEntryCommonFields = (
@@ -46,6 +36,10 @@ const renderEntryCommonFields = (
   out.push(renderDefinitionRow("Payload size", escapeHtml(humanSize(entry.sizeOfData))));
   out.push(renderDefinitionRow("Raw RVA", escapeHtml(hex(entry.addressOfRawData, 8))));
   out.push(renderDefinitionRow("Raw file ptr", escapeHtml(hex(entry.pointerToRawData, 8))));
+  out.push(renderDefinitionRow("Characteristics", hex(entry.characteristics, 8), "Reserved; must be zero."));
+  out.push(renderDefinitionRow("Timestamp / identity stamp", hex(entry.timeDateStamp, 8),
+    "May be derived from a content hash; not necessarily a build date."));
+  out.push(renderDefinitionRow("Directory version", `${entry.majorVersion}.${entry.minorVersion}`));
   out.push(renderDefinitionRow("What it contains", escapeHtml(getEntrySummary(entry))));
   out.push(`</dl>`);
 };
@@ -72,6 +66,8 @@ const renderCodeViewFields = (entry: PeDebugDirectoryEntry, out: string[]): void
   out.push(renderDefinitionRow("Age", escapeHtml(String(entry.codeView.age))));
   out.push(renderDefinitionRow("Path", escapeHtml(entry.codeView.path || "(no path)")));
   out.push(`</dl>`);
+  out.push(`<p class="smallNote">CodeView identifies a PDB symbol file. Source lines and local ` +
+    `variables require its contents; an embedded PDB is analyzed separately.</p>`);
 };
 
 const renderCoffFields = (
@@ -80,35 +76,6 @@ const renderCoffFields = (
   out: string[]
 ): void => {
   if (entry.coff) renderCoffDebugInfo(entry.coff, out, `pe-debug-entry-${entryIndex}-coff`);
-};
-
-const renderFpoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
-  if (!entry.fpo) return;
-  out.push(`<dl>${renderDefinitionRow("Record count", escapeHtml(String(entry.fpo.records.length)))}</dl>`);
-  out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th>` +
-      `<th>Start</th><th>Size</th><th>Locals</th><th>Params</th>` +
-      `<th>Prolog</th><th>Regs</th><th>Frame</th></tr></thead><tbody>`
-  );
-  entry.fpo.records.slice(0, 25).forEach((record, index) => {
-    out.push(
-      `<tr><td>${index + 1}</td><td>${hex(record.startOffset, 8)}</td>` +
-        `<td>${humanSize(record.procedureSize)}</td><td>${record.localDwordCount}</td>` +
-        `<td>${record.parameterDwordCount}</td><td>${record.prologByteCount}</td>` +
-        `<td>${record.savedRegisterCount}</td><td>${record.frameType}</td></tr>`
-    );
-  });
-  out.push(`</tbody></table>`);
-};
-
-const renderMiscFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
-  if (!entry.misc) return;
-  out.push(`<dl>`);
-  out.push(renderDefinitionRow("Data type", escapeHtml(hex(entry.misc.dataType, 8))));
-  out.push(renderDefinitionRow("Length", escapeHtml(humanSize(entry.misc.length))));
-  out.push(renderDefinitionRow("Encoding", entry.misc.unicode ? "UTF-16LE" : "ANSI"));
-  out.push(renderDefinitionRow("Text", escapeHtml(entry.misc.text || "(empty)")));
-  out.push(`</dl>`);
 };
 
 const renderVcFeatureFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
@@ -140,36 +107,6 @@ const renderVcFeatureFields = (entry: PeDebugDirectoryEntry, out: string[]): voi
   out.push(`</tbody></table>`);
 };
 
-const renderPogoFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
-  if (!entry.pogo) return;
-  out.push(
-    `<div class="smallNote">POGO (profile-guided optimization) / ` +
-      `LTCG (link-time code generation) records describe regions placed by the linker. ` +
-      `These regions can contain code or data; the presence of these records alone ` +
-      `does not prove that profiling was used.</div>`
-  );
-  out.push(`<dl>`);
-  out.push(renderDefinitionRow(
-    "Signature",
-    `${escapeHtml(entry.pogo.signatureName)} (${hex(entry.pogo.signature, 8)})`
-  ));
-  out.push(renderDefinitionRow("Entry count", escapeHtml(String(entry.pogo.entries.length))));
-  out.push(`</dl>`);
-  if (!entry.pogo.entries.length) return;
-  out.push(
-    `<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th>` +
-      `<th>Start RVA</th><th>Size</th><th>Name</th></tr></thead><tbody>`
-  );
-  entry.pogo.entries.forEach((pogoEntry, index) => {
-    out.push(
-      `<tr><td>${index + 1}</td><td>${hex(pogoEntry.startRva, 8)}</td>` +
-        `<td>${humanSize(pogoEntry.size)}</td>` +
-        `<td>${escapeHtml(pogoEntry.name || "(empty)")}</td></tr>`
-    );
-  });
-  out.push(`</tbody></table>`);
-};
-
 const renderReproFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
   if (entry.repro) {
     out.push(`<dl>`);
@@ -181,7 +118,7 @@ const renderReproFields = (entry: PeDebugDirectoryEntry, out: string[]): void =>
   }
 };
 
-const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, out: string[]): void => {
+const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, index: number, out: string[]): void => {
   if (entry.embeddedPortablePdb) {
     out.push(`<dl>${renderDefinitionRow("Signature", escapeHtml(entry.embeddedPortablePdb.signature))}`);
     out.push(renderDefinitionRow(
@@ -193,6 +130,8 @@ const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, out: stri
       escapeHtml(humanSize(entry.embeddedPortablePdb.uncompressedSize))
     ));
     out.push(`</dl>`);
+    if (entry.embeddedPortablePdb.portablePdb) renderPortablePdb(entry.embeddedPortablePdb.portablePdb, out, index);
+    else out.push(`<p class="smallNote">Embedded debug metadata was not decoded; see diagnostics.</p>`);
   }
 };
 
@@ -238,8 +177,8 @@ const renderRawPayloadFields = (entry: PeDebugDirectoryEntry, out: string[]): vo
   if (entry.rawPayload) {
     out.push(`<dl>`);
     out.push(renderDefinitionRow(
-      "Preview",
-      `<span class="mono">${formatBytes(entry.rawPayload.previewBytes)}</span>`
+      "Analysis",
+      "Payload format is unsupported or malformed; no semantic decoding is available."
     ));
     out.push(`</dl>`);
   }
@@ -250,15 +189,15 @@ export const renderDecodedEntryDetails = (
   debug: PeDebugSection,
   out: string[]
 ): void => {
-  const decodedEntries = debug.entries?.filter(hasDecodedPayload) ?? [];
-  if (!decodedEntries.length) return;
+  const entries = debug.entries ?? [];
+  if (!entries.some(hasEntryDetails)) return;
   out.push(
     `<div class="smallNote" style="margin-top:.5rem">Decoded entry details explain the fields ` +
       `for recognized payload formats. The table above stays as a compact index; the sections ` +
-      `below explain each decoded payload in full.</div>`
+      `below retain directory fields and describe recognized payloads.</div>`
   );
-  decodedEntries.forEach(entry => {
-    const entryIndex = debug.entries?.indexOf(entry) ?? -1;
+  entries.forEach((entry, entryIndex) => {
+    if (!hasEntryDetails(entry)) return;
     const typeInfo = getDebugTypeInfo(entry.type >>> 0);
     const storageInfo = getDebugStorageInfo(pe, entry);
     out.push(
@@ -270,13 +209,14 @@ export const renderDecodedEntryDetails = (
     renderEntryCommonFields(pe, entry, out);
     renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
-    renderFpoFields(entry, out);
-    renderMiscFields(entry, out);
+    renderFpoStatistics(entry, out);
+    renderMiscDebug(entry, entryIndex, out);
     renderOmap(entry, entryIndex, out);
     renderVcFeatureFields(entry, out);
-    renderPogoFields(entry, out);
+    renderPogoStatistics(entry, out);
+    renderPogoRegions(entry, entryIndex, out);
     renderReproFields(entry, out);
-    renderEmbeddedPortablePdbFields(entry, out);
+    renderEmbeddedPortablePdbFields(entry, entryIndex, out);
     renderExceptionFields(entry, out);
     renderPdbChecksumFields(entry, out);
     renderExDllCharacteristicsFields(entry, out);

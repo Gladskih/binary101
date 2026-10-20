@@ -30,11 +30,13 @@ import { getNativeAotFunctionTableModel } from "../native-aot/function-maps.js";
 import { createExportTableModel, EXPORT_TABLE_ID } from "./export-table.js";
 import { analyzeTypeLibraryExports } from
   "../../analyzers/pe/resources/type-library-export-links.js";
-import { getOmapTableModel } from "./omap.js";
 import { createDRuntimeModuleTableModel, D_MODULE_TABLE_ID } from "./d-runtime.js";
 import { createDRuntimeReferenceTableModel, D_REFERENCE_TABLE_ID } from "./d-runtime-references.js";
 import { createClrMetadataTableModels } from "./clr-metadata.js";
 import { getReadyToRunTableModel } from "./ready-to-run-tables.js";
+import { getPogoTableModel } from "./pogo.js";
+import { getPortablePdbTableModel } from "./portable-pdb.js";
+import { getMiscDebugTableModel } from "./debug-misc.js";
 
 const getClrTableModel = (pe: PeWindowsParseResult, tableId: string): PagedSortableTableModel | null =>
   tableId.startsWith("pe-clr-") && pe.clr?.meta?.tables
@@ -119,7 +121,8 @@ const getNativeAotTableModel = (
 type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortableTableModel | null;
 
 const windowsTableResolvers: TableResolver[] = [
-  getPeDisassemblyStringTableModel, getOmapTableModel, getClrTableModel,
+  getPeDisassemblyStringTableModel, getClrTableModel, getPogoTableModel, getPortablePdbTableModel,
+  getMiscDebugTableModel,
   (pe, id) => getReadyToRunTableModel(pe.clr ?? pe, id),
   (pe, id) => id === EXPORT_TABLE_ID && pe.exports
     ? createExportTableModel(pe.exports.entries,

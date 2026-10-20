@@ -1,6 +1,6 @@
 "use strict";
 
-import { readDebugPayloadBytes } from "./payload-reader.js";
+import { readDebugPayload } from "./payload-reader.js";
 import { getReadableDebugData } from "./data.js";
 import { alignUpTo, readAsciiString, toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
@@ -44,6 +44,49 @@ const POGO_ENTRY_PREFIX_SIZE = 8;
 const getPogoSignatureName = (signature: number): string =>
   POGO_SIGNATURE_NAMES[signature >>> 0] ?? `UNKNOWN_${toHex32(signature, 8)}`;
 
+type PogoPayloadReader = (offset: number, size: number) => Promise<DataView>;
+
+const readPogoName = async (read: PogoPayloadReader, offset: number, size: number) => {
+  const parts: string[] = [];
+  // Chunk size controls I/O granularity, never the accepted name length.
+  for (let cursor = offset; cursor < size; cursor += 64) {
+    const count = Math.min(64, size - cursor);
+    const view = await read(cursor, count);
+    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    const zero = bytes.indexOf(0);
+    parts.push(readAsciiString(view, 0, zero < 0 ? bytes.length : zero));
+    if (zero >= 0) return { name: parts.join(""), end: cursor + zero + 1 };
+    if (view.byteLength < count) break;
+  }
+  return null;
+};
+
+const readPogoEntries = async (
+  read: PogoPayloadReader, size: number, addWarning: (message: string) => void
+): Promise<PePogoEntry[]> => {
+  const entries: PePogoEntry[] = [];
+  let cursor = POGO_HEADER_SIZE;
+  while (cursor < size) {
+    const view = await read(cursor, Math.min(POGO_ENTRY_PREFIX_SIZE, size - cursor));
+    if (view.byteLength < POGO_ENTRY_PREFIX_SIZE) {
+      addWarning("POGO payload has trailing bytes after whole entries.");
+      break;
+    }
+    const name = await readPogoName(read, cursor + POGO_ENTRY_NAME_OFFSET, size);
+    if (!name) {
+      addWarning("POGO entry name is not NUL-terminated within SizeOfData.");
+      break;
+    }
+    const startRva = view.getUint32(POGO_ENTRY_OFF_START_RVA, true);
+    const regionSize = view.getUint32(POGO_ENTRY_OFF_SIZE, true);
+    if (startRva + regionSize > 0x100000000) addWarning("POGO region extends beyond the 32-bit RVA space.");
+    entries.push({ startRva, size: regionSize, name: name.name });
+    cursor = alignUpTo(name.end, 4);
+    if (cursor > size) addWarning("POGO final record alignment padding is truncated.");
+  }
+  return entries;
+};
+
 export const parsePogoInfo = async (
   reader: FileRangeReader,
   fileSize: number,
@@ -66,10 +109,13 @@ export const parsePogoInfo = async (
     addWarning("POGO debug entry is smaller than the signature header.");
     return null;
   }
-  const payload = await readDebugPayloadBytes(
-    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
-    0, dataInfo.size);
-  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const read: PogoPayloadReader = (offset, size) => readDebugPayload(
+    reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff, offset, size);
+  const view = await read(0, POGO_HEADER_SIZE);
+  if (view.byteLength < POGO_HEADER_SIZE) {
+    addWarning("POGO signature header is truncated while reading.");
+    return null;
+  }
   const signature = view.getUint32(POGO_OFF_SIGNATURE, true);
   const signatureName = getPogoSignatureName(signature);
   const entries: PePogoEntry[] = [];
@@ -77,31 +123,5 @@ export const parsePogoInfo = async (
     addWarning(`POGO signature ${toHex32(signature, 8)} is not recognized; entry list not decoded.`);
     return { signature, signatureName, entries };
   }
-  let cursor = POGO_HEADER_SIZE;
-  while (cursor < view.byteLength) {
-    if (view.byteLength - cursor < POGO_ENTRY_PREFIX_SIZE) {
-      addWarning("POGO payload has trailing bytes after whole entries.");
-      break;
-    }
-    const startRva = view.getUint32(cursor + POGO_ENTRY_OFF_START_RVA, true);
-    const size = view.getUint32(cursor + POGO_ENTRY_OFF_SIZE, true);
-    const nameOffset = cursor + POGO_ENTRY_NAME_OFFSET;
-    const zeroIndex = payload.indexOf(0, nameOffset);
-    if (zeroIndex === -1) {
-      addWarning("POGO entry name is not NUL-terminated within SizeOfData.");
-      break;
-    }
-    entries.push({
-      startRva,
-      size,
-      name: readAsciiString(view, nameOffset, zeroIndex - nameOffset)
-    });
-    const nextCursor = alignUpTo(zeroIndex + 1, 4);
-    if (nextCursor <= cursor) {
-      addWarning("POGO entry alignment did not advance.");
-      break;
-    }
-    cursor = nextCursor;
-  }
-  return { signature, signatureName, entries };
+  return { signature, signatureName, entries: await readPogoEntries(read, dataInfo.size, addWarning) };
 };

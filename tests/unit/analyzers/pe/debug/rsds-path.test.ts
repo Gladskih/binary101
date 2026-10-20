@@ -5,8 +5,28 @@ import { test } from "node:test";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../analyzers/coff/machine.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
+import { createCodeViewSubject } from "../../../../fixtures/pe-debug-directory-subject.js";
 
 const encoder = new TextEncoder();
+
+void test("RSDS preserves UTF-8 paths including characters split across read windows", async () => {
+  // dotnet/runtime PE-COFF.md: RSDS Path is UTF-8, not ASCII.
+  const path = `${"a".repeat(63)}отладка/日本語.pdb`;
+  const subject = createCodeViewSubject(0, path);
+  const parsed = await parseDebugDirectory(subject.file, [subject.dataDir], value => value, 0);
+
+  assert.equal(parsed.entry?.path, path);
+  assert.equal(parsed.warning, null);
+});
+
+void test("RSDS diagnoses invalid UTF-8 instead of presenting mojibake as a valid path", async () => {
+  const subject = createCodeViewSubject(0, "x.pdb");
+  const bytes = subject.bytes.slice();
+  bytes[subject.dataDir.rva + subject.dataDir.size + 24] = 0xff;
+  const parsed = await parseDebugDirectory(new MockFile(bytes), [subject.dataDir], value => value, 0);
+
+  assert.match(parsed.warning ?? "", /not valid utf-8/i);
+});
 // Microsoft PE/COFF Debug Directory entries are 28 bytes wide.
 const IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE = 28;
 // PE/COFF debug type 2 is the CodeView record family.

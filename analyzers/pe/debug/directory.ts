@@ -7,6 +7,7 @@ import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.js";
 import { DEBUG_TYPE_NAMES } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import { validateDebugEntry, validatePortablePdbLinks } from "./entry-validation.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
 export type { PeEmbeddedPortablePdbInfo } from "./embedded-portable-pdb.js";
@@ -55,12 +56,17 @@ const appendFileRange = (ranges: FileRange[], start: number, end: number, fileSi
   const safeStart = Math.max(0, Math.min(start, fileSize));
   const safeEnd = Math.max(0, Math.min(end, fileSize));
   if (safeEnd <= safeStart) return;
-  const previous = ranges[ranges.length - 1];
-  if (previous && previous.end >= safeStart) {
-    previous.end = Math.max(previous.end, safeEnd);
-    return;
-  }
   ranges.push({ start: safeStart, end: safeEnd });
+};
+
+const mergeFileRanges = (ranges: FileRange[]): FileRange[] => {
+  const merged: FileRange[] = [];
+  for (const range of ranges.sort((left, right) => left.start - right.start)) {
+    const previous = merged.at(-1);
+    if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+    else merged.push(range);
+  }
+  return merged;
 };
 
 const resolveDebugRawSpan = (
@@ -129,24 +135,57 @@ const decodeDebugDirectoryEntry = async (
     addressOfRawData: addressOfRawDataRva,
     pointerToRawData: pointerToRawDataOff
   };
-  Object.assign(
-    currentEntry,
-    await decodeDebugEntryPayload(
-      reader,
-      {
-        type,
-        typeName: currentEntry.typeName,
-        fileSize: reader.size,
-        rvaToOff,
-        addressOfRawDataRva,
-        pointerToRawDataOff,
-        dataSize,
-        machine
-      },
-      addWarning
-    )
-  );
+  Object.assign(currentEntry, await decodeDebugEntryPayload(reader, {
+    type, typeName: currentEntry.typeName, fileSize: reader.size, rvaToOff,
+    addressOfRawDataRva, pointerToRawDataOff, dataSize, machine
+  }, addWarning));
+  validateDebugEntry(currentEntry, rvaToOff, reader.size).forEach(addWarning);
   return currentEntry;
+};
+
+const findDebugDirectory = (
+  dataDirs: PeDataDirectory[], addWarning: (message: string | null) => void
+): PeDataDirectory | null => {
+  const directory = dataDirs.find(item => item.name === "DEBUG");
+  if (!directory || (directory.rva === 0 && directory.size === 0)) return null;
+  if (directory.rva === 0) {
+    addWarning("Debug directory has a non-zero size but RVA is 0.");
+    return null;
+  }
+  if (directory.size === 0) {
+    addWarning("Debug directory has an RVA but size is 0.");
+    return null;
+  }
+  return directory;
+};
+
+const readableDebugEntryCount = (
+  fileSize: number, debugDir: PeDataDirectory, rvaToOff: RvaToOffset,
+  addWarning: (message: string | null) => void
+): number => {
+  const baseOffset = rvaToOff(debugDir.rva);
+  if (baseOffset == null || baseOffset < 0) {
+    addWarning("Debug directory RVA does not map to a file offset.");
+    return 0;
+  }
+  if (baseOffset >= fileSize) {
+    addWarning("Debug directory starts past end of file.");
+    return 0;
+  }
+  const availableDirSize = mappedRvaSize(rvaToOff, debugDir.rva, debugDir.size, fileSize);
+  if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
+    addWarning("Debug directory is smaller than one entry; file may be truncated.");
+    return 0;
+  }
+  addWarning(
+    availableDirSize < debugDir.size
+      ? "Debug directory is shorter than recorded size (possible truncation)."
+      : null
+  );
+  if (availableDirSize % IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE !== 0) {
+    addWarning("Debug directory size has trailing bytes after whole entries.");
+  }
+  return Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
 };
 
 export async function parseDebugDirectory(
@@ -164,71 +203,26 @@ export async function parseDebugDirectory(
   const addWarning = (message: string | null): void => {
     if (message && !warnings.includes(message)) warnings.push(message);
   };
-  const debugDir = dataDirs.find(d => d.name === "DEBUG");
-  if (!debugDir || (debugDir.rva === 0 && debugDir.size === 0)) {
-    return { entry: null, entries: [], warning: null, rawDataRanges: [] };
-  }
-  if (debugDir.rva === 0) {
-    return {
-      entry: null,
-      entries: [],
-      warning: "Debug directory has a non-zero size but RVA is 0.",
-      rawDataRanges: []
-    };
-  }
-  if (debugDir.size === 0) {
-    return {
-      entry: null,
-      entries: [],
-      warning: "Debug directory has an RVA but size is 0.",
-      rawDataRanges: []
-    };
-  }
-  const baseOffset = rvaToOff(debugDir.rva);
-  if (baseOffset == null || baseOffset < 0) {
-    return {
-      entry: null,
-      entries: [],
-      warning: "Debug directory RVA does not map to a file offset.",
-      rawDataRanges: []
-    };
-  }
-  const fileSize = reader.size;
-  if (baseOffset >= fileSize) {
-    return { entry: null, entries: [], warning: "Debug directory starts past end of file.", rawDataRanges: [] };
-  }
-  const availableDirSize = mappedRvaSize(rvaToOff, debugDir.rva, debugDir.size, fileSize);
-  if (availableDirSize < IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE) {
-    return {
-      entry: null,
-      entries: [],
-      warning: "Debug directory is smaller than one entry; file may be truncated.",
-      rawDataRanges: []
-    };
-  }
-  const maxEntries = Math.floor(availableDirSize / IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE);
+  const debugDir = findDebugDirectory(dataDirs, addWarning);
+  if (!debugDir) return { entry: null, entries: [],
+    warning: warnings.length ? warnings.join(" | ") : null, rawDataRanges: [] };
+  const maxEntries = readableDebugEntryCount(reader.size, debugDir, rvaToOff, addWarning);
   const rawDataRanges: FileRange[] = [];
   const entries: PeDebugDirectoryEntry[] = [];
   let entry: PeCodeViewEntry | null = null;
-  addWarning(
-    availableDirSize < debugDir.size
-      ? "Debug directory is shorter than recorded size (possible truncation)."
-      : null
-  );
-  if (availableDirSize % IMAGE_DEBUG_DIRECTORY_ENTRY_SIZE !== 0) {
-    addWarning("Debug directory size has trailing bytes after whole entries.");
-  }
   for (let index = 0; index < maxEntries; index++) {
     const view = await readDebugDirectoryEntry(reader, rvaToOff, debugDir.rva, index, addWarning);
     if (!view) break;
-    const currentEntry = await decodeDebugDirectoryEntry(reader, rvaToOff, view, machine, addWarning, rawDataRanges);
+    const currentEntry = await decodeDebugDirectoryEntry(reader, rvaToOff, view, machine,
+      message => addWarning(message ? `Debug entry #${index + 1}: ${message}` : null), rawDataRanges);
     if (currentEntry.codeView && !entry) entry = currentEntry.codeView;
     entries.push(currentEntry);
   }
+  validatePortablePdbLinks(entries).forEach(addWarning);
   return {
     entry,
     entries,
     warning: warnings.length ? warnings.join(" | ") : null,
-    rawDataRanges
+    rawDataRanges: mergeFileRanges(rawDataRanges)
   };
 }

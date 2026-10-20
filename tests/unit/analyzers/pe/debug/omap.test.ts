@@ -18,6 +18,12 @@ void test("OMAP preserves unsigned little-endian RVAs, zero targets and file ord
   const { result, warnings } = await parseSubject(createOmapPayload(pairs));
 
   assert.deepEqual(result, { records: pairs.map(([rva, rvaTo]) => ({ rva, rvaTo })) });
+  assert.match(warnings.join(" | "), /target region.*32-bit/);
+});
+
+void test("OMAP accepts a mapped region ending exactly at the RVA limit", async () => {
+  const { warnings } = await parseSubject(createOmapPayload([[1, 0xfffffff0], [17, 0]]));
+
   assert.deepEqual(warnings, []);
 });
 

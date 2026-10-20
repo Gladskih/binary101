@@ -16,7 +16,7 @@ export interface PeVcFeatureInfo {
 // Upstream PE parsers model IMAGE_DEBUG_TYPE_VC_FEATURE as five DWORD counters:
 // https://raw.githubusercontent.com/saferwall/pe/main/debug.go
 const VC_FEATURE_FIXED_SIZE = 20;
-const VC_FEATURE_LEGACY_SIZE = 16;
+const VC_FEATURE_COUNTER_PREFIX_SIZE = 16;
 const VC_FEATURE_OFF_PRE_VC11 = 0;
 const VC_FEATURE_OFF_C_AND_CPP = 4;
 const VC_FEATURE_OFF_GS = 8;
@@ -42,17 +42,20 @@ export const parseVcFeatureInfo = async (
     addWarning
   );
   if (!dataInfo) return null;
-  if (dataInfo.size < VC_FEATURE_LEGACY_SIZE) {
+  if (dataInfo.size < VC_FEATURE_COUNTER_PREFIX_SIZE) {
     addWarning("VC_FEATURE debug entry is smaller than the known four-counter layout.");
     return null;
   }
   if (dataInfo.size < VC_FEATURE_FIXED_SIZE) {
-    addWarning("VC_FEATURE debug entry uses a legacy four-counter layout without guardN.");
+    addWarning("VC_FEATURE debug entry is truncated before guardN; only four counters are available.");
+  }
+  if (dataInfo.size > VC_FEATURE_FIXED_SIZE) {
+    addWarning("VC_FEATURE debug entry has trailing bytes after its five counters.");
   }
   const view = await readDebugPayload(
     reader, rvaToOff, addressOfRawDataRva, pointerToRawDataOff,
     0, Math.min(dataInfo.size, VC_FEATURE_FIXED_SIZE));
-  if (view.byteLength < VC_FEATURE_LEGACY_SIZE) {
+  if (view.byteLength < VC_FEATURE_COUNTER_PREFIX_SIZE) {
     addWarning("VC_FEATURE debug entry is truncated.");
     return null;
   }

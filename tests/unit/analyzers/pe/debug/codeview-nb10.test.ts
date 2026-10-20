@@ -52,6 +52,16 @@ void test("parseCodeViewEntry decodes legacy NB10 records", async () => {
   assert.deepEqual(warnings, []);
 });
 
+void test("NB10 reports a non-zero reserved offset and ambiguous non-ASCII ANSI paths", async () => {
+  const payload = createNb10Payload(Uint8Array.from([0xe9, 0x2e, 0x70, 0x64, 0x62, 0]));
+  writeU32(payload, 4, 1);
+  const { result, warnings } = await parseSubject(payload);
+
+  assert.equal(result?.path, "é.pdb");
+  assert.match(warnings.join(" | "), /offset.*zero/i);
+  assert.match(warnings.join(" | "), /code page.*not recorded/i);
+});
+
 void test("parseCodeViewEntry reports unterminated NB10 paths but preserves text", async () => {
   const { result, warnings } = await parseSubject(createNb10Payload(new TextEncoder().encode("crtdll.pdb")));
 

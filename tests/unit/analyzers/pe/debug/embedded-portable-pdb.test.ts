@@ -5,6 +5,8 @@ import { test } from "node:test";
 import { createPeRvaFragments } from "../../../../helpers/pe-rva-fragments.js";
 import { parseEmbeddedPortablePdbInfo } from "../../../../../analyzers/pe/debug/embedded-portable-pdb.js";
 import { createExtraDebugPayloadSubject, identityRvaToOff, writeU32 } from "../../../../fixtures/pe-debug-extra-payloads.js";
+import { createEmbeddedPdbPayload, createPortablePdbRoot,
+  createPortablePdbStreams } from "../../../../fixtures/portable-pdb.js";
 
 const MPDB_SIGNATURE = 0x4244504d;
 
@@ -38,7 +40,7 @@ void test("parseEmbeddedPortablePdbInfo decodes MPDB header sizes", async () => 
   const { result, warnings } = await parseSubject(createPayload(MPDB_SIGNATURE, 4, [0x78, 0x9c]));
 
   assert.deepEqual(result, { signature: "MPDB", uncompressedSize: 4, compressedSize: 2 });
-  assert.deepEqual(warnings, []);
+  assert.match(warnings.join(" | "), /decompression failed/i);
 });
 
 void test("parseEmbeddedPortablePdbInfo rejects payloads smaller than the fixed header", async () => {
@@ -71,5 +73,41 @@ void test("Embedded Portable PDB headers follow fragmented RVA mappings", async 
   const result = await parseEmbeddedPortablePdbInfo(fixture.reader, fixture.reader.size,
     fixture.mapping, 0x1000, 0, 10, message => warnings.push(message));
   assert.deepEqual(result, { signature: "MPDB", uncompressedSize: 4, compressedSize: 2 });
+  assert.match(warnings.join(" | "), /decompression failed/i);
+});
+
+void test("Embedded Portable PDB decodes real Deflate metadata, including fragmented RVA payloads", async () => {
+  const payload = createEmbeddedPdbPayload(createPortablePdbRoot(createPortablePdbStreams()));
+  const fixture = createPeRvaFragments(0x1000, payload, 13);
+  const warnings: string[] = [];
+  const result = await parseEmbeddedPortablePdbInfo(fixture.reader, fixture.reader.size,
+    fixture.mapping, 0x1000, 0, payload.length, message => warnings.push(message));
+
+  assert.equal(result?.portablePdb?.documents[0]?.name, "source.cs");
+  assert.deepEqual(result?.portablePdb?.sequencePoints, { visible: 1, hidden: 1 });
   assert.deepEqual(warnings, []);
+});
+
+void test("Embedded Portable PDB reserved future-format sizes are not inflated", async () => {
+  const { result, warnings } = await parseSubject(createPayload(MPDB_SIGNATURE, 0x80000001, []));
+
+  assert.equal(result?.portablePdb, undefined);
+  assert.match(warnings.join(" | "), /future-format/);
+});
+
+void test("Embedded Portable PDB propagates metadata diagnostics after successful inflation", async () => {
+  const { result, warnings } = await parseSubject(createEmbeddedPdbPayload(new Uint8Array(32)));
+
+  assert.equal(result?.portablePdb, undefined);
+  assert.match(warnings.join(" | "), /signature/i);
+});
+
+void test("Embedded Portable PDB guards a short header read even when file metadata claims enough bytes", async () => {
+  const warnings: string[] = [];
+  const result = await parseEmbeddedPortablePdbInfo({ size: 16,
+    read: async () => new DataView(new ArrayBuffer(4)), readBytes: async () => new Uint8Array(4)
+  }, 16, identityRvaToOff, 0, 8, 8, message => warnings.push(message));
+
+  assert.equal(result, null);
+  assert.match(warnings.join(" | "), /entry is truncated/);
 });
