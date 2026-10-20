@@ -102,3 +102,22 @@ void test("a section requiring relocations cannot become decoded when its table 
   assert.equal((await applyElfDwarfRelocations([fixture.source], fixture.elf,
     fixture.relocations, fixture.issues))[0], fixture.source);
 });
+
+void test("CREL and compressed relocation byte counts are not mistaken for record counts", async () => {
+  const fixture = createDwarfRelocationFixture();
+  fixture.relocations.tables[0]!.encoding = "CREL";
+  fixture.relocations.tables[0]!.size = 7;
+  fixture.relocations.tables[0]!.entrySize = 1;
+  fixture.relocations.tables[0]!.complete = true;
+  const result = await applyElfDwarfRelocations([fixture.source], fixture.elf, fixture.relocations, fixture.issues);
+  assert.equal(result[0]?.decoded, true);
+  assert.equal((await result[0]!.reader.read(4, 4)).getUint32(0, true), 16);
+  fixture.relocations.tables[0]!.encoding = "RELA";
+  fixture.relocations.tables[0]!.compressed = true;
+  const compressed = await applyElfDwarfRelocations([fixture.source], fixture.elf, fixture.relocations, fixture.issues);
+  assert.equal(compressed[0]?.decoded, true);
+  fixture.relocations.tables[0]!.complete = false;
+  const incomplete = await applyElfDwarfRelocations([fixture.source], fixture.elf, fixture.relocations, fixture.issues);
+  assert.equal(incomplete[0]?.decoded, false);
+  assert.match(fixture.issues.join(" "), /incomplete/);
+});

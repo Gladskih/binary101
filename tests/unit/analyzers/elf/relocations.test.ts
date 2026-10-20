@@ -113,3 +113,30 @@ void test("overlapping section/dynamic tables decode once, retaining composed re
   assert.equal(result?.entries.length, 2);
   assert.deepEqual(result?.entries.map(entry => entry.recordOffset), [64, 88]);
 });
+
+void test("APS2 aliases preserve repeated records while sharing linked symbols", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.bytes.set([65, 80, 83, 50, 2, 0, 2, 3, 0, 8], 64);
+  fixture.tags.clear();
+  fixture.tags.set(0x60000011, 0x1040n).set(0x60000012, 10n);
+  fixture.installTags();
+  fixture.elf.sections.push(relocationSection(4, { type: 0x60000002, offset: 64n,
+    size: 10n, entsize: 1n, link: 2 }));
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+  assert.equal(result?.tables.length, 1);
+  assert.equal(result?.entries.length, 2); // Same address is meaningful, not an alias to discard.
+  assert.deepEqual(result?.entries.map(entry => entry.addend), [0n, 0n]);
+});
+
+void test("NONE does not demand a target and overlapping section contexts remain independent", async () => {
+  const fixture = relocationFixture();
+  fixture.elf.sections.push(relocationSection(4, { type: 4, offset: 64n, size: 24n,
+    entsize: 24n, link: 2, info: 1 }));
+  fixture.elf.sections.push(relocationSection(5, { type: 4, offset: 64n, size: 24n,
+    entsize: 24n, link: 2, info: 3 }));
+  fixture.word(64, 0xffffn);
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+  assert.equal(result?.entries.length, 2);
+  assert.deepEqual(result?.entries.map(entry => entry.target), [null, null]);
+  assert.deepEqual(result?.issues, []);
+});

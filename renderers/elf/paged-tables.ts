@@ -7,7 +7,7 @@ import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.j
 import { getNativeAotInvokeTableModel } from "../native-aot/invoke-map.js";
 import { getNativeAotStackTraceTableModel } from "../native-aot/stack-trace-map.js";
 import { getNativeAotFunctionTableModel } from "../native-aot/function-maps.js";
-import { createElfRelocationTableModel } from "./relocations.js";
+import { getElfRelocationSummaryModel } from "./relocations.js";
 import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
@@ -78,7 +78,5 @@ export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
     const table = resolve(elf, tableId);
     if (table) return table;
   }
-  return tableId === "elf-relocations" && elf.relocations
-    ? createElfRelocationTableModel(elf)
-    : getNativeAotTable(elf, tableId);
+  return getElfRelocationSummaryModel(elf, tableId) ?? getNativeAotTable(elf, tableId);
 };

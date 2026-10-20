@@ -52,7 +52,6 @@ export const createElf32Layout = (byteOrder: ElfByteOrder): ElfBinaryLayout => {
       { tag: BigInt(integers.u32(view, 0)), value: BigInt(integers.u32(view, 4)) },
     readSymbol: view => readSymbol(view, integers),
     readSectionIndex: view => view.byteLength < ELF_SYMBOL_INDEX.BYTE_SIZE ? null : integers.u32(view, 0),
-    supportsSymbolicRelocations: _machine => true,
     relocations: {
       REL: { entrySize: 8, read: view => readRel(view, integers) },
       RELA: { entrySize: 12, read: view => readRela(view, integers) }

@@ -33,7 +33,6 @@ export interface ElfBinaryLayout {
   readDynamic: (view: DataView) => { tag: bigint; value: bigint } | null;
   readSymbol: (view: DataView) => ElfSymbolRecord | null;
   readSectionIndex: (view: DataView) => number | null;
-  supportsSymbolicRelocations: (machine: number) => boolean;
   relocations: Record<"REL" | "RELA", {
     entrySize: number;
     read: (view: DataView) => ElfSymbolicRelocationRecord | null;

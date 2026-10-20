@@ -10,7 +10,7 @@ import { createElfItaniumFile } from "../../../fixtures/elf-itanium-file.js";
 import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { renderElfSymbols } from "../../../../renderers/elf/symbols.js";
 import { createElfSymbolTableModel } from "../../../../renderers/elf/symbol-tables.js";
-import { createElfRelocationTableModel } from "../../../../renderers/elf/relocations.js";
+import { getElfRelocationSummaryModel } from "../../../../renderers/elf/relocations.js";
 
 void test("full ELF parsing decodes dynamic symbols and renders both names", async () => {
   const elf = await parseElf(new File([createElfItaniumFile()], "cpp.elf"));
@@ -56,9 +56,9 @@ for (const [name, text] of [["_RNvC1a4main", "a::main"], ["_D3foo3barf", "float 
     const symbols = createElfSymbolTableModel(fixture.elf.symbolTables[0]!);
     assert.ok(symbols.rowAt(1)!.cells[1]!.html.includes(text));
     assert.equal(symbols.sortValueAt(1, 1), name);
-    const relocations = createElfRelocationTableModel(fixture.elf);
-    assert.ok(relocations.rowAt(0)!.cells[4]!.html.includes(text));
-    assert.equal(relocations.sortValueAt(0, 4), "#1 " + name);
+    const relocations = getElfRelocationSummaryModel(fixture.elf, "elf-relocations-symbols")!;
+    assert.ok(relocations.rowAt(0)!.cells[0]!.html.includes(text));
+    assert.equal(relocations.sortValueAt(0, 0), name);
   });
 }
 
@@ -85,9 +85,9 @@ void test("static symbols and relocation references share parsing but retain raw
   const table = createElfSymbolTableModel(fixture.elf.symbolTables[0]!);
   assert.match(table.rowAt(1)!.cells[1]!.html, /f\(int\)/);
   assert.equal(table.sortValueAt(1, 1), "_Z1fi");
-  const relocations = createElfRelocationTableModel(fixture.elf);
-  assert.match(relocations.rowAt(0)!.cells[4]!.html, /#1 f\(int\)/);
-  assert.equal(relocations.sortValueAt(0, 4), "#1 _Z1fi");
+  const relocations = getElfRelocationSummaryModel(fixture.elf, "elf-relocations-symbols")!;
+  assert.match(relocations.rowAt(0)!.cells[0]!.html, /f\(int\)/);
+  assert.equal(relocations.sortValueAt(0, 0), "_Z1fi");
 });
 
 void test("empty ELF analysis does not request WASM", async () => {

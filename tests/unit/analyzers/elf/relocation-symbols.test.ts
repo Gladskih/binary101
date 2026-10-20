@@ -137,3 +137,81 @@ void test("a short symbol read returns a warning and caches the failed read", as
   assert.equal(issues.length, 1);
   assert.match(issues.join(" "), /truncated/);
 });
+
+void test("dynamic relocation symbols cannot read past DT_SYMTABSZ into neighboring data", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.tags.set(39, 24n); // gABI DT_SYMTABSZ: only the null Elf64_Sym is in the table.
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader(
+    createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, issues);
+  assert.equal(await read(relocationTable({ symbolTableIndex: null }), 1), null);
+  assert.match(issues.join(" "), /outside/);
+});
+
+void test("sectionless relocation symbols use DT_SYMTAB_SHNDX", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.elf.sections = [];
+  fixture.tags.set(34, 0x11c0n); // DT_SYMTAB_SHNDX points at two Elf32_Word entries.
+  fixture.view.setUint16(286, 0xffff, true);
+  fixture.view.setUint32(452, 70000, true);
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader(
+    createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, issues);
+  assert.equal((await read(relocationTable({ symbolTableIndex: null }), 1))?.sectionIndex, 70000);
+  assert.deepEqual(issues, []);
+});
+
+void test("a missing dynamic symbol boundary is visible and reported once", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.tags.delete(39);
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader(
+    createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, issues);
+  assert.ok(await read(relocationTable({ symbolTableIndex: null }), 1));
+  assert.ok(await read(relocationTable({ symbolTableIndex: null }), 1));
+  assert.equal(issues.length, 1);
+  assert.match(issues[0]!, /no established size/);
+});
+
+void test("dynamic references honor a matching DYNSYM section or a previously parsed hash-derived count", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.tags.delete(39);
+  Object.assign(fixture.elf.sections[2]!, { type: 11, addr: 0x1100n });
+  const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, issues);
+  assert.ok(await read(relocationTable({ symbolTableIndex: null }), 1));
+  assert.equal(await read(relocationTable({ symbolTableIndex: null }), 2), null);
+  fixture.elf.sections = [];
+  fixture.elf.dynSymbols = { total: 2, importSymbols: [], exportSymbols: [], issues: [] };
+  const fromHashes = createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, []);
+  assert.ok(await fromHashes(relocationTable({ symbolTableIndex: null }), 1));
+  assert.equal(await fromHashes(relocationTable({ symbolTableIndex: null }), 2), null);
+});
+
+for (const size of [-1n, 25n]) {
+  void test(`invalid DT_SYMTABSZ ${size} never enables a neighboring symbol read`, async () => {
+    const fixture = dynamicRelocationFixture();
+    fixture.tags.set(39, size);
+    const read = createElfRelocationSymbolReader(
+      createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, []);
+    assert.equal(await read(relocationTable({ symbolTableIndex: null }), 1), null);
+  });
+}
+
+void test("invalid DYNSYM stride and nonextended SHNDX values are rejected", async () => {
+  const fixture = dynamicRelocationFixture();
+  Object.assign(fixture.elf.sections[2]!, { type: 11, addr: 0x1100n, entsize: 1n });
+  const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
+  assert.equal(await createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, [])(
+    relocationTable({ symbolTableIndex: null }), 1), null);
+  fixture.elf.sections = [];
+  fixture.tags.set(34, 0x11c0n);
+  fixture.view.setUint16(286, 0xffff, true);
+  fixture.view.setUint32(452, 1, true); // Extended indices must be >= SHN_LORESERVE.
+  const issues: string[] = [];
+  const changedReader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
+  assert.equal((await createElfRelocationSymbolReader(changedReader, fixture.elf, fixture.tags, issues)(
+    relocationTable({ symbolTableIndex: null }), 1))?.sectionIndex, 0xffff);
+  assert.match(issues.join(" "), /SHN_XINDEX/);
+});

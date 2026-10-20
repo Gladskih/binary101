@@ -12,7 +12,8 @@ const relocationTags = (wordSize: number, symbolEntrySize: bigint): Map<number, 
   [dynamicTags.STRTAB, relocationStorage.loadAddress + BigInt(relocationStorage.strings)],
   [dynamicTags.STRSZ, 8n], // "\0target\0" plus a spare NUL, as in the section fixture.
   [dynamicTags.SYMTAB, relocationStorage.loadAddress + BigInt(relocationStorage.symbols)],
-  [dynamicTags.SYMENT, symbolEntrySize]
+  [dynamicTags.SYMENT, symbolEntrySize],
+  [39, symbolEntrySize * 2n] // gABI DT_SYMTABSZ: null symbol and target symbol.
 ]);
 
 const installDynamicTags = (

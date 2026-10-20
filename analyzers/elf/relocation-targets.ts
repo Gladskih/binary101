@@ -71,7 +71,7 @@ export const locateElfRelocationTarget = (
 ): ElfRelocationTarget | null => {
   // RELR fixes a whole address-sized slot. Unknown symbolic types only identify a site;
   // their write width belongs to the processor-specific relocation evaluator.
-  const width = table.encoding === "RELR" ? BigInt(layout.wordSize) : 1n;
+  const width = table.encoding === "RELR" || table.encoding === "AUTH_RELR" ? BigInt(layout.wordSize) : 1n;
   return elf.header.type === ELF_FILE_TYPE.REL ? sectionTarget(elf, table, offset, width, issues, logicalSizes) :
     virtualTarget(elf, offset, width, issues);
 };
