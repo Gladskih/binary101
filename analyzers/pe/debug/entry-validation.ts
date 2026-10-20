@@ -44,7 +44,7 @@ export const validateDebugEntry = (
   validateVersions(entry, warnings);
   validateLocations(entry, rvaToOff, fileSize, warnings);
   if (entry.rawPayload || (entry.sizeOfData &&
-      ![1, 2, 3, 4, 5, 7, 8, 12, 13, 16, 17, 18, 19, 20, 21].includes(entry.type))) {
+      ![1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 16, 17, 18, 19, 20, 21].includes(entry.type))) {
     warnings.push(`${entry.typeName} payload is not decoded; the format is unsupported or malformed.`);
   }
   return warnings;

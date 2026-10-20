@@ -16,6 +16,7 @@ import {
   type PeExDllCharacteristicsInfo
 } from "./ex-dll-characteristics.js";
 import { parseFpoInfo, type PeFpoInfo } from "./fpo.js";
+import { parseFixupInfo, type PeFixupInfo } from "./fixup.js";
 import { parseMiscDebugInfo, type PeMiscDebugInfo } from "./misc.js";
 import { parseOmapInfo, type PeOmapInfo } from "./omap.js";
 import { parsePdbChecksumInfo, type PePdbChecksumInfo } from "./pdb-checksum.js";
@@ -30,6 +31,7 @@ import {
   IMAGE_DEBUG_TYPE_EXCEPTION,
   IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS,
   IMAGE_DEBUG_TYPE_FPO,
+  IMAGE_DEBUG_TYPE_FIXUP,
   IMAGE_DEBUG_TYPE_MISC,
   IMAGE_DEBUG_TYPE_OMAP_TO_SRC,
   IMAGE_DEBUG_TYPE_OMAP_FROM_SRC,
@@ -46,6 +48,7 @@ export type PeDebugPayloads = {
   coff?: CoffDebugInfo;
   codeView?: PeCodeViewEntry;
   fpo?: PeFpoInfo;
+  fixup?: PeFixupInfo;
   misc?: PeMiscDebugInfo;
   omap?: PeOmapInfo;
   vcFeature?: PeVcFeatureInfo;
@@ -70,23 +73,7 @@ type DecodeInput = {
   machine: number;
 };
 
-const hasDecodedPayload = (payloads: PeDebugPayloads): boolean =>
-  Boolean(
-    payloads.codeView ||
-      payloads.coff ||
-      payloads.fpo ||
-      payloads.misc ||
-      payloads.omap ||
-      payloads.vcFeature ||
-      payloads.pogo ||
-      payloads.repro ||
-      payloads.embeddedPortablePdb ||
-      payloads.exception ||
-      payloads.pdbChecksum ||
-      payloads.exDllCharacteristics ||
-      payloads.r2rPerfMap ||
-      payloads.rawPayload
-  );
+const hasDecodedPayload = (payloads: PeDebugPayloads): boolean => Object.values(payloads).some(Boolean);
 
 const readRawFallback = (
   reader: FileRangeReader,
@@ -114,6 +101,7 @@ const PAYLOAD_DECODERS: Partial<Record<number, readonly [keyof PeDebugPayloads, 
   [IMAGE_DEBUG_TYPE_COFF]: ["coff", parseCoffDebugInfo],
   [IMAGE_DEBUG_TYPE_CODEVIEW]: ["codeView", parseCodeViewEntry],
   [IMAGE_DEBUG_TYPE_FPO]: ["fpo", parseFpoInfo],
+  [IMAGE_DEBUG_TYPE_FIXUP]: ["fixup", parseFixupInfo],
   [IMAGE_DEBUG_TYPE_MISC]: ["misc", parseMiscDebugInfo],
   [IMAGE_DEBUG_TYPE_OMAP_TO_SRC]: ["omap", parseOmapInfo],
   [IMAGE_DEBUG_TYPE_OMAP_FROM_SRC]: ["omap", parseOmapInfo],

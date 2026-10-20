@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
-import { createPeDebugFile } from "../../../../fixtures/pe-debug-file.js";
+import { createPeDebugFile, createPeWithDebugPayloads } from "../../../../fixtures/pe-debug-file.js";
 
 void test("full PE parsing retains embedded PDB, frame metadata, linker names and chained DBG paths", async () => {
   const parsed = await parsePe(createPeDebugFile());
@@ -18,6 +18,17 @@ void test("full PE parsing retains embedded PDB, frame metadata, linker names an
     [".text$first", ".text$largest"]);
   assert.deepEqual(parsed.debug?.entries?.[4]?.misc?.records.map(record => record.text),
     ["first.dbg", "second.dbg"]);
+});
+
+void test("full PE parsing recognizes FIXUP metadata instead of opaque fallback", async () => {
+  const parsed = await parsePe(createPeWithDebugPayloads([{ type: 6, data: Uint8Array.of(
+    4, 0, 0, 128, 0, 16, 0, 0, 4, 16, 0, 0) }]));
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.debug?.warning, undefined);
+  assert.deepEqual(parsed.debug?.entries?.[0]?.fixup?.records,
+    [{ type: 4, extra: 0x8000, rva: 0x1000, targetRva: 0x1004 }]);
+  assert.equal(parsed.debug?.entries?.[0]?.rawPayload, undefined);
 });
 
 void test("full PE parsing retains named linker regions beyond a presentation page", async () => {

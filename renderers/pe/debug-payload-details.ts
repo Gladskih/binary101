@@ -10,6 +10,7 @@ import { getDebugStorageInfo, getEntrySummary } from "./debug-entry-summary.js";
 import { renderCoffDebugInfo } from "../coff/debug.js";
 import { renderException } from "./exception.js";
 import { renderFpoStatistics, renderPogoStatistics } from "./debug-statistics.js";
+import { renderFixupStatistics } from "./fixup.js";
 import { renderPortablePdb } from "./portable-pdb.js";
 import { renderPogoRegions } from "./pogo.js";
 import { renderMiscDebug } from "./debug-misc.js";
@@ -214,6 +215,7 @@ export const renderDecodedEntryDetails = (
     renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
     renderFpoStatistics(entry, out);
+    renderFixupStatistics(pe, entry, entryIndex, out);
     renderMiscDebug(entry, entryIndex, out);
     renderOmap(entry, entryIndex, out);
     renderVcFeatureFields(entry, out);

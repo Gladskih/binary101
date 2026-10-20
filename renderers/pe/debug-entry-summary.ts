@@ -79,6 +79,7 @@ const payloadSummaries: ReadonlyArray<(entry: PeDebugDirectoryEntry) => string |
   entry => entry.codeView ? `CodeView ${entry.codeView.signature} record with PDB identity and path.` : null,
   entry => entry.fpo
     ? `Frame-pointer omission table with ${formatDebugCount(entry.fpo.records.length, "record")}.` : null,
+  entry => entry.fixup ? `Link-time relocation metadata with ${formatDebugCount(entry.fixup.records.length, "fixup")}.` : null,
   entry => entry.misc ? `Legacy DBG-file locations: ` +
     `${formatDebugCount(entry.misc.records.filter(record => record.text).length, "decoded path")} in ` +
     `${formatDebugCount(entry.misc.records.length, "MISC record")}.` : null,

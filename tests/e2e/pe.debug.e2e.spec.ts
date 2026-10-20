@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createPeDebugFile } from "../fixtures/pe-debug-file.js";
+import { createPeDebugFile, createPeWithDebugPayloads } from "../fixtures/pe-debug-file.js";
 
 test("PE debug shows embedded source mappings and readable layout statistics", async ({ page }, testInfo) => {
   const errors: string[] = [];
@@ -36,6 +36,25 @@ test("PE debug shows embedded source mappings and readable layout statistics", a
   await expect(panel).not.toContainText("not decoded");
   expect(errors).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("pe-debug.png"), fullPage: true });
+});
+
+test("FIXUP displays type and named-section summaries without an address table", async ({ page }) => {
+  const file = createPeWithDebugPayloads([{ type: 6, data: Uint8Array.of(
+    1, 0, 0, 0, 0, 16, 0, 0, 4, 16, 0, 0,
+    4, 0, 0, 128, 4, 16, 0, 0, 8, 16, 0, 0) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByText("Entry #1:", { exact: false }).click();
+  await expect(panel).toContainText("Link-time relocation metadata with 2 fixups");
+  await expect(panel).toContainText("Distinct source locations");
+  await expect(panel).toContainText("IMAGE_REL_AMD64_ADDR64");
+  await expect(panel).toContainText("IMAGE_REL_AMD64_REL32");
+  await expect(panel).toContainText(".text");
+  await expect(panel.getByRole("columnheader", { name: "Source section", exact: true })).toBeVisible();
+  await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+  await expect(panel).not.toContainText("not decoded");
 });
 
 test("POGO keeps names and sizes accessible through pagination", async ({ page }) => {

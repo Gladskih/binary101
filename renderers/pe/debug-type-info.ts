@@ -26,7 +26,7 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   },
   4: { label: "MISC", description: "Legacy location of a DBG file." },
   5: { label: "EXCEPTION", description: "Copy of the .pdata exception data." },
-  6: { label: "FIXUP", description: "Reserved FIXUP debug type." },
+  6: { label: "FIXUP", description: "Linker static relocation records using Microsoft's published XFIXUP layout." },
   7: {
     label: "OMAP_TO_SRC",
     description: "Mapping from an RVA in the image to an RVA in the source image."

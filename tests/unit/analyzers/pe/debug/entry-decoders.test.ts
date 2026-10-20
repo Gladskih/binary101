@@ -84,6 +84,14 @@ void test("decodeDebugEntryPayload returns known decoded payloads without raw fa
   assert.deepEqual(warnings, []);
 });
 
+void test("decodeDebugEntryPayload recognizes the published FIXUP record layout", async () => {
+  const { result, warnings } = await createDecodeSubject(6, Uint8Array.of(
+    1, 0, 0, 128, 0, 16, 0, 0, 0, 32, 0, 0), "FIXUP");
+
+  assert.deepEqual(result, { fixup: { records: [{ type: 1, extra: 0x8000, rva: 0x1000, targetRva: 0x2000 }] } });
+  assert.deepEqual(warnings, []);
+});
+
 void test("decodeDebugEntryPayload falls back to raw preview when known decoders reject data", async () => {
   const { result, warnings } = await createDecodeSubject(
     IMAGE_DEBUG_TYPE_CODEVIEW,

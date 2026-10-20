@@ -34,6 +34,12 @@ export const createPeDebugFile = (regionCount = 2): MockFile => {
           : index === regionCount - 1 ? ".text$largest" : `.text$region_${index}` }))) },
     { type: 4, data: miscPaths(["first.dbg", "second.dbg"]) }
   ];
+  return createPeWithDebugPayloads(payloads);
+};
+
+export const createPeWithDebugPayloads = (
+  payloads: readonly { type: number; data: Uint8Array }[]
+): MockFile => {
   const base = createPePlusWithSection();
   const bytes = new Uint8Array(Math.ceil((1024 + payloads.reduce(
     (size, payload) => size + payload.data.length, 0)) / 512) * 512);
