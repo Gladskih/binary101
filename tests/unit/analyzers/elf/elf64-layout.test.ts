@@ -43,8 +43,6 @@ void test("ELF64 preserves full-width addresses, unsigned r_info halves and sign
     offset: 0xffff_ffff_ffff_fffen, type: 0xfffffff0, symbolIndex: 0xffffffff,
     addend: -(1n << 63n)
   });
-  assert.equal(layout.supportsSymbolicRelocations(8), false); // EM_MIPS compound ELF64 r_info.
-  assert.equal(layout.supportsSymbolicRelocations(62), true); // EM_X86_64.
 });
 
 void test("ELF64 symbol values remain bigints and do not lose high bits", () => {

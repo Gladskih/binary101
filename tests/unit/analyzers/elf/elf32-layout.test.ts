@@ -41,7 +41,6 @@ void test("ELF32 preserves unsigned address and r_info fields and signed RELA ad
   assert.deepEqual(layout.relocations.RELA.read(view), {
     offset: 0xffff_fffen, type: 128, symbolIndex: 0xffffff, addend: -0x8000_0000n
   });
-  assert.equal(layout.supportsSymbolicRelocations(8), true); // EM_MIPS has generic ELF32 r_info.
 });
 
 void test("ELF32 st_info, st_other and st_shndx keep their independent byte offsets", () => {

@@ -17,8 +17,12 @@ const relocateSource = async (source: DwarfSectionSource, elf: ElfRelocationImag
   if (!tables.length) return { ...source, decoded: false };
   const indexes = new Set(tables.map(({ index }) => index));
   const entries = relocations.entries.filter(entry => indexes.has(entry.tableIndex));
-  const expected = tables.reduce((count, { table }) => count + table.size / table.entrySize, 0);
-  if (!Number.isSafeInteger(expected) || entries.length !== expected) {
+  const fixed = new Set(tables.filter(({ table }) => !table.compressed &&
+    (table.encoding === "REL" || table.encoding === "RELA")).map(({ index }) => index));
+  const expected = tables.reduce((count, { table, index }) =>
+    count + (fixed.has(index) ? table.size / table.entrySize : 0), 0);
+  if (tables.some(({ table }) => table.complete === false) ||
+    !Number.isSafeInteger(expected) || entries.filter(entry => fixed.has(entry.tableIndex)).length !== expected) {
     issues.push(`${section.name}: relocation records are incomplete; section is not decoded.`);
     return { ...source, decoded: false };
   }

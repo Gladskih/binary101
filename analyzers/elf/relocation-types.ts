@@ -1,8 +1,9 @@
 import type { ElfParseResult } from "./types.js";
 
 export type ElfRelocationImage = Pick<ElfParseResult,
-  "header" | "sections" | "programHeaders" | "is64" | "littleEndian" | "fileSize">;
-export type ElfRelocationEncoding = "REL" | "RELA" | "RELR";
+  "header" | "sections" | "programHeaders" | "is64" | "littleEndian" | "fileSize" | "dynSymbols">;
+export type ElfRelocationEncoding = "REL" | "RELA" | "RELR" |
+  "ANDROID_REL" | "ANDROID_RELA" | "CREL" | "AUTH_RELR";
 
 export interface ElfRelocationTable {
   offset: number;
@@ -13,6 +14,8 @@ export interface ElfRelocationTable {
   sectionIndex: number | null;
   symbolTableIndex: number | null;
   targetSectionIndex: number | null;
+  compressed?: true;
+  complete?: boolean;
 }
 
 export interface ElfRelocationSymbol {
@@ -29,6 +32,7 @@ export interface ElfRelocationTarget {
 
 export interface ElfRelocation {
   tableIndex: number;
+  // Physical file offset, or decoded-section offset when table.compressed is set.
   recordOffset: number;
   offset: bigint;
   type: number | null;

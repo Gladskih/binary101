@@ -1,5 +1,7 @@
 "use strict";
 
+import { createMemoryRangeReader } from "../memory-range-reader.js";
+import { decompressSectionZlib } from "../section-zlib.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import {
   canonicalDwarfSectionName,
@@ -30,48 +32,6 @@ const supportedNames = new Set<string>([
   ".debug_cu_index", ".debug_tu_index", ".debug_sup", ".gnu_debugaltlink"
 ]);
 
-const memoryReader = (bytes: Uint8Array): FileRangeReader => {
-  const read = async (offset: number, size: number): Promise<DataView> => {
-    const start = Math.min(offset, bytes.length);
-    const length = Math.max(0, Math.min(size, bytes.length - start));
-    return new DataView(bytes.buffer, bytes.byteOffset + start, length);
-  };
-  const readBytes = async (offset: number, size: number): Promise<Uint8Array> => {
-    const view = await read(offset, size);
-    return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-  };
-  return { size: bytes.length, read, readBytes };
-};
-
-const inflateZlib = async (
-  compressed: Uint8Array,
-  expectedSize: number
-): Promise<Uint8Array> => {
-  if (typeof DecompressionStream !== "function") {
-    throw new Error("browser does not provide DecompressionStream");
-  }
-  const output = new Uint8Array(expectedSize);
-  const stream = new Blob([compressed.slice().buffer])
-    .stream()
-    .pipeThrough(new DecompressionStream("deflate"));
-  const streamReader = stream.getReader();
-  let offset = 0;
-  while (true) {
-    const chunk = await streamReader.read();
-    if (chunk.done) break;
-    if (offset + chunk.value.length > output.length) {
-      await streamReader.cancel();
-      throw new Error(`output exceeds declared size ${expectedSize}`);
-    }
-    output.set(chunk.value, offset);
-    offset += chunk.value.length;
-  }
-  if (offset !== output.length) {
-    throw new Error(`output size ${offset} does not match declared size ${expectedSize}`);
-  }
-  return output;
-};
-
 const unavailableSource = (
   reader: FileRangeReader,
   section: DwarfSectionInput,
@@ -90,7 +50,7 @@ const decodedSource = (
 ): DwarfSectionSource => ({
   summary: section,
   section: { name: payload.name, offset: 0, size: bytes.length, compressed: false },
-  reader: memoryReader(bytes),
+  reader: createMemoryRangeReader(bytes),
   decoded: true
 });
 
@@ -130,7 +90,7 @@ const decompressCandidate = async (
   const compressed = await readCompressedBytes(reader, candidate.section, payload, issues);
   if (!compressed) return unavailable;
   try {
-    const bytes = payload.codec === "zlib" ? await inflateZlib(compressed, payload.uncompressedSize)
+    const bytes = payload.codec === "zlib" ? await decompressSectionZlib(compressed, payload.uncompressedSize)
       : await (await import("./zstd.js")).decompressDwarfZstd(compressed, payload.uncompressedSize);
     return decodedSource(candidate.section, payload, bytes);
   } catch (error) {

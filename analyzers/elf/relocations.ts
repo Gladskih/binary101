@@ -20,8 +20,17 @@ const resolveEntry = async (
   ...entry,
   symbol: entry.symbolIndex != null && entry.symbolIndex !== ELF_SYMBOL_INDEX.UNDEF
     ? await readSymbol(table, entry.symbolIndex) : null,
-  target: locateElfRelocationTarget(elf, table, entry.offset, issues, layout, logicalSizes)
+  target: entry.type === 0 ? null :
+    locateElfRelocationTarget(elf, table, entry.offset, issues, layout, logicalSizes)
 });
+
+const recordIdentity = (elf: ElfRelocationImage, table: ElfRelocationTable,
+  entry: ElfRelocation, ordinal: number): string => {
+  const identity = table.encoding === "ANDROID_REL" || table.encoding === "ANDROID_RELA"
+    ? `${table.offset}:${ordinal}` : `${entry.recordOffset}:${entry.offset}`;
+  const context = elf.header.type === 1 ? `${table.targetSectionIndex}:${table.symbolTableIndex}` : "";
+  return `${table.encoding}:${table.compressed ? table.offset : ""}:${identity}:${context}`;
+};
 
 export const parseElfRelocations = async (
   file: File, elf: ElfRelocationImage, dynamicEntries?: ElfDynamicEntry[],
@@ -38,8 +47,9 @@ export const parseElfRelocations = async (
   const visited = new Set<string>();
   for (const [tableIndex, table] of tables.entries()) {
     // Exact aliases are merged above; overlapping tables need independent RELR cursors.
+    let ordinal = 0;
     for await (const entry of readElfRelocationRecords(reader, table, elf, tableIndex, issues, layout)) {
-      const key = `${table.encoding}:${entry.recordOffset}:${entry.offset}`;
+      const key = recordIdentity(elf, table, entry, ordinal++);
       if (visited.has(key)) continue;
       visited.add(key);
       entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout, logicalSizes));

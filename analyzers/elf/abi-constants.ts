@@ -7,7 +7,10 @@ export const ELF_MACHINE_ID = { I386: 3, MIPS: 8, X86_64: 62, AARCH64: 183, RISC
 // https://gabi.xinuos.com/elf/03-sheader.html (sh_type, sh_flags)
 export const ELF_SECTION_TYPE = {
   SYMTAB: 2, STRTAB: 3, RELA: 4, DYNAMIC: 6, NOBITS: 8, REL: 9, DYNSYM: 11,
-  SYMTAB_SHNDX: 18, RELR: 19
+  SYMTAB_SHNDX: 18, RELR: 19,
+  // LLVM BinaryFormat/ELF.h; CREL remains an experimental LLVM encoding.
+  CREL: 0x40000014, ANDROID_REL: 0x60000001, ANDROID_RELA: 0x60000002,
+  ANDROID_RELR: 0x6fffff00, AARCH64_AUTH_RELR: 0x70000004
 } as const;
 export const ELF_SECTION_FLAG = { ALLOC: 0x2n } as const;
 
@@ -19,7 +22,13 @@ export const ELF_SEGMENT_TYPE = { LOAD: 1, DYNAMIC: 2 } as const;
 export const ELF_DYNAMIC_TAG = {
   NULL: 0, PLTRELSZ: 2, HASH: 4, STRTAB: 5, SYMTAB: 6, RELA: 7, RELASZ: 8, RELAENT: 9,
   STRSZ: 10, SYMENT: 11, REL: 17, RELSZ: 18, RELENT: 19, PLTREL: 20, JMPREL: 23,
-  RELRSZ: 35, RELR: 36, RELRENT: 37, RELACOUNT: 0x6ffffff9, RELCOUNT: 0x6ffffffa
+  RELRSZ: 35, RELR: 36, RELRENT: 37, RELACOUNT: 0x6ffffff9, RELCOUNT: 0x6ffffffa,
+  // LLVM BinaryFormat/DynamicTags.def and Android bionic libc/include/elf.h.
+  ANDROID_REL: 0x6000000f, ANDROID_RELSZ: 0x60000010,
+  ANDROID_RELA: 0x60000011, ANDROID_RELASZ: 0x60000012,
+  ANDROID_RELR: 0x6fffe000, ANDROID_RELRSZ: 0x6fffe001, ANDROID_RELRENT: 0x6fffe003,
+  SYMTAB_SHNDX: 34, SYMTABSZ: 39, CREL: 0x40000026,
+  AARCH64_AUTH_RELRSZ: 0x70000011, AARCH64_AUTH_RELR: 0x70000012, AARCH64_AUTH_RELRENT: 0x70000013
 } as const;
 
 // https://gabi.xinuos.com/elf/05-symtab.html: SHN_XINDEX and Elf32_Word SHNDX entries.

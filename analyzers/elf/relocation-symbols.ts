@@ -34,12 +34,33 @@ const dynamicStrings = (
   tags.has(DT.STRTAB) && tags.has(DT.STRSZ)
     ? elfVirtualRange(elf.programHeaders, tags.get(DT.STRTAB)!, tags.get(DT.STRSZ)!, reader.size) : null;
 
+const dynamicSymbolSize = (elf: ElfRelocationImage, tags: Map<number, bigint>,
+  stride: number): bigint | null => {
+  const section = elf.sections.find(section => section.type === SECTION.DYNSYM &&
+    section.addr === tags.get(DT.SYMTAB));
+  if (section) return section.entsize === BigInt(stride) ? section.size : 0n;
+  if (tags.has(DT.SYMTABSZ)) return tags.get(DT.SYMTABSZ)!;
+  // Reuse the count already established from dynamic hashes; don't scan them again.
+  // A section-derived count is only applicable to its own table (checked above).
+  if (!elf.sections.some(section => section.type === SECTION.DYNSYM) &&
+    elf.dynSymbols && !elf.dynSymbols.issues.length) return BigInt(elf.dynSymbols.total * stride);
+  return null;
+};
+
+const withinDynamicSymbols = (elf: ElfRelocationImage, tags: Map<number, bigint>,
+  index: number, stride: number): boolean => {
+  const size = dynamicSymbolSize(elf, tags, stride);
+  return size == null || (size >= 0n && size % BigInt(stride) === 0n &&
+    BigInt(index + 1) * BigInt(stride) <= size);
+};
+
 const locateDynamicSymbol = (
   reader: FileRangeReader, elf: ElfRelocationImage, tags: Map<number, bigint>, index: number,
   stride: number
 ): SymbolLocation | null => {
   const address = tags.get(DT.SYMTAB);
   if (address == null || tags.get(DT.SYMENT) !== BigInt(stride)) return null;
+  if (!withinDynamicSymbols(elf, tags, index, stride)) return null;
   const stringsAddress = tags.get(DT.STRTAB);
   if (stringsAddress != null && stringsAddress > address &&
     address + BigInt(index + 1) * BigInt(stride) > stringsAddress) return null;
@@ -61,21 +82,24 @@ const locateSymbol = (
 
 const extendedSectionIndex = async (
   reader: FileRangeReader, elf: ElfRelocationImage, table: ElfRelocationTable,
-  index: number, issues: string[], layout: ElfBinaryLayout
+  index: number, issues: string[], layout: ElfBinaryLayout, tags: Map<number, bigint>
 ): Promise<number> => {
   const section = elf.sections.find(item => item.type === SECTION.SYMTAB_SHNDX && item.link === table.symbolTableIndex);
   const width = BigInt(ELF_SYMBOL_INDEX.BYTE_SIZE);
-  const range = section && section.entsize === width && BigInt(index + 1) * width <= section.size
-    ? elfFileRange(section.offset + BigInt(index) * width, width, reader.size) : null;
+  const address = tags.get(DT.SYMTAB_SHNDX);
+  const range = table.symbolTableIndex == null && address != null ?
+    elfVirtualRange(elf.programHeaders, address + BigInt(index) * width, width, reader.size) :
+    section && section.entsize === width && BigInt(index + 1) * width <= section.size
+      ? elfFileRange(section.offset + BigInt(index) * width, width, reader.size) : null;
   const value = range ? layout.readSectionIndex(await reader.read(range.offset, ELF_SYMBOL_INDEX.BYTE_SIZE)) : null;
-  if (value != null) return value;
+  if (value != null && value >= 0xff00) return value; // gABI SHN_LORESERVE.
   issues.push(`Relocation symbol #${index} has an invalid SHN_XINDEX reference.`);
   return ELF_SYMBOL_INDEX.XINDEX;
 };
 
 const readSymbol = async (
   reader: FileRangeReader, elf: ElfRelocationImage, table: ElfRelocationTable,
-  location: SymbolLocation, index: number, issues: string[], layout: ElfBinaryLayout
+  location: SymbolLocation, index: number, issues: string[], layout: ElfBinaryLayout, tags: Map<number, bigint>
 ): Promise<ElfRelocationSymbol | null> => {
   const record = layout.readSymbol(await reader.read(location.offset, layout.symbolEntrySize));
   if (!record) {
@@ -85,7 +109,7 @@ const readSymbol = async (
   const nameOffset = record.nameOffset;
   let sectionIndex = record.sectionIndex;
   if (sectionIndex === ELF_SYMBOL_INDEX.XINDEX) {
-    sectionIndex = await extendedSectionIndex(reader, elf, table, index, issues, layout);
+    sectionIndex = await extendedSectionIndex(reader, elf, table, index, issues, layout, tags);
   }
   const strings = location.strings;
   let name = "";
@@ -104,15 +128,21 @@ export const createElfRelocationSymbolReader = (
 ): ((table: ElfRelocationTable, index: number) => Promise<ElfRelocationSymbol | null>) => {
   // Cache by physical symbol record, so aliases of .dynsym share decoded names.
   const cache = new Map<number, ElfRelocationSymbol | null>();
+  let reportedBoundary = false;
   return async (table, index) => {
     const location = locateSymbol(reader, elf, table, tags, index, layout.symbolEntrySize);
     if (!location) {
       issues.push(`Relocation symbol #${index} is outside its symbol table or PT_LOAD.`);
       return null;
     }
+    if (table.symbolTableIndex == null && !reportedBoundary &&
+      dynamicSymbolSize(elf, tags, layout.symbolEntrySize) == null) {
+      issues.push("ELF dynamic symbol table has no established size; references are only bounded by PT_LOAD and DT_STRTAB.");
+      reportedBoundary = true;
+    }
     if (cache.has(location.offset)) return cache.get(location.offset)!;
     if (location.strings && parsedSymbols.has(location.offset)) return parsedSymbols.get(location.offset)!;
-    const symbol = await readSymbol(reader, elf, table, location, index, issues, layout);
+    const symbol = await readSymbol(reader, elf, table, location, index, issues, layout, tags);
     cache.set(location.offset, symbol);
     return symbol;
   };

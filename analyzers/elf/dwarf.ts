@@ -77,7 +77,8 @@ const collectDwarfSections = (sections: ElfSectionHeader[], elfClass: "elf32" | 
   );
   // gABI sh_info identifies targets independently of relocation section names.
   for (const section of sections) {
-    if (section.type !== ELF_SECTION_TYPE.RELA && section.type !== ELF_SECTION_TYPE.REL) continue;
+    if (section.type !== ELF_SECTION_TYPE.RELA && section.type !== ELF_SECTION_TYPE.REL &&
+      section.type !== ELF_SECTION_TYPE.CREL) continue;
     const target = sections.find(item => item.index === section.info);
     if (target?.name) relocationTargets.add(target.name);
   }

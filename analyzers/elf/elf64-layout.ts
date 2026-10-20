@@ -1,7 +1,7 @@
 import { ELF_INTEGER_READERS, type ElfIntegerReader } from "./byte-order.js";
 import type { ElfBinaryLayout, ElfByteOrder, ElfSymbolRecord, ElfFileHeaderRecord,
   ElfSymbolicRelocationRecord } from "./binary-layout-types.js";
-import { ELF_MACHINE_ID, ELF_SYMBOL_INDEX } from "./abi-constants.js";
+import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
 
 // Elf64_Ehdr: https://gabi.xinuos.com/elf/02-eheader.html
 const readHeader = (view: DataView, integers: ElfIntegerReader): ElfFileHeaderRecord | null =>
@@ -51,10 +51,6 @@ export const createElf64Layout = (byteOrder: ElfByteOrder): ElfBinaryLayout => {
       { tag: integers.u64(view, 0), value: integers.u64(view, 8) },
     readSymbol: view => readSymbol(view, integers),
     readSectionIndex: view => view.byteLength < ELF_SYMBOL_INDEX.BYTE_SIZE ? null : integers.u32(view, 0),
-    // MIPS64 needs a dedicated codec; its little-endian r_info mixes byte orders.
-    // See LLVM Elf_Rel_Impl::getRInfo rather than applying ELF64_R_SYM/TYPE blindly.
-    // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/ELFTypes.h
-    supportsSymbolicRelocations: machine => machine !== ELF_MACHINE_ID.MIPS,
     relocations: {
       REL: { entrySize: 16, read: view => readRel(view, integers) },
       RELA: { entrySize: 24, read: view => readRela(view, integers) }

@@ -1,78 +1,66 @@
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { escapeHtml } from "../../html-utils.js";
-import { elfRelocationTypeName } from "../../analyzers/elf/relocation-names.js";
-import type { ElfRelocation } from "../../analyzers/elf/relocation-types.js";
-import type { ElfParseResult, ElfSectionHeader } from "../../analyzers/elf/types.js";
+import type { ElfParseResult } from "../../analyzers/elf/types.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
-import { formatElfHex } from "./value-format.js";
-import { ELF_FILE_TYPE, ELF_SYMBOL_INDEX } from "../../analyzers/elf/abi-constants.js";
+import { summarizeElfRelocations } from "./relocation-summary.js";
+import type { ElfRelocationSummary, ElfRelocationSummaryKind } from "./relocation-summary.js";
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
 
-const targetText = (sections: Map<number, ElfSectionHeader>, entry: ElfRelocation): string => {
-  const target = entry.target;
-  if (!target) return "Unmapped";
-  const section = target.sectionIndex == null ? null : sections.get(target.sectionIndex);
-  const label = section?.name || (target.sectionIndex == null ? "" : `#${target.sectionIndex}`);
-  return label ? `${label} + ${formatElfHex(target.sectionOffset ?? 0n)}` : "PT_LOAD";
-};
+const labels = { types: "Relocation type", formats: "Encoding", targets: "Target section", symbols: "Referenced symbol" };
+const tableId = (kind: ElfRelocationSummaryKind): string =>
+  kind === "types" ? "elf-relocations" : `elf-relocations-${kind}`;
 
-const columnValues = (elf: ElfParseResult): Array<(entry: ElfRelocation) => string | bigint> => {
-  const tables = elf.relocations?.tables ?? [];
-  const sources = tables.map(table => table.sources.join(", "));
-  const plt = tables.filter(table => table.sources.includes("DT_JMPREL"));
-  const sections = new Map(elf.sections.map(section => [section.index, section]));
-  return [entry => sources[entry.tableIndex]! +
-    (plt.some(table => entry.recordOffset >= table.offset &&
-      entry.recordOffset < table.offset + table.size) &&
-      !tables[entry.tableIndex]!.sources.includes("DT_JMPREL") ? " (PLT)" : ""),
-  entry => tables[entry.tableIndex]!.encoding, entry => entry.offset,
-  entry => entry.type == null ? "Relative (RELR)" : elfRelocationTypeName(elf.header.machine, entry.type),
-  entry => entry.symbolIndex == null ? "—" : entry.symbolIndex === ELF_SYMBOL_INDEX.UNDEF ? "0 (no symbol)" :
-    `#${entry.symbolIndex} ${entry.symbol?.name || "(unnamed/unresolved)"}`,
-  entry => entry.addend ?? "Implicit", entry => targetText(sections, entry),
-  entry => entry.target?.fileOffset ?? "—"];
-};
-
-export const createElfRelocationTableModel = (elf: ElfParseResult): PagedSortableTableModel => {
-  const values = columnValues(elf);
-  return {
-    id: "elf-relocations", pageSize: 100, // UI page size; the parser has a separate resource limit.
-    rowCount: elf.relocations?.entries.length ?? 0,
-    columns: ["Source", "Format", elf.header.type === ELF_FILE_TYPE.REL ? "Section offset" : "Virtual address",
-      "Relocation type", "Symbol", "Addend", "Target", "File offset"]
-      .map((label, index) => ({ label, className: [2, 5, 7].includes(index) ? "peNumeric" : "" })),
-    rowAt: index => {
-      const entry = elf.relocations?.entries[index];
-      return entry ? { cells: values.map((read, column) => {
-        const value = read(entry);
-        return {
-          html: column === 4 && entry.symbol?.name ? renderSymbolName(String(value),
-            `#${entry.symbolIndex} ${getElfSymbolDisplayName(entry.symbol)}`) :
-            escapeHtml(typeof value === "bigint" ?
-            (value < 0n ? `-0x${(-value).toString(16)}` : formatElfHex(value)) : value),
-          sortValue: String(value), className: [2, 5, 7].includes(column) ? "peNumeric" : ""
-        };
-      }) } : null;
-    },
-    sortValueAt: (row, column) => {
-      const entry = elf.relocations?.entries[row];
-      return entry ? String(values[column]?.(entry) ?? "") : "";
-    }
+export const createElfRelocationSummaryModel = (
+  summary: ElfRelocationSummary, kind: ElfRelocationSummaryKind
+): PagedSortableTableModel => {
+  const rows = summary[kind];
+  const total = summary.types.reduce((sum, row) => sum + row.count, 0);
+  const values = (index: number): string[] => {
+    const row = rows[index];
+    return row ? [row.label, row.detail, String(row.count), `${(100 * row.count / total).toFixed(1)}%`] : [];
   };
+  return { id: tableId(kind), pageSize: 100, rowCount: rows.length,
+    columns: [labels[kind], "Meaning", "Records", "Share of all relocations"].map((label, index) => ({
+      label, className: index >= 2 ? "peNumeric" : ""
+    })),
+    rowAt: index => rows[index] ? { cells: values(index).map((value, column) => ({
+      html: column === 0 && rows[index]!.symbol?.name ?
+        renderSymbolName(value, getElfSymbolDisplayName(rows[index]!.symbol!)) : escapeHtml(value),
+      sortValue: column === 3 ? String(rows[index]!.count) : value,
+      className: column >= 2 ? "peNumeric" : ""
+    })) } : null,
+    sortValueAt: (index, column) => column === 3 ? String(rows[index]?.count ?? "") : values(index)[column] ?? ""
+  };
+};
+
+export const createElfRelocationTableModel = (elf: ElfParseResult): PagedSortableTableModel =>
+  createElfRelocationSummaryModel(summarizeElfRelocations(elf), "types");
+
+export const getElfRelocationSummaryModel = (elf: ElfParseResult, id: string): PagedSortableTableModel | null => {
+  const kind = (Object.keys(labels) as ElfRelocationSummaryKind[]).find(kind => tableId(kind) === id);
+  return kind && elf.relocations ? createElfRelocationSummaryModel(summarizeElfRelocations(elf), kind) : null;
 };
 
 export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void => {
   const relocations = elf.relocations;
   if (!relocations) return;
+  const summary = summarizeElfRelocations(elf);
   out.push(renderElfSectionStart(`Relocations (${relocations.entries.length})`));
-  out.push(`<p class="smallNote">Targets identify where the loader or linker applies each ` +
-    `relocation. REL and RELR addends remain in the target bytes; runtime symbol binding ` +
-    `and load addresses are not resolved here.</p>`);
-  if (relocations.entries.length) out.push(renderAutoPagedSortableTable(createElfRelocationTableModel(elf)));
+  out.push(`<p>${relocations.entries.length} relocation records in ${relocations.tables.length} tables; ` +
+    `${summary.symbols.length} distinct referenced symbols.</p>`);
+  out.push(`<p class="smallNote">Counts describe linker/loader work, not executed instructions. ` +
+    `Undefined symbols require lookup; their providers and runtime addresses are not inferred. ` +
+    `REL/RELR addends stay in target bytes. CREL is an experimental LLVM format.</p>`);
+  for (const kind of Object.keys(labels) as ElfRelocationSummaryKind[]) {
+    if (!summary[kind].length) continue;
+    out.push(`<h4>${escapeHtml(labels[kind])} distribution</h4>`);
+    out.push(renderAutoPagedSortableTable(createElfRelocationSummaryModel(summary, kind)));
+  }
   if (relocations.issues.length) {
-    out.push(`<ul>${relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
+    out.push(`<p>Analysis is incomplete or contains anomalies:</p><ul>` +
+      relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul>`);
   }
   out.push(renderElfSectionEnd());
 };

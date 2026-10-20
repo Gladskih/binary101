@@ -20,19 +20,18 @@ const pagedRelocations = (): Buffer => {
   return bytes;
 };
 
-test("ELF relocation rows paginate and sort in the browser", async ({ page }) => {
+test("ELF relocations show aggregated statistics instead of raw address rows", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", {
     name: "relocations.elf", mimeType: "application/x-elf", buffer: pagedRelocations()
   });
   await page.locator(".peSectionSummary").filter({ hasText: "Relocations" }).click();
-  const table = page.locator('[data-paged-sortable-table-id="elf-relocations"]');
-
+  const table = page.locator('[data-sort-state-key="elf-relocations"]');
   await expect(table).toContainText("R_X86_64_RELATIVE");
-  await expect(table.locator("tbody tr")).toHaveCount(100);
-  await table.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(table).toContainText("Showing 101-200 of 201");
-  await table.getByRole("button", { name: "Sort by Addend", exact: true }).click();
-  await table.getByRole("button", { name: "Sort by Addend", exact: true }).click();
-  await expect(table.locator("tbody tr").first().locator("td").nth(5)).toHaveText("0xc8");
+  await expect(table.locator("tbody tr")).toHaveCount(1);
+  await expect(table.locator("tbody tr td").nth(2)).toHaveText("201");
+  await expect(table).toContainText("100.0%");
+  await expect(table).not.toContainText("Addend");
+  await expect(table).not.toContainText("Virtual address");
+  await expect(page.locator('[data-sort-state-key="elf-relocations-targets"]')).toContainText("201");
 });
