@@ -16,6 +16,9 @@ test("PE debug shows embedded source mappings and readable layout statistics", a
   await expect(panel).toContainText("source.cs");
   await expect(panel.getByRole("cell", { name: "local", exact: true })).toBeVisible();
   await expect(panel.getByRole("cell", { name: "constant", exact: true })).toBeVisible();
+  await expect(panel.getByRole("cell", { name: "System", exact: true })).toBeVisible();
+  await expect(panel).toContainText("int32: 3");
+  await expect(panel).toContainText("https://example.invalid/source.cs");
   await panel.getByText("Entry #2:", { exact: false }).click();
   await expect(panel).toContainText("Frames with SEH");
   await expect(panel).toContainText("26");

@@ -40,6 +40,9 @@ export const createPortablePdbStreams = (): Record<string, Uint8Array> => {
   const name = blob(Uint8Array.from([47, part]));
   const hash = blob(new Uint8Array(32));
   const points = blob(Uint8Array.from([0, 0, 0, 5, 10, 1, 1, 0, 0]));
+  const constant = blob(Uint8Array.from([8, 3, 0, 0, 0])); // LocalConstantSig: int32 value 3.
+  const namespace = blob(utf8.encode("System"));
+  const imports = blob(Uint8Array.of(1, namespace)); // ImportNamespace, UTF-8 namespace blob index.
   const custom = blob(utf8.encode('{"documents":{"source.cs":"https://example.invalid/source.cs"}}'));
   const pdb = new Uint8Array(40);
   const pdbView = new DataView(pdb.buffer);
@@ -56,7 +59,7 @@ export const createPortablePdbStreams = (): Record<string, Uint8Array> => {
   const dword = (value: number): void => { view.setUint32(cursor, value, true); cursor += 4; };
   [name, 1, hash, 2, 1, points, 1, 1, 1, 1].forEach(word);
   dword(0); dword(8); // LocalScope StartOffset, Length.
-  [0, 0, 1, 7, 0, 0, 0, 1, 1, 39, 3, custom].forEach(word);
+  [0, 0, 1, 7, constant, 0, imports, 1, 1, 39, 3, custom].forEach(word);
   // HasCustomDebugInformation Module row 1 is (1 << 5) | 7 = 39.
   const guid = Uint8Array.from([
     0x0f, 0xd0, 0x29, 0x88, 0xb8, 0x11, 0x13, 0x42, 0x87, 0x8b, 0x77, 0x0e, 0x85, 0x97, 0xac, 0x16,

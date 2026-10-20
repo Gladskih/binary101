@@ -1,5 +1,9 @@
 import type { PortablePdbInfo, PortablePdbLocal } from "../../analyzers/pe/debug/portable-pdb-types.js";
-import { humanSize } from "../../binary-utils.js";
+import { PortablePdbTypeNames } from "../../analyzers/pe/debug/portable-pdb-type-names.js";
+import type { PortablePdbConstant } from "../../analyzers/pe/debug/portable-pdb-constants.js";
+import type { PeClrMetadataTables } from "../../analyzers/pe/clr/types.js";
+import { renderPortablePdbCustom } from "./portable-pdb-custom.js";
+import { renderPortablePdbImports } from "./portable-pdb-imports.js";
 import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
@@ -11,19 +15,6 @@ const LANGUAGE_NAMES: Record<string, string> = {
   "3a12d0b8-c26c-11d0-b442-00a0244a1dd2": "Visual Basic",
   "ab4f38c9-b6e6-43ba-be3b-58080b2ccce3": "F#"
 };
-const CUSTOM_NAMES: Record<string, string> = {
-  "6da9a61e-f8c7-4874-be62-68bc5630df71": "Hoisted local scopes",
-  "83c563c4-b4f3-47d5-b824-ba5441477ea8": "Dynamic local variables",
-  "58b2eab6-209f-4e4e-a22c-b2d0f910c782": "Default namespace",
-  "755f52a8-91c5-45be-b4b8-209571e552bd": "Edit and Continue local slots",
-  "a643004c-0240-496f-a783-30d64f4979de": "Edit and Continue lambdas and closures",
-  "ed9fdf71-8879-4747-8ed3-fe5ede3ce710": "Embedded source",
-  "cc110556-a091-4d38-9fec-25ab9a351a6a": "Source Link",
-  "7e4d4708-096e-4c5c-aeda-cb10ba6a740d": "Compilation references",
-  "b5feec05-8cd0-4a83-96da-466284bb4bd8": "Compilation options",
-  "932e74bc-dba9-4478-8d46-0f32a7bab3d3": "Type definition documents"
-};
-
 const createDocumentTableModel = (pdb: PortablePdbInfo, id: string): PagedSortableTableModel => ({
   id, pageSize: 100, rowCount: pdb.documents.length,
   columns: [{ label: "Source file" }, { label: "Language" }, { label: "Source checksum" }],
@@ -48,23 +39,43 @@ const createDocumentTableModel = (pdb: PortablePdbInfo, id: string): PagedSortab
   }
 });
 
+const embeddedPdb = (pe: PeWindowsParseResult, index: number): PortablePdbInfo | undefined =>
+  pe.debug?.entries?.[index]?.embeddedPortablePdb?.portablePdb;
+
 export const getPortablePdbTableModel = (
   pe: PeWindowsParseResult, tableId: string
 ): PagedSortableTableModel | null => {
   const match = /^pe-debug-entry-(\d+)-(documents|locals)$/.exec(tableId);
   if (!match) return null;
-  const pdb = pe.debug?.entries?.[Number(match[1])]?.embeddedPortablePdb?.portablePdb;
+  const pdb = embeddedPdb(pe, Number(match[1]));
   if (!pdb) return null;
-  return match[2] === "locals" ? createLocalTableModel(pdb, tableId) : createDocumentTableModel(pdb, tableId);
+  return match[2] === "locals" ? createLocalTableModel(pdb, tableId, pe.clr?.meta?.tables) : createDocumentTableModel(pdb, tableId);
 };
 
-const localDetails = (local: PortablePdbLocal): string => {
-  if (local.kind === "constant") return `Signature: ${local.signatureSize ?? "unknown"} bytes`;
+const constantText = (constant: PortablePdbConstant): string => {
+  if (constant.data) return constant.data.length ? `Type-dependent value (${constant.data.length} bytes)` : "Default value";
+  if (constant.typeCode === 3 || constant.typeCode === 14) return JSON.stringify(constant.value);
+  return Object.is(constant.value, -0) ? "-0" : String(constant.value);
+};
+
+const localDetails = (local: PortablePdbLocal, names: PortablePdbTypeNames): string => {
+  if (local.kind === "constant") {
+    if (!local.constant) return `Signature: ${local.signatureSize ?? "unknown"} bytes`;
+    const typeName = names.get(local.constant.typeReference) ?? ({
+      2: "bool", 3: "char", 4: "int8", 5: "uint8", 6: "int16", 7: "uint16", 8: "int32", 9: "uint32",
+      10: "int64", 11: "uint64", 12: "float32", 13: "float64", 14: "string", 17: "Value type", 18: "Reference type", 28: "object"
+    } as Record<number, string>)[local.constant.typeCode] ?? "Constant";
+    return `${typeName}: ${constantText(local.constant)}`;
+  }
   // LocalVariableAttributes.DebuggerHidden is bit 0; other bits are reserved.
   return `Slot ${local.slot}${local.attributes & 1 ? "; hidden from debugger" : ""}`;
 };
 
-const createLocalTableModel = (pdb: PortablePdbInfo, id: string): PagedSortableTableModel => ({
+const createLocalTableModel = (
+  pdb: PortablePdbInfo, id: string, metadata: PeClrMetadataTables | undefined
+): PagedSortableTableModel => {
+  const names = new PortablePdbTypeNames(metadata);
+  return {
   id, pageSize: 100, rowCount: pdb.locals.length,
   columns: [{ label: "Local symbol" }, { label: "Kind" }, { label: "Details" }],
   rowAt: index => {
@@ -72,34 +83,19 @@ const createLocalTableModel = (pdb: PortablePdbInfo, id: string): PagedSortableT
     return local ? { cells: [
       { html: escapeHtml(local.name ?? "(unreadable name)") },
       { html: local.kind === "variable" ? "Variable" : "Constant" },
-      { html: localDetails(local) }
+      { html: escapeHtml(localDetails(local, names)) }
     ] } : null;
   },
   sortValueAt: (index, column) => {
     const local = pdb.locals[index];
-    return local ? [local.name, local.kind, localDetails(local)][column] ?? "" : "";
+    return local ? [local.name, local.kind, localDetails(local, names)][column] ?? "" : "";
   }
-});
-
-const renderCustomRecords = (pdb: PortablePdbInfo, out: string[]): void => {
-  const kinds = new Map<string, { count: number; bytes: number }>();
-  for (const record of pdb.customRecords) {
-    const name = CUSTOM_NAMES[record.kind ?? ""] ?? "Other custom debug information";
-    const previous = kinds.get(name) ?? { count: 0, bytes: 0 };
-    kinds.set(name, { count: previous.count + 1, bytes: previous.bytes + (record.size ?? 0) });
-  }
-  if (!kinds.size) return;
-  out.push(`<table class="table"><thead><tr><th>Custom debug information</th>` +
-    `<th class="peNumeric">Records</th><th class="peNumeric">Payload size</th></tr></thead><tbody>`);
-  for (const [name, stats] of kinds) {
-    out.push(`<tr><td>${escapeHtml(name)}</td><td class="peNumeric">${stats.count}</td>` +
-      `<td class="peNumeric">${humanSize(stats.bytes)}</td></tr>`);
-  }
-  out.push(`</tbody></table><p class="smallNote">Custom records are inventoried by kind and size; ` +
-    `their language-specific contents are not fully decoded. Source Link is never fetched.</p>`);
+  };
 };
 
-export const renderPortablePdb = (pdb: PortablePdbInfo, out: string[], entryIndex = 0): void => {
+export const renderPortablePdb = (
+  pdb: PortablePdbInfo, out: string[], entryIndex = 0, metadata?: PeClrMetadataTables
+): void => {
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Source documents", String(pdb.documents.length)));
   out.push(renderDefinitionRow("Methods with sequence points", String(pdb.methodsWithSequencePoints),
@@ -124,9 +120,10 @@ export const renderPortablePdb = (pdb: PortablePdbInfo, out: string[], entryInde
       `Source documents: ${name}`, String(count))));
     out.push(`</dl>`);
   }
-  renderCustomRecords(pdb, out);
+  renderPortablePdbCustom(pdb, out, entryIndex, metadata);
   if (pdb.documents.length) out.push(renderAutoPagedSortableTable(
     createDocumentTableModel(pdb, `pe-debug-entry-${entryIndex}-documents`)));
   if (pdb.locals.length) out.push(renderAutoPagedSortableTable(
-    createLocalTableModel(pdb, `pe-debug-entry-${entryIndex}-locals`)));
+    createLocalTableModel(pdb, `pe-debug-entry-${entryIndex}-locals`, metadata)));
+  renderPortablePdbImports(pdb, out, entryIndex, metadata);
 };

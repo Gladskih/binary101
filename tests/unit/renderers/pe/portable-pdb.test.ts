@@ -21,13 +21,34 @@ void test("Portable PDB presents source and metadata statistics without hexadeci
   assert.match(out.join(""), /Source Link/);
   assert.match(out.join(""), /<td>local<\/td>/);
   assert.match(out.join(""), /<td>constant<\/td>/);
+  assert.match(out.join(""), /int32: 3/);
   assert.match(out.join(""), /never fetched/);
   assert.doesNotMatch(out.join(""), /0x|3f5162f8/);
 });
 
+void test("Portable PDB connects decoded custom records and escapes constant strings", async () => {
+  const pdb = await parsePortablePdb(new MockFile(createPortablePdbRoot(createPortablePdbStreams())), []);
+  pdb!.locals = [{ kind: "constant", name: "text", signatureSize: 17,
+    constant: { typeCode: 14, value: "<script>" } }];
+  pdb!.customRecords = [
+    { kind: "ed9fdf71-8879-4747-8ed3-fe5ede3ce710", size: 5, parent: { tableId: 0x33, row: 1 },
+      data: { type: "tupleNames", names: ["element"] } },
+    { kind: "0e8a571b-6926-466e-b4ad-8ab04611f5fe", size: 16, parent: { tableId: 0x30, row: 1 },
+      data: { type: "embeddedSource", source: { storage: "raw", bytes: 12, lines: 2, encoding: "UTF-8" } } }
+  ];
+  const out: string[] = [];
+  renderPortablePdb(pdb!, out);
+
+  assert.match(out.join(""), /Tuple element names/);
+  assert.match(out.join(""), /12 source bytes; 2 lines/);
+  assert.match(out.join(""), /&lt;script>/);
+  assert.doesNotMatch(out.join(""), /<script>/);
+});
+
 void test("Portable PDB distinguishes unknown custom records and escapes table names", async () => {
   const pdb = await parsePortablePdb(new MockFile(createPortablePdbRoot(createPortablePdbStreams())), []);
-  pdb!.customRecords = [{ kind: null, size: null }, { kind: "unknown", size: 8 }];
+  pdb!.customRecords = [{ kind: null, size: null, parent: { tableId: 0, row: 1 } },
+    { kind: "unknown", size: 8, parent: { tableId: 0, row: 1 } }];
   pdb!.documents[0]!.language = "unknown";
   pdb!.tables[0]!.name = "<script>";
   const out: string[] = [];
@@ -55,7 +76,7 @@ void test("Portable PDB local symbols retain names across pages and explain unre
   pdb!.locals = Array.from({ length: 100 }, (_, slot) => ({
     kind: "variable", name: `<local${slot}>`, slot, attributes: 1
   }));
-  pdb!.locals.push({ kind: "constant", name: null, signatureSize: null });
+  pdb!.locals.push({ kind: "constant", name: null, signatureSize: null, constant: null });
   const pe = createBasePe();
   pe.debug = { entry: null, entries: [{ ...createDebugViewEntry(17, 0, 128), embeddedPortablePdb: {
     signature: "MPDB", compressedSize: 8, uncompressedSize: 32, portablePdb: pdb!

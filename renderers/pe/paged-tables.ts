@@ -35,6 +35,8 @@ import { createDRuntimeReferenceTableModel, D_REFERENCE_TABLE_ID } from "./d-run
 import { createClrMetadataTableModels } from "./clr-metadata.js";
 import { getReadyToRunTableModel } from "./ready-to-run-tables.js";
 import { getPogoTableModel } from "./pogo.js";
+import { getPortablePdbCustomTableModel } from "./portable-pdb-custom.js";
+import { getPortablePdbImportTableModel } from "./portable-pdb-imports.js";
 import { getPortablePdbTableModel } from "./portable-pdb.js";
 import { getMiscDebugTableModel } from "./debug-misc.js";
 
@@ -122,7 +124,7 @@ type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortabl
 
 const windowsTableResolvers: TableResolver[] = [
   getPeDisassemblyStringTableModel, getClrTableModel, getPogoTableModel, getPortablePdbTableModel,
-  getMiscDebugTableModel,
+  getMiscDebugTableModel, getPortablePdbCustomTableModel, getPortablePdbImportTableModel,
   (pe, id) => getReadyToRunTableModel(pe.clr ?? pe, id),
   (pe, id) => id === EXPORT_TABLE_ID && pe.exports
     ? createExportTableModel(pe.exports.entries,

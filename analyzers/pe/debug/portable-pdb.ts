@@ -6,8 +6,12 @@ import { parseMetadataTableStream, type ClrMetadataRow,
   type ClrParsedTableStream } from "../clr/metadata-table-reader.js";
 import type { PeClrStreamInfo } from "../clr/types.js";
 import { summarizeSequencePoints } from "./portable-pdb-points.js";
-import type { PortablePdbDocument, PortablePdbInfo, PortablePdbLocal } from "./portable-pdb-types.js";
+import type { PortablePdbDocument, PortablePdbInfo, PortablePdbLocal,
+  PortablePdbCustomRecord } from "./portable-pdb-types.js";
 import { validatePortablePdbRows } from "./portable-pdb-validation.js";
+import { PortablePdbImportReader } from "./portable-pdb-imports.js";
+import { PortablePdbCustomReader } from "./portable-pdb-custom.js";
+import { decodePortablePdbConstant } from "./portable-pdb-constants.js";
 
 const readStream = async (
   reader: FileRangeReader, streams: PeClrStreamInfo[], name: string, issues: string[]
@@ -95,7 +99,11 @@ const readDocument = (row: ClrMetadataRow, heaps: ClrHeapReaders): PortablePdbDo
   hashSize: heaps.getBlobSize(scalar(row, "Hash"), "Document.Hash")
 });
 
-const readLocals = (parsed: ClrParsedTableStream, heaps: ClrHeapReaders): PortablePdbLocal[] => [
+const readLocals = (
+  parsed: ClrParsedTableStream, heaps: ClrHeapReaders, counts: ReadonlyMap<number, number>
+): PortablePdbLocal[] => {
+  const decode = (bytes: Uint8Array | null) => decodePortablePdbConstant(bytes, counts, heaps.issues);
+  return [
   // Portable PDB LocalVariable (0x33) and LocalConstant (0x34) table layouts.
   ...tableRows(parsed, 0x33).map((row): PortablePdbLocal => ({
     kind: "variable", name: heaps.getString(scalar(row, "Name"), "LocalVariable.Name"),
@@ -103,9 +111,28 @@ const readLocals = (parsed: ClrParsedTableStream, heaps: ClrHeapReaders): Portab
   })),
   ...tableRows(parsed, 0x34).map((row): PortablePdbLocal => ({
     kind: "constant", name: heaps.getString(scalar(row, "Name"), "LocalConstant.Name"),
-    signatureSize: heaps.getBlobSize(scalar(row, "Signature"), "LocalConstant.Signature")
+    signatureSize: heaps.getBlobSize(scalar(row, "Signature"), "LocalConstant.Signature"),
+    constant: heaps.decodeBlob(scalar(row, "Signature"), "LocalConstant.Signature", decode)
   }))
-];
+  ];
+};
+
+const readCustomRecords = async (
+  rows: ClrMetadataRow[], heaps: ClrHeapReaders, counts: ReadonlyMap<number, number>
+): Promise<PortablePdbCustomRecord[]> => {
+  const reader = new PortablePdbCustomReader(heaps, counts);
+  const result: PortablePdbCustomRecord[] = [];
+  for (const row of rows) {
+    const index = scalar(row, "Value");
+    const kind = heaps.getGuid(scalar(row, "Kind"), "CustomDebugInformation.Kind");
+    const parent = row["Parent"]!;
+    const parentIndex = typeof parent === "number" ? { tableId: -1, row: 0 } : parent;
+    const data = await reader.read(kind, index, parentIndex.tableId);
+    result.push({ kind, size: heaps.getBlobSize(index, "CustomDebugInformation.Value"),
+      parent: { tableId: parentIndex.tableId, row: parentIndex.row }, ...(data ? { data } : {}) });
+  }
+  return result;
+};
 
 const summarizeMethods = (rows: ClrMetadataRow[], heaps: ClrHeapReaders, documents: number) => {
   const result = { methodsWithSequencePoints: 0, sequencePoints: { visible: 0, hidden: 0 } };
@@ -154,15 +181,16 @@ export const parsePortablePdb = async (
   }, issues);
   validatePortablePdbRows(parsed, heaps, header.referencedRows);
   const documents = tableRows(parsed, 0x30).map(row => readDocument(row, heaps));
+  const importReader = new PortablePdbImportReader(heaps, header.referencedRows);
   return {
     id: header.id, entryPoint: header.entryPoint,
     tables: parsed.rowCounts.map(table => ({ name: table.name, declaredRows: table.rows,
       parsedRows: parsed.tables.get(table.tableId)?.rows.length ?? 0 })),
-    documents, locals: readLocals(parsed, heaps),
+    documents, locals: readLocals(parsed, heaps, header.referencedRows),
+    imports: tableRows(parsed, 0x35).map(row => ({ parent: scalar(row, "Parent"),
+      imports: importReader.read(scalar(row, "Imports")) })),
     ...summarizeMethods(tableRows(parsed, 0x31), heaps, documents.length),
-    customRecords: tableRows(parsed, 0x37).map(row => ({
-      kind: heaps.getGuid(scalar(row, "Kind"), "CustomDebugInformation.Kind"),
-      size: heaps.getBlobSize(scalar(row, "Value"), "CustomDebugInformation.Value")
-    }))
+    customRecords: await readCustomRecords(tableRows(parsed, 0x37), heaps,
+      new Map([...header.referencedRows, ...parsed.rowCounts.map(table => [table.tableId, table.rows] as const)]))
   };
 };

@@ -8,4 +8,9 @@
     <EmbedAllSources>true</EmbedAllSources>
     <Optimize>false</Optimize>
   </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>$(MSBuildToolsPath)/Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>

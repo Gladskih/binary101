@@ -17,9 +17,28 @@ void test("Portable PDB decodes all eight tables, documents and sequence point s
   assert.deepEqual(result?.sequencePoints, { visible: 1, hidden: 1 });
   assert.deepEqual(result?.locals, [
     { kind: "variable", name: "local", slot: 0, attributes: 0 },
-    { kind: "constant", name: "constant", signatureSize: 0 }
+    { kind: "constant", name: "constant", signatureSize: 5, constant: { typeCode: 8, value: 3 } }
   ]);
-  assert.deepEqual(result?.customRecords, [{ kind: "cc110556-a091-4d38-9fec-25ab9a351a6a", size: 63 }]);
+  assert.deepEqual(result?.customRecords, [{ kind: "cc110556-a091-4d38-9fec-25ab9a351a6a", size: 63,
+    parent: { tableId: 0, row: 1 }, data: { type: "sourceLink", documents: [
+      { pattern: "source.cs", url: "https://example.invalid/source.cs" }
+    ] } }]);
+  assert.deepEqual(result?.imports, [{ parent: 0, imports: [{ kind: 1, targetNamespace: "System" }] }]);
+  assert.deepEqual(issues, []);
+});
+
+void test("Portable PDB retains import scope ancestry and namespace strings", async () => {
+  const streams = createPortablePdbStreams();
+  const previous = streams["#Blob"]!;
+  const namespace = new TextEncoder().encode("System");
+  streams["#Blob"] = Uint8Array.from([...previous, namespace.length, ...namespace,
+    3, 1, 0x80 | (previous.length >> 8), previous.length & 255]);
+  // ImportScope is after LocalConstant in the table stream; its Imports column is at +96.
+  new DataView(streams["#~"]!.buffer).setUint16(96, previous.length + 1 + namespace.length, true);
+  const issues: string[] = [];
+  const result = await parsePortablePdb(new MockFile(createPortablePdbRoot(streams)), issues);
+
+  assert.deepEqual(result?.imports, [{ parent: 0, imports: [{ kind: 1, targetNamespace: "System" }] }]);
   assert.deepEqual(issues, []);
 });
 
@@ -46,7 +65,7 @@ void test("Portable PDB preserves locals with unreadable names and constant sign
 
   assert.deepEqual(result?.locals, [
     { kind: "variable", name: null, slot: 0, attributes: 0 },
-    { kind: "constant", name: null, signatureSize: null }
+    { kind: "constant", name: null, signatureSize: null, constant: null }
   ]);
   assert.match(issues.join(" | "), /outside the heap/);
 });
@@ -154,8 +173,9 @@ void test("Portable PDB rejects truncated table headers and retains complete row
 void test("Portable PDB diagnoses invalid document parts and preserves nil sequence-point blobs", async () => {
   const streams = createPortablePdbStreams();
   const table = new DataView(streams["#~"]!.buffer);
-  const nameIndex = table.getUint16(56, true);
-  streams["#Blob"]![nameIndex + 2] = 127;
+  const previous = streams["#Blob"]!;
+  streams["#Blob"] = Uint8Array.from([...previous, 3, 47, 0xbf, 0xff]); // Part index 16383 is outside #Blob.
+  table.setUint16(56, previous.length, true);
   table.setUint16(66, 0, true); // MethodDebugInformation.SequencePoints follows the Document index.
   const { result, issues } = await parseStreams(streams);
 

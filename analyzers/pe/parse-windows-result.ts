@@ -1,6 +1,7 @@
 "use strict";
 
 import type { PeDebugSection, PeWindowsParseResult } from "./core/parse-result.js";
+import { resolveDebugConstants } from "./debug/portable-pdb-constant-values.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import type {
   PeDebugArtifacts,
@@ -68,7 +69,7 @@ export const buildWindowsPeResult = (
 ): PeWindowsParseResult => {
   return {
     ...buildWindowsPeIdentity(context, directories, imageArtifacts),
-    debug: buildPeDebugSection(debugArtifacts),
+    debug: buildWindowsPeDebug(debugArtifacts, directories.clr),
     ...(debugArtifacts.coffDebug ? { coffDebug: debugArtifacts.coffDebug } : {}),
     imports: directories.importResult,
     loadcfg: directories.loadcfg,
@@ -101,6 +102,10 @@ export const buildWindowsPeResult = (
     hasCert: !!security?.count
   };
 };
+
+const buildWindowsPeDebug = (
+  artifacts: PeDebugArtifacts, clr: PeDirectoryArtifacts["clr"]
+): PeDebugSection | null => resolveDebugConstants(buildPeDebugSection(artifacts), clr?.meta?.tables);
 
 export const buildPeDebugSection = (
   debugArtifacts: PeDebugArtifacts

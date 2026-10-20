@@ -4,7 +4,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { readDebugPayload } from "./payload-reader.js";
 import { getReadableDebugData } from "./data.js";
-import { inflateEmbeddedPdb } from "./embedded-pdb-image.js";
+import { inflateEmbeddedDebugImage } from "./embedded-debug-image.js";
 import { parsePortablePdb } from "./portable-pdb.js";
 import type { PortablePdbInfo } from "./portable-pdb-types.js";
 
@@ -62,7 +62,7 @@ const decodeEmbeddedMetadata = async (
       }
     };
     const issues: string[] = [];
-    const pdb = await parsePortablePdb(await inflateEmbeddedPdb(compressed, info.uncompressedSize), issues);
+    const pdb = await parsePortablePdb(await inflateEmbeddedDebugImage(compressed, info.uncompressedSize), issues);
     issues.forEach(addWarning);
     if (pdb) info.portablePdb = pdb;
   } catch (error) {

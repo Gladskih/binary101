@@ -118,7 +118,9 @@ const renderReproFields = (entry: PeDebugDirectoryEntry, out: string[]): void =>
   }
 };
 
-const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, index: number, out: string[]): void => {
+const renderEmbeddedPortablePdbFields = (
+  pe: PeWindowsParseResult, entry: PeDebugDirectoryEntry, index: number, out: string[]
+): void => {
   if (entry.embeddedPortablePdb) {
     out.push(`<dl>${renderDefinitionRow("Signature", escapeHtml(entry.embeddedPortablePdb.signature))}`);
     out.push(renderDefinitionRow(
@@ -130,7 +132,9 @@ const renderEmbeddedPortablePdbFields = (entry: PeDebugDirectoryEntry, index: nu
       escapeHtml(humanSize(entry.embeddedPortablePdb.uncompressedSize))
     ));
     out.push(`</dl>`);
-    if (entry.embeddedPortablePdb.portablePdb) renderPortablePdb(entry.embeddedPortablePdb.portablePdb, out, index);
+    if (entry.embeddedPortablePdb.portablePdb) {
+      renderPortablePdb(entry.embeddedPortablePdb.portablePdb, out, index, pe.clr?.meta?.tables);
+    }
     else out.push(`<p class="smallNote">Embedded debug metadata was not decoded; see diagnostics.</p>`);
   }
 };
@@ -216,7 +220,7 @@ export const renderDecodedEntryDetails = (
     renderPogoStatistics(entry, out);
     renderPogoRegions(entry, entryIndex, out);
     renderReproFields(entry, out);
-    renderEmbeddedPortablePdbFields(entry, entryIndex, out);
+    renderEmbeddedPortablePdbFields(pe, entry, entryIndex, out);
     renderExceptionFields(entry, out);
     renderPdbChecksumFields(entry, out);
     renderExDllCharacteristicsFields(entry, out);
