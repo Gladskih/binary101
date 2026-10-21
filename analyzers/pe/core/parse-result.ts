@@ -5,6 +5,7 @@ import type { DwarfAnalysis } from "../../dwarf/types.js";
 import type { GoRuntimeMetadata } from "../../go-runtime/types.js";
 import type { DRuntimeMetadata } from "../../d-runtime/types.js";
 import type { PeCodeViewEntry, PeDebugDirectoryEntry } from "../debug/directory.js";
+import type { PeTd32Source } from "../debug/td32-sources.js";
 import type { PeEntrypointDisassemblyReport, PeInstructionSetReport } from "../disassembly/index.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import type { PeImportParseResult } from "../imports/index.js";
@@ -44,6 +45,7 @@ import { ROM_OPTIONAL_HEADER_MAGIC } from "../optional-header/magic.js";
 export interface PeDebugSection {
   entry: PeCodeViewEntry | null;
   entries?: PeDebugDirectoryEntry[];
+  td32Sources?: PeTd32Source[];
   notes?: string[];
   warning?: string;
   rawDataRanges?: Array<{ start: number; end: number }>;

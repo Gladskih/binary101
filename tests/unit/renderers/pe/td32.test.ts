@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderTd32, getTd32TableModel } from "../../../../renderers/pe/td32.js";
+import { renderTd32, renderTd32Sources, getTd32TableModel } from "../../../../renderers/pe/td32.js";
 import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createDebugViewEntry } from "../../../fixtures/pe-debug-view-subject.js";
@@ -40,6 +40,33 @@ void test("TD32 pagination preserves every shared name beyond the first page", (
   assert.equal(model.pageSize, 100);
   assert.equal(model.rowCount, 101);
   assert.equal(model.rowAt(100)?.cells[2]?.html, "type_name_100");
+});
+
+void test("TD32 standalone sources expose the same paginated names and truthful storage labels", () => {
+  const { pe, entry } = subject();
+  pe.debug = { entry: null, td32Sources: [
+    { kind: "section", offset: 512, size: 128, td32: entry.td32 },
+    { kind: "overlay", offset: 640, size: 128, td32: entry.td32 }] };
+  const out: string[] = [];
+  renderTd32Sources(pe, out);
+  const model = getPePagedTableModel(pe, "pe-debug-source-1-td32-names")!;
+
+  assert.match(out.join(""), /TD32 source #1: .debug section/);
+  assert.match(out.join(""), /TD32 source #2: Appended debug data/);
+  assert.match(out.join(""), /&lt;unit>.pas/);
+  assert.equal(model.rowCount, 4);
+  assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;unit>.pas");
+  assert.equal(getTd32TableModel(pe, "pe-debug-source-2-td32-names"), null);
+  assert.equal(getTd32TableModel(createBasePe(), "pe-debug-source-0-td32-names"), null);
+});
+
+void test("TD32 standalone rendering handles absent debug data and absent source arrays", () => {
+  const { pe } = subject();
+  const out: string[] = [];
+  renderTd32Sources(createBasePe(), out);
+  renderTd32Sources(pe, out);
+
+  assert.deepEqual(out, []);
 });
 
 void test("TD32 omits empty tables and does not claim unrelated or absent payloads", () => {

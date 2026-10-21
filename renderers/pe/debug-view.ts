@@ -13,6 +13,8 @@ import {
   renderDecodedEntryDetails
 } from "./debug-payload-details.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { renderTd32Sources } from "./td32.js";
+import { getPeDebugSectionDescriptor } from "./debug-section-descriptor.js";
 
 const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
   const typeInfo = getDebugTypeInfo(entry.type >>> 0);
@@ -48,16 +50,17 @@ const renderDebugIntro = (out: string[]): void => {
 
 export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   if (!pe.debug) return;
-  const entryCount = pe.debug.entries?.length ?? 0;
+  const descriptor = getPeDebugSectionDescriptor(pe.debug);
   out.push(
     renderPeSectionStart(
-      "Debug directory",
-      `${entryCount} entr${entryCount === 1 ? "y" : "ies"}`
+      descriptor.title,
+      descriptor.summary
     )
   );
   renderDebugIntro(out);
   renderEntryTable(pe, out);
   renderDecodedEntryDetails(pe, pe.debug, out);
+  renderTd32Sources(pe, out);
   if (pe.debug.notes?.length) out.push(`<div class="smallNote">${escapeHtml(pe.debug.notes.join(" | "))}</div>`);
   if (pe.debug.warning) out.push(`<div class="smallNote">${escapeHtml(pe.debug.warning)}</div>`);
   out.push(renderPeSectionEnd());

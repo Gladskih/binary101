@@ -17,6 +17,8 @@ const PE_SECTION_DESCRIPTIONS: Record<string, string> = {
     "Optional-header directory entries that point to higher-level PE structures such as imports, resources, TLS, and security data.",
   "Debug directory":
     "Compiler and linker debug records such as CodeView paths, PDB identifiers, POGO, and reproducibility markers.",
+  "Debug information":
+    "Compiler and linker debug records, including TD32 containers stored outside the debug directory.",
   "Delay-load imports":
     "Imports that are resolved on first use by a delay-load helper instead of during initial process startup.",
   "DOS header":

@@ -14,6 +14,7 @@ import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
 import { getPeSanityIssues } from "./layout.js";
+import { getPeDebugSectionDescriptor } from "./debug-section-descriptor.js";
 export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
   appHost: "apphost",
@@ -128,11 +129,8 @@ const addWindowsToolingDescriptors = (
     summary: `v${pe.loadcfg?.Major ?? 0}.${pe.loadcfg?.Minor ?? 0}`,
     title: "Load Config"
   });
-  pushIf(descriptors, pe.debug, {
-    key: PE_LAZY_SECTION_KEYS.debug,
-    summary: `debug: ${plural(pe.debug?.entries?.length ?? 0, "entry", "entries")}`,
-    title: "Debug directory"
-  });
+  const debug = getPeDebugSectionDescriptor(pe.debug);
+  pushIf(descriptors, pe.debug, { ...debug, summary: `debug: ${debug.summary}` });
   pushIf(descriptors, pe.linuxBoot, {
     key: PE_LAZY_SECTION_KEYS.linuxBoot,
     summary: pe.linuxBoot ? getLinuxBootSummary(pe.linuxBoot) : "",

@@ -3,6 +3,25 @@ import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
 import { codeViewField, codeViewFieldList } from "../fixtures/pe-codeview-fields.js";
+import { createPeTd32Overlay, createPeTd32Section } from "../fixtures/pe-td32-locations.js";
+
+for (const [label, create] of [["appended", createPeTd32Overlay], ["section", createPeTd32Section]] as const) {
+  test(`TD32 ${label} data remains accessible without a debug directory entry`, async ({ page }) => {
+    const file = create(createTd32([{ type: 0x130, module: 0,
+      data: td32Names(Array.from({ length: 101 }, (_, index) => `stored_name_${index}`)) }]));
+    await page.goto("/");
+    await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+    const panel = page.locator('[data-pe-lazy-section="debug"]');
+    await expect(panel).toContainText("Debug information");
+    await expect(panel).toContainText("TD32 sources: 1");
+    await panel.locator(":scope > details > summary").click();
+    await panel.locator("summary").filter({ hasText: /^TD32 source #1:/ }).click();
+    await expect(panel.getByRole("cell", { name: "stored_name_0", exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(panel.getByRole("cell", { name: "stored_name_100", exact: true })).toBeVisible();
+    await expect(panel).not.toContainText("Entry #1:");
+  });
+}
 
 test("legacy CodeView member names remain readable beyond the first page", async ({ page }) => {
   const fields = Array.from({ length: 101 }, (_, index) =>

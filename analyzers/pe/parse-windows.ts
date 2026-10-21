@@ -4,6 +4,7 @@ import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from 
 import { parseCoffDebugInfoFromFileHeader } from "../coff/debug.js";
 import { collectDebugExceptionConsistencyFindings } from "./debug/exception-consistency.js";
 import { parseDebugDirectory } from "./debug/directory.js";
+import { parseTd32Sources, type PeTd32Source } from "./debug/td32-sources.js";
 import { parseArchitectureDirectory } from "./directories/architecture-directory.js";
 import { parseExportDirectory } from "./directories/exports.js";
 import { parseGlobalPtrDirectory } from "./directories/globalptr-directory.js";
@@ -51,6 +52,7 @@ export type PeWindowsParseContext = {
 
 export type PeDebugArtifacts = {
   debugResult: Awaited<ReturnType<typeof parseDebugDirectory>>;
+  td32Sources?: PeTd32Source[];
   coffDebug: Awaited<ReturnType<typeof parseCoffDebugInfoFromFileHeader>> | null;
   debugNotes: string[] | undefined;
   debugWarning: string | null;
@@ -135,6 +137,11 @@ const parsePeDebugArtifacts = async (
 ): Promise<PeDebugArtifacts> => {
   const { reader, core, canonicalMachine } = context;
   const debugResult = await parseDebugDirectory(reader, core.dataDirs, core.rvaToOff, canonicalMachine);
+  const td32Warnings: string[] = [];
+  const td32Sources = await parseTd32Sources(reader, core.sections, core.opt.SizeOfHeaders,
+    debugResult.entries, core.rvaToOff, warning => td32Warnings.push(warning));
+  for (const source of td32Sources) debugResult.rawDataRanges.push({
+    start: source.offset, end: source.offset + source.size });
   const hasMatchingCoffEntry = debugResult.entries.some(entry =>
     entry.coff?.symbolTableOffset === core.coff.PointerToSymbolTable
   );
@@ -155,9 +162,10 @@ const parsePeDebugArtifacts = async (
   );
   return {
     debugResult,
+    td32Sources,
     coffDebug,
     debugNotes: appendUniqueMessages(undefined, debugExceptionFindings.notes),
-    debugWarning: appendDebugWarnings(debugResult.warning, debugExceptionFindings.warnings)
+    debugWarning: appendDebugWarnings(debugResult.warning, [...td32Warnings, ...debugExceptionFindings.warnings])
   };
 };
 const parsePeLoaderDirectories = async (context: PeWindowsParseContext) => {
