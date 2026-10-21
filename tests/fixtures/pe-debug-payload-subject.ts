@@ -232,13 +232,12 @@ export const createTruncatedExceptionDebugDirectorySubject = () => ({
   }])
 });
 
-export const createSpgoDebugDirectorySubject = (count = 2) => {
+export const createSpgoSignatureDebugDirectorySubject = (type: number, count = 2) => {
   const expected = createSpgoPogoSubjectInfo(count);
   return {
     ...createDebugDirectorySubject([{
       payload: createPogoPayload(expected.signature, expected.entries),
-      // Windows SDK winnt.h defines IMAGE_DEBUG_TYPE_SPGO as 18.
-      type: 18
+      type
     }]),
     expected
   };

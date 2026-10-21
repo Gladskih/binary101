@@ -2,6 +2,18 @@ import { expect, test } from "@playwright/test";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 
+test("SPGO debug type 18 stays explicitly undecoded even with a recognized POGO signature", async ({ page }) => {
+  // DWORD 0x5350474f is SPGO inside a type-13 POGO record, not a type-18 contract.
+  const file = createPeWithDebugPayloads([{ type: 18, data: Uint8Array.of(0x4f, 0x47, 0x50, 0x53) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await expect(panel).toContainText("SPGO payload is not decoded");
+  await expect(panel).toContainText("no semantic decoding is available");
+});
+
 test("raw-only exception copy resolves indirect image-table references", async ({ page }) => {
   const file = createPeWithExceptionCopy();
   await page.goto("/");

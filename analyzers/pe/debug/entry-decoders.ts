@@ -41,7 +41,6 @@ import {
   IMAGE_DEBUG_TYPE_POGO,
   IMAGE_DEBUG_TYPE_R2R_PERFMAP,
   IMAGE_DEBUG_TYPE_REPRO,
-  IMAGE_DEBUG_TYPE_SPGO,
   IMAGE_DEBUG_TYPE_VC_FEATURE
 } from "./types.js";
 import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
@@ -101,6 +100,9 @@ type DebugPayloadParser = (
   ...args: Parameters<typeof parseOmapInfo>
 ) => Promise<PeDebugPayloads[keyof PeDebugPayloads] | null>;
 
+// SPGO is a supported payload signature inside POGO (type 13), not evidence
+// that IMAGE_DEBUG_TYPE_SPGO (18) has the same layout. Keep type 18 opaque.
+// https://github.com/lief-project/LIEF/blob/80cf4a582cd7afc486cc3791e30775517c71b579/src/PE/Parser.cpp
 const PAYLOAD_DECODERS: Partial<Record<number, readonly [keyof PeDebugPayloads, DebugPayloadParser]>> = {
   [IMAGE_DEBUG_TYPE_COFF]: ["coff", parseCoffDebugInfo],
   [IMAGE_DEBUG_TYPE_FPO]: ["fpo", parseFpoInfo],
@@ -110,7 +112,6 @@ const PAYLOAD_DECODERS: Partial<Record<number, readonly [keyof PeDebugPayloads, 
   [IMAGE_DEBUG_TYPE_OMAP_FROM_SRC]: ["omap", parseOmapInfo],
   [IMAGE_DEBUG_TYPE_VC_FEATURE]: ["vcFeature", parseVcFeatureInfo],
   [IMAGE_DEBUG_TYPE_POGO]: ["pogo", parsePogoInfo],
-  [IMAGE_DEBUG_TYPE_SPGO]: ["pogo", parsePogoInfo],
   [IMAGE_DEBUG_TYPE_REPRO]: ["repro", parseReproInfo],
   [IMAGE_DEBUG_TYPE_EMBEDDED_PORTABLE_PDB]: ["embeddedPortablePdb", parseEmbeddedPortablePdbInfo],
   [IMAGE_DEBUG_TYPE_PDB_CHECKSUM]: ["pdbChecksum", parsePdbChecksumInfo],

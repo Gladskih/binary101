@@ -23,7 +23,7 @@ import {
 import {
   createExceptionDebugDirectorySubject,
   createPogoDebugDirectorySubject,
-  createSpgoDebugDirectorySubject,
+  createSpgoSignatureDebugDirectorySubject,
   createTruncatedExceptionDebugDirectorySubject,
   createVcFeatureDebugDirectorySubject
 } from "../../../../fixtures/pe-debug-payload-subject.js";
@@ -250,8 +250,8 @@ void test("parseDebugDirectory decodes POGO signature and records on matching en
   assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
 });
 
-void test("parseDebugDirectory decodes SPGO debug-directory entries as POGO maps", async () => {
-  const { file, dataDirs, expected } = createSpgoDebugDirectorySubject();
+void test("parseDebugDirectory does not mistake debug type 18 for a type-13 POGO map", async () => {
+  const { file, dataDirs } = createSpgoSignatureDebugDirectorySubject(18);
 
   const result = await parseDebugDirectory(
     file,
@@ -260,6 +260,19 @@ void test("parseDebugDirectory decodes SPGO debug-directory entries as POGO maps
     IMAGE_FILE_MACHINE_AMD64
   );
 
-  assert.equal(expectDefined(result.entries?.[0]).typeName, "SPGO");
-  assert.deepEqual(expectDefined(result.entries?.[0]).pogo, expected);
+  const entry = expectDefined(result.entries[0]);
+  assert.equal(entry.typeName, "SPGO");
+  assert.equal(entry.pogo, undefined);
+  assert.ok(entry.rawPayload);
+  assert.match(expectDefined(result.warning), /SPGO payload is not decoded/);
+});
+
+void test("parseDebugDirectory retains supported SPGO signatures inside type-13 POGO tables", async () => {
+  const { file, dataDirs, expected } = createSpgoSignatureDebugDirectorySubject(13);
+  const result = await parseDebugDirectory(file, dataDirs, value => value, IMAGE_FILE_MACHINE_AMD64);
+
+  const entry = expectDefined(result.entries[0]);
+  assert.equal(entry.typeName, "POGO");
+  assert.deepEqual(entry.pogo, expected);
+  assert.equal(result.warning, null);
 });
