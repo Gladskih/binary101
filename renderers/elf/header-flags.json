@@ -1,0 +1,3106 @@
+{
+  "sources": [
+    "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+    "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/common.h",
+    "https://github.com/bminor/glibc/blob/04e750e75b73957cf1c791535a3f4319534a52fc/elf/elf.h"
+  ],
+  "catalogs": {
+    "mips": {
+      "machines": [
+        8,
+        10
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/mips.h",
+      "fields": [
+        {
+          "name": "EF_MIPS_NOREORDER",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_MIPS_NOREORDER", "description": "Instruction reordering is disabled."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_PIC",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_MIPS_PIC", "description": "Contains position-independent code."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_CPIC",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_MIPS_CPIC", "description": "Uses position-independent calling sequences."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_XGOT",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_MIPS_XGOT", "description": "Uses an extended global offset table."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_UCODE",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_MIPS_UCODE", "description": "Reserved legacy UCODE indicator."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_ABI2",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_MIPS_ABI2", "description": "Uses the N32 ABI."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_ABI_ON32",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_MIPS_ABI_ON32", "description": "Uses a 64-bit ABI with a 32-bit register model."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_OPTIONS_FIRST",
+          "mask": 128,
+          "kind": "flag",
+          "values": [
+            {"value": 128, "name": "EF_MIPS_OPTIONS_FIRST", "description": "Process the MIPS options before other sections."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_32BITMODE",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_MIPS_32BITMODE", "description": "Uses 32-bit code on a 64-bit processor."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_FP64",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_MIPS_FP64", "description": "Uses the FP64 floating-point register convention."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_NAN2008",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_MIPS_NAN2008", "description": "Uses IEEE 754-2008 NaN encodings."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_ARCH_ASE_MICROMIPS",
+          "mask": 33554432,
+          "kind": "flag",
+          "values": [
+            {"value": 33554432, "name": "EF_MIPS_ARCH_ASE_MICROMIPS", "description": "MIPS ARCH ASE MICROMIPS selection."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_ARCH_ASE_M16",
+          "mask": 67108864,
+          "kind": "flag",
+          "values": [
+            {"value": 67108864, "name": "EF_MIPS_ARCH_ASE_M16", "description": "MIPS ARCH ASE M16 selection."}
+          ]
+        },
+        {
+          "name": "EF_MIPS_ARCH_ASE_MDMX",
+          "mask": 134217728,
+          "kind": "flag",
+          "values": [
+            {"value": 134217728, "name": "EF_MIPS_ARCH_ASE_MDMX", "description": "MIPS ARCH ASE MDMX selection."}
+          ]
+        },
+        {
+          "name": "MIPS ABI",
+          "mask": 61440,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ABI unspecified", "description": "ABI unspecified"},
+            {"value": 4096, "name": "EF_MIPS_ABI_O32", "description": "MIPS ABI O32 selection."},
+            {"value": 8192, "name": "EF_MIPS_ABI_O64", "description": "MIPS ABI O64 selection."},
+            {"value": 12288, "name": "EF_MIPS_ABI_EABI32", "description": "MIPS ABI EABI32 selection."},
+            {"value": 16384, "name": "EF_MIPS_ABI_EABI64", "description": "MIPS ABI EABI64 selection."}
+          ]
+        },
+        {
+          "name": "MIPS processor",
+          "mask": 16711680,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "Standard MIPS implementation", "description": "Standard MIPS implementation"},
+            {"value": 8454144, "name": "EF_MIPS_MACH_3900", "description": "MIPS MACH 3900 selection."},
+            {"value": 8519680, "name": "EF_MIPS_MACH_4010", "description": "MIPS MACH 4010 selection."},
+            {"value": 8585216, "name": "EF_MIPS_MACH_4100", "description": "MIPS MACH 4100 selection."},
+            {"value": 8650752, "name": "EF_MIPS_MACH_ALLEGREX", "description": "MIPS MACH ALLEGREX selection."},
+            {"value": 8716288, "name": "EF_MIPS_MACH_4650", "description": "MIPS MACH 4650 selection."},
+            {"value": 8847360, "name": "EF_MIPS_MACH_4120", "description": "MIPS MACH 4120 selection."},
+            {"value": 8912896, "name": "EF_MIPS_MACH_4111", "description": "MIPS MACH 4111 selection."},
+            {"value": 9043968, "name": "EF_MIPS_MACH_SB1", "description": "MIPS MACH SB1 selection."},
+            {"value": 9109504, "name": "EF_MIPS_MACH_OCTEON", "description": "MIPS MACH OCTEON selection."},
+            {"value": 9175040, "name": "EF_MIPS_MACH_XLR", "description": "MIPS MACH XLR selection."},
+            {"value": 9240576, "name": "EF_MIPS_MACH_OCTEON2", "description": "MIPS MACH OCTEON2 selection."},
+            {"value": 9306112, "name": "EF_MIPS_MACH_OCTEON3", "description": "MIPS MACH OCTEON3 selection."},
+            {"value": 9502720, "name": "EF_MIPS_MACH_5400", "description": "MIPS MACH 5400 selection."},
+            {"value": 9568256, "name": "EF_MIPS_MACH_5900", "description": "MIPS MACH 5900 selection."},
+            {"value": 9633792, "name": "EF_MIPS_MACH_IAMR2", "description": "MIPS MACH IAMR2 selection."},
+            {"value": 9961472, "name": "EF_MIPS_MACH_5500", "description": "MIPS MACH 5500 selection."},
+            {"value": 10027008, "name": "EF_MIPS_MACH_9000", "description": "MIPS MACH 9000 selection."},
+            {"value": 10485760, "name": "EF_MIPS_MACH_LS2E", "description": "MIPS MACH LS2E selection."},
+            {"value": 10551296, "name": "EF_MIPS_MACH_LS2F", "description": "MIPS MACH LS2F selection."},
+            {"value": 10616832, "name": "EF_MIPS_MACH_GS464", "description": "MIPS MACH GS464 selection."},
+            {"value": 10682368, "name": "EF_MIPS_MACH_GS464E", "description": "MIPS MACH GS464E selection."},
+            {"value": 10747904, "name": "EF_MIPS_MACH_GS264E", "description": "MIPS MACH GS264E selection."}
+          ]
+        },
+        {
+          "name": "MIPS ISA",
+          "mask": 4026531840,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_MIPS_ARCH_1", "description": "MIPS ARCH 1 selection."},
+            {"value": 268435456, "name": "EF_MIPS_ARCH_2", "description": "MIPS ARCH 2 selection."},
+            {"value": 536870912, "name": "EF_MIPS_ARCH_3", "description": "MIPS ARCH 3 selection."},
+            {"value": 805306368, "name": "EF_MIPS_ARCH_4", "description": "MIPS ARCH 4 selection."},
+            {"value": 1073741824, "name": "EF_MIPS_ARCH_5", "description": "MIPS ARCH 5 selection."},
+            {"value": 1342177280, "name": "EF_MIPS_ARCH_32", "description": "MIPS ARCH 32 selection."},
+            {"value": 1610612736, "name": "EF_MIPS_ARCH_64", "description": "MIPS ARCH 64 selection."},
+            {"value": 1879048192, "name": "EF_MIPS_ARCH_32R2", "description": "MIPS ARCH 32R2 selection."},
+            {"value": 2147483648, "name": "EF_MIPS_ARCH_64R2", "description": "MIPS ARCH 64R2 selection."},
+            {"value": 2415919104, "name": "EF_MIPS_ARCH_32R6", "description": "MIPS ARCH 32R6 selection."},
+            {"value": 2684354560, "name": "EF_MIPS_ARCH_64R6", "description": "MIPS ARCH 64R6 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "arm": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "ARM EABI version",
+          "mask": 4278190080,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_ARM_EABI_UNKNOWN", "description": "ARM EABI UNKNOWN selection."},
+            {"value": 16777216, "name": "EF_ARM_EABI_VER1", "description": "ARM EABI VER1 selection."},
+            {"value": 33554432, "name": "EF_ARM_EABI_VER2", "description": "ARM EABI VER2 selection."},
+            {"value": 50331648, "name": "EF_ARM_EABI_VER3", "description": "ARM EABI VER3 selection."},
+            {"value": 67108864, "name": "EF_ARM_EABI_VER4", "description": "ARM EABI VER4 selection."},
+            {"value": 83886080, "name": "EF_ARM_EABI_VER5", "description": "ARM EABI VER5 selection."}
+          ]
+        },
+        {
+          "name": "EF_ARM_RELEXEC",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_ARM_RELEXEC", "description": "Relocatable executable."}
+          ]
+        },
+        {
+          "name": "EF_ARM_PIC",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_ARM_PIC", "description": "Contains position-independent code."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "arm-legacy": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "EF_ARM_HASENTRY",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_ARM_HASENTRY", "description": "The entry address is meaningful."}
+          ]
+        },
+        {
+          "name": "EF_ARM_INTERWORK",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_ARM_INTERWORK", "description": "ARM and Thumb interworking is enabled."}
+          ]
+        },
+        {
+          "name": "EF_ARM_APCS_26",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_ARM_APCS_26", "description": "Uses the legacy APCS 26-bit calling convention."}
+          ]
+        },
+        {
+          "name": "EF_ARM_APCS_FLOAT",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_ARM_APCS_FLOAT", "description": "Uses the legacy APCS floating-point calling convention."}
+          ]
+        },
+        {
+          "name": "EF_ARM_ALIGN8",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_ARM_ALIGN8", "description": "Legacy structure alignment indicator (8-bit alignment)."}
+          ]
+        },
+        {
+          "name": "EF_ARM_NEW_ABI",
+          "mask": 128,
+          "kind": "flag",
+          "values": [
+            {"value": 128, "name": "EF_ARM_NEW_ABI", "description": "Uses the legacy new ABI."}
+          ]
+        },
+        {
+          "name": "EF_ARM_OLD_ABI",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_ARM_OLD_ABI", "description": "Uses the legacy old ABI."}
+          ]
+        },
+        {
+          "name": "EF_ARM_SOFT_FLOAT",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_ARM_SOFT_FLOAT", "description": "Legacy software floating-point convention."}
+          ]
+        },
+        {
+          "name": "EF_ARM_VFP_FLOAT",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_ARM_VFP_FLOAT", "description": "Legacy VFP floating-point convention."}
+          ]
+        },
+        {
+          "name": "EF_ARM_MAVERICK_FLOAT",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_ARM_MAVERICK_FLOAT", "description": "Uses the Maverick floating-point convention."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4278190080,
+          "values": [
+            0
+          ]
+        }
+      ]
+    },
+    "arm-v1": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "EF_ARM_SYMSARESORTED",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_ARM_SYMSARESORTED", "description": "Symbol tables are sorted (EABI version 1 or 2)."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4278190080,
+          "values": [
+            16777216
+          ]
+        }
+      ]
+    },
+    "arm-v2": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "EF_ARM_SYMSARESORTED",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_ARM_SYMSARESORTED", "description": "Symbol tables are sorted (EABI version 1 or 2)."}
+          ]
+        },
+        {
+          "name": "EF_ARM_DYNSYMSUSESEGIDX",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_ARM_DYNSYMSUSESEGIDX", "description": "Dynamic symbols identify segments instead of sections (EABI version 2)."}
+          ]
+        },
+        {
+          "name": "EF_ARM_MAPSYMSFIRST",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_ARM_MAPSYMSFIRST", "description": "Mapping symbols appear before other symbols (EABI version 2)."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4278190080,
+          "values": [
+            33554432
+          ]
+        }
+      ]
+    },
+    "arm-v4": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "EF_ARM_BE8",
+          "mask": 8388608,
+          "kind": "flag",
+          "values": [
+            {"value": 8388608, "name": "EF_ARM_BE8", "description": "Uses the BE8 byte-invariant big-endian model."}
+          ]
+        },
+        {
+          "name": "EF_ARM_LE8",
+          "mask": 4194304,
+          "kind": "flag",
+          "values": [
+            {"value": 4194304, "name": "EF_ARM_LE8", "description": "Uses the LE8 little-endian model."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4278190080,
+          "values": [
+            67108864
+          ]
+        }
+      ]
+    },
+    "arm-v5": {
+      "machines": [
+        40
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arm.h",
+      "fields": [
+        {
+          "name": "EF_ARM_BE8",
+          "mask": 8388608,
+          "kind": "flag",
+          "values": [
+            {"value": 8388608, "name": "EF_ARM_BE8", "description": "Uses the BE8 byte-invariant big-endian model."}
+          ]
+        },
+        {
+          "name": "EF_ARM_LE8",
+          "mask": 4194304,
+          "kind": "flag",
+          "values": [
+            {"value": 4194304, "name": "EF_ARM_LE8", "description": "Uses the LE8 little-endian model."}
+          ]
+        },
+        {
+          "name": "EF_ARM_ABI_FLOAT_SOFT",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_ARM_ABI_FLOAT_SOFT", "description": "Uses the base procedure call standard for floating-point arguments (EABI version 5)."}
+          ]
+        },
+        {
+          "name": "EF_ARM_ABI_FLOAT_HARD",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_ARM_ABI_FLOAT_HARD", "description": "Uses VFP registers for floating-point arguments (EABI version 5)."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4278190080,
+          "values": [
+            83886080
+          ]
+        }
+      ]
+    },
+    "riscv": {
+      "machines": [
+        243
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/riscv.h",
+      "fields": [
+        {
+          "name": "EF_RISCV_RVC",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_RISCV_RVC", "description": "Compressed instructions are permitted; the linker may use compressed relaxation."}
+          ]
+        },
+        {
+          "name": "EF_RISCV_RVE",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_RISCV_RVE", "description": "Uses the reduced-register E ABI."}
+          ]
+        },
+        {
+          "name": "EF_RISCV_TSO",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_RISCV_TSO", "description": "Requires the total store ordering memory model."}
+          ]
+        },
+        {
+          "name": "Floating-point ABI",
+          "mask": 6,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_RISCV_FLOAT_ABI_SOFT", "description": "Passes floating-point arguments using the integer calling convention."},
+            {"value": 2, "name": "EF_RISCV_FLOAT_ABI_SINGLE", "description": "Uses the single-precision floating-point calling convention."},
+            {"value": 4, "name": "EF_RISCV_FLOAT_ABI_DOUBLE", "description": "Uses the double-precision floating-point calling convention."},
+            {"value": 6, "name": "EF_RISCV_FLOAT_ABI_QUAD", "description": "Uses the quad-precision floating-point calling convention."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "loongarch": {
+      "machines": [
+        258
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "Floating-point ABI",
+          "mask": 7,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_LOONGARCH_ABI_SOFT_FLOAT", "description": "LOONGARCH ABI SOFT FLOAT selection."},
+            {"value": 2, "name": "EF_LOONGARCH_ABI_SINGLE_FLOAT", "description": "LOONGARCH ABI SINGLE FLOAT selection."},
+            {"value": 3, "name": "EF_LOONGARCH_ABI_DOUBLE_FLOAT", "description": "LOONGARCH ABI DOUBLE FLOAT selection."}
+          ]
+        },
+        {
+          "name": "Object ABI",
+          "mask": 192,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_LOONGARCH_OBJABI_V0", "description": "LOONGARCH OBJABI V0 selection."},
+            {"value": 64, "name": "EF_LOONGARCH_OBJABI_V1", "description": "LOONGARCH OBJABI V1 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "ppc": {
+      "machines": [
+        20
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/ppc.h",
+      "fields": [
+        {
+          "name": "EF_PPC_EMB",
+          "mask": 2147483648,
+          "kind": "flag",
+          "values": [
+            {"value": 2147483648, "name": "EF_PPC_EMB", "description": "Uses the embedded PowerPC ABI."}
+          ]
+        },
+        {
+          "name": "EF_PPC_RELOCATABLE",
+          "mask": 65536,
+          "kind": "flag",
+          "values": [
+            {"value": 65536, "name": "EF_PPC_RELOCATABLE", "description": "Built with relocatable code support."}
+          ]
+        },
+        {
+          "name": "EF_PPC_RELOCATABLE_LIB",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "EF_PPC_RELOCATABLE_LIB", "description": "Built as a relocatable library."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "ppc64": {
+      "machines": [
+        21
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/ppc64.h",
+      "fields": [
+        {
+          "name": "PowerPC64 ABI",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ABI unspecified", "description": "ABI unspecified"},
+            {"value": 1, "name": "ELFv1", "description": "ELFv1"},
+            {"value": 2, "name": "ELFv2", "description": "ELFv2"}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "sparc": {
+      "machines": [
+        18
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/sparc.h",
+      "fields": [
+        {
+          "name": "EF_SPARC_LEDATA",
+          "mask": 8388608,
+          "kind": "flag",
+          "values": [
+            {"value": 8388608, "name": "EF_SPARC_LEDATA", "description": "Data uses little-endian byte order."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_32PLUS",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_SPARC_32PLUS", "description": "Uses SPARC V8+ instructions."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_SUN_US1",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_SPARC_SUN_US1", "description": "Uses UltraSPARC I extensions."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_HAL_R1",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_SPARC_HAL_R1", "description": "Uses HAL R1 extensions."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_SUN_US3",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_SPARC_SUN_US3", "description": "Uses UltraSPARC III extensions."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "sparcv9": {
+      "machines": [
+        43
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/sparc.h",
+      "fields": [
+        {
+          "name": "EF_SPARC_LEDATA",
+          "mask": 8388608,
+          "kind": "flag",
+          "values": [
+            {"value": 8388608, "name": "EF_SPARC_LEDATA", "description": "Data uses little-endian byte order."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_SUN_US1",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_SPARC_SUN_US1", "description": "Uses UltraSPARC I extensions."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_HAL_R1",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_SPARC_HAL_R1", "description": "Uses HAL R1 extensions."}
+          ]
+        },
+        {
+          "name": "EF_SPARC_SUN_US3",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_SPARC_SUN_US3", "description": "Uses UltraSPARC III extensions."}
+          ]
+        },
+        {
+          "name": "Memory model",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_SPARCV9_TSO", "description": "Total store ordering memory model."},
+            {"value": 1, "name": "EF_SPARCV9_PSO", "description": "Partial store ordering memory model."},
+            {"value": 2, "name": "EF_SPARCV9_RMO", "description": "Relaxed memory ordering model."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "s390": {
+      "machines": [
+        22
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/s390.h",
+      "fields": [
+        {
+          "name": "EF_S390_HIGH_GPRS",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_S390_HIGH_GPRS", "description": "Requires kernel support for the high general-purpose registers."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "alpha": {
+      "machines": [
+        41,
+        36902
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/alpha.h",
+      "fields": [
+        {
+          "name": "EF_ALPHA_32BIT",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_ALPHA_32BIT", "description": "All addresses fit below 2 GiB."}
+          ]
+        },
+        {
+          "name": "EF_ALPHA_CANRELAX",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_ALPHA_CANRELAX", "description": "Contains relocations that support linker relaxation."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "avr": {
+      "machines": [
+        83,
+        4183
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/avr.h",
+      "fields": [
+        {
+          "name": "AVR architecture",
+          "mask": 127,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_AVR_ARCH_AVR1", "description": "AVR ARCH AVR1 selection."},
+            {"value": 2, "name": "EF_AVR_ARCH_AVR2", "description": "AVR ARCH AVR2 selection."},
+            {"value": 25, "name": "EF_AVR_ARCH_AVR25", "description": "AVR ARCH AVR25 selection."},
+            {"value": 3, "name": "EF_AVR_ARCH_AVR3", "description": "AVR ARCH AVR3 selection."},
+            {"value": 31, "name": "EF_AVR_ARCH_AVR31", "description": "AVR ARCH AVR31 selection."},
+            {"value": 35, "name": "EF_AVR_ARCH_AVR35", "description": "AVR ARCH AVR35 selection."},
+            {"value": 4, "name": "EF_AVR_ARCH_AVR4", "description": "AVR ARCH AVR4 selection."},
+            {"value": 5, "name": "EF_AVR_ARCH_AVR5", "description": "AVR ARCH AVR5 selection."},
+            {"value": 51, "name": "EF_AVR_ARCH_AVR51", "description": "AVR ARCH AVR51 selection."},
+            {"value": 6, "name": "EF_AVR_ARCH_AVR6", "description": "AVR ARCH AVR6 selection."},
+            {"value": 100, "name": "EF_AVR_ARCH_AVRTINY", "description": "AVR ARCH AVRTINY selection."},
+            {"value": 101, "name": "EF_AVR_ARCH_XMEGA1", "description": "AVR ARCH XMEGA1 selection."},
+            {"value": 102, "name": "EF_AVR_ARCH_XMEGA2", "description": "AVR ARCH XMEGA2 selection."},
+            {"value": 103, "name": "EF_AVR_ARCH_XMEGA3", "description": "AVR ARCH XMEGA3 selection."},
+            {"value": 104, "name": "EF_AVR_ARCH_XMEGA4", "description": "AVR ARCH XMEGA4 selection."},
+            {"value": 105, "name": "EF_AVR_ARCH_XMEGA5", "description": "AVR ARCH XMEGA5 selection."},
+            {"value": 106, "name": "EF_AVR_ARCH_XMEGA6", "description": "AVR ARCH XMEGA6 selection."},
+            {"value": 107, "name": "EF_AVR_ARCH_XMEGA7", "description": "AVR ARCH XMEGA7 selection."}
+          ]
+        },
+        {
+          "name": "EF_AVR_LINKRELAX_PREPARED",
+          "mask": 128,
+          "kind": "flag",
+          "values": [
+            {"value": 128, "name": "EF_AVR_LINKRELAX_PREPARED", "description": "Prepared for instruction relaxation by the linker."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "sh": {
+      "machines": [
+        42
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/sh.h",
+      "fields": [
+        {
+          "name": "SuperH processor",
+          "mask": 31,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_SH_UNKNOWN", "description": "SH UNKNOWN selection."},
+            {"value": 1, "name": "EF_SH1", "description": "SH1 selection."},
+            {"value": 2, "name": "EF_SH2", "description": "SH2 selection."},
+            {"value": 3, "name": "EF_SH3", "description": "SH3 selection."},
+            {"value": 4, "name": "EF_SH_DSP", "description": "SH DSP selection."},
+            {"value": 5, "name": "EF_SH3_DSP", "description": "SH3 DSP selection."},
+            {"value": 6, "name": "EF_SH4AL_DSP", "description": "SH4AL DSP selection."},
+            {"value": 8, "name": "EF_SH3E", "description": "SH3E selection."},
+            {"value": 9, "name": "EF_SH4", "description": "SH4 selection."},
+            {"value": 11, "name": "EF_SH2E", "description": "SH2E selection."},
+            {"value": 12, "name": "EF_SH4A", "description": "SH4A selection."},
+            {"value": 13, "name": "EF_SH2A", "description": "SH2A selection."},
+            {"value": 16, "name": "EF_SH4_NOFPU", "description": "SH4 NOFPU selection."},
+            {"value": 17, "name": "EF_SH4A_NOFPU", "description": "SH4A NOFPU selection."},
+            {"value": 18, "name": "EF_SH4_NOMMU_NOFPU", "description": "SH4 NOMMU NOFPU selection."},
+            {"value": 19, "name": "EF_SH2A_NOFPU", "description": "SH2A NOFPU selection."},
+            {"value": 20, "name": "EF_SH3_NOMMU", "description": "SH3 NOMMU selection."},
+            {"value": 21, "name": "EF_SH2A_SH4_NOFPU", "description": "SH2A SH4 NOFPU selection."},
+            {"value": 22, "name": "EF_SH2A_SH3_NOFPU", "description": "SH2A SH3 NOFPU selection."},
+            {"value": 23, "name": "EF_SH2A_SH4", "description": "SH2A SH4 selection."},
+            {"value": 24, "name": "EF_SH2A_SH3E", "description": "SH2A SH3E selection."},
+            {"value": 10, "name": "EF_SH5", "description": "SH5 selection."}
+          ]
+        },
+        {
+          "name": "EF_SH_PIC",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_SH_PIC", "description": "FDPIC segments may be relocated independently."}
+          ]
+        },
+        {
+          "name": "EF_SH_FDPIC",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "EF_SH_FDPIC", "description": "Uses the function descriptor PIC ABI."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "blackfin": {
+      "machines": [
+        106
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/bfin.h",
+      "fields": [
+        {
+          "name": "EF_BFIN_PIC",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_BFIN_PIC", "description": "Uses position-independent code."}
+          ]
+        },
+        {
+          "name": "EF_BFIN_FDPIC",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_BFIN_FDPIC", "description": "Uses the function descriptor PIC ABI."}
+          ]
+        },
+        {
+          "name": "EF_BFIN_CODE_IN_L1",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_BFIN_CODE_IN_L1", "description": "Code is placed in L1 memory."}
+          ]
+        },
+        {
+          "name": "EF_BFIN_DATA_IN_L1",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_BFIN_DATA_IN_L1", "description": "Data is placed in L1 memory."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "xtensa": {
+      "machines": [
+        94
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "Xtensa processor",
+          "mask": 15,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_XTENSA_MACH_NONE", "description": "XTENSA MACH NONE selection."}
+          ]
+        },
+        {
+          "name": "EF_XTENSA_XT_INSN",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_XTENSA_XT_INSN", "description": "Contains Xtensa instructions."}
+          ]
+        },
+        {
+          "name": "EF_XTENSA_XT_LIT",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_XTENSA_XT_LIT", "description": "Contains Xtensa literal data."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "arc": {
+      "machines": [
+        93,
+        195
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/arc.h",
+      "fields": [
+        {
+          "name": "ARC processor",
+          "mask": 255,
+          "kind": "enum",
+          "values": [
+            {"value": 2, "name": "E_ARC_MACH_ARC600", "description": "ARC MACH ARC600 selection."},
+            {"value": 4, "name": "E_ARC_MACH_ARC601", "description": "ARC MACH ARC601 selection."},
+            {"value": 3, "name": "E_ARC_MACH_ARC700", "description": "ARC MACH ARC700 selection."},
+            {"value": 5, "name": "EF_ARC_CPU_ARCV2EM", "description": "ARC CPU ARCV2EM selection."},
+            {"value": 6, "name": "EF_ARC_CPU_ARCV2HS", "description": "ARC CPU ARCV2HS selection."}
+          ]
+        },
+        {
+          "name": "ARC OS ABI",
+          "mask": 3840,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_ARC_OSABI_ORIG", "description": "ARC OSABI ORIG selection."},
+            {"value": 512, "name": "E_ARC_OSABI_V2", "description": "ARC OSABI V2 selection."},
+            {"value": 768, "name": "E_ARC_OSABI_V3", "description": "ARC OSABI V3 selection."},
+            {"value": 1024, "name": "E_ARC_OSABI_V4", "description": "ARC OSABI V4 selection."}
+          ]
+        },
+        {
+          "name": "EF_ARC_PIC",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_ARC_PIC", "description": "ARC PIC selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "parisc": {
+      "machines": [
+        15
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/hppa.h",
+      "fields": [
+        {
+          "name": "EF_PARISC_TRAPNIL",
+          "mask": 65536,
+          "kind": "flag",
+          "values": [
+            {"value": 65536, "name": "EF_PARISC_TRAPNIL", "description": "PARISC TRAPNIL selection."}
+          ]
+        },
+        {
+          "name": "EF_PARISC_EXT",
+          "mask": 131072,
+          "kind": "flag",
+          "values": [
+            {"value": 131072, "name": "EF_PARISC_EXT", "description": "PARISC EXT selection."}
+          ]
+        },
+        {
+          "name": "EF_PARISC_LSB",
+          "mask": 262144,
+          "kind": "flag",
+          "values": [
+            {"value": 262144, "name": "EF_PARISC_LSB", "description": "PARISC LSB selection."}
+          ]
+        },
+        {
+          "name": "EF_PARISC_WIDE",
+          "mask": 524288,
+          "kind": "flag",
+          "values": [
+            {"value": 524288, "name": "EF_PARISC_WIDE", "description": "PARISC WIDE selection."}
+          ]
+        },
+        {
+          "name": "EF_PARISC_NO_KABP",
+          "mask": 1048576,
+          "kind": "flag",
+          "values": [
+            {"value": 1048576, "name": "EF_PARISC_NO_KABP", "description": "PARISC NO KABP selection."}
+          ]
+        },
+        {
+          "name": "EF_PARISC_LAZYSWAP",
+          "mask": 4194304,
+          "kind": "flag",
+          "values": [
+            {"value": 4194304, "name": "EF_PARISC_LAZYSWAP", "description": "PARISC LAZYSWAP selection."}
+          ]
+        },
+        {
+          "name": "PA-RISC architecture",
+          "mask": 65535,
+          "kind": "enum",
+          "values": [
+            {"value": 523, "name": "EFA_PARISC_1_0", "description": "EFA PARISC 1 0 selection."},
+            {"value": 528, "name": "EFA_PARISC_1_1", "description": "EFA PARISC 1 1 selection."},
+            {"value": 532, "name": "EFA_PARISC_2_0", "description": "EFA PARISC 2 0 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "ia64": {
+      "machines": [
+        50
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/ia64.h",
+      "fields": [
+        {
+          "name": "IA-64 architecture",
+          "mask": 4278190080,
+          "kind": "enum",
+          "values": [
+            {"value": 16777216, "name": "EF_IA_64_ARCHVER_1", "description": "IA 64 ARCHVER 1 selection."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_ABI64",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_IA_64_ABI64", "description": "Uses the 64-bit ABI."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_REDUCEDFP",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_IA_64_REDUCEDFP", "description": "Uses only the reduced floating-point register set FP6-FP11."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_CONS_GP",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_IA_64_CONS_GP", "description": "The global pointer is constant across the program."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_NOFUNCDESC_CONS_GP",
+          "mask": 128,
+          "kind": "flag",
+          "values": [
+            {"value": 128, "name": "EF_IA_64_NOFUNCDESC_CONS_GP", "description": "Uses a constant global pointer without function descriptors."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_ABSOLUTE",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_IA_64_ABSOLUTE", "description": "Requires loading at absolute addresses."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "ia64-unix": {
+      "machines": [
+        50
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/ia64.h",
+      "fields": [
+        {
+          "name": "EF_IA_64_TRAPNIL",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_IA_64_TRAPNIL", "description": "Requests trapping of null pointer accesses."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_EXT",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_IA_64_EXT", "description": "Uses architecture extensions."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_BE",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_IA_64_BE", "description": "Uses big-endian execution."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "osabi",
+          "mask": 255,
+          "values": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            9,
+            12
+          ]
+        }
+      ]
+    },
+    "ia64-vms": {
+      "machines": [
+        50
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/ia64.h",
+      "fields": [
+        {
+          "name": "VMS completion status",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_IA_64_VMS_COMCOD_SUCCESS", "description": "IA 64 VMS COMCOD SUCCESS selection."},
+            {"value": 1, "name": "EF_IA_64_VMS_COMCOD_WARNING", "description": "IA 64 VMS COMCOD WARNING selection."},
+            {"value": 2, "name": "EF_IA_64_VMS_COMCOD_ERROR", "description": "IA 64 VMS COMCOD ERROR selection."},
+            {"value": 3, "name": "EF_IA_64_VMS_COMCOD_ABORT", "description": "IA 64 VMS COMCOD ABORT selection."}
+          ]
+        },
+        {
+          "name": "EF_IA_64_VMS_LINKAGES",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_IA_64_VMS_LINKAGES", "description": "IA 64 VMS LINKAGES selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "osabi",
+          "mask": 255,
+          "values": [
+            13
+          ]
+        }
+      ]
+    },
+    "msp430": {
+      "machines": [
+        105,
+        4185
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "MSP430 processor",
+          "mask": 255,
+          "kind": "enum",
+          "values": [
+            {"value": 11, "name": "EF_MSP430_MACH_MSP430x11", "description": "MSP430 MACH MSP430x11 selection."},
+            {"value": 110, "name": "EF_MSP430_MACH_MSP430x11x1", "description": "MSP430 MACH MSP430x11x1 selection."},
+            {"value": 12, "name": "EF_MSP430_MACH_MSP430x12", "description": "MSP430 MACH MSP430x12 selection."},
+            {"value": 13, "name": "EF_MSP430_MACH_MSP430x13", "description": "MSP430 MACH MSP430x13 selection."},
+            {"value": 14, "name": "EF_MSP430_MACH_MSP430x14", "description": "MSP430 MACH MSP430x14 selection."},
+            {"value": 15, "name": "EF_MSP430_MACH_MSP430x15", "description": "MSP430 MACH MSP430x15 selection."},
+            {"value": 16, "name": "EF_MSP430_MACH_MSP430x16", "description": "MSP430 MACH MSP430x16 selection."},
+            {"value": 20, "name": "EF_MSP430_MACH_MSP430x20", "description": "MSP430 MACH MSP430x20 selection."},
+            {"value": 22, "name": "EF_MSP430_MACH_MSP430x22", "description": "MSP430 MACH MSP430x22 selection."},
+            {"value": 23, "name": "EF_MSP430_MACH_MSP430x23", "description": "MSP430 MACH MSP430x23 selection."},
+            {"value": 24, "name": "EF_MSP430_MACH_MSP430x24", "description": "MSP430 MACH MSP430x24 selection."},
+            {"value": 26, "name": "EF_MSP430_MACH_MSP430x26", "description": "MSP430 MACH MSP430x26 selection."},
+            {"value": 31, "name": "EF_MSP430_MACH_MSP430x31", "description": "MSP430 MACH MSP430x31 selection."},
+            {"value": 32, "name": "EF_MSP430_MACH_MSP430x32", "description": "MSP430 MACH MSP430x32 selection."},
+            {"value": 33, "name": "EF_MSP430_MACH_MSP430x33", "description": "MSP430 MACH MSP430x33 selection."},
+            {"value": 41, "name": "EF_MSP430_MACH_MSP430x41", "description": "MSP430 MACH MSP430x41 selection."},
+            {"value": 42, "name": "EF_MSP430_MACH_MSP430x42", "description": "MSP430 MACH MSP430x42 selection."},
+            {"value": 43, "name": "EF_MSP430_MACH_MSP430x43", "description": "MSP430 MACH MSP430x43 selection."},
+            {"value": 44, "name": "EF_MSP430_MACH_MSP430x44", "description": "MSP430 MACH MSP430x44 selection."},
+            {"value": 45, "name": "EF_MSP430_MACH_MSP430X", "description": "MSP430 MACH MSP430X selection."},
+            {"value": 46, "name": "EF_MSP430_MACH_MSP430x46", "description": "MSP430 MACH MSP430x46 selection."},
+            {"value": 47, "name": "EF_MSP430_MACH_MSP430x47", "description": "MSP430 MACH MSP430x47 selection."},
+            {"value": 54, "name": "EF_MSP430_MACH_MSP430x54", "description": "MSP430 MACH MSP430x54 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "h8": {
+      "machines": [
+        46,
+        47,
+        48,
+        49
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/h8.h",
+      "fields": [
+        {
+          "name": "H8 processor",
+          "mask": 16711680,
+          "kind": "enum",
+          "values": [
+            {"value": 8388608, "name": "E_H8_MACH_H8300", "description": "H8 MACH H8300 selection."},
+            {"value": 8454144, "name": "E_H8_MACH_H8300H", "description": "H8 MACH H8300H selection."},
+            {"value": 8519680, "name": "E_H8_MACH_H8300S", "description": "H8 MACH H8300S selection."},
+            {"value": 8585216, "name": "E_H8_MACH_H8300HN", "description": "H8 MACH H8300HN selection."},
+            {"value": 8650752, "name": "E_H8_MACH_H8300SN", "description": "H8 MACH H8300SN selection."},
+            {"value": 8716288, "name": "E_H8_MACH_H8300SX", "description": "H8 MACH H8300SX selection."},
+            {"value": 8781824, "name": "E_H8_MACH_H8300SXN", "description": "H8 MACH H8300SXN selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "cris": {
+      "machines": [
+        76
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/cris.h",
+      "fields": [
+        {
+          "name": "EF_CRIS_UNDERSCORE",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_CRIS_UNDERSCORE", "description": "CRIS UNDERSCORE selection."}
+          ]
+        },
+        {
+          "name": "CRIS processor",
+          "mask": 14,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_CRIS_VARIANT_ANY_V0_V10", "description": "CRIS VARIANT ANY V0 V10 selection."},
+            {"value": 2, "name": "EF_CRIS_VARIANT_V32", "description": "CRIS VARIANT V32 selection."},
+            {"value": 4, "name": "EF_CRIS_VARIANT_COMMON_V10_V32", "description": "CRIS VARIANT COMMON V10 V32 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "frv": {
+      "machines": [
+        21569
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/frv.h",
+      "fields": [
+        {
+          "name": "FR-V GPR",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_FRV_GPR_32", "description": "FRV GPR 32 selection."},
+            {"value": 2, "name": "EF_FRV_GPR_64", "description": "FRV GPR 64 selection."}
+          ]
+        },
+        {
+          "name": "FR-V FPR",
+          "mask": 12,
+          "kind": "enum",
+          "values": [
+            {"value": 4, "name": "EF_FRV_FPR_32", "description": "FRV FPR 32 selection."},
+            {"value": 8, "name": "EF_FRV_FPR_64", "description": "FRV FPR 64 selection."},
+            {"value": 12, "name": "EF_FRV_FPR_NONE", "description": "FRV FPR NONE selection."}
+          ]
+        },
+        {
+          "name": "FR-V DWORD",
+          "mask": 48,
+          "kind": "enum",
+          "values": [
+            {"value": 16, "name": "EF_FRV_DWORD_YES", "description": "FRV DWORD YES selection."},
+            {"value": 32, "name": "EF_FRV_DWORD_NO", "description": "FRV DWORD NO selection."}
+          ]
+        },
+        {
+          "name": "FR-V CPU",
+          "mask": 4278190080,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_FRV_CPU_GENERIC", "description": "FRV CPU GENERIC selection."},
+            {"value": 16777216, "name": "EF_FRV_CPU_FR500", "description": "FRV CPU FR500 selection."},
+            {"value": 33554432, "name": "EF_FRV_CPU_FR300", "description": "FRV CPU FR300 selection."},
+            {"value": 50331648, "name": "EF_FRV_CPU_SIMPLE", "description": "FRV CPU SIMPLE selection."},
+            {"value": 67108864, "name": "EF_FRV_CPU_TOMCAT", "description": "FRV CPU TOMCAT selection."},
+            {"value": 83886080, "name": "EF_FRV_CPU_FR400", "description": "FRV CPU FR400 selection."},
+            {"value": 100663296, "name": "EF_FRV_CPU_FR550", "description": "FRV CPU FR550 selection."},
+            {"value": 117440512, "name": "EF_FRV_CPU_FR405", "description": "FRV CPU FR405 selection."},
+            {"value": 134217728, "name": "EF_FRV_CPU_FR450", "description": "FRV CPU FR450 selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_DOUBLE",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_FRV_DOUBLE", "description": "FRV DOUBLE selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_MEDIA",
+          "mask": 128,
+          "kind": "flag",
+          "values": [
+            {"value": 128, "name": "EF_FRV_MEDIA", "description": "FRV MEDIA selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_PIC",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_FRV_PIC", "description": "FRV PIC selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_NON_PIC_RELOCS",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_FRV_NON_PIC_RELOCS", "description": "FRV NON PIC RELOCS selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_MULADD",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_FRV_MULADD", "description": "FRV MULADD selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_BIGPIC",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_FRV_BIGPIC", "description": "FRV BIGPIC selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_LIBPIC",
+          "mask": 4096,
+          "kind": "flag",
+          "values": [
+            {"value": 4096, "name": "EF_FRV_LIBPIC", "description": "FRV LIBPIC selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_G0",
+          "mask": 8192,
+          "kind": "flag",
+          "values": [
+            {"value": 8192, "name": "EF_FRV_G0", "description": "FRV G0 selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_NOPACK",
+          "mask": 16384,
+          "kind": "flag",
+          "values": [
+            {"value": 16384, "name": "EF_FRV_NOPACK", "description": "FRV NOPACK selection."}
+          ]
+        },
+        {
+          "name": "EF_FRV_FDPIC",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "EF_FRV_FDPIC", "description": "FRV FDPIC selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "i370": {
+      "machines": [
+        9
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/i370.h",
+      "fields": [
+        {
+          "name": "EF_I370_RELOCATABLE",
+          "mask": 65536,
+          "kind": "flag",
+          "values": [
+            {"value": 65536, "name": "EF_I370_RELOCATABLE", "description": "I370 RELOCATABLE selection."}
+          ]
+        },
+        {
+          "name": "EF_I370_RELOCATABLE_LIB",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "EF_I370_RELOCATABLE_LIB", "description": "I370 RELOCATABLE LIB selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "iq2000": {
+      "machines": [
+        65210
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/iq2000.h",
+      "fields": [
+        {
+          "name": "IQ2000 processor",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_IQ2000_CPU_IQ2000", "description": "IQ2000 CPU IQ2000 selection."},
+            {"value": 2, "name": "EF_IQ2000_CPU_IQ10", "description": "IQ2000 CPU IQ10 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "m32c": {
+      "machines": [
+        120,
+        65200
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/m32c.h",
+      "fields": [
+        {
+          "name": "M32C processor",
+          "mask": 127,
+          "kind": "enum",
+          "values": [
+            {"value": 117, "name": "EF_M32C_CPU_M16C", "description": "M32C CPU M16C selection."},
+            {"value": 120, "name": "EF_M32C_CPU_M32C", "description": "M32C CPU M32C selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "m32r": {
+      "machines": [
+        88,
+        36929
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/m32r.h",
+      "fields": [
+        {
+          "name": "M32R architecture",
+          "mask": 805306368,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_M32R_ARCH", "description": "M32R ARCH selection."},
+            {"value": 268435456, "name": "E_M32RX_ARCH", "description": "M32RX ARCH selection."},
+            {"value": 536870912, "name": "E_M32R2_ARCH", "description": "M32R2 ARCH selection."}
+          ]
+        },
+        {
+          "name": "M32R instruction flags",
+          "mask": 268369920,
+          "kind": "number",
+          "values": []
+        }
+      ],
+      "conditions": []
+    },
+    "mep": {
+      "machines": [
+        61453
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/mep.h",
+      "fields": [
+        {
+          "name": "MeP processor",
+          "mask": 4278190080,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_MEP_CPU_MEP", "description": "MEP CPU MEP selection."},
+            {"value": 16777216, "name": "EF_MEP_CPU_C2", "description": "MEP CPU C2 selection."},
+            {"value": 33554432, "name": "EF_MEP_CPU_C3", "description": "MEP CPU C3 selection."},
+            {"value": 67108864, "name": "EF_MEP_CPU_C4", "description": "MEP CPU C4 selection."},
+            {"value": 134217728, "name": "EF_MEP_CPU_C5", "description": "MEP CPU C5 selection."},
+            {"value": 268435456, "name": "EF_MEP_CPU_H1", "description": "MEP CPU H1 selection."}
+          ]
+        },
+        {
+          "name": "MeP coprocessor",
+          "mask": 16711680,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_MEP_COP_NONE", "description": "MEP COP NONE selection."},
+            {"value": 65536, "name": "EF_MEP_COP_AVC", "description": "MEP COP AVC selection."},
+            {"value": 131072, "name": "EF_MEP_COP_AVC2", "description": "MEP COP AVC2 selection."},
+            {"value": 196608, "name": "EF_MEP_COP_FMAX", "description": "MEP COP FMAX selection."},
+            {"value": 393216, "name": "EF_MEP_COP_IVC2", "description": "MEP COP IVC2 selection."}
+          ]
+        },
+        {
+          "name": "EF_MEP_LIBRARY",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_MEP_LIBRARY", "description": "MEP LIBRARY selection."}
+          ]
+        },
+        {
+          "name": "MeP configuration index",
+          "mask": 255,
+          "kind": "number",
+          "values": []
+        }
+      ],
+      "conditions": []
+    },
+    "mt": {
+      "machines": [
+        9520
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/mt.h",
+      "fields": [
+        {
+          "name": "Morpho processor",
+          "mask": 3,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_MT_CPU_MRISC", "description": "MT CPU MRISC selection."},
+            {"value": 2, "name": "EF_MT_CPU_MRISC2", "description": "MT CPU MRISC2 selection."},
+            {"value": 3, "name": "EF_MT_CPU_MS2", "description": "MT CPU MS2 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "nios2": {
+      "machines": [
+        113,
+        65211
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nios2.h",
+      "fields": [
+        {
+          "name": "Nios II architecture",
+          "mask": 1,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_NIOS2_ARCH_R1", "description": "NIOS2 ARCH R1 selection."},
+            {"value": 1, "name": "EF_NIOS2_ARCH_R2", "description": "NIOS2 ARCH R2 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "or1k": {
+      "machines": [
+        92
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/or1k.h",
+      "fields": [
+        {
+          "name": "EF_OR1K_NODELAY",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_OR1K_NODELAY", "description": "Uses instructions without branch delay slots."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "picojava": {
+      "machines": [
+        91,
+        99
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/pj.h",
+      "fields": [
+        {
+          "name": "picoJava architecture",
+          "mask": 15,
+          "kind": "number",
+          "values": []
+        },
+        {
+          "name": "EF_PICOJAVA_NEWCALLS",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "EF_PICOJAVA_NEWCALLS", "description": "PICOJAVA NEWCALLS selection."}
+          ]
+        },
+        {
+          "name": "EF_PICOJAVA_GNUCALLS",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_PICOJAVA_GNUCALLS", "description": "PICOJAVA GNUCALLS selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "rl78": {
+      "machines": [
+        197
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/rl78.h",
+      "fields": [
+        {
+          "name": "E_FLAG_RL78_64BIT_DOUBLES",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "E_FLAG_RL78_64BIT_DOUBLES", "description": "RL78 64BIT DOUBLES selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RL78_DSP",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "E_FLAG_RL78_DSP", "description": "RL78 DSP selection."}
+          ]
+        },
+        {
+          "name": "RL78 processor",
+          "mask": 12,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_FLAG_RL78_ANY_CPU", "description": "RL78 ANY CPU selection."},
+            {"value": 4, "name": "E_FLAG_RL78_G10", "description": "RL78 G10 selection."},
+            {"value": 8, "name": "E_FLAG_RL78_G13", "description": "RL78 G13 selection."},
+            {"value": 12, "name": "E_FLAG_RL78_G14", "description": "RL78 G14 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "rx": {
+      "machines": [
+        173
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/rx.h",
+      "fields": [
+        {
+          "name": "E_FLAG_RX_64BIT_DOUBLES",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "E_FLAG_RX_64BIT_DOUBLES", "description": "RX 64BIT DOUBLES selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RX_DSP",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "E_FLAG_RX_DSP", "description": "RX DSP selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RX_PID",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "E_FLAG_RX_PID", "description": "RX PID selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RX_ABI",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "E_FLAG_RX_ABI", "description": "RX ABI selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RX_V2",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "E_FLAG_RX_V2", "description": "RX V2 selection."}
+          ]
+        },
+        {
+          "name": "E_FLAG_RX_V3",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "E_FLAG_RX_V3", "description": "RX V3 selection."}
+          ]
+        },
+        {
+          "name": "RX string instructions",
+          "mask": 192,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "String instruction use unspecified", "description": "String instruction use unspecified"},
+            {"value": 64, "name": "String instructions prohibited", "description": "String instructions prohibited"},
+            {"value": 192, "name": "String instructions used", "description": "String instructions used"}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "vax": {
+      "machines": [
+        75
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/vax.h",
+      "fields": [
+        {
+          "name": "EF_VAX_NONPIC",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_VAX_NONPIC", "description": "VAX NONPIC selection."}
+          ]
+        },
+        {
+          "name": "EF_VAX_DFLOAT",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_VAX_DFLOAT", "description": "VAX DFLOAT selection."}
+          ]
+        },
+        {
+          "name": "EF_VAX_GFLOAT",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_VAX_GFLOAT", "description": "VAX GFLOAT selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "visium": {
+      "machines": [
+        221
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/visium.h",
+      "fields": [
+        {
+          "name": "EF_VISIUM_ARCH_MCM",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_VISIUM_ARCH_MCM", "description": "VISIUM ARCH MCM selection."}
+          ]
+        },
+        {
+          "name": "EF_VISIUM_ARCH_MCM24",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_VISIUM_ARCH_MCM24", "description": "VISIUM ARCH MCM24 selection."}
+          ]
+        },
+        {
+          "name": "EF_VISIUM_ARCH_GR6",
+          "mask": 4,
+          "kind": "flag",
+          "values": [
+            {"value": 4, "name": "EF_VISIUM_ARCH_GR6", "description": "VISIUM ARCH GR6 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "tic6x": {
+      "machines": [
+        140
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/tic6x.h",
+      "fields": [
+        {
+          "name": "EF_C6000_REL",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_C6000_REL", "description": "This file is a relocatable module."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "z80": {
+      "machines": [
+        220
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/z80.h",
+      "fields": [
+        {
+          "name": "Z80 processor",
+          "mask": 255,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_Z80_MACH_Z80", "description": "Z80 MACH Z80 selection."},
+            {"value": 2, "name": "EF_Z80_MACH_Z180", "description": "Z80 MACH Z180 selection."},
+            {"value": 3, "name": "EF_Z80_MACH_R800", "description": "Z80 MACH R800 selection."},
+            {"value": 4, "name": "EF_Z80_MACH_EZ80_Z80", "description": "Z80 MACH EZ80 Z80 selection."},
+            {"value": 132, "name": "EF_Z80_MACH_EZ80_ADL", "description": "Z80 MACH EZ80 ADL selection."},
+            {"value": 5, "name": "EF_Z80_MACH_GBZ80", "description": "Z80 MACH GBZ80 selection."},
+            {"value": 6, "name": "EF_Z80_MACH_Z80N", "description": "Z80 MACH Z80N selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "bpf": {
+      "machines": [
+        247
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/bpf.h",
+      "fields": [
+        {
+          "name": "BPF CPU version",
+          "mask": 15,
+          "kind": "number",
+          "values": []
+        }
+      ],
+      "conditions": []
+    },
+    "mn10300": {
+      "machines": [
+        89,
+        48879
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/mn10300.h",
+      "fields": [
+        {
+          "name": "MN10300 processor",
+          "mask": 16711680,
+          "kind": "enum",
+          "values": [
+            {"value": 8454144, "name": "E_MN10300_MACH_MN10300", "description": "MN10300 MACH MN10300 selection."},
+            {"value": 8519680, "name": "E_MN10300_MACH_AM33", "description": "MN10300 MACH AM33 selection."},
+            {"value": 8585216, "name": "E_MN10300_MACH_AM33_2", "description": "MN10300 MACH AM33 2 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "lm32": {
+      "machines": [
+        138
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/lm32.h",
+      "fields": [
+        {
+          "name": "LM32 processor",
+          "mask": 1,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "E_LM32_MACH", "description": "LM32 MACH selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "m68hc11": {
+      "machines": [
+        70,
+        53
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/m68hc11.h",
+      "fields": [
+        {
+          "name": "68HC12 processor",
+          "mask": 240,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_M68HC11_GENERIC", "description": "M68HC11 GENERIC selection."},
+            {"value": 16, "name": "EF_M68HC12_MACH", "description": "M68HC12 MACH selection."},
+            {"value": 32, "name": "EF_M68HCS12_MACH", "description": "M68HCS12 MACH selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_I32",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "E_M68HC11_I32", "description": "M68HC11 I32 selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_F64",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "E_M68HC11_F64", "description": "M68HC11 F64 selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_XGATE_RAMOFFSET",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "E_M68HC11_XGATE_RAMOFFSET", "description": "M68HC11 XGATE RAMOFFSET selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "xgate": {
+      "machines": [
+        115
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/xgate.h",
+      "fields": [
+        {
+          "name": "XGATE processor",
+          "mask": 240,
+          "kind": "enum",
+          "values": [
+            {"value": 128, "name": "EF_XGATE_MACH", "description": "XGATE MACH selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_I32",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "E_M68HC11_I32", "description": "M68HC11 I32 selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_F64",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "E_M68HC11_F64", "description": "M68HC11 F64 selection."}
+          ]
+        },
+        {
+          "name": "E_M68HC11_XGATE_RAMOFFSET",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "E_M68HC11_XGATE_RAMOFFSET", "description": "M68HC11 XGATE RAMOFFSET selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "hexagon": {
+      "machines": [
+        164
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "Hexagon processor",
+          "mask": 65535,
+          "kind": "enum",
+          "values": [
+            {"value": 1, "name": "EF_HEXAGON_MACH_V2", "description": "HEXAGON MACH V2 selection."},
+            {"value": 2, "name": "EF_HEXAGON_MACH_V3", "description": "HEXAGON MACH V3 selection."},
+            {"value": 3, "name": "EF_HEXAGON_MACH_V4", "description": "HEXAGON MACH V4 selection."},
+            {"value": 4, "name": "EF_HEXAGON_MACH_V5", "description": "HEXAGON MACH V5 selection."},
+            {"value": 5, "name": "EF_HEXAGON_MACH_V55", "description": "HEXAGON MACH V55 selection."},
+            {"value": 96, "name": "EF_HEXAGON_MACH_V60", "description": "HEXAGON MACH V60 selection."},
+            {"value": 97, "name": "EF_HEXAGON_MACH_V61", "description": "HEXAGON MACH V61 selection."},
+            {"value": 98, "name": "EF_HEXAGON_MACH_V62", "description": "HEXAGON MACH V62 selection."},
+            {"value": 101, "name": "EF_HEXAGON_MACH_V65", "description": "HEXAGON MACH V65 selection."},
+            {"value": 102, "name": "EF_HEXAGON_MACH_V66", "description": "HEXAGON MACH V66 selection."},
+            {"value": 103, "name": "EF_HEXAGON_MACH_V67", "description": "HEXAGON MACH V67 selection."},
+            {"value": 32871, "name": "EF_HEXAGON_MACH_V67T", "description": "HEXAGON MACH V67T selection."},
+            {"value": 104, "name": "EF_HEXAGON_MACH_V68", "description": "HEXAGON MACH V68 selection."},
+            {"value": 105, "name": "EF_HEXAGON_MACH_V69", "description": "HEXAGON MACH V69 selection."},
+            {"value": 113, "name": "EF_HEXAGON_MACH_V71", "description": "HEXAGON MACH V71 selection."},
+            {"value": 32881, "name": "EF_HEXAGON_MACH_V71T", "description": "HEXAGON MACH V71T selection."},
+            {"value": 115, "name": "EF_HEXAGON_MACH_V73", "description": "HEXAGON MACH V73 selection."},
+            {"value": 117, "name": "EF_HEXAGON_MACH_V75", "description": "HEXAGON MACH V75 selection."},
+            {"value": 119, "name": "EF_HEXAGON_MACH_V77", "description": "HEXAGON MACH V77 selection."},
+            {"value": 121, "name": "EF_HEXAGON_MACH_V79", "description": "HEXAGON MACH V79 selection."},
+            {"value": 129, "name": "EF_HEXAGON_MACH_V81", "description": "HEXAGON MACH V81 selection."},
+            {"value": 131, "name": "EF_HEXAGON_MACH_V83", "description": "HEXAGON MACH V83 selection."},
+            {"value": 133, "name": "EF_HEXAGON_MACH_V85", "description": "HEXAGON MACH V85 selection."},
+            {"value": 135, "name": "EF_HEXAGON_MACH_V87", "description": "HEXAGON MACH V87 selection."},
+            {"value": 137, "name": "EF_HEXAGON_MACH_V89", "description": "HEXAGON MACH V89 selection."},
+            {"value": 145, "name": "EF_HEXAGON_MACH_V91", "description": "HEXAGON MACH V91 selection."},
+            {"value": 147, "name": "EF_HEXAGON_MACH_V93", "description": "HEXAGON MACH V93 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "amdgpu": {
+      "machines": [
+        224
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "AMDGPU processor",
+          "mask": 255,
+          "kind": "enum",
+          "values": [
+            {"value": 32, "name": "EF_AMDGPU_MACH_AMDGCN_GFX600", "description": "AMDGPU MACH AMDGCN GFX600 selection."},
+            {"value": 33, "name": "EF_AMDGPU_MACH_AMDGCN_GFX601", "description": "AMDGPU MACH AMDGCN GFX601 selection."},
+            {"value": 34, "name": "EF_AMDGPU_MACH_AMDGCN_GFX700", "description": "AMDGPU MACH AMDGCN GFX700 selection."},
+            {"value": 35, "name": "EF_AMDGPU_MACH_AMDGCN_GFX701", "description": "AMDGPU MACH AMDGCN GFX701 selection."},
+            {"value": 36, "name": "EF_AMDGPU_MACH_AMDGCN_GFX702", "description": "AMDGPU MACH AMDGCN GFX702 selection."},
+            {"value": 37, "name": "EF_AMDGPU_MACH_AMDGCN_GFX703", "description": "AMDGPU MACH AMDGCN GFX703 selection."},
+            {"value": 38, "name": "EF_AMDGPU_MACH_AMDGCN_GFX704", "description": "AMDGPU MACH AMDGCN GFX704 selection."},
+            {"value": 40, "name": "EF_AMDGPU_MACH_AMDGCN_GFX801", "description": "AMDGPU MACH AMDGCN GFX801 selection."},
+            {"value": 41, "name": "EF_AMDGPU_MACH_AMDGCN_GFX802", "description": "AMDGPU MACH AMDGCN GFX802 selection."},
+            {"value": 42, "name": "EF_AMDGPU_MACH_AMDGCN_GFX803", "description": "AMDGPU MACH AMDGCN GFX803 selection."},
+            {"value": 43, "name": "EF_AMDGPU_MACH_AMDGCN_GFX810", "description": "AMDGPU MACH AMDGCN GFX810 selection."},
+            {"value": 44, "name": "EF_AMDGPU_MACH_AMDGCN_GFX900", "description": "AMDGPU MACH AMDGCN GFX900 selection."},
+            {"value": 45, "name": "EF_AMDGPU_MACH_AMDGCN_GFX902", "description": "AMDGPU MACH AMDGCN GFX902 selection."},
+            {"value": 46, "name": "EF_AMDGPU_MACH_AMDGCN_GFX904", "description": "AMDGPU MACH AMDGCN GFX904 selection."},
+            {"value": 47, "name": "EF_AMDGPU_MACH_AMDGCN_GFX906", "description": "AMDGPU MACH AMDGCN GFX906 selection."},
+            {"value": 48, "name": "EF_AMDGPU_MACH_AMDGCN_GFX908", "description": "AMDGPU MACH AMDGCN GFX908 selection."},
+            {"value": 49, "name": "EF_AMDGPU_MACH_AMDGCN_GFX909", "description": "AMDGPU MACH AMDGCN GFX909 selection."},
+            {"value": 50, "name": "EF_AMDGPU_MACH_AMDGCN_GFX90C", "description": "AMDGPU MACH AMDGCN GFX90C selection."},
+            {"value": 51, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1010", "description": "AMDGPU MACH AMDGCN GFX1010 selection."},
+            {"value": 52, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1011", "description": "AMDGPU MACH AMDGCN GFX1011 selection."},
+            {"value": 53, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1012", "description": "AMDGPU MACH AMDGCN GFX1012 selection."},
+            {"value": 54, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1030", "description": "AMDGPU MACH AMDGCN GFX1030 selection."},
+            {"value": 55, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1031", "description": "AMDGPU MACH AMDGCN GFX1031 selection."},
+            {"value": 56, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1032", "description": "AMDGPU MACH AMDGCN GFX1032 selection."},
+            {"value": 57, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1033", "description": "AMDGPU MACH AMDGCN GFX1033 selection."},
+            {"value": 58, "name": "EF_AMDGPU_MACH_AMDGCN_GFX602", "description": "AMDGPU MACH AMDGCN GFX602 selection."},
+            {"value": 59, "name": "EF_AMDGPU_MACH_AMDGCN_GFX705", "description": "AMDGPU MACH AMDGCN GFX705 selection."},
+            {"value": 60, "name": "EF_AMDGPU_MACH_AMDGCN_GFX805", "description": "AMDGPU MACH AMDGCN GFX805 selection."},
+            {"value": 61, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1035", "description": "AMDGPU MACH AMDGCN GFX1035 selection."},
+            {"value": 62, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1034", "description": "AMDGPU MACH AMDGCN GFX1034 selection."},
+            {"value": 63, "name": "EF_AMDGPU_MACH_AMDGCN_GFX90A", "description": "AMDGPU MACH AMDGCN GFX90A selection."},
+            {"value": 65, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1100", "description": "AMDGPU MACH AMDGCN GFX1100 selection."},
+            {"value": 66, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1013", "description": "AMDGPU MACH AMDGCN GFX1013 selection."},
+            {"value": 67, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1150", "description": "AMDGPU MACH AMDGCN GFX1150 selection."},
+            {"value": 68, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1103", "description": "AMDGPU MACH AMDGCN GFX1103 selection."},
+            {"value": 69, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1036", "description": "AMDGPU MACH AMDGCN GFX1036 selection."},
+            {"value": 70, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1101", "description": "AMDGPU MACH AMDGCN GFX1101 selection."},
+            {"value": 71, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1102", "description": "AMDGPU MACH AMDGCN GFX1102 selection."},
+            {"value": 72, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1200", "description": "AMDGPU MACH AMDGCN GFX1200 selection."},
+            {"value": 73, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1250", "description": "AMDGPU MACH AMDGCN GFX1250 selection."},
+            {"value": 74, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1151", "description": "AMDGPU MACH AMDGCN GFX1151 selection."},
+            {"value": 76, "name": "EF_AMDGPU_MACH_AMDGCN_GFX942", "description": "AMDGPU MACH AMDGCN GFX942 selection."},
+            {"value": 78, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1201", "description": "AMDGPU MACH AMDGCN GFX1201 selection."},
+            {"value": 79, "name": "EF_AMDGPU_MACH_AMDGCN_GFX950", "description": "AMDGPU MACH AMDGCN GFX950 selection."},
+            {"value": 81, "name": "EF_AMDGPU_MACH_AMDGCN_GFX9_GENERIC", "description": "AMDGPU MACH AMDGCN GFX9 GENERIC selection."},
+            {"value": 82, "name": "EF_AMDGPU_MACH_AMDGCN_GFX10_1_GENERIC", "description": "AMDGPU MACH AMDGCN GFX10 1 GENERIC selection."},
+            {"value": 83, "name": "EF_AMDGPU_MACH_AMDGCN_GFX10_3_GENERIC", "description": "AMDGPU MACH AMDGCN GFX10 3 GENERIC selection."},
+            {"value": 84, "name": "EF_AMDGPU_MACH_AMDGCN_GFX11_GENERIC", "description": "AMDGPU MACH AMDGCN GFX11 GENERIC selection."},
+            {"value": 85, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1152", "description": "AMDGPU MACH AMDGCN GFX1152 selection."},
+            {"value": 88, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1153", "description": "AMDGPU MACH AMDGCN GFX1153 selection."},
+            {"value": 89, "name": "EF_AMDGPU_MACH_AMDGCN_GFX12_GENERIC", "description": "AMDGPU MACH AMDGCN GFX12 GENERIC selection."},
+            {"value": 91, "name": "EF_AMDGPU_MACH_AMDGCN_GFX12_5_GENERIC", "description": "AMDGPU MACH AMDGCN GFX12 5 GENERIC selection."},
+            {"value": 95, "name": "EF_AMDGPU_MACH_AMDGCN_GFX9_4_GENERIC", "description": "AMDGPU MACH AMDGCN GFX9 4 GENERIC selection."},
+            {"value": 1, "name": "EF_AMDGPU_MACH_R600_R600", "description": "AMDGPU MACH R600 R600 selection."},
+            {"value": 2, "name": "EF_AMDGPU_MACH_R600_R630", "description": "AMDGPU MACH R600 R630 selection."},
+            {"value": 3, "name": "EF_AMDGPU_MACH_R600_RS880", "description": "AMDGPU MACH R600 RS880 selection."},
+            {"value": 4, "name": "EF_AMDGPU_MACH_R600_RV670", "description": "AMDGPU MACH R600 RV670 selection."},
+            {"value": 5, "name": "EF_AMDGPU_MACH_R600_RV710", "description": "AMDGPU MACH R600 RV710 selection."},
+            {"value": 6, "name": "EF_AMDGPU_MACH_R600_RV730", "description": "AMDGPU MACH R600 RV730 selection."},
+            {"value": 7, "name": "EF_AMDGPU_MACH_R600_RV770", "description": "AMDGPU MACH R600 RV770 selection."},
+            {"value": 8, "name": "EF_AMDGPU_MACH_R600_CEDAR", "description": "AMDGPU MACH R600 CEDAR selection."},
+            {"value": 9, "name": "EF_AMDGPU_MACH_R600_CYPRESS", "description": "AMDGPU MACH R600 CYPRESS selection."},
+            {"value": 10, "name": "EF_AMDGPU_MACH_R600_JUNIPER", "description": "AMDGPU MACH R600 JUNIPER selection."},
+            {"value": 11, "name": "EF_AMDGPU_MACH_R600_REDWOOD", "description": "AMDGPU MACH R600 REDWOOD selection."},
+            {"value": 12, "name": "EF_AMDGPU_MACH_R600_SUMO", "description": "AMDGPU MACH R600 SUMO selection."},
+            {"value": 13, "name": "EF_AMDGPU_MACH_R600_BARTS", "description": "AMDGPU MACH R600 BARTS selection."},
+            {"value": 14, "name": "EF_AMDGPU_MACH_R600_CAICOS", "description": "AMDGPU MACH R600 CAICOS selection."},
+            {"value": 15, "name": "EF_AMDGPU_MACH_R600_CAYMAN", "description": "AMDGPU MACH R600 CAYMAN selection."},
+            {"value": 16, "name": "EF_AMDGPU_MACH_R600_TURKS", "description": "AMDGPU MACH R600 TURKS selection."},
+            {"value": 80, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1310", "description": "AMDGPU MACH AMDGCN GFX1310 selection."},
+            {"value": 87, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1154", "description": "AMDGPU MACH AMDGCN GFX1154 selection."},
+            {"value": 90, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1251", "description": "AMDGPU MACH AMDGCN GFX1251 selection."},
+            {"value": 92, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1172", "description": "AMDGPU MACH AMDGCN GFX1172 selection."},
+            {"value": 93, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1170", "description": "AMDGPU MACH AMDGCN GFX1170 selection."},
+            {"value": 94, "name": "EF_AMDGPU_MACH_AMDGCN_GFX1171", "description": "AMDGPU MACH AMDGCN GFX1171 selection."},
+            {"value": 98, "name": "EF_AMDGPU_MACH_AMDGCN_GFX11_7_GENERIC", "description": "AMDGPU MACH AMDGCN GFX11 7 GENERIC selection."},
+            {"value": 99, "name": "EF_AMDGPU_MACH_AMDGCN_GFX13_GENERIC", "description": "AMDGPU MACH AMDGCN GFX13 GENERIC selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "gpuLayout",
+          "mask": 255,
+          "values": [
+            3,
+            4,
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    "amdgpu-v2": {
+      "machines": [
+        224
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "EF_AMDGPU_FEATURE_XNACK_V2",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_AMDGPU_FEATURE_XNACK_V2", "description": "AMDGPU FEATURE XNACK V2 selection."}
+          ]
+        },
+        {
+          "name": "EF_AMDGPU_FEATURE_TRAP_HANDLER_V2",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_AMDGPU_FEATURE_TRAP_HANDLER_V2", "description": "AMDGPU FEATURE TRAP HANDLER V2 selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "osabi",
+          "mask": 255,
+          "values": [
+            64
+          ]
+        },
+        {
+          "field": "abiVersion",
+          "mask": 255,
+          "values": [
+            0
+          ]
+        }
+      ]
+    },
+    "amdgpu-v3": {
+      "machines": [
+        224
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "EF_AMDGPU_FEATURE_XNACK_V3",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_AMDGPU_FEATURE_XNACK_V3", "description": "AMDGPU FEATURE XNACK V3 selection."}
+          ]
+        },
+        {
+          "name": "EF_AMDGPU_FEATURE_SRAMECC_V3",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_AMDGPU_FEATURE_SRAMECC_V3", "description": "AMDGPU FEATURE SRAMECC V3 selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "gpuLayout",
+          "mask": 255,
+          "values": [
+            3
+          ]
+        }
+      ]
+    },
+    "amdgpu-v4": {
+      "machines": [
+        224
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "XNACK",
+          "mask": 768,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_AMDGPU_FEATURE_XNACK_UNSUPPORTED_V4", "description": "AMDGPU FEATURE XNACK UNSUPPORTED V4 selection."},
+            {"value": 256, "name": "EF_AMDGPU_FEATURE_XNACK_ANY_V4", "description": "AMDGPU FEATURE XNACK ANY V4 selection."},
+            {"value": 512, "name": "EF_AMDGPU_FEATURE_XNACK_OFF_V4", "description": "AMDGPU FEATURE XNACK OFF V4 selection."},
+            {"value": 768, "name": "EF_AMDGPU_FEATURE_XNACK_ON_V4", "description": "AMDGPU FEATURE XNACK ON V4 selection."}
+          ]
+        },
+        {
+          "name": "SRAMECC",
+          "mask": 3072,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "EF_AMDGPU_FEATURE_SRAMECC_UNSUPPORTED_V4", "description": "AMDGPU FEATURE SRAMECC UNSUPPORTED V4 selection."},
+            {"value": 1024, "name": "EF_AMDGPU_FEATURE_SRAMECC_ANY_V4", "description": "AMDGPU FEATURE SRAMECC ANY V4 selection."},
+            {"value": 2048, "name": "EF_AMDGPU_FEATURE_SRAMECC_OFF_V4", "description": "AMDGPU FEATURE SRAMECC OFF V4 selection."},
+            {"value": 3072, "name": "EF_AMDGPU_FEATURE_SRAMECC_ON_V4", "description": "AMDGPU FEATURE SRAMECC ON V4 selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "gpuLayout",
+          "mask": 255,
+          "values": [
+            4,
+            5,
+            6
+          ]
+        }
+      ]
+    },
+    "amdgpu-generic": {
+      "machines": [
+        224
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "Generic target version",
+          "mask": 4278190080,
+          "kind": "number",
+          "values": []
+        }
+      ],
+      "conditions": [
+        {
+          "field": "gpuLayout",
+          "mask": 255,
+          "values": [
+            6
+          ]
+        }
+      ]
+    },
+    "csky": {
+      "machines": [
+        252
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "C-SKY processor",
+          "mask": 31,
+          "kind": "enum",
+          "values": [
+            {"value": 10, "name": "EF_CSKY_801", "description": "CSKY 801 selection."},
+            {"value": 16, "name": "EF_CSKY_802", "description": "CSKY 802 selection."},
+            {"value": 9, "name": "EF_CSKY_803", "description": "CSKY 803 selection."},
+            {"value": 17, "name": "EF_CSKY_805", "description": "CSKY 805 selection."},
+            {"value": 6, "name": "EF_CSKY_807", "description": "CSKY 807 selection."},
+            {"value": 8, "name": "EF_CSKY_810", "description": "CSKY 810 selection."},
+            {"value": 11, "name": "EF_CSKY_860", "description": "CSKY 860 selection."},
+            {"value": 31, "name": "EF_CSKY_800", "description": "CSKY 800 selection."}
+          ]
+        },
+        {
+          "name": "EF_CSKY_FLOAT",
+          "mask": 8192,
+          "kind": "flag",
+          "values": [
+            {"value": 8192, "name": "EF_CSKY_FLOAT", "description": "CSKY FLOAT selection."}
+          ]
+        },
+        {
+          "name": "EF_CSKY_DSP",
+          "mask": 16384,
+          "kind": "flag",
+          "values": [
+            {"value": 16384, "name": "EF_CSKY_DSP", "description": "CSKY DSP selection."}
+          ]
+        },
+        {
+          "name": "C-SKY ABI",
+          "mask": 4026531840,
+          "kind": "enum",
+          "values": [
+            {"value": 268435456, "name": "EF_CSKY_ABIV1", "description": "CSKY ABIV1 selection."},
+            {"value": 536870912, "name": "EF_CSKY_ABIV2", "description": "CSKY ABIV2 selection."}
+          ]
+        },
+        {
+          "name": "C-SKY ELF version",
+          "mask": 251658240,
+          "kind": "enum",
+          "values": [
+            {"value": 16777216, "name": "EF_CSKY_EFV1", "description": "CSKY EFV1 selection."},
+            {"value": 33554432, "name": "EF_CSKY_EFV2", "description": "CSKY EFV2 selection."},
+            {"value": 50331648, "name": "EF_CSKY_EFV3", "description": "CSKY EFV3 selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "m68k": {
+      "machines": [
+        4
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/m68k.h",
+      "fields": [
+        {
+          "name": "M68K architecture",
+          "mask": 58818560,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ColdFire", "description": "ColdFire"},
+            {"value": 8454144, "name": "EF_M68K_CPU32", "description": "M68K CPU32 selection."},
+            {"value": 16777216, "name": "EF_M68K_M68000", "description": "M68K M68000 selection."},
+            {"value": 33554432, "name": "EF_M68K_FIDO", "description": "M68K FIDO selection."},
+            {"value": 32768, "name": "EF_M68K_CFV4E", "description": "M68K CFV4E selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "coldfire": {
+      "machines": [
+        4
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/m68k.h",
+      "fields": [
+        {
+          "name": "ColdFire ISA",
+          "mask": 15,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ISA unspecified", "description": "ISA unspecified"},
+            {"value": 1, "name": "EF_M68K_CF_ISA_A_NODIV", "description": "M68K CF ISA A NODIV selection."},
+            {"value": 2, "name": "EF_M68K_CF_ISA_A", "description": "M68K CF ISA A selection."},
+            {"value": 3, "name": "EF_M68K_CF_ISA_A_PLUS", "description": "M68K CF ISA A PLUS selection."},
+            {"value": 4, "name": "EF_M68K_CF_ISA_B_NOUSP", "description": "M68K CF ISA B NOUSP selection."},
+            {"value": 5, "name": "EF_M68K_CF_ISA_B", "description": "M68K CF ISA B selection."},
+            {"value": 6, "name": "EF_M68K_CF_ISA_C", "description": "M68K CF ISA C selection."},
+            {"value": 7, "name": "EF_M68K_CF_ISA_C_NODIV", "description": "M68K CF ISA C NODIV selection."}
+          ]
+        },
+        {
+          "name": "ColdFire multiply-accumulate",
+          "mask": 48,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "No multiply-accumulate extension", "description": "No multiply-accumulate extension"},
+            {"value": 16, "name": "EF_M68K_CF_MAC", "description": "M68K CF MAC selection."},
+            {"value": 32, "name": "EF_M68K_CF_EMAC", "description": "M68K CF EMAC selection."},
+            {"value": 48, "name": "EF_M68K_CF_EMAC_B", "description": "M68K CF EMAC B selection."}
+          ]
+        },
+        {
+          "name": "EF_M68K_CF_FLOAT",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_M68K_CF_FLOAT", "description": "M68K CF FLOAT selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 58818560,
+          "values": [
+            0,
+            32768
+          ]
+        }
+      ]
+    },
+    "v850": {
+      "machines": [
+        87,
+        36992
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/v850.h",
+      "fields": [
+        {
+          "name": "V850 architecture",
+          "mask": 4026531840,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_V850_ARCH", "description": "V850 ARCH selection."},
+            {"value": 268435456, "name": "E_V850E_ARCH", "description": "V850E ARCH selection."},
+            {"value": 536870912, "name": "E_V850E1_ARCH", "description": "V850E1 ARCH selection."},
+            {"value": 805306368, "name": "E_V850E2_ARCH", "description": "V850E2 ARCH selection."},
+            {"value": 1073741824, "name": "E_V850E2V3_ARCH", "description": "V850E2V3 ARCH selection."},
+            {"value": 1610612736, "name": "E_V850E3V5_ARCH", "description": "V850E3V5 ARCH selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "v800": {
+      "machines": [
+        36
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/v850.h",
+      "fields": [
+        {
+          "name": "RH850 ABI",
+          "mask": 4026531840,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ABI unspecified", "description": "ABI unspecified"},
+            {"value": 4026531840, "name": "EF_RH850_ABI", "description": "RH850 ABI selection."}
+          ]
+        },
+        {
+          "name": "EF_V800_850E3",
+          "mask": 1048576,
+          "kind": "flag",
+          "values": [
+            {"value": 1048576, "name": "EF_V800_850E3", "description": "V800 850E3 selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_FPU_DOUBLE",
+          "mask": 1,
+          "kind": "flag",
+          "values": [
+            {"value": 1, "name": "EF_RH850_FPU_DOUBLE", "description": "RH850 FPU DOUBLE selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_FPU_SINGLE",
+          "mask": 2,
+          "kind": "flag",
+          "values": [
+            {"value": 2, "name": "EF_RH850_FPU_SINGLE", "description": "RH850 FPU SINGLE selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_REGMODE22",
+          "mask": 32,
+          "kind": "flag",
+          "values": [
+            {"value": 32, "name": "EF_RH850_REGMODE22", "description": "RH850 REGMODE22 selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_REGMODE32",
+          "mask": 64,
+          "kind": "flag",
+          "values": [
+            {"value": 64, "name": "EF_RH850_REGMODE32", "description": "RH850 REGMODE32 selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_GP_FIX",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_RH850_GP_FIX", "description": "RH850 GP FIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_GP_NOFIX",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_RH850_GP_NOFIX", "description": "RH850 GP NOFIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_EP_FIX",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_RH850_EP_FIX", "description": "RH850 EP FIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_EP_NOFIX",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_RH850_EP_NOFIX", "description": "RH850 EP NOFIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_TP_FIX",
+          "mask": 4096,
+          "kind": "flag",
+          "values": [
+            {"value": 4096, "name": "EF_RH850_TP_FIX", "description": "RH850 TP FIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_TP_NOFIX",
+          "mask": 8192,
+          "kind": "flag",
+          "values": [
+            {"value": 8192, "name": "EF_RH850_TP_NOFIX", "description": "RH850 TP NOFIX selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_REG2_RESERVE",
+          "mask": 16384,
+          "kind": "flag",
+          "values": [
+            {"value": 16384, "name": "EF_RH850_REG2_RESERVE", "description": "RH850 REG2 RESERVE selection."}
+          ]
+        },
+        {
+          "name": "EF_RH850_REG2_NORESERVE",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "EF_RH850_REG2_NORESERVE", "description": "RH850 REG2 NORESERVE selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "nfp": {
+      "machines": [
+        250
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nfp.h",
+      "fields": [
+        {
+          "name": "NFP processor",
+          "mask": 16776960,
+          "kind": "enum",
+          "values": [
+            {"value": 3276800, "name": "NFP-32xx", "description": "NFP-32xx"},
+            {"value": 6291456, "name": "NFP-6xxx", "description": "NFP-6xxx"}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "kvx": {
+      "machines": [
+        256
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/kvx_elfids.h",
+      "fields": [
+        {
+          "name": "KVX core",
+          "mask": 65280,
+          "kind": "enum",
+          "values": [
+            {"value": 4864, "name": "KV3-1", "description": "KV3-1"},
+            {"value": 8960, "name": "KV3-2", "description": "KV3-2"},
+            {"value": 5120, "name": "KV4-1", "description": "KV4-1"}
+          ]
+        },
+        {
+          "name": "KVX ABI",
+          "mask": 7,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "ELF_KVX_ABI_UNDEF", "description": "ELF KVX ABI UNDEF selection."},
+            {"value": 1, "name": "ELF_KVX_ABI_REGULAR", "description": "ELF KVX ABI REGULAR selection."}
+          ]
+        },
+        {
+          "name": "ELF_KVX_ABI_64B_ADDR_BIT",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "ELF_KVX_ABI_64B_ADDR_BIT", "description": "ELF KVX ABI 64B ADDR BIT selection."}
+          ]
+        },
+        {
+          "name": "ELF_KVX_ABI_PIC_BIT",
+          "mask": 16,
+          "kind": "flag",
+          "values": [
+            {"value": 16, "name": "ELF_KVX_ABI_PIC_BIT", "description": "ELF KVX ABI PIC BIT selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "score": {
+      "machines": [
+        135
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/score.h",
+      "fields": [
+        {
+          "name": "S+core processor",
+          "mask": 268369920,
+          "kind": "enum",
+          "values": [
+            {"value": 196608, "name": "E_SCORE_MACH_SCORE3", "description": "SCORE MACH SCORE3 selection."},
+            {"value": 458752, "name": "E_SCORE_MACH_SCORE7", "description": "SCORE MACH SCORE7 selection."}
+          ]
+        },
+        {
+          "name": "EF_SCORE_PIC",
+          "mask": 2147483648,
+          "kind": "flag",
+          "values": [
+            {"value": 2147483648, "name": "EF_SCORE_PIC", "description": "SCORE PIC selection."}
+          ]
+        },
+        {
+          "name": "EF_SCORE_FIXDEP",
+          "mask": 1073741824,
+          "kind": "flag",
+          "values": [
+            {"value": 1073741824, "name": "EF_SCORE_FIXDEP", "description": "SCORE FIXDEP selection."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "cuda-v1": {
+      "machines": [
+        190
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "CUDA SM",
+          "mask": 255,
+          "kind": "enum",
+          "values": [
+            {"value": 20, "name": "EF_CUDA_SM20", "description": "CUDA SM20 selection."},
+            {"value": 21, "name": "EF_CUDA_SM21", "description": "CUDA SM21 selection."},
+            {"value": 30, "name": "EF_CUDA_SM30", "description": "CUDA SM30 selection."},
+            {"value": 32, "name": "EF_CUDA_SM32", "description": "CUDA SM32 selection."},
+            {"value": 35, "name": "EF_CUDA_SM35", "description": "CUDA SM35 selection."},
+            {"value": 37, "name": "EF_CUDA_SM37", "description": "CUDA SM37 selection."},
+            {"value": 50, "name": "EF_CUDA_SM50", "description": "CUDA SM50 selection."},
+            {"value": 52, "name": "EF_CUDA_SM52", "description": "CUDA SM52 selection."},
+            {"value": 53, "name": "EF_CUDA_SM53", "description": "CUDA SM53 selection."},
+            {"value": 60, "name": "EF_CUDA_SM60", "description": "CUDA SM60 selection."},
+            {"value": 61, "name": "EF_CUDA_SM61", "description": "CUDA SM61 selection."},
+            {"value": 62, "name": "EF_CUDA_SM62", "description": "CUDA SM62 selection."},
+            {"value": 70, "name": "EF_CUDA_SM70", "description": "CUDA SM70 selection."},
+            {"value": 72, "name": "EF_CUDA_SM72", "description": "CUDA SM72 selection."},
+            {"value": 75, "name": "EF_CUDA_SM75", "description": "CUDA SM75 selection."},
+            {"value": 80, "name": "EF_CUDA_SM80", "description": "CUDA SM80 selection."},
+            {"value": 86, "name": "EF_CUDA_SM86", "description": "CUDA SM86 selection."},
+            {"value": 87, "name": "EF_CUDA_SM87", "description": "CUDA SM87 selection."},
+            {"value": 88, "name": "EF_CUDA_SM88", "description": "CUDA SM88 selection."},
+            {"value": 89, "name": "EF_CUDA_SM89", "description": "CUDA SM89 selection."},
+            {"value": 90, "name": "EF_CUDA_SM90", "description": "CUDA SM90 selection."},
+            {"value": 100, "name": "EF_CUDA_SM100", "description": "CUDA SM100 selection."},
+            {"value": 101, "name": "EF_CUDA_SM101", "description": "CUDA SM101 selection."},
+            {"value": 103, "name": "EF_CUDA_SM103", "description": "CUDA SM103 selection."},
+            {"value": 110, "name": "EF_CUDA_SM110", "description": "CUDA SM110 selection."},
+            {"value": 120, "name": "EF_CUDA_SM120", "description": "CUDA SM120 selection."},
+            {"value": 121, "name": "EF_CUDA_SM121", "description": "CUDA SM121 selection."}
+          ]
+        },
+        {
+          "name": "CUDA virtual SM",
+          "mask": 16711680,
+          "kind": "enum",
+          "values": [
+            {"value": 1310720, "name": "COMPUTE_20", "description": "COMPUTE_20"},
+            {"value": 1376256, "name": "COMPUTE_21", "description": "COMPUTE_21"},
+            {"value": 1966080, "name": "COMPUTE_30", "description": "COMPUTE_30"},
+            {"value": 2097152, "name": "COMPUTE_32", "description": "COMPUTE_32"},
+            {"value": 2293760, "name": "COMPUTE_35", "description": "COMPUTE_35"},
+            {"value": 2424832, "name": "COMPUTE_37", "description": "COMPUTE_37"},
+            {"value": 3276800, "name": "COMPUTE_50", "description": "COMPUTE_50"},
+            {"value": 3407872, "name": "COMPUTE_52", "description": "COMPUTE_52"},
+            {"value": 3473408, "name": "COMPUTE_53", "description": "COMPUTE_53"},
+            {"value": 3932160, "name": "COMPUTE_60", "description": "COMPUTE_60"},
+            {"value": 3997696, "name": "COMPUTE_61", "description": "COMPUTE_61"},
+            {"value": 4063232, "name": "COMPUTE_62", "description": "COMPUTE_62"},
+            {"value": 4587520, "name": "COMPUTE_70", "description": "COMPUTE_70"},
+            {"value": 4718592, "name": "COMPUTE_72", "description": "COMPUTE_72"},
+            {"value": 4915200, "name": "COMPUTE_75", "description": "COMPUTE_75"},
+            {"value": 5242880, "name": "COMPUTE_80", "description": "COMPUTE_80"},
+            {"value": 5636096, "name": "COMPUTE_86", "description": "COMPUTE_86"},
+            {"value": 5701632, "name": "COMPUTE_87", "description": "COMPUTE_87"},
+            {"value": 5767168, "name": "COMPUTE_88", "description": "COMPUTE_88"},
+            {"value": 5832704, "name": "COMPUTE_89", "description": "COMPUTE_89"},
+            {"value": 5898240, "name": "COMPUTE_90", "description": "COMPUTE_90"},
+            {"value": 6553600, "name": "COMPUTE_100", "description": "COMPUTE_100"},
+            {"value": 6619136, "name": "COMPUTE_101", "description": "COMPUTE_101"},
+            {"value": 6750208, "name": "COMPUTE_103", "description": "COMPUTE_103"},
+            {"value": 7208960, "name": "COMPUTE_110", "description": "COMPUTE_110"},
+            {"value": 7864320, "name": "COMPUTE_120", "description": "COMPUTE_120"},
+            {"value": 7929856, "name": "COMPUTE_121", "description": "COMPUTE_121"}
+          ]
+        },
+        {
+          "name": "EF_CUDA_TEXMODE_UNIFIED",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "EF_CUDA_TEXMODE_UNIFIED", "description": "CUDA TEXMODE UNIFIED selection."}
+          ]
+        },
+        {
+          "name": "EF_CUDA_TEXMODE_INDEPENDANT",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "EF_CUDA_TEXMODE_INDEPENDANT", "description": "CUDA TEXMODE INDEPENDANT selection."}
+          ]
+        },
+        {
+          "name": "EF_CUDA_64BIT_ADDRESS",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "EF_CUDA_64BIT_ADDRESS", "description": "CUDA 64BIT ADDRESS selection."}
+          ]
+        },
+        {
+          "name": "EF_CUDA_ACCELERATORS_V1",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "EF_CUDA_ACCELERATORS_V1", "description": "CUDA ACCELERATORS V1 selection."}
+          ]
+        },
+        {
+          "name": "EF_CUDA_SW_FLAG_V2",
+          "mask": 4096,
+          "kind": "flag",
+          "values": [
+            {"value": 4096, "name": "EF_CUDA_SW_FLAG_V2", "description": "CUDA SW FLAG V2 selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "abiVersion",
+          "mask": 255,
+          "values": [
+            7
+          ]
+        }
+      ]
+    },
+    "cuda-v2": {
+      "machines": [
+        190
+      ],
+      "source": "https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/BinaryFormat/ELF.h",
+      "fields": [
+        {
+          "name": "CUDA SM",
+          "mask": 65280,
+          "kind": "enum",
+          "values": [
+            {"value": 5120, "name": "EF_CUDA_SM20", "description": "EF_CUDA_SM20"},
+            {"value": 5376, "name": "EF_CUDA_SM21", "description": "EF_CUDA_SM21"},
+            {"value": 7680, "name": "EF_CUDA_SM30", "description": "EF_CUDA_SM30"},
+            {"value": 8192, "name": "EF_CUDA_SM32", "description": "EF_CUDA_SM32"},
+            {"value": 8960, "name": "EF_CUDA_SM35", "description": "EF_CUDA_SM35"},
+            {"value": 9472, "name": "EF_CUDA_SM37", "description": "EF_CUDA_SM37"},
+            {"value": 12800, "name": "EF_CUDA_SM50", "description": "EF_CUDA_SM50"},
+            {"value": 13312, "name": "EF_CUDA_SM52", "description": "EF_CUDA_SM52"},
+            {"value": 13568, "name": "EF_CUDA_SM53", "description": "EF_CUDA_SM53"},
+            {"value": 15360, "name": "EF_CUDA_SM60", "description": "EF_CUDA_SM60"},
+            {"value": 15616, "name": "EF_CUDA_SM61", "description": "EF_CUDA_SM61"},
+            {"value": 15872, "name": "EF_CUDA_SM62", "description": "EF_CUDA_SM62"},
+            {"value": 17920, "name": "EF_CUDA_SM70", "description": "EF_CUDA_SM70"},
+            {"value": 18432, "name": "EF_CUDA_SM72", "description": "EF_CUDA_SM72"},
+            {"value": 19200, "name": "EF_CUDA_SM75", "description": "EF_CUDA_SM75"},
+            {"value": 20480, "name": "EF_CUDA_SM80", "description": "EF_CUDA_SM80"},
+            {"value": 22016, "name": "EF_CUDA_SM86", "description": "EF_CUDA_SM86"},
+            {"value": 22272, "name": "EF_CUDA_SM87", "description": "EF_CUDA_SM87"},
+            {"value": 22528, "name": "EF_CUDA_SM88", "description": "EF_CUDA_SM88"},
+            {"value": 22784, "name": "EF_CUDA_SM89", "description": "EF_CUDA_SM89"},
+            {"value": 23040, "name": "EF_CUDA_SM90", "description": "EF_CUDA_SM90"},
+            {"value": 25600, "name": "EF_CUDA_SM100", "description": "EF_CUDA_SM100"},
+            {"value": 25856, "name": "EF_CUDA_SM101", "description": "EF_CUDA_SM101"},
+            {"value": 26368, "name": "EF_CUDA_SM103", "description": "EF_CUDA_SM103"},
+            {"value": 28160, "name": "EF_CUDA_SM110", "description": "EF_CUDA_SM110"},
+            {"value": 30720, "name": "EF_CUDA_SM120", "description": "EF_CUDA_SM120"},
+            {"value": 30976, "name": "EF_CUDA_SM121", "description": "EF_CUDA_SM121"}
+          ]
+        },
+        {
+          "name": "EF_CUDA_ACCELERATORS",
+          "mask": 8,
+          "kind": "flag",
+          "values": [
+            {"value": 8, "name": "EF_CUDA_ACCELERATORS", "description": "CUDA ACCELERATORS selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "abiVersion",
+          "mask": 255,
+          "values": [
+            8
+          ]
+        }
+      ]
+    },
+    "nds32": {
+      "machines": [
+        167
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nds32.h",
+      "fields": [
+        {
+          "name": "Andes architecture",
+          "mask": 4026531840,
+          "kind": "enum",
+          "values": [
+            {"value": 268435456, "name": "E_NDS_ARCH_STAR_V1_0", "description": "NDS ARCH STAR V1 0 selection."},
+            {"value": 536870912, "name": "E_NDS_ARCH_STAR_V2_0", "description": "NDS ARCH STAR V2 0 selection."},
+            {"value": 805306368, "name": "E_NDS_ARCH_STAR_V3_0", "description": "NDS ARCH STAR V3 0 selection."},
+            {"value": 1073741824, "name": "E_NDS_ARCH_STAR_V3_M", "description": "NDS ARCH STAR V3 M selection."},
+            {"value": 2415919104, "name": "E_NDS_ARCH_STAR_V0_9", "description": "NDS ARCH STAR V0 9 selection."}
+          ]
+        },
+        {
+          "name": "Andes ABI",
+          "mask": 240,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_NDS_ABI_V0", "description": "NDS ABI V0 selection."},
+            {"value": 16, "name": "E_NDS_ABI_V1", "description": "NDS ABI V1 selection."},
+            {"value": 32, "name": "E_NDS_ABI_V2", "description": "NDS ABI V2 selection."},
+            {"value": 48, "name": "E_NDS_ABI_V2FP", "description": "NDS ABI V2FP selection."},
+            {"value": 64, "name": "E_NDS_ABI_AABI", "description": "NDS ABI AABI selection."},
+            {"value": 80, "name": "E_NDS_ABI_V2FP_PLUS", "description": "NDS ABI V2FP PLUS selection."}
+          ]
+        },
+        {
+          "name": "Andes ELF version",
+          "mask": 15,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_NDS32_ELF_VER_1_2", "description": "NDS32 ELF VER 1 2 selection."},
+            {"value": 1, "name": "E_NDS32_ELF_VER_1_3", "description": "NDS32 ELF VER 1 3 selection."},
+            {"value": 2, "name": "E_NDS32_ELF_VER_1_4", "description": "NDS32 ELF VER 1 4 selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_EXT_INST",
+          "mask": 512,
+          "kind": "flag",
+          "values": [
+            {"value": 512, "name": "E_NDS32_HAS_EXT_INST", "description": "NDS32 HAS EXT INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_EXT2_INST",
+          "mask": 1024,
+          "kind": "flag",
+          "values": [
+            {"value": 1024, "name": "E_NDS32_HAS_EXT2_INST", "description": "NDS32 HAS EXT2 INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_FPU_INST",
+          "mask": 2048,
+          "kind": "flag",
+          "values": [
+            {"value": 2048, "name": "E_NDS32_HAS_FPU_INST", "description": "NDS32 HAS FPU INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_AUDIO_INST",
+          "mask": 4096,
+          "kind": "flag",
+          "values": [
+            {"value": 4096, "name": "E_NDS32_HAS_AUDIO_INST", "description": "NDS32 HAS AUDIO INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_STRING_INST",
+          "mask": 32768,
+          "kind": "flag",
+          "values": [
+            {"value": 32768, "name": "E_NDS32_HAS_STRING_INST", "description": "NDS32 HAS STRING INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_REDUCED_REGS",
+          "mask": 65536,
+          "kind": "flag",
+          "values": [
+            {"value": 65536, "name": "E_NDS32_HAS_REDUCED_REGS", "description": "NDS32 HAS REDUCED REGS selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_ENCRIPT_INST",
+          "mask": 262144,
+          "kind": "flag",
+          "values": [
+            {"value": 262144, "name": "E_NDS32_HAS_ENCRIPT_INST", "description": "NDS32 HAS ENCRIPT INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_FPU_DP_INST",
+          "mask": 524288,
+          "kind": "flag",
+          "values": [
+            {"value": 524288, "name": "E_NDS32_HAS_FPU_DP_INST", "description": "NDS32 HAS FPU DP INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_L2C_INST",
+          "mask": 2097152,
+          "kind": "flag",
+          "values": [
+            {"value": 2097152, "name": "E_NDS32_HAS_L2C_INST", "description": "NDS32 HAS L2C INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_FPU_MAC_INST",
+          "mask": 16777216,
+          "kind": "flag",
+          "values": [
+            {"value": 16777216, "name": "E_NDS32_HAS_FPU_MAC_INST", "description": "NDS32 HAS FPU MAC INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_DSP_INST",
+          "mask": 33554432,
+          "kind": "flag",
+          "values": [
+            {"value": 33554432, "name": "E_NDS32_HAS_DSP_INST", "description": "NDS32 HAS DSP INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_CUSTOM_SEC",
+          "mask": 134217728,
+          "kind": "flag",
+          "values": [
+            {"value": 134217728, "name": "E_NDS32_HAS_CUSTOM_SEC", "description": "NDS32 HAS CUSTOM SEC selection."}
+          ]
+        },
+        {
+          "name": "Andes FPU registers",
+          "mask": 12582912,
+          "kind": "enum",
+          "values": [
+            {"value": 0, "name": "E_NDS32_FPU_REG_8SP_4DP", "description": "E_NDS32_FPU_REG_8SP_4DP"},
+            {"value": 4194304, "name": "E_NDS32_FPU_REG_16SP_8DP", "description": "E_NDS32_FPU_REG_16SP_8DP"},
+            {"value": 8388608, "name": "E_NDS32_FPU_REG_32SP_16DP", "description": "E_NDS32_FPU_REG_32SP_16DP"},
+            {"value": 12582912, "name": "E_NDS32_FPU_REG_32SP_32DP", "description": "E_NDS32_FPU_REG_32SP_32DP"}
+          ]
+        },
+        {
+          "name": "NDS32 shared PIC/ZOL indicator",
+          "mask": 67108864,
+          "kind": "flag",
+          "values": [
+            {"value": 67108864, "name": "E_NDS32_HAS_PIC / E_NDS32_HAS_ZOL", "description": "The upstream header assigns this bit to both position-independent code and hardware zero-overhead loops. The ELF header alone does not distinguish these meanings; toolchain context is required."}
+          ]
+        }
+      ],
+      "conditions": []
+    },
+    "nds32-v1": {
+      "machines": [
+        167
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nds32.h",
+      "fields": [
+        {
+          "name": "E_NDS32_HAS_MFUSR_PC_INST",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "E_NDS32_HAS_MFUSR_PC_INST", "description": "NDS32 HAS MFUSR PC INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_DIV_INST",
+          "mask": 8192,
+          "kind": "flag",
+          "values": [
+            {"value": 8192, "name": "E_NDS32_HAS_DIV_INST", "description": "NDS32 HAS DIV INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_16BIT_INST",
+          "mask": 16384,
+          "kind": "flag",
+          "values": [
+            {"value": 16384, "name": "E_NDS32_HAS_16BIT_INST", "description": "NDS32 HAS 16BIT INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_NO_MAC_INST",
+          "mask": 1048576,
+          "kind": "flag",
+          "values": [
+            {"value": 1048576, "name": "E_NDS32_HAS_NO_MAC_INST", "description": "NDS32 HAS NO MAC INST selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4026531840,
+          "values": [
+            268435456
+          ]
+        }
+      ]
+    },
+    "nds32-new": {
+      "machines": [
+        167
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nds32.h",
+      "fields": [
+        {
+          "name": "E_NDS32_HAS_MFUSR_PC_INST",
+          "mask": 256,
+          "kind": "flag",
+          "values": [
+            {"value": 256, "name": "E_NDS32_HAS_MFUSR_PC_INST", "description": "NDS32 HAS MFUSR PC INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_DIV_DX_INST",
+          "mask": 8192,
+          "kind": "flag",
+          "values": [
+            {"value": 8192, "name": "E_NDS32_HAS_DIV_DX_INST", "description": "NDS32 HAS DIV DX INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_16BIT_INST",
+          "mask": 16384,
+          "kind": "flag",
+          "values": [
+            {"value": 16384, "name": "E_NDS32_HAS_16BIT_INST", "description": "NDS32 HAS 16BIT INST selection."}
+          ]
+        },
+        {
+          "name": "E_NDS32_HAS_MAC_DX_INST",
+          "mask": 1048576,
+          "kind": "flag",
+          "values": [
+            {"value": 1048576, "name": "E_NDS32_HAS_MAC_DX_INST", "description": "NDS32 HAS MAC DX INST selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 4026531840,
+          "values": [
+            536870912,
+            805306368,
+            1073741824
+          ]
+        }
+      ]
+    },
+    "nds32-old-video": {
+      "machines": [
+        167
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nds32.h",
+      "fields": [
+        {
+          "name": "E_NDS32_HAS_VIDEO_INST",
+          "mask": 131072,
+          "kind": "flag",
+          "values": [
+            {"value": 131072, "name": "E_NDS32_HAS_VIDEO_INST", "description": "NDS32 HAS VIDEO INST selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 15,
+          "values": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    "nds32-new-video": {
+      "machines": [
+        167
+      ],
+      "source": "https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/include/elf/nds32.h",
+      "fields": [
+        {
+          "name": "E_NDS32_HAS_SATURATION_INST",
+          "mask": 131072,
+          "kind": "flag",
+          "values": [
+            {"value": 131072, "name": "E_NDS32_HAS_SATURATION_INST", "description": "NDS32 HAS SATURATION INST selection."}
+          ]
+        }
+      ],
+      "conditions": [
+        {
+          "field": "flags",
+          "mask": 15,
+          "values": [
+            2
+          ]
+        }
+      ]
+    }
+  }
+}

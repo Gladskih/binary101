@@ -1,6 +1,5 @@
 "use strict";
 import { renderElfSanitizers } from "./sanitizers.js";
-import { ELF_MACHINE_OPTIONS } from "../../analyzers/elf/legacy-machine-types.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
@@ -10,13 +9,14 @@ import { renderElfAttributes } from "./attributes.js";
 import { renderElfMips } from "./mips.js";
 import { renderElfLsda } from "./lsda.js";
 import { renderElfArmEhabi } from "./arm-ehabi.js";
+import { renderElfHeaderFlags } from "./header-flags.js";
+import { renderHeaderOptions, renderMachine, renderOsAbi } from "./header-options.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
-import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
+import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import {
   ELF_CLASS,
   ELF_DATA,
-  ELF_OSABI,
   ELF_TYPE,
   PROGRAM_TYPES,
   SECTION_TYPES
@@ -147,6 +147,9 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
     "Identifies the file's role: relocatable object, executable, shared object or core dump."));
   out.push(renderDefinitionRow("Machine", renderMachine(h.machine),
     "Identifies the target processor architecture used to interpret machine code."));
+  out.push(renderDefinitionRow("Flags (e_flags)", renderElfHeaderFlags(h, elf.ident),
+    "Processor-specific flags. Highlighted chips show set bits or the selected ABI/ISA value; " +
+    "dim chips show other defined choices for this architecture and ABI."));
   out.push(renderDefinitionRow("Entry", formatElfHex(h.entry),
     "Virtual address where execution starts. Zero means no entry point."));
   const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
@@ -164,16 +167,6 @@ export function renderHeader(elf: ElfParseResult, out: string[]): void {
     "Size of one section header record, used to locate successive records."));
   out.push(`</dl>`);
   out.push(renderElfSectionEnd());
-}
-
-function renderOsAbi(code: number): string {
-  if (ELF_OSABI.some(([value]) => value === code)) return renderOptionChips(code, ELF_OSABI);
-  // gABI Appendix B reserves 64..255 for e_machine-specific ABI assignments.
-  // https://gabi.xinuos.com/elf/b-osabi.html
-  return renderOptionChips(code, [...ELF_OSABI, [code,
-    code >= 64 ? `Architecture-specific (${code})` : `Unrecognized (${code})`,
-    "This value is outside the global OS ABI list; consult the target architecture ABI."
-  ]]);
 }
 
 export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
@@ -288,17 +281,4 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);
   return out.join("");
-}
-
-function renderMachine(code: number): string {
-  return renderOptionChips(code, [ELF_MACHINE_OPTIONS.find(([value]) => value === code) ??
-    [code, `Unknown machine (${code})`, "Unassigned or vendor-specific e_machine value."]]) +
-    `<details><summary>Other machine values</summary>` +
-    renderOptionChips(code, ELF_MACHINE_OPTIONS.filter(([value]) => value !== code)) + `</details>`;
-}
-
-function renderHeaderOptions(code: number, options: ElfOptionEntry[]): string {
-  if (options.some(([value]) => value === code)) return renderOptionChips(code, options);
-  return renderOptionChips(code, [...options, [code, `Unknown (${code})`,
-    "This numeric code is not in the recognized values for this field."]]);
 }
