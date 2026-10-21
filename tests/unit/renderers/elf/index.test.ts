@@ -125,7 +125,7 @@ void test("places the collapsed instruction panel before collapsed ELF metadata"
   assert.deepEqual(
     Array.from(html.slice(html.indexOf("<b>ELF header</b>"), html.indexOf("</dl>"))
       .matchAll(/<dt data-accessible-tooltip title="[^"]+">([^<]+)<\/dt>/g), match => match[1]),
-    ["Class", "Data", "OS ABI", "ABI version", "Type", "Machine", "Entry",
+    ["Class", "Data", "OS ABI", "ABI version", "Type", "Machine", "Flags (e_flags)", "Entry",
       "Program headers", "Section headers", "Header size", "PH entry size", "SH entry size"]
   );
   assert.match(html, /<dt[^>]*>OS ABI<\/dt>/);
