@@ -2,7 +2,7 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
-import type { RvaToOffset } from "../types.js";
+import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeCodeViewPayload } from "./codeview-payload.js";
 import type { PeLegacyCodeViewInfo } from "./legacy-codeview.js";
@@ -74,6 +74,7 @@ type DecodeInput = {
   pointerToRawDataOff: number;
   dataSize: number;
   machine: number;
+  exceptionDirectory?: PeDataDirectory | undefined;
 };
 
 const hasDecodedPayload = (payloads: PeDebugPayloads): boolean => Object.values(payloads).some(Boolean);
@@ -126,8 +127,8 @@ const parseKnownPayload = async (
     input.rvaToOff, input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning);
   if (input.type === IMAGE_DEBUG_TYPE_EXCEPTION) {
     const exception = await parseExceptionDebugInfo(
-      reader, input.fileSize, input.rvaToOff, input.addressOfRawDataRva,
-      input.pointerToRawDataOff, input.dataSize, input.machine, addWarning
+      reader, input.rvaToOff, input.addressOfRawDataRva,
+      input.pointerToRawDataOff, input.dataSize, input.machine, addWarning, input.exceptionDirectory
     );
     return exception ? { exception } : {};
   }

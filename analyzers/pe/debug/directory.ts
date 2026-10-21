@@ -112,7 +112,8 @@ const decodeDebugDirectoryEntry = async (
   view: DataView,
   machine: number,
   addWarning: (message: string | null) => void,
-  rawDataRanges: FileRange[]
+  rawDataRanges: FileRange[],
+  exceptionDirectory: PeDataDirectory | undefined
 ): Promise<PeDebugDirectoryEntry> => {
   const characteristics = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS, true);
   if (characteristics !== 0) {
@@ -137,7 +138,7 @@ const decodeDebugDirectoryEntry = async (
   };
   Object.assign(currentEntry, await decodeDebugEntryPayload(reader, {
     type, typeName: currentEntry.typeName, fileSize: reader.size, rvaToOff,
-    addressOfRawDataRva, pointerToRawDataOff, dataSize, machine
+    addressOfRawDataRva, pointerToRawDataOff, dataSize, machine, exceptionDirectory
   }, addWarning));
   validateDebugEntry(currentEntry, rvaToOff, reader.size).forEach(addWarning);
   return currentEntry;
@@ -208,13 +209,15 @@ export async function parseDebugDirectory(
     warning: warnings.length ? warnings.join(" | ") : null, rawDataRanges: [] };
   const maxEntries = readableDebugEntryCount(reader.size, debugDir, rvaToOff, addWarning);
   const rawDataRanges: FileRange[] = [];
+  const exceptionDirectory = dataDirs.find(directory => directory.name === "EXCEPTION");
   const entries: PeDebugDirectoryEntry[] = [];
   let entry: PeCodeViewEntry | null = null;
   for (let index = 0; index < maxEntries; index++) {
     const view = await readDebugDirectoryEntry(reader, rvaToOff, debugDir.rva, index, addWarning);
     if (!view) break;
     const currentEntry = await decodeDebugDirectoryEntry(reader, rvaToOff, view, machine,
-      message => addWarning(message ? `Debug entry #${index + 1}: ${message}` : null), rawDataRanges);
+      message => addWarning(message ? `Debug entry #${index + 1}: ${message}` : null), rawDataRanges,
+      exceptionDirectory);
     if (currentEntry.codeView && !entry) entry = currentEntry.codeView;
     entries.push(currentEntry);
   }

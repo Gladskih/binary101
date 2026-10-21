@@ -68,3 +68,23 @@ export const createPeWithDebugPayloads = (
   bytes[512] = 0xc3; // RET keeps entry point analysis bounded in this UI fixture.
   return new MockFile(bytes, "debug-statistics.exe");
 };
+
+export const createPeWithExceptionCopy = (): MockFile => {
+  const payload = new Uint8Array(24);
+  const rows = new DataView(payload.buffer);
+  // Two AMD64 rows, first referencing the second via RUNTIME_FUNCTION_INDIRECT.
+  [0x1000, 0x1004, 0x108d, 0x1004, 0x1008, 0x10c0]
+    .forEach((value, index) => rows.setUint32(index * 4, value, true));
+  const bytes = createPeWithDebugPayloads([{ type: 5, data: payload }]).data.slice();
+  const view = new DataView(bytes.buffer);
+  const optional = view.getUint32(0x3c, true) + 24;
+  view.setUint32(optional + 112 + 3 * 8, 0x1080, true);
+  view.setUint32(optional + 112 + 3 * 8 + 4, payload.length, true);
+  view.setUint32(optional + 240 + 8, 512, true);
+  view.setUint32(optional + 240 + 16, 512, true);
+  view.setUint32(optional + 56, 0x2000, true);
+  view.setUint32(0x300 + 20, 0, true); // Raw-only copy at 0x400, outside .text.
+  bytes.set(payload, 0x280);
+  bytes[0x2c0] = 1; // Version-1 UNWIND_INFO without codes or handler.
+  return new MockFile(bytes, "debug-exception-copy.exe");
+};

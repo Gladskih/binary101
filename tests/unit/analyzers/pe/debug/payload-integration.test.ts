@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
-import { createPeDebugFile, createPeWithDebugPayloads } from "../../../../fixtures/pe-debug-file.js";
+import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from
+  "../../../../fixtures/pe-debug-file.js";
 import { createLegacyCodeView } from "../../../../fixtures/pe-legacy-codeview.js";
 
 void test("full PE parsing recognizes inline CodeView without an external PDB path", async () => {
@@ -11,6 +12,18 @@ void test("full PE parsing recognizes inline CodeView without an external PDB pa
   assert.equal(parsed.debug?.warning, undefined);
   assert.equal(parsed.debug?.entries?.[0]?.legacyCodeView?.signature, "NB09");
   assert.equal(parsed.debug?.entries?.[0]?.codeView, undefined);
+  assert.equal(parsed.debug?.entries?.[0]?.rawPayload, undefined);
+});
+
+void test("full PE parsing analyzes an unmapped .pdata copy with its actual image-table references", async () => {
+  const parsed = await parsePe(createPeWithExceptionCopy());
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.debug?.warning, undefined);
+  assert.equal(parsed.exception?.functionCount, 2);
+  assert.equal(parsed.debug?.entries?.[0]?.addressOfRawData, 0);
+  assert.deepEqual(parsed.debug?.entries?.[0]?.exception, parsed.exception);
+  assert.deepEqual(parsed.debug?.entries?.[0]?.exception?.issues, []);
   assert.equal(parsed.debug?.entries?.[0]?.rawPayload, undefined);
 });
 

@@ -1,6 +1,21 @@
 import { expect, test } from "@playwright/test";
-import { createPeDebugFile, createPeWithDebugPayloads } from "../fixtures/pe-debug-file.js";
+import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
+
+test("raw-only exception copy resolves indirect image-table references", async ({ page }) => {
+  const file = createPeWithExceptionCopy();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByText("Entry #1:", { exact: false }).click();
+  await expect(panel).toContainText("EXCEPTION");
+  await panel.locator("summary").filter({ hasText: /^Exception directory/ }).click();
+  await expect(panel).toContainText("Functions (RUNTIME_FUNCTION entries)");
+  await expect(panel).toContainText("UNWIND_INFO v1 blocks");
+  await expect(panel.locator("dt").filter({ hasText: "Missing/invalid ranges" }).locator("+ dd")).toHaveText("0");
+  await expect(panel).not.toContainText("no raw-data RVA");
+});
 
 test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {
   const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([{ type: 0x125, module: 1,
