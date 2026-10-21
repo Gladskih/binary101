@@ -4,8 +4,9 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../../types.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "../types.js";
 import { resolveAmd64ExceptionDirectory } from "./directory.js";
-import { readAmd64RuntimeFunctions } from "./runtime-functions.js";
+import { readAmd64RuntimeFunctionTable } from "./runtime-function-table.js";
 import { scanAmd64UnwindInfos } from "./unwind-info.js";
+import { createRvaRangeReader } from "../../rva-range-reader.js";
 
 export const parseAmd64ExceptionDirectory = async (
   reader: FileRangeReader,
@@ -15,22 +16,26 @@ export const parseAmd64ExceptionDirectory = async (
   const directory = resolveAmd64ExceptionDirectory(reader.size, dataDirs, rvaToOff);
   if (directory.kind === "absent") return null;
   if (directory.kind === "invalid") return directory.result;
-  const runtimeFunctions = await readAmd64RuntimeFunctions(
-    reader,
-    directory.directory.rva,
-    directory.entryCount,
-    rvaToOff,
-    directory.issues
-  );
+  return parseAmd64ExceptionTable(reader, createRvaRangeReader(reader, rvaToOff,
+    directory.directory.rva, directory.directory.size), directory.entryCount,
+    rvaToOff, directory.issues, directory.directory.rva);
+};
+
+export const parseAmd64ExceptionTable = async (
+  reader: FileRangeReader, source: FileRangeReader, entryCount: number,
+  rvaToOff: RvaToOffset, issues: string[], directoryRva?: number
+): Promise<PeExceptionDirectory> => {
+  const runtimeFunctions = await readAmd64RuntimeFunctionTable(reader, source, entryCount,
+    rvaToOff, issues, directoryRva);
   if (runtimeFunctions.functionCount === 0) {
-    directory.issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
-    return createEmptyExceptionDirectory(directory.issues, "amd64");
+    issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
+    return createEmptyExceptionDirectory(issues, "amd64");
   }
   const unwindInfo = await scanAmd64UnwindInfos(
     reader,
     rvaToOff,
     runtimeFunctions.unwindRvas,
-    directory.issues
+    issues
   );
   return {
     functionCount: runtimeFunctions.functionCount,
@@ -45,7 +50,7 @@ export const parseAmd64ExceptionDirectory = async (
     handlerUnwindInfoCount: unwindInfo.handlerUnwindInfoCount,
     chainedUnwindInfoCount: unwindInfo.chainedUnwindInfoCount,
     invalidEntryCount: runtimeFunctions.invalidEntryCount,
-    issues: directory.issues,
+    issues,
     format: "amd64"
   };
 };

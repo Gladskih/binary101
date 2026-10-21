@@ -24,12 +24,15 @@ void test("raw-only copy of real Windows .pdata agrees with the image table and 
   const actual = await parseExceptionDebugInfo(copy, core.rvaToOff, 0, file.size,
     directory.size, core.coff.Machine, warning => warnings.push(warning), directory);
   const expected = await parseExceptionDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const withoutOrigin = await parseExceptionDebugInfo(copy, core.rvaToOff, 0, file.size,
+    directory.size, core.coff.Machine, warning => warnings.push(warning));
   const llvm = execFileSync("C:/Program Files/LLVM/bin/llvm-readobj.exe", ["--unwind", path],
     { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
 
   assert.ok(expected && expected.functionCount > 0);
   assert.ok(actual, warnings.join(" | "));
   assert.deepEqual(actual, expected);
+  assert.deepEqual(withoutOrigin, expected);
   assert.equal(actual.functionCount, [...llvm.matchAll(/RuntimeFunction \{/g)].length);
   assert.deepEqual(warnings, []);
 });

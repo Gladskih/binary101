@@ -88,3 +88,12 @@ export const createPeWithExceptionCopy = (): MockFile => {
   bytes[0x2c0] = 1; // Version-1 UNWIND_INFO without codes or handler.
   return new MockFile(bytes, "debug-exception-copy.exe");
 };
+
+export const createPeWithRawExceptionCopy = (): MockFile => {
+  const bytes = createPeWithExceptionCopy().data.slice();
+  const view = new DataView(bytes.buffer);
+  const optional = view.getUint32(0x3c, true) + 24;
+  view.setBigUint64(optional + 112 + 3 * 8, 0n, true); // No image Exception Table origin.
+  view.setUint32(0x408, 0x10c0, true); // First copied row now has a direct UNWIND_INFO RVA.
+  return new MockFile(bytes, "debug-raw-exception-copy.exe");
+};

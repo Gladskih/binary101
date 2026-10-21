@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from "../fixtures/pe-debug-file.js";
+import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy, createPeWithRawExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
 import { codeViewField, codeViewFieldList } from "../fixtures/pe-codeview-fields.js";
@@ -70,8 +70,9 @@ test("SPGO debug type 18 stays explicitly undecoded even with a recognized POGO 
   await expect(panel).toContainText("no semantic decoding is available");
 });
 
-test("raw-only exception copy resolves indirect image-table references", async ({ page }) => {
-  const file = createPeWithExceptionCopy();
+for (const create of [createPeWithExceptionCopy, createPeWithRawExceptionCopy]) {
+test(`raw-only exception copy preserves unwind statistics: ${create.name}`, async ({ page }) => {
+  const file = create();
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
@@ -84,6 +85,7 @@ test("raw-only exception copy resolves indirect image-table references", async (
   await expect(panel.locator("dt").filter({ hasText: "Missing/invalid ranges" }).locator("+ dd")).toHaveText("0");
   await expect(panel).not.toContainText("no raw-data RVA");
 });
+}
 
 test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {
   const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([{ type: 0x125, module: 1,

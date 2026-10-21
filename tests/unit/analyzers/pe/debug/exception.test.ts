@@ -39,6 +39,102 @@ void test("raw-only .pdata copy uses the actual image-table origin for indirect 
   assert.deepEqual(warnings, []);
 });
 
+void test("raw-only AMD64 .pdata decodes direct image RVAs without a table-origin RVA", async () => {
+  const bytes = subject().data.slice();
+  new DataView(bytes.buffer).setUint32(0x28, 0x3000, true);
+  const warnings: string[] = [];
+  const parsed = await parseExceptionDebugInfo(new MockFile(bytes), mapRva, 0, 0x20, 24,
+    0x8664, warning => warnings.push(warning));
+
+  assert.equal(parsed?.functionCount, 2);
+  assert.equal(parsed?.invalidEntryCount, 0);
+  assert.equal(parsed?.uniqueUnwindInfoCount, 1);
+  assert.deepEqual(parsed?.issues, []);
+  assert.deepEqual(warnings, []);
+});
+
+void test("raw-only AMD64 .pdata retains direct rows and diagnoses unverifiable indirect references", async () => {
+  const warnings: string[] = [];
+  const parsed = await parseExceptionDebugInfo(subject(), mapRva, 0, 0x20, 24,
+    0x8664, warning => warnings.push(warning));
+
+  assert.equal(parsed?.functionCount, 2);
+  assert.equal(parsed?.invalidEntryCount, 1);
+  assert.equal(parsed?.uniqueUnwindInfoCount, 1);
+  assert.deepEqual(parsed?.beginRvas, [0x2004]);
+  assert.match(parsed?.issues.join(" | ") ?? "", /Indirect.*origin.*unknown/i);
+  assert.deepEqual(warnings, []);
+});
+
+for (const pointer of [0, 0x20]) {
+  void test(`ARM64 exception copies preserve their existing RVA-based decoder at pointer ${pointer}`, async () => {
+    const bytes = subject().data.slice();
+    const view = new DataView(bytes.buffer);
+    [0x2004, 5, 0x2008, 5].forEach((value, index) => view.setUint32(0x20 + index * 4, value, true));
+    const warnings: string[] = [];
+    const warn = (warning: string) => warnings.push(warning);
+    const file = new MockFile(bytes);
+    const parsed = await parseExceptionDebugInfo(file, mapRva, 0x4000, pointer, 16,
+      0xaa64, warn, { ...exception, size: 16 });
+
+    assert.equal(parsed?.functionCount, 2);
+    assert.equal(parsed?.invalidEntryCount, 0);
+    assert.deepEqual(parsed?.beginRvas, [0x2004, 0x2008]);
+    assert.deepEqual(parsed?.issues, []);
+    assert.deepEqual(warnings, []);
+    assert.equal(await parseExceptionDebugInfo(file, mapRva, 0, file.size, 16, 0xaa64, warn, exception), null);
+    assert.match(warnings[0]!, /starts past end/);
+  });
+}
+
+void test("ARM64 copies retain low function RVAs in the image instead of treating them as copy coordinates", async () => {
+  const bytes = subject().data.slice();
+  const view = new DataView(bytes.buffer);
+  [0x800, 5, 0x804, 5].forEach((value, index) => view.setUint32(0x20 + index * 4, value, true));
+  const parsed = await parseExceptionDebugInfo(new MockFile(bytes),
+    rva => rva >= 0x800 && rva < 0x808 ? 0x80 + rva - 0x800 : mapRva(rva),
+    0, 0x20, 16, 0xaa64, assert.fail, { ...exception, size: 16 });
+
+  assert.equal(parsed?.invalidEntryCount, 0);
+  assert.deepEqual(parsed?.beginRvas, [0x800, 0x804]);
+});
+
+void test("ARM64 .xdata at the table-end RVA remains image data", async () => {
+  const bytes = subject().data.slice();
+  const view = new DataView(bytes.buffer);
+  [0x2004, 0x1010, 0x2008, 5].forEach((value, index) => view.setUint32(0x20 + index * 4, value, true));
+  view.setUint32(0x90, 1 | (1 << 21) | (1 << 27), true); // Length=4, E=1, one code word.
+  const parsed = await parseExceptionDebugInfo(new MockFile(bytes),
+    rva => rva >= 0x1010 && rva < 0x1018 ? 0x90 + rva - 0x1010 : mapRva(rva),
+    0, 0x20, 16, 0xaa64, assert.fail, { ...exception, size: 16 });
+
+  assert.equal(parsed?.invalidEntryCount, 0);
+  assert.deepEqual(parsed?.rangeLengths, [4, 4]);
+  assert.deepEqual(parsed?.issues, []);
+});
+
+void test("raw-only AMD64 copies do not substitute invented table RVAs for low image references", async () => {
+  const bytes = subject().data.slice();
+  const view = new DataView(bytes.buffer);
+  [4, 8, 16, 8, 12, 16].forEach((value, index) => view.setUint32(0x20 + index * 4, value, true));
+  const parsed = await parseExceptionDebugInfo(new MockFile(bytes), rva =>
+    rva >= 4 && rva < 12 ? 0x80 + rva - 4 : rva >= 16 && rva < 20 ? 0x90 + rva - 16 : null,
+    0, 0x20, 24, 0x8664, assert.fail);
+
+  assert.deepEqual(parsed?.beginRvas, [4, 8]);
+  assert.equal(parsed?.uniqueUnwindInfoCount, 1);
+  assert.deepEqual(parsed?.issues, []);
+});
+
+void test("raw-only AMD64 copies diagnose trailing bytes after complete rows", async () => {
+  const bytes = subject().data.slice();
+  new DataView(bytes.buffer).setUint32(0x28, 0x3000, true);
+  const parsed = await parseExceptionDebugInfo(new MockFile(bytes), mapRva, 0, 0x20, 13, 0x8664, assert.fail);
+
+  assert.equal(parsed?.functionCount, 1);
+  assert.match(parsed?.issues.join(" | ") ?? "", /not a multiple/);
+});
+
 void test("mapped .pdata copy keeps its physical location separate from its original table RVA", async () => {
   const file = subject();
   const warnings: string[] = [];
@@ -93,7 +189,7 @@ void test("exception-copy mapping leaves function addresses below the table orig
   const file = new MockFile(bytes);
   const parsed = await parseExceptionDebugInfo(file,
     rva => rva >= 0x800 && rva < 0x804 ? 0x80 + rva - 0x800 : mapRva(rva),
-    0, 0x20, 24, 0x8664, () => {}, exception);
+    0, 0x20, 24, 0x8664, assert.fail, exception);
 
   assert.equal(parsed?.invalidEntryCount, 0);
   assert.equal(parsed?.beginRvas[0], 0x800);
@@ -103,7 +199,7 @@ void test("exception copy without main-table context still decodes direct refere
   const bytes = subject().data.slice();
   new DataView(bytes.buffer).setUint32(0x28, 0x3000, true);
   const file = new MockFile(bytes);
-  const parsed = await parseExceptionDebugInfo(file, mapRva, 0x4000, 0x20, 24, 0x8664, () => {});
+  const parsed = await parseExceptionDebugInfo(file, mapRva, 0x4000, 0x20, 24, 0x8664, assert.fail);
 
   assert.equal(parsed?.functionCount, 2);
   assert.equal(parsed?.invalidEntryCount, 0);
@@ -114,10 +210,10 @@ void test("exception copies report missing origins, unmapped sources and out-of-
   const warnings: string[] = [];
   const warn = (warning: string) => warnings.push(warning);
 
-  assert.equal(await parseExceptionDebugInfo(file, mapRva, 0, 0x20, 24, 0x8664, warn), null);
+  assert.equal(await parseExceptionDebugInfo(file, mapRva, 0, 0x20, 24, 0x14c, warn), null);
   assert.equal(await parseExceptionDebugInfo(file, mapRva, 0x9000, 0, 24, 0x8664, warn), null);
   assert.equal(await parseExceptionDebugInfo(file, mapRva, 0, file.size, 24, 0x8664, warn, exception), null);
-  assert.match(warnings.join(" | "), /no raw-data RVA/);
+  assert.match(warnings.join(" | "), /no known table RVA/);
   assert.match(warnings[1]!, /^EXCEPTION debug entry does not map/);
   assert.match(warnings[2]!, /^EXCEPTION debug entry starts past end of file/);
 });
@@ -152,7 +248,7 @@ void test("exception copy reads its first byte from the copy and leaves table-en
   const file = new MockFile(bytes);
   const parsed = await parseExceptionDebugInfo(file,
     rva => rva >= 0x1018 && rva < 0x101c ? 0x90 + rva - 0x1018 : mapRva(rva),
-    0, 0x20, 24, 0x8664, () => {}, exception);
+    0, 0x20, 24, 0x8664, assert.fail, exception);
 
   assert.equal(parsed?.beginRvas[0], 0x2001);
   assert.equal(parsed?.invalidEntryCount, 0);
