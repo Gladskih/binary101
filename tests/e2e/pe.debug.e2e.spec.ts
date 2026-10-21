@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 import { createPeDebugFile, createPeWithDebugPayloads } from "../fixtures/pe-debug-file.js";
+import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
+
+test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {
+  const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([{ type: 0x125, module: 1,
+    data: Uint8Array.from([...legacyU32(1), ...Array.from({ length: 101 },
+      (_, index) => legacySymbol(0x203, `public_${index}`)).flat()]) }]) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.getByText("Entry #1:", { exact: false }).click();
+  await expect(panel).toContainText("Embedded NB09 CodeView");
+  await expect(panel).toContainText("Symbol and type statistics");
+  const symbols = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-symbols"]');
+  await expect(symbols).toContainText("public_0");
+  await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+  await symbols.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(symbols).toContainText("public_100");
+  await page.screenshot({ path: testInfo.outputPath("legacy-codeview.png"), fullPage: true });
+});
 
 test("PE debug shows embedded source mappings and readable layout statistics", async ({ page }, testInfo) => {
   const errors: string[] = [];

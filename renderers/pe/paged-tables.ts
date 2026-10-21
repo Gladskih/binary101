@@ -36,6 +36,7 @@ import { createClrMetadataTableModels } from "./clr-metadata.js";
 import { getReadyToRunTableModel } from "./ready-to-run-tables.js";
 import { getPogoTableModel } from "./pogo.js";
 import { getFixupTableModel } from "./fixup.js";
+import { getLegacyCodeViewTableModel } from "./legacy-codeview.js";
 import { getPortablePdbCustomTableModel } from "./portable-pdb-custom.js";
 import { getPortablePdbImportTableModel } from "./portable-pdb-imports.js";
 import { getPortablePdbTableModel } from "./portable-pdb.js";
@@ -126,6 +127,7 @@ type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortabl
 const windowsTableResolvers: TableResolver[] = [
   getPeDisassemblyStringTableModel, getClrTableModel, getPogoTableModel, getPortablePdbTableModel,
   getMiscDebugTableModel, getPortablePdbCustomTableModel, getPortablePdbImportTableModel, getFixupTableModel,
+  getLegacyCodeViewTableModel,
   (pe, id) => getReadyToRunTableModel(pe.clr ?? pe, id),
   (pe, id) => id === EXPORT_TABLE_ID && pe.exports
     ? createExportTableModel(pe.exports.entries,

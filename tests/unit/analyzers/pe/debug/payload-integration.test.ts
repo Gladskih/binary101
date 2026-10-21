@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
 import { createPeDebugFile, createPeWithDebugPayloads } from "../../../../fixtures/pe-debug-file.js";
+import { createLegacyCodeView } from "../../../../fixtures/pe-legacy-codeview.js";
+
+void test("full PE parsing recognizes inline CodeView without an external PDB path", async () => {
+  const parsed = await parsePe(createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView() }]));
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.debug?.warning, undefined);
+  assert.equal(parsed.debug?.entries?.[0]?.legacyCodeView?.signature, "NB09");
+  assert.equal(parsed.debug?.entries?.[0]?.codeView, undefined);
+  assert.equal(parsed.debug?.entries?.[0]?.rawPayload, undefined);
+});
 
 void test("full PE parsing retains embedded PDB, frame metadata, linker names and chained DBG paths", async () => {
   const parsed = await parsePe(createPeDebugFile());

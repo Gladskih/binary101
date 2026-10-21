@@ -3,7 +3,9 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
 import type { RvaToOffset } from "../types.js";
-import { parseCodeViewEntry, type PeCodeViewEntry } from "./codeview.js";
+import type { PeCodeViewEntry } from "./codeview.js";
+import { decodeCodeViewPayload } from "./codeview-payload.js";
+import type { PeLegacyCodeViewInfo } from "./legacy-codeview.js";
 import { parseCoffDebugInfo } from "./coff.js";
 import {
   parseEmbeddedPortablePdbInfo,
@@ -47,6 +49,7 @@ import { parseVcFeatureInfo, type PeVcFeatureInfo } from "./vc-feature.js";
 export type PeDebugPayloads = {
   coff?: CoffDebugInfo;
   codeView?: PeCodeViewEntry;
+  legacyCodeView?: PeLegacyCodeViewInfo;
   fpo?: PeFpoInfo;
   fixup?: PeFixupInfo;
   misc?: PeMiscDebugInfo;
@@ -99,7 +102,6 @@ type DebugPayloadParser = (
 
 const PAYLOAD_DECODERS: Partial<Record<number, readonly [keyof PeDebugPayloads, DebugPayloadParser]>> = {
   [IMAGE_DEBUG_TYPE_COFF]: ["coff", parseCoffDebugInfo],
-  [IMAGE_DEBUG_TYPE_CODEVIEW]: ["codeView", parseCodeViewEntry],
   [IMAGE_DEBUG_TYPE_FPO]: ["fpo", parseFpoInfo],
   [IMAGE_DEBUG_TYPE_FIXUP]: ["fixup", parseFixupInfo],
   [IMAGE_DEBUG_TYPE_MISC]: ["misc", parseMiscDebugInfo],
@@ -120,6 +122,8 @@ const parseKnownPayload = async (
   input: DecodeInput,
   addWarning: (message: string) => void
 ): Promise<PeDebugPayloads> => {
+  if (input.type === IMAGE_DEBUG_TYPE_CODEVIEW) return decodeCodeViewPayload(reader, input.fileSize,
+    input.rvaToOff, input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning);
   if (input.type === IMAGE_DEBUG_TYPE_EXCEPTION) {
     const exception = await parseExceptionDebugInfo(
       reader, input.fileSize, input.rvaToOff, input.addressOfRawDataRva,

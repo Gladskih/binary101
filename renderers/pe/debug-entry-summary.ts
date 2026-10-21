@@ -77,6 +77,8 @@ const payloadSummaries: ReadonlyArray<(entry: PeDebugDirectoryEntry) => string |
   entry => entry.coff
     ? `COFF symbol table with ${formatDebugCount(entry.coff.symbols.length, "parsed primary symbol")}.` : null,
   entry => entry.codeView ? `CodeView ${entry.codeView.signature} record with PDB identity and path.` : null,
+  entry => entry.legacyCodeView ? `Embedded ${entry.legacyCodeView.signature} CodeView: ` +
+    `modules, symbols, source mappings and type records.` : null,
   entry => entry.fpo
     ? `Frame-pointer omission table with ${formatDebugCount(entry.fpo.records.length, "record")}.` : null,
   entry => entry.fixup ? `Link-time relocation metadata with ${formatDebugCount(entry.fixup.records.length, "fixup")}.` : null,

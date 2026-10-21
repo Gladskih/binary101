@@ -639,6 +639,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .flagColumn{font-family:var(--mono);word-break:normal;white-space:normal}
 .table tr:last-child td{border-bottom:none}
 .peNumeric{text-align:right}
+.peDebugIndex th:nth-child(-n+4),.peDebugIndex td:nth-child(-n+4){white-space:nowrap}
 .table th.peNumeric{text-align:right}
 .analysisStatisticsTable th,.analysisStatisticsTable td{font-family:inherit}
 .analysisStatisticsTable th:nth-child(2){min-width:4rem;white-space:nowrap}

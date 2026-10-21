@@ -22,7 +22,7 @@ const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
 const renderEntryTable = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!pe.debug?.entries?.length) return;
   out.push(
-    `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
+    `<div class="tableWrap"><table class="table peDebugIndex" style="margin-top:.35rem"><thead><tr>` +
       `<th>#</th><th>Type</th><th>Storage</th><th>Payload</th>` +
       `<th>What it contains</th></tr></thead><tbody>`
   );

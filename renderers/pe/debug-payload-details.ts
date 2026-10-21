@@ -15,6 +15,7 @@ import { renderPortablePdb } from "./portable-pdb.js";
 import { renderPogoRegions } from "./pogo.js";
 import { renderMiscDebug } from "./debug-misc.js";
 import { renderOmap } from "./omap.js";
+import { renderLegacyCodeView } from "./legacy-codeview.js";
 
 const hasEntryDetails = (entry: PeDebugDirectoryEntry): boolean => Boolean(
   entry.sizeOfData || entry.characteristics || entry.timeDateStamp || entry.majorVersion ||
@@ -214,6 +215,7 @@ export const renderDecodedEntryDetails = (
     renderEntryCommonFields(pe, entry, out);
     renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
+    renderLegacyCodeView(entry, entryIndex, out);
     renderFpoStatistics(entry, out);
     renderFixupStatistics(pe, entry, entryIndex, out);
     renderMiscDebug(entry, entryIndex, out);
