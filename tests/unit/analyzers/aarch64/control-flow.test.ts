@@ -13,6 +13,22 @@ const emptyReport = (): ElfInstructionSetReport => ({
   invalidInstructionCount: 0, instructionSets: [], issues: []
 });
 
+void test("AArch64 yields at the frame boundary and resets its scheduling budget", async context => {
+  const now = context.mock.method(performance, "now", () => 16);
+  now.mock.mockImplementationOnce(() => 0);
+  const timer = context.mock.method(globalThis, "setTimeout");
+  const report = emptyReport();
+  const file = aarch64Code([0xd503201f, 0xd65f03c0]); // nop; ret
+
+  await walkAarch64ControlFlow(decoder, async address => file.data.subarray(Number(address)),
+    [0n], { yieldEveryInstructions: 1 }, report);
+
+  assert.equal(report.instructionCount, 2);
+  assert.equal(timer.mock.callCount(), 1);
+  assert.equal(timer.mock.calls[0]!.arguments[1], 0);
+  assert.equal(now.mock.callCount(), 4);
+});
+
 void test("A64 preserves privilege findings after cancellation without visiting further sites", async () => {
   // MRS SCTLR_EL1; HVC (QEMU a64.decode).
   const file = aarch64Code([0xd5381000, 0xd4000002]);
