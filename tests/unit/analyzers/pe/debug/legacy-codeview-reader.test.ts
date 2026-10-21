@@ -52,6 +52,7 @@ void test("legacy terminated strings stream through windows and require a termin
   const ansi = legacyReader([...new Array<number>(256).fill(65), 0x80, 0]);
 
   assert.equal(await utf8.utf8(0), text);
+  assert.deepEqual(await utf8.utf8Name(0), { name: text, end: 260 });
   assert.deepEqual(await ansi.ansi(0), { name: "A".repeat(256) + "€", end: 258 });
   assert.deepEqual(await legacyReader([0]).ansi(0), { name: "", end: 1 });
   assert.equal(await legacyReader([0]).utf8(0), "");

@@ -200,13 +200,13 @@ export async function parseDebugDirectory(
   warning: string | null;
   rawDataRanges: FileRange[];
 }> {
-  const warnings: string[] = [];
+  const warnings = new Set<string>();
   const addWarning = (message: string | null): void => {
-    if (message && !warnings.includes(message)) warnings.push(message);
+    if (message) warnings.add(message);
   };
   const debugDir = findDebugDirectory(dataDirs, addWarning);
   if (!debugDir) return { entry: null, entries: [],
-    warning: warnings.length ? warnings.join(" | ") : null, rawDataRanges: [] };
+    warning: warnings.size ? [...warnings].join(" | ") : null, rawDataRanges: [] };
   const maxEntries = readableDebugEntryCount(reader.size, debugDir, rvaToOff, addWarning);
   const rawDataRanges: FileRange[] = [];
   const exceptionDirectory = dataDirs.find(directory => directory.name === "EXCEPTION");
@@ -225,7 +225,7 @@ export async function parseDebugDirectory(
   return {
     entry,
     entries,
-    warning: warnings.length ? warnings.join(" | ") : null,
+    warning: warnings.size ? [...warnings].join(" | ") : null,
     rawDataRanges: mergeFileRanges(rawDataRanges)
   };
 }

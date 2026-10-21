@@ -51,3 +51,24 @@ const TYPE_NAMES = new Map<number, string>([
 
 export const legacyCodeViewTypeName = (type: number): string => TYPE_NAMES.get(type) ??
   `Type record 0x${type.toString(16)}`;
+
+// Field-list categories use separate leaf tags for 16-bit indices, ST and SZ names.
+const FIELD_NAMES = new Map<number, string>([
+  [0x400, "Base class"], [0x401, "Virtual base class"], [0x402, "Indirect virtual base class"],
+  [0x403, "Enumerator"], [0x404, "Friend function"], [0x405, "Field list continuation"],
+  [0x406, "Data member"], [0x407, "Static data member"], [0x408, "Overloaded method"],
+  [0x409, "Nested type"], [0x40a, "Virtual table pointer"], [0x40b, "Friend class"],
+  [0x40c, "Method"], [0x40d, "Virtual table offset"],
+  [0x1400, "Base class"], [0x1401, "Virtual base class"], [0x1402, "Indirect virtual base class"],
+  [0x1403, "Friend function"], [0x1404, "Field list continuation"], [0x1405, "Data member"],
+  [0x1406, "Static data member"], [0x1407, "Overloaded method"], [0x1408, "Nested type"],
+  [0x1409, "Virtual table pointer"], [0x140a, "Friend class"], [0x140b, "Method"],
+  [0x140c, "Virtual table offset"], [0x140d, "Nested type"], [0x140e, "Member modification"], [0x140f, "Managed type"],
+  [0x1502, "Enumerator"], [0x150c, "Friend function"], [0x150d, "Data member"],
+  [0x150e, "Static data member"], [0x150f, "Overloaded method"], [0x1510, "Nested type"],
+  [0x1511, "Method"], [0x1512, "Nested type"], [0x1513, "Member modification"],
+  [0x1514, "Managed type"], [0x151a, "Base interface"]
+]);
+
+export const legacyCodeViewFieldName = (type: number): string => FIELD_NAMES.get(type) ??
+  `Field record 0x${type.toString(16)}`;

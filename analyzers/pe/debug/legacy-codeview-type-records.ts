@@ -1,7 +1,11 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { skipLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
+import { readLegacyCodeViewFields, type LegacyCodeViewField } from "./legacy-codeview-fields.js";
 
-export interface LegacyCodeViewTypes { kind: "types"; records: { type: number; name?: string }[]; }
+export interface LegacyCodeViewTypes {
+  kind: "types";
+  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[] }[];
+}
 
 // Offset of size numeric leaf, or name for enum/alias; includes record length.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
@@ -11,13 +15,35 @@ const NUMERIC_OFFSETS = new Map([
 ]);
 const NAME_OFFSETS = new Map([[7, 12], [0x1007, 16], [0x1010, 8], [0x1507, 16], [0x150a, 8]]);
 
+const readUtf8TypeName = async (reader: LegacyCodeViewReader, type: number, offset: number) => {
+  const { name, end } = await reader.utf8Name(offset);
+  // CV_prop_t.hasuniquename (bit 9) appends a second string to these UDT leaves.
+  // Same cvinfo.h source as the record offsets above.
+  if (![0x1504, 0x1505, 0x1506, 0x1507, 0x1519].includes(type) ||
+      !(await reader.uint16(6) & 0x200)) return { type, name };
+  try { return { type, name, uniqueName: await reader.utf8(end) }; }
+  catch (error) { reader.warn(`CodeView decorated type name: ${String(error)}`); return { type, name }; }
+};
+
 const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTypes["records"][number]> => {
   const type = await reader.uint16(2);
-  const numeric = NUMERIC_OFFSETS.get(type);
-  const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
-  if (offset == null) return { type };
-  const name = type >= 0x1500 ? await reader.utf8(offset) : (await reader.pascal(offset)).name;
-  return { type, name };
+  if (type === 0x204 || type === 0x1203) return { type,
+    members: await readLegacyCodeViewFields(reader.subsection(4, reader.size - 4)) };
+  try {
+    const numeric = NUMERIC_OFFSETS.get(type);
+    const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
+    if (offset == null) return { type };
+    return type >= 0x1500 ? await readUtf8TypeName(reader, type, offset) :
+      { type, name: (await reader.pascal(offset)).name };
+  } catch (error) { reader.warn(`CodeView type name: ${String(error)}`); return { type }; }
+};
+
+const globalTypeOffset = (signature: string, base: number, offset: number): number => {
+  // TIS 7.4: NB07/08 offsets are subsection-relative; NB09+ are record-base-relative.
+  // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
+  const target = (signature === "NB07" || signature === "NB08" ? 0 : base) + offset;
+  if (target < base) throw new Error("CodeView type offset overlaps the header or offset table.");
+  return target;
 };
 
 const readTypeAt = async (reader: LegacyCodeViewReader, offset: number) => {
@@ -34,20 +60,16 @@ export const readLegacyCodeViewGlobalTypes = async (
   const base = 8 + count * 4;
   if (base > reader.size) throw new Error("CodeView global type offsets are truncated.");
   const records: LegacyCodeViewTypes["records"] = [];
-  const decoded = new Map<number, LegacyCodeViewTypes["records"][number]>();
+  const decoded = new Map<number, LegacyCodeViewTypes["records"][number] | undefined>();
   for (let index = 0; index < count; index++) {
     try {
       const offset = await reader.uint32(8 + index * 4);
-      let record = decoded.get(offset);
-      if (!record) {
-        // TIS Symbol and Type Information 7.4: NB07/08 use subsection-relative
-        // offsets; NB09 and later use offsets from the first type record.
-        // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
-        const origin = signature === "NB07" || signature === "NB08" ? 0 : base;
-        record = (await readTypeAt(reader, origin + offset)).record;
-        decoded.set(offset, record);
+      if (!decoded.has(offset)) {
+        decoded.set(offset, undefined);
+        decoded.set(offset, (await readTypeAt(reader, globalTypeOffset(signature, base, offset))).record);
       }
-      records.push(record);
+      const record = decoded.get(offset);
+      if (record) records.push(record);
     } catch (error) { reader.warn(`CodeView type ${index}: ${String(error)}`); }
   }
   return { kind: "types", records };

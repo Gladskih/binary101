@@ -52,13 +52,17 @@ export class LegacyCodeViewReader {
   }
 
   async utf8(offset: number): Promise<string> {
+    return (await this.utf8Name(offset)).name;
+  }
+
+  async utf8Name(offset: number): Promise<{ name: string; end: number }> {
     const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
     let value = "";
     for (let cursor = offset; cursor < this.size; cursor += 256) {
       const view = await this.view(cursor, Math.min(256, this.size - cursor));
       const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
       const end = bytes.indexOf(0);
-      if (end >= 0) return value + decoder.decode(bytes.subarray(0, end));
+      if (end >= 0) return { name: value + decoder.decode(bytes.subarray(0, end)), end: cursor + end + 1 };
       value += decoder.decode(bytes, { stream: true });
     }
     throw new Error("CodeView UTF-8 name is not NUL-terminated.");

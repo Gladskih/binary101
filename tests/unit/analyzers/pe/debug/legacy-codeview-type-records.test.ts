@@ -2,6 +2,82 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readLegacyCodeViewGlobalTypes, readLegacyCodeViewModuleTypes } from "../../../../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { legacyReader, legacySymbol, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { codeViewField, codeViewFieldList, codeViewUniqueType } from "../../../../fixtures/pe-codeview-fields.js";
+
+for (const [type, offset] of [[0x1504, 22], [0x1505, 22], [0x1506, 14],
+  [0x1507, 16], [0x1519, 22]] as const) {
+  void test(`CodeView leaf ${type} retains the separate decorated type identity`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+      ...codeViewUniqueType(type, offset, "名", [...new TextEncoder().encode(".?AUNamed@@"), 0])], warnings));
+
+    assert.deepEqual(parsed.records, [{ type, name: "名", uniqueName: ".?AUNamed@@" }]);
+    assert.deepEqual(warnings, []);
+  });
+}
+
+for (const identity of [[], [0x41], [0xff, 0]]) {
+  void test(`CodeView preserves the readable type name when the decorated identity is malformed: ${identity}`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+      ...codeViewUniqueType(0x1505, 22, "Readable", identity), 2, 0, 2, 0], warnings));
+
+    assert.deepEqual(parsed.records, [{ type: 0x1505, name: "Readable" }, { type: 2 }]);
+    assert.match(warnings.join(" | "), /decorated type name/);
+  });
+}
+
+void test("CodeView does not infer a decorated identity without the UDT property flag", async () => {
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...legacySymbol(0x1505, "Readable", 22), ...codeViewUniqueType(0x1503, 14, "Array", [0]) ]));
+
+  assert.deepEqual(parsed.records, [{ type: 0x1505, name: "Readable" }, { type: 0x1503, name: "Array" }]);
+});
+
+for (const [recordType, fieldType, body] of [[0x204, 0x407, [0x74, 0, 3, 0]],
+  [0x1203, 0x150e, [3, 0, 0x74, 0, 0, 0]]] as const) {
+  void test(`CodeView type ${recordType} exposes member names instead of leaving LF_FIELDLIST opaque`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1),
+      ...codeViewFieldList(codeViewField(fieldType, body, "value"), recordType)], warnings));
+
+    assert.deepEqual(parsed.records, [{ type: recordType, members: [{ type: fieldType, name: "value" }] }]);
+    assert.deepEqual(warnings, []);
+  });
+}
+
+void test("CodeView caches malformed type records as well as successfully decoded ones", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewGlobalTypes(legacyReader([
+    ...legacyU32(1), ...legacyU32(3), ...legacyU32(0), ...legacyU32(0), ...legacyU32(2),
+    0, 0, 2, 0, 2, 0], warnings));
+
+  assert.deepEqual(parsed.records, [{ type: 2 }]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /Invalid CodeView type record length/);
+});
+
+for (const signature of ["NB07", "NB08"]) {
+  void test(`${signature} rejects global type offsets into its offset table`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewGlobalTypes(legacyReader([
+      ...legacyU32(1), ...legacyU32(2), ...legacyU32(8), ...legacyU32(16), 2, 0, 2, 0], warnings), signature);
+
+    assert.deepEqual(parsed.records, [{ type: 2 }]);
+    assert.match(warnings.join(" | "), /overlaps/);
+  });
+}
+
+void test("CodeView malformed type names retain the bounded record kind and later records", async () => {
+  const bytes = legacySymbol(0x1504, "X", 22);
+  bytes[22] = 0xff;
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([
+    ...legacyU32(4), ...bytes, 2, 0, 2, 0], warnings));
+
+  assert.deepEqual(parsed.records, [{ type: 0x1504 }, { type: 2 }]);
+  assert.match(warnings.join(" | "), /type name/);
+});
 
 void test("CodeView type streams retain structural records and names from sized type leaves", async () => {
   const records = [...legacySymbol(5, "MyStruct", 16), 2, 0, 2, 0];

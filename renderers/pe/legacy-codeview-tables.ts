@@ -2,6 +2,8 @@ import type { PeLegacyCodeViewInfo, LegacyCodeViewData } from "../../analyzers/p
 import type { LegacyCodeViewSource } from "../../analyzers/pe/debug/legacy-codeview-source.js";
 import type { LegacyCodeViewFiles } from "../../analyzers/pe/debug/legacy-codeview-modules.js";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
+import { legacyCodeViewFieldName } from "./legacy-codeview-kinds.js";
+import type { LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -40,8 +42,10 @@ const recordRows = (data: LegacyCodeViewData): string[][] => {
   if (data.kind === "publics") return data.names.map(name => [name]);
   if (data.kind === "symbols") return data.records.flatMap(record => record.name == null ? [] :
     [[legacyCodeViewSymbolName(record.type), record.name]]);
-  if (data.kind === "types") return data.records.flatMap(record => record.name == null ? [] :
-    [[legacyCodeViewTypeName(record.type), record.name]]);
+  if (data.kind === "types") return data.records.flatMap(record => [
+    ...(record.name == null ? [] : [[legacyCodeViewTypeName(record.type), record.name]]),
+    ...(record.uniqueName == null ? [] : [[`${legacyCodeViewTypeName(record.type)} (decorated)`, record.uniqueName]])
+  ]);
   return [];
 };
 
@@ -78,6 +82,28 @@ const dataRows = (data: LegacyCodeViewData, names: DirectoryNames): string[][] =
     String(segment.size), segmentAccess(segment.flags)]);
 };
 
+const addMemberHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewTypes,
+  directory: number, module: number): void => {
+  const counts = new Map<number, number>();
+  for (const record of data.records) for (const member of record.members ?? []) {
+    counts.set(member.type, (counts.get(member.type) ?? 0) + 1);
+  }
+  for (const [type, count] of counts) table.rows.push([String(directory), String(module),
+    "Type members", legacyCodeViewFieldName(type), String(count)]);
+};
+
+const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCodeViewData,
+  directory: number, module: number): void => {
+  if (data.kind !== "types") return;
+  const table = tables.get("members") ?? { key: "members", title: "Member and enumerator names",
+    columns: ["Directory", "Module", "Member kind", "Name"], rows: [] };
+  for (const record of data.records) for (const member of record.members ?? []) {
+    if (member.name === undefined) continue;
+    table.rows.push([String(directory), String(module), legacyCodeViewFieldName(member.type), member.name || "(unnamed)"]);
+  }
+  tables.set("members", table);
+};
+
 const addHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewData,
   directory: number, module: number): void => {
   if (data.kind !== "symbols" && data.kind !== "types") return;
@@ -86,6 +112,7 @@ const addHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewData,
   for (const [type, count] of counts) table.rows.push([String(directory), String(module),
     data.kind === "symbols" ? "Symbols" : "Types",
     data.kind === "symbols" ? legacyCodeViewSymbolName(type) : legacyCodeViewTypeName(type), String(count)]);
+  if (data.kind === "types") addMemberHistogram(table, data, directory, module);
 };
 
 export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCodeViewTable[] => {
@@ -108,6 +135,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       const table = tables.get(data.kind) ?? { key: data.kind, title, columns: ["Directory", "Module", ...columns], rows: [] };
       for (const row of rows) table.rows.push([String(index + 1), String(section.module), ...row]);
       tables.set(data.kind, table);
+      addMemberNames(tables, data, index + 1, section.module);
       addHistogram(histogram, data, index + 1, section.module);
     }
     for (const [type, group] of groups) inventory.rows.push([String(index + 1), legacyCodeViewSubsectionName(type),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName,
-  legacyCodeViewTypeName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
+  legacyCodeViewTypeName, legacyCodeViewFieldName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
 
 void test("CodeView record categories use published meanings and explicit unknown labels", () => {
   assert.equal(legacyCodeViewSubsectionName(0x120), "Modules");
@@ -15,4 +15,8 @@ void test("CodeView record categories use published meanings and explicit unknow
   assert.equal(legacyCodeViewSymbolName(0xffff), "Symbol record 0xffff");
   assert.equal(legacyCodeViewTypeName(0x204), "Fields");
   assert.equal(legacyCodeViewTypeName(0xffff), "Type record 0xffff");
+  assert.equal(legacyCodeViewFieldName(0x406), "Data member");
+  assert.equal(legacyCodeViewFieldName(0x1502), "Enumerator");
+  assert.equal(legacyCodeViewFieldName(0x151a), "Base interface");
+  assert.equal(legacyCodeViewFieldName(0xffff), "Field record 0xffff");
 });

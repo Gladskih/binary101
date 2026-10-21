@@ -10,7 +10,11 @@ void test("CodeView tables retain readable names and summarize symbol, line and 
     [["1", "1", "<module>.obj", "library.lib", "CV", "1", "24"]]);
   assert.deepEqual(tables.find(table => table.key === "symbols")?.rows,
     [["1", "1", "Public symbol", "<public>"], ["1", "1", "Public symbol", "second"]]);
-  assert.deepEqual(tables.find(table => table.key === "types")?.rows, [["1", "1", "Structure", "Structure"]]);
+  assert.deepEqual(tables.find(table => table.key === "types")?.rows, [["1", "1", "Structure", "Structure"],
+    ["1", "1", "Structure (decorated)", ".?AU<Structure>@@"]]);
+  assert.deepEqual(tables.find(table => table.key === "members")?.rows,
+    [["1", "1", "Data member", "<field>"], ["1", "1", "Enumerator", "first"], ["1", "1", "Enumerator", "(unnamed)"]]);
+  assert.ok(tables.find(table => table.key === "records")?.rows.some(row => row[2] === "Type members" && row[4] === "2"));
   assert.deepEqual(tables.find(table => table.key === "source")?.rows, [["1", "1", "source.c", "1", "3", "2"]]);
   assert.deepEqual(tables.find(table => table.key === "frameMap")?.rows, [["1", "1", "3", "2"]]);
   assert.deepEqual(tables.find(table => table.key === "files")?.rows,

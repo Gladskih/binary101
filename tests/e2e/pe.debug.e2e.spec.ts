@@ -2,6 +2,25 @@ import { expect, test } from "@playwright/test";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
+import { codeViewField, codeViewFieldList } from "../fixtures/pe-codeview-fields.js";
+
+test("legacy CodeView member names remain readable beyond the first page", async ({ page }) => {
+  const fields = Array.from({ length: 101 }, (_, index) =>
+    codeViewField(0x407, [0x74, 0, 3, 0], `field_${index}`)).flat();
+  const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([
+    { type: 0x121, module: 1, data: Uint8Array.from([...legacyU32(1), ...codeViewFieldList(fields)]) }
+  ]) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await expect(panel).toContainText("Member and enumerator names");
+  const members = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-members"]');
+  await expect(members.getByRole("cell", { name: "field_0", exact: true })).toBeVisible();
+  await members.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(members.getByRole("cell", { name: "field_100", exact: true })).toBeVisible();
+});
 
 test("TD32 in an UNKNOWN directory entry preserves names and exposes paginated details", async ({ page }) => {
   const file = createPeWithDebugPayloads([{ type: 0, data: createTd32([

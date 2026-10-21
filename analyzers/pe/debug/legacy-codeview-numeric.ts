@@ -12,7 +12,7 @@ const NUMERIC_SIZES = new Map([
 export const skipLegacyCodeViewNumeric = async (reader: LegacyCodeViewReader, offset: number): Promise<number> => {
   const type = await reader.uint16(offset);
   if (type < 0x8000) return offset + 2;
-  if (type === 0x801b) return offset + 3 + new TextEncoder().encode(await reader.utf8(offset + 2)).length;
+  if (type === 0x801b) return (await reader.utf8Name(offset + 2)).end;
   const size = type === 0x8010 ? 2 + await reader.uint16(offset + 2) : NUMERIC_SIZES.get(type);
   if (size == null) throw new Error(`Unknown CodeView numeric leaf ${type}.`);
   await reader.view(offset + 2, size);
