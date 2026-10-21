@@ -74,6 +74,7 @@ const embeddedPdbSummary = (entry: PeDebugDirectoryEntry): string | null => {
 };
 
 const payloadSummaries: ReadonlyArray<(entry: PeDebugDirectoryEntry) => string | null> = [
+  entry => entry.td32 ? `Borland TD32 ${entry.td32.signature}: names, modules, symbols and source mappings.` : null,
   entry => entry.coff
     ? `COFF symbol table with ${formatDebugCount(entry.coff.symbols.length, "parsed primary symbol")}.` : null,
   entry => entry.codeView ? `CodeView ${entry.codeView.signature} record with PDB identity and path.` : null,

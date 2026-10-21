@@ -16,6 +16,7 @@ import { renderPogoRegions } from "./pogo.js";
 import { renderMiscDebug } from "./debug-misc.js";
 import { renderOmap } from "./omap.js";
 import { renderLegacyCodeView } from "./legacy-codeview.js";
+import { renderTd32 } from "./td32.js";
 
 const hasEntryDetails = (entry: PeDebugDirectoryEntry): boolean => Boolean(
   entry.sizeOfData || entry.characteristics || entry.timeDateStamp || entry.majorVersion ||
@@ -216,6 +217,7 @@ export const renderDecodedEntryDetails = (
     renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
     renderLegacyCodeView(entry, entryIndex, out);
+    renderTd32(entry, entryIndex, out);
     renderFpoStatistics(entry, out);
     renderFixupStatistics(pe, entry, entryIndex, out);
     renderMiscDebug(entry, entryIndex, out);

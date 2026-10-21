@@ -26,6 +26,7 @@ import { parsePogoInfo, type PePogoInfo } from "./pogo.js";
 import { parseR2rPerfMapInfo, type PeR2rPerfMapInfo } from "./r2r-perfmap.js";
 import { parseRawDebugPayload, type PeRawDebugPayload } from "./raw-payload.js";
 import { parseReproInfo, type PeReproInfo } from "./repro.js";
+import { parseTd32, type PeTd32Info } from "./td32.js";
 import {
   IMAGE_DEBUG_TYPE_COFF,
   IMAGE_DEBUG_TYPE_CODEVIEW,
@@ -49,6 +50,7 @@ export type PeDebugPayloads = {
   coff?: CoffDebugInfo;
   codeView?: PeCodeViewEntry;
   legacyCodeView?: PeLegacyCodeViewInfo;
+  td32?: PeTd32Info;
   fpo?: PeFpoInfo;
   fixup?: PeFixupInfo;
   misc?: PeMiscDebugInfo;
@@ -124,6 +126,13 @@ const parseKnownPayload = async (
   input: DecodeInput,
   addWarning: (message: string) => void
 ): Promise<PeDebugPayloads> => {
+  // JCL's TJclPeBorTD32Image reads embedded TD32 from UNKNOWN (0). Type 9 is
+  // Borland's reserved namespace; decode only recognized FB09/FB0A signatures.
+  if (input.type === 0 || input.type === 9) {
+    const td32 = await parseTd32(reader, input.fileSize, input.rvaToOff,
+      input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning);
+    return td32 ? { td32 } : {};
+  }
   if (input.type === IMAGE_DEBUG_TYPE_CODEVIEW) return decodeCodeViewPayload(reader, input.fileSize,
     input.rvaToOff, input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning);
   if (input.type === IMAGE_DEBUG_TYPE_EXCEPTION) {

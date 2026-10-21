@@ -1,6 +1,24 @@
 import { expect, test } from "@playwright/test";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
+import { createTd32, td32Names } from "../fixtures/pe-td32.js";
+
+test("TD32 in an UNKNOWN directory entry preserves names and exposes paginated details", async ({ page }) => {
+  const file = createPeWithDebugPayloads([{ type: 0, data: createTd32([
+    { type: 0x130, module: 0, data: td32Names(Array.from({ length: 101 }, (_, index) => `type_name_${index}`)) }
+  ]) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await expect(panel).toContainText("Borland TD32 FB09");
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await expect(panel).toContainText("TD32 shared names");
+  await expect(panel.getByRole("cell", { name: "type_name_0", exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(panel.getByRole("cell", { name: "type_name_100", exact: true })).toBeVisible();
+  await expect(panel).not.toContainText("payload is not decoded");
+});
 
 test("SPGO debug type 18 stays explicitly undecoded even with a recognized POGO signature", async ({ page }) => {
   // DWORD 0x5350474f is SPGO inside a type-13 POGO record, not a type-18 contract.
