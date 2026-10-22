@@ -255,3 +255,25 @@ void test("exception copy reads its first byte from the copy and leaves table-en
   assert.equal(parsed?.uniqueUnwindInfoCount, 1);
   assert.deepEqual(parsed?.issues, []);
 });
+
+void test("unsupported exception-copy machines with a known origin retain an explicit diagnostic", async () => {
+  const parsed = await parseExceptionDebugInfo(subject(), mapRva, 0, 0x20, 24,
+    0x1c4, assert.fail, exception);
+
+  assert.equal(parsed?.functionCount, 0);
+  assert.deepEqual(parsed?.issues, ["Exception directory decoding is not implemented for machine 0x1c4."]);
+});
+
+for (const [size, count, issues] of [
+  [11, 0, ["Exception directory size is smaller than one RUNTIME_FUNCTION entry (12 bytes)."]],
+  [12, 1, []]
+] as const) {
+  void test(`AMD64 debug copy with declared size ${size} preserves the one-row boundary`, async () => {
+    const bytes = subject().data.slice();
+    new DataView(bytes.buffer).setUint32(0x28, 0x3000, true);
+    const parsed = await parseExceptionDebugInfo(new MockFile(bytes), mapRva, 0, 0x20, size, 0x8664, assert.fail);
+
+    assert.equal(parsed?.functionCount, count);
+    assert.deepEqual(parsed?.issues, issues);
+  });
+}

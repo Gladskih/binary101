@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createPeWithRawArm64ExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy, createPeWithRawExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
@@ -86,6 +87,19 @@ test(`raw-only exception copy preserves unwind statistics: ${create.name}`, asyn
   await expect(panel).not.toContainText("no raw-data RVA");
 });
 }
+
+test("raw-only ARM64 exception copy exposes readable unwind statistics without a table RVA", async ({ page }) => {
+  const file = createPeWithRawArm64ExceptionCopy();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await panel.locator("summary").filter({ hasText: /^Exception directory/ }).click();
+  await expect(panel.locator("dt").filter({ hasText: "Missing/invalid ranges" }).locator("+ dd")).toHaveText("0");
+  await expect(panel).not.toContainText("not implemented");
+  await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+});
 
 test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {
   const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([{ type: 0x125, module: 1,

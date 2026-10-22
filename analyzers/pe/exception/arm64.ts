@@ -1,199 +1,17 @@
 "use strict";
 
-import { mappedRvaSize } from "../rva-mapping.js";
-import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import {
-  isMappedArm64FunctionBegin,
-  isValidArm64FunctionRange
-} from "./arm64-function-range.js";
-import {
-  createArm64ExceptionState,
-  recordArm64HandlerRva,
-  type Arm64ExceptionState
-} from "./arm64-state.js";
-import { collectRuntimeFunctionSpans, readRuntimeFunctionSpan } from "./runtime-spans.js";
-import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import { createRvaRangeReader } from "../rva-range-reader.js";
+import { isMappedArm64FunctionBegin, isValidArm64FunctionRange } from "./arm64-function-range.js";
+import { createArm64ExceptionState, recordArm64HandlerRva, type Arm64ExceptionState } from "./arm64-state.js";
+import { createArm64UnwindInfoReader } from "./arm64-unwind-info.js";
+import { readRuntimeFunctionChunks } from "./runtime-function-chunks.js";
+import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 
-// Microsoft ARM64 exception-handling docs:
-// https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
-// ARM64 .pdata entries are 8 bytes, and the low 2 bits of word 2 are the Flag field.
+// Microsoft ARM64 exception-handling docs, .pdata records are two DWORDs.
+// https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling#pdata-records
 const ARM64_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
-// Microsoft ARM64 exception-handling docs, ".pdata records":
-// Flag is the low 2 bits of word 2, and the remaining 30 bits hold either an .xdata RVA
-// or packed unwind data, depending on Flag.
-const ARM64_PDATA_FLAG_MASK = 0x3;
-const ARM64_PDATA_FLAG_XDATA = 0;
-const ARM64_PDATA_FLAG_CHAINED = 0x3;
-// MSVC dumpbin /unwindinfo 14.51 labels ARM64 Flag=3 entries as "Chained pdata".
-const ARM64_CHAINED_PDATA_MAX_DEPTH = 8;
-// Microsoft ARM64 exception-handling docs, ".xdata records":
-// Function Length is 18 bits, Vers is 2 bits, and the X/E bits live at bit positions 20/21.
-const ARM64_XDATA_FUNCTION_LENGTH_MASK = 0x3ffff;
-const ARM64_XDATA_VERSION_SHIFT = 18;
-const ARM64_XDATA_VERSION_MASK = 0x3;
-const ARM64_XDATA_HAS_EXCEPTION_DATA = 1 << 20;
-const ARM64_XDATA_SINGLE_EPILOG = 1 << 21;
-// Microsoft ARM64 exception-handling docs, "Packed unwind data":
-// packed records use bits 2-12 for Function Length.
-const ARM64_PACKED_FUNCTION_LENGTH_SHIFT = 2;
-const ARM64_PACKED_FUNCTION_LENGTH_MASK = 0x7ff;
-
-type Arm64UnwindInfo = {
-  chained: boolean;
-  functionLengthBytes: number;
-  handlerRva: number | null;
-  hasHandler: boolean;
-  key: string;
-  version: number | null;
-};
-
-const readUint32 = async (reader: FileRangeReader, rvaToOff: RvaToOffset, offset: number): Promise<number | null> => {
-  const view = await readMappedRvaPrefix(reader, offset, Uint32Array.BYTES_PER_ELEMENT, rvaToOff);
-  return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
-};
-
-const readPackedUnwindInfo = (packedWord: number): Arm64UnwindInfo => ({
-  functionLengthBytes:
-    ((packedWord >>> ARM64_PACKED_FUNCTION_LENGTH_SHIFT) & ARM64_PACKED_FUNCTION_LENGTH_MASK) * 4,
-  handlerRva: null,
-  hasHandler: false,
-  key: `packed:${packedWord >>> 0}`,
-  chained: false,
-  version: null
-});
-
-const readXdataUnwindInfo = async (
-  reader: FileRangeReader,
-  rvaToOff: RvaToOffset,
-  xdataRva: number,
-  issues: string[]
-): Promise<Arm64UnwindInfo | null> => {
-  const xdataOff = rvaToOff(xdataRva);
-  if (xdataOff == null || xdataOff < 0 || xdataOff >= reader.size) {
-    issues.push("ARM64 .pdata entry points to an .xdata RVA that does not map to file data.");
-    return null;
-  }
-  const headerWord = await readUint32(reader, rvaToOff, xdataRva);
-  if (headerWord == null) {
-    issues.push("ARM64 .xdata header is truncated.");
-    return null;
-  }
-  // Microsoft ARM64 exception-handling docs, ComputeXdataSize sample:
-  // `(Xdata[0] >> 22) == 0` means Epilog Count and Code Words are both zero, so the
-  // record carries the extra extension word with 16-bit Extended Epilog Count and 8-bit
-  // Extended Code Words fields.
-  const usesExtendedHeader = (headerWord >>> 22) === 0;
-  const extendedHeader = usesExtendedHeader
-    ? await readUint32(reader, rvaToOff, xdataRva + Uint32Array.BYTES_PER_ELEMENT)
-    : 0;
-  if (usesExtendedHeader && extendedHeader == null) {
-    issues.push("ARM64 .xdata extended header is truncated.");
-    return null;
-  }
-  const epilogScopeCount = usesExtendedHeader
-    ? extendedHeader! & 0xffff
-    : (headerWord >>> 22) & 0x1f;
-  const unwindWordCount = usesExtendedHeader
-    ? (extendedHeader! >>> 16) & 0xff
-    : (headerWord >>> 27) & 0x1f;
-  const recordSize =
-    (usesExtendedHeader ? 8 : 4) +
-    ((headerWord & ARM64_XDATA_SINGLE_EPILOG) === 0 ? epilogScopeCount * 4 : 0) +
-    unwindWordCount * 4 +
-    ((headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0 ? 4 : 0);
-  if (mappedRvaSize(rvaToOff, xdataRva, recordSize, reader.size) < recordSize) {
-    issues.push("ARM64 .xdata record is truncated before its unwind metadata ends.");
-    return null;
-  }
-  const hasHandler = (headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0;
-  const handlerRva = hasHandler
-    ? await readUint32(reader, rvaToOff, xdataRva + recordSize - Uint32Array.BYTES_PER_ELEMENT)
-    : null;
-  if (hasHandler && handlerRva == null) {
-    issues.push("ARM64 .xdata declares exception data, but the handler RVA is truncated.");
-    return null;
-  }
-  return {
-    functionLengthBytes: (headerWord & ARM64_XDATA_FUNCTION_LENGTH_MASK) * 4,
-    handlerRva,
-    hasHandler,
-    key: `xdata:${xdataRva >>> 0}`,
-    chained: false,
-    version: (headerWord >>> ARM64_XDATA_VERSION_SHIFT) & ARM64_XDATA_VERSION_MASK
-  };
-};
-
-const readArm64UnwindInfo = async (
-  reader: FileRangeReader,
-  rvaToOff: RvaToOffset,
-  unwindWord: number,
-  issues: string[],
-  chainedDepth = 0
-): Promise<Arm64UnwindInfo | null> => {
-  const flag = unwindWord & ARM64_PDATA_FLAG_MASK;
-  if (flag === ARM64_PDATA_FLAG_CHAINED) {
-    if (chainedDepth >= ARM64_CHAINED_PDATA_MAX_DEPTH) {
-      issues.push(
-        `ARM64 chained .pdata entries exceed the parser recursion limit (${ARM64_CHAINED_PDATA_MAX_DEPTH}).`
-      );
-      return null;
-    }
-    const targetPdataRva = unwindWord & ~ARM64_PDATA_FLAG_MASK;
-    const targetPdataOff = rvaToOff(targetPdataRva >>> 0);
-    if (targetPdataOff == null || targetPdataOff < 0 || targetPdataOff >= reader.size) {
-      issues.push("ARM64 chained .pdata target RVA does not map to file data.");
-      return null;
-    }
-    const chainedEntry = await readMappedRvaPrefix(reader, targetPdataRva >>> 0,
-      ARM64_RUNTIME_FUNCTION_ENTRY_SIZE, rvaToOff);
-    if (chainedEntry.byteLength < ARM64_RUNTIME_FUNCTION_ENTRY_SIZE) {
-      issues.push("ARM64 chained .pdata target is truncated.");
-      return null;
-    }
-    const chainedUnwindWord = chainedEntry.getUint32(Uint32Array.BYTES_PER_ELEMENT, true) >>> 0;
-    const chainedInfo = await readArm64UnwindInfo(
-      reader,
-      rvaToOff,
-      chainedUnwindWord,
-      issues,
-      chainedDepth + 1
-    );
-    return chainedInfo
-      ? { ...chainedInfo, key: `chained:${targetPdataRva >>> 0}`, chained: true }
-      : null;
-  }
-  if (flag === ARM64_PDATA_FLAG_XDATA) {
-    const xdataRva = unwindWord & ~ARM64_PDATA_FLAG_MASK;
-    if (!xdataRva) {
-      issues.push("ARM64 .pdata entry points to .xdata RVA 0.");
-      return null;
-    }
-    return readXdataUnwindInfo(reader, rvaToOff, xdataRva >>> 0, issues);
-  }
-  return readPackedUnwindInfo(unwindWord);
-};
-
-const createUnwindInfoReader = (reader: FileRangeReader, rvaToOff: RvaToOffset) => {
-  // The second .pdata word describes unwind data independently of the function start.
-  // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling#pdata-records
-  const cache = new Map<number, { info: Arm64UnwindInfo | null; issues: string[] }>();
-  return async (word: number, issues: string[]): Promise<Arm64UnwindInfo | null> => {
-    const cached = cache.get(word);
-    if (cached) {
-      issues.push(...cached.issues);
-      return cached.info;
-    }
-    const recordIssues: string[] = [];
-    const info = await readArm64UnwindInfo(reader, rvaToOff, word, recordIssues);
-    // Repeated references to shared .xdata can otherwise thrash the file-window cache.
-    // Cache decoded records locally; retain diagnostics for every referencing entry.
-    cache.set(word, { info, issues: recordIssues });
-    issues.push(...recordIssues);
-    return info;
-  };
-};
 
 const processArm64RuntimeFunction = async (
   reader: FileRangeReader,
@@ -202,7 +20,7 @@ const processArm64RuntimeFunction = async (
   unwindWord: number,
   issues: string[],
   state: Arm64ExceptionState,
-  readUnwindInfo: ReturnType<typeof createUnwindInfoReader>
+  readUnwindInfo: ReturnType<typeof createArm64UnwindInfoReader>
 ): Promise<void> => {
   state.functionCount += 1;
   const unwindInfo = await readUnwindInfo(unwindWord, issues);
@@ -258,36 +76,29 @@ export async function parseArm64ExceptionDirectory(
       "Exception directory location is outside the file."
     ], "arm64");
   }
-  if (dir.size < ARM64_RUNTIME_FUNCTION_ENTRY_SIZE) {
+  return parseArm64ExceptionTable(reader,
+    createRvaRangeReader(reader, rvaToOff, dir.rva, dir.size), dir.size, rvaToOff, dir.rva);
+}
+
+/** Decode a bounded .pdata source while resolving its addresses against the image. */
+export async function parseArm64ExceptionTable(
+  reader: FileRangeReader, source: FileRangeReader, declaredSize: number,
+  rvaToOff: RvaToOffset, originRva?: number
+): Promise<PeExceptionDirectory> {
+  if (declaredSize < ARM64_RUNTIME_FUNCTION_ENTRY_SIZE) {
     return createEmptyExceptionDirectory([
       `Exception directory size is smaller than one ARM64 .pdata entry (${ARM64_RUNTIME_FUNCTION_ENTRY_SIZE} bytes).`
     ], "arm64");
   }
-
   const issues: string[] = [];
-  if (dir.size % ARM64_RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
+  if (declaredSize % ARM64_RUNTIME_FUNCTION_ENTRY_SIZE !== 0) {
     issues.push("Exception directory size is not a multiple of ARM64 .pdata entry size (8 bytes).");
   }
   const state = createArm64ExceptionState();
-  const readUnwindInfo = createUnwindInfoReader(reader, rvaToOff);
-  const spans = collectRuntimeFunctionSpans(
-    dir.rva,
-    Math.floor(dir.size / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE),
-    ARM64_RUNTIME_FUNCTION_ENTRY_SIZE,
-    rvaToOff,
-    reader.size,
-    "Exception directory is truncated; some ARM64 .pdata entries are missing.",
-    issues
-  );
-  for (const span of spans) {
-    const spanView = await readRuntimeFunctionSpan(reader, span, rvaToOff,
-      ARM64_RUNTIME_FUNCTION_ENTRY_SIZE,
-      "Exception directory is truncated; some ARM64 .pdata entries are missing.",
-      issues
-    );
-    if (!spanView) {
-      break;
-    }
+  const readUnwindInfo = createArm64UnwindInfoReader(reader, rvaToOff, source, originRva, declaredSize);
+  for await (const spanView of readRuntimeFunctionChunks(source,
+    Math.floor(declaredSize / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE), ARM64_RUNTIME_FUNCTION_ENTRY_SIZE,
+    "Exception directory is truncated; some ARM64 .pdata entries are missing.", issues)) {
     const spanEntries = Math.floor(spanView.byteLength / ARM64_RUNTIME_FUNCTION_ENTRY_SIZE);
     for (let index = 0; index < spanEntries; index += 1) {
       const entryOffset = index * ARM64_RUNTIME_FUNCTION_ENTRY_SIZE;
@@ -298,6 +109,10 @@ export async function parseArm64ExceptionDirectory(
       );
     }
   }
+  return summarizeArm64Table(state, issues);
+}
+
+const summarizeArm64Table = (state: Arm64ExceptionState, issues: string[]): PeExceptionDirectory => {
   if (state.functionCount === 0) {
     issues.push("Exception directory does not contain a complete ARM64 .pdata entry.");
     return createEmptyExceptionDirectory(issues, "arm64");

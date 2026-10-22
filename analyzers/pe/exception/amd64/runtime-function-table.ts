@@ -2,6 +2,7 @@
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { RvaToOffset } from "../../types.js";
+import { readRuntimeFunctionChunks } from "../runtime-function-chunks.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "./directory.js";
 import { validateAmd64RuntimeFunction } from "./runtime-function-validation.js";
 
@@ -49,27 +50,6 @@ const recordValidBeginRva = (
   return { previousBeginRva: beginRva, reportedUnsortedEntries: false };
 };
 
-const readRuntimeFunctionChunks = async function* (
-  source: FileRangeReader, entryCount: number, issues: string[]
-): AsyncGenerator<DataView> {
-  if (!Number.isSafeInteger(entryCount) || entryCount < 0) {
-    issues.push("RUNTIME_FUNCTION entry count is invalid.");
-    return;
-  }
-  const size = Math.min(entryCount, Math.floor(source.size / AMD64_RUNTIME_FUNCTION_ENTRY_SIZE)) *
-    AMD64_RUNTIME_FUNCTION_ENTRY_SIZE;
-  if (size < entryCount * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE) issues.push(TRUNCATED_RUNTIME_FUNCTION_ISSUE);
-  // Whole rows within the existing 64 KiB reader window, independent of storage coordinates.
-  for (let offset = 0; offset < size; offset += 65532) {
-    const requested = Math.min(size - offset, 65532);
-    const view = await source.read(offset, requested);
-    if (view.byteLength < requested) issues.push(TRUNCATED_RUNTIME_FUNCTION_ISSUE);
-    yield new DataView(view.buffer, view.byteOffset, Math.floor(Math.min(view.byteLength, requested) /
-      AMD64_RUNTIME_FUNCTION_ENTRY_SIZE) * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE);
-    if (view.byteLength < requested) break;
-  }
-};
-
 export const readAmd64RuntimeFunctionTable = async (
   reader: FileRangeReader,
   source: FileRangeReader,
@@ -86,7 +66,8 @@ export const readAmd64RuntimeFunctionTable = async (
   let previousBeginRva: number | null = null;
   let reportedUnsortedEntries = false;
   const invalidEntryIssues = new Map<string, number>();
-  for await (const spanView of readRuntimeFunctionChunks(source, entryCount, issues)) {
+  for await (const spanView of readRuntimeFunctionChunks(source, entryCount,
+    AMD64_RUNTIME_FUNCTION_ENTRY_SIZE, TRUNCATED_RUNTIME_FUNCTION_ISSUE, issues)) {
     const spanEntries = Math.floor(spanView.byteLength / AMD64_RUNTIME_FUNCTION_ENTRY_SIZE);
     for (let index = 0; index < spanEntries; index += 1) {
       const entryOffset = index * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE;

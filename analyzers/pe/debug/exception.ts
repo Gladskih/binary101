@@ -6,7 +6,9 @@ import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
 import { createDebugPayloadReader } from "./payload-reader.js";
 import { parseAmd64ExceptionTable } from "../exception/amd64/index.js";
-import { IMAGE_FILE_MACHINE_AMD64 } from "../../coff/machine.js";
+import { parseArm64ExceptionTable } from "../exception/arm64.js";
+import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64,
+  IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X } from "../../coff/machine.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "../exception/amd64/directory.js";
 
@@ -18,12 +20,6 @@ const parseAmd64Copy = async (reader: FileRangeReader, source: FileRangeReader,
     ["Exception directory size is not a multiple of RUNTIME_FUNCTION entry size (12 bytes)."];
   return parseAmd64ExceptionTable(reader, source, Math.floor(dataSize / AMD64_RUNTIME_FUNCTION_ENTRY_SIZE),
     rvaToOff, issues, tableRva);
-};
-
-const mapExceptionCopy = (rvaToOff: RvaToOffset, tableRva: number,
-  sourceRva: number, sourceOffset: number, size: number): RvaToOffset => rva => {
-  if (rva < tableRva || rva >= tableRva + size) return rvaToOff(rva);
-  return sourceOffset ? sourceOffset + rva - tableRva : rvaToOff(sourceRva + rva - tableRva);
 };
 
 // Microsoft PE format, "Debug Type": IMAGE_DEBUG_TYPE_EXCEPTION is a copy of
@@ -46,9 +42,15 @@ export const parseExceptionDebugInfo = async (
     addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning);
   if (!location) return null;
   const tableRva = exceptionDirectory?.rva || addressOfRawDataRva;
-  if (getCanonicalPeMachine(machine) === IMAGE_FILE_MACHINE_AMD64) {
-    return parseAmd64Copy(reader, createDebugPayloadReader(reader, rvaToOff,
-      addressOfRawDataRva, pointerToRawDataOff, location.size), rvaToOff, dataSize, tableRva || undefined);
+  const canonicalMachine = getCanonicalPeMachine(machine);
+  const source = createDebugPayloadReader(reader, rvaToOff,
+    addressOfRawDataRva, pointerToRawDataOff, location.size);
+  if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
+    return parseAmd64Copy(reader, source, rvaToOff, dataSize, tableRva || undefined);
+  }
+  if ([IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X]
+    .includes(canonicalMachine)) {
+    return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva || undefined);
   }
   if (!tableRva) {
     addWarning(`EXCEPTION debug payload has no known table RVA; raw-table decoding is not implemented for machine 0x${machine.toString(16)}.`);
@@ -57,7 +59,7 @@ export const parseExceptionDebugInfo = async (
   return parseExceptionDirectory(
     reader,
     [{ name: "EXCEPTION", rva: tableRva, size: dataSize }],
-    mapExceptionCopy(rvaToOff, tableRva, addressOfRawDataRva, pointerToRawDataOff, dataSize),
+    rvaToOff,
     machine
   );
 };

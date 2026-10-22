@@ -97,3 +97,13 @@ export const createPeWithRawExceptionCopy = (): MockFile => {
   view.setUint32(0x408, 0x10c0, true); // First copied row now has a direct UNWIND_INFO RVA.
   return new MockFile(bytes, "debug-raw-exception-copy.exe");
 };
+
+export const createPeWithRawArm64ExceptionCopy = (): MockFile => {
+  const bytes = createPeWithRawExceptionCopy().data.slice();
+  const view = new DataView(bytes.buffer);
+  view.setUint16(view.getUint32(0x3c, true) + 4, 0xaa64, true);
+  view.setUint32(512, 0xd65f03c0, true); // ARM64 RET.
+  view.setUint32(0x300 + 16, 16, true);
+  [0x1000, 5, 0x1004, 5].forEach((word, index) => view.setUint32(0x400 + index * 4, word, true));
+  return new MockFile(bytes, "debug-raw-arm64-exception-copy.exe");
+};
