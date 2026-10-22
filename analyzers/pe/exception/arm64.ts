@@ -3,7 +3,7 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import { createRvaRangeReader } from "../rva-range-reader.js";
-import { isMappedArm64FunctionBegin, isValidArm64FunctionRange } from "./arm64-function-range.js";
+import { isMappedFunctionBegin, isValidFunctionRange } from "./function-range.js";
 import { createArm64ExceptionState, recordArm64HandlerRva, type Arm64ExceptionState } from "./arm64-state.js";
 import { createArm64UnwindInfoReader } from "./arm64-unwind-info.js";
 import { readRuntimeFunctionChunks } from "./runtime-function-chunks.js";
@@ -33,8 +33,8 @@ const processArm64RuntimeFunction = async (
     unwindInfo &&
     (
       unwindInfo.chained
-        ? isMappedArm64FunctionBegin(beginRva, rvaToOff, reader.size)
-        : isValidArm64FunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
+        ? isMappedFunctionBegin(beginRva, rvaToOff, reader.size)
+        : isValidFunctionRange(beginRva, unwindInfo.functionLengthBytes, rvaToOff, reader.size)
     )
   );
   if (!valid) {

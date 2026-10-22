@@ -7,8 +7,9 @@ import { getReadableDebugData } from "./data.js";
 import { createDebugPayloadReader } from "./payload-reader.js";
 import { parseAmd64ExceptionTable } from "../exception/amd64/index.js";
 import { parseArm64ExceptionTable } from "../exception/arm64.js";
+import { parseArmntExceptionTable } from "../exception/armnt.js";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64,
-  IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X } from "../../coff/machine.js";
+  IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X, IMAGE_FILE_MACHINE_ARMNT } from "../../coff/machine.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "../exception/amd64/directory.js";
 
@@ -51,6 +52,9 @@ export const parseExceptionDebugInfo = async (
   if ([IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X]
     .includes(canonicalMachine)) {
     return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva || undefined);
+  }
+  if (canonicalMachine === IMAGE_FILE_MACHINE_ARMNT) {
+    return parseArmntExceptionTable(reader, source, dataSize, rvaToOff);
   }
   if (!tableRva) {
     addWarning(`EXCEPTION debug payload has no known table RVA; raw-table decoding is not implemented for machine 0x${machine.toString(16)}.`);

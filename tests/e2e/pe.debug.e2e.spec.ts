@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createPeWithRawArm64ExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createPeWithV3ExceptionCopy } from "../fixtures/pe-debug-file.js";
+import { createPeWithRawArmntExceptionCopy } from "../fixtures/pe-armnt-debug-file.js";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy, createPeWithRawExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
@@ -118,6 +119,27 @@ test("Unwind V3 shows operations and APX register statistics without an address 
   await expect(panel).not.toContainText("unexpected version");
   await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("unwind-v3.png"), fullPage: true });
+});
+
+test("ARMNT raw exception copies show return and register statistics without invented x64 labels", async ({ page }, testInfo) => {
+  const file = createPeWithRawArmntExceptionCopy();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await panel.locator("summary").filter({ hasText: /^Exception directory/ }).click();
+  await expect(panel).toContainText("ARMNT .pdata");
+  await expect(panel).toContainText("Function fragments");
+  await expect(panel).toContainText("Frame chains (r11/LR)");
+  const returns = panel.getByRole("table", { name: "Packed return modes", exact: true });
+  await expect(returns.getByRole("cell", { name: "16-bit branch", exact: true })).toBeVisible();
+  await expect(returns.getByRole("row").nth(1).getByRole("cell").nth(1)).toHaveText("2");
+  await expect(panel.getByRole("table", { name: "Encoded nonvolatile register groups" })).toContainText("None");
+  await expect(panel).not.toContainText("x64 .pdata");
+  await expect(panel).not.toContainText("not implemented");
+  await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("armnt-exception.png"), fullPage: true });
 });
 
 test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {

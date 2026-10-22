@@ -3,6 +3,7 @@
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { parseAmd64ExceptionDirectory } from "./amd64/index.js";
 import { parseArm64ExceptionDirectory } from "./arm64.js";
+import { parseArmntExceptionDirectory } from "./armnt.js";
 import { parseNativeAotX86ExceptionDirectory } from "./native-aot-x86.js";
 import { parseReadyToRunX86ExceptionDirectory } from "./ready-to-run-x86.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
@@ -14,6 +15,7 @@ import {
   IMAGE_FILE_MACHINE_ARM64,
   IMAGE_FILE_MACHINE_ARM64EC,
   IMAGE_FILE_MACHINE_ARM64X,
+  IMAGE_FILE_MACHINE_ARMNT,
   IMAGE_FILE_MACHINE_I386
 } from "../../coff/machine.js";
 import {
@@ -54,6 +56,9 @@ export async function parseExceptionDirectory(
   }
   if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
     return parseAmd64ExceptionDirectory(reader, dataDirs, rvaToOff);
+  }
+  if (canonicalMachine === IMAGE_FILE_MACHINE_ARMNT) {
+    return parseArmntExceptionDirectory(reader, dataDirs, rvaToOff);
   }
   if (isArm64ExceptionMachine(canonicalMachine)) {
     return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);

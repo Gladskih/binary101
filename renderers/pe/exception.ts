@@ -6,6 +6,7 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 import { renderExceptionV3 } from "./exception-v3.js";
 import { renderDefinitionRow } from "../../html-utils.js";
+import { renderArmntPackedStatistics } from "./exception-armnt.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -71,7 +72,35 @@ const renderReadyToRunStats = (ex: PeExceptionSection, out: string[]): void => {
   });
 };
 
+const renderArmntSummary = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.fragmentEntryCount) out.push(renderDefinitionRow("Function fragments", String(ex.fragmentEntryCount)));
+};
+
+const renderArmntDetails = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.armntPacked) out.push(renderArmntPackedStatistics(ex.armntPacked));
+};
+
+const getArmProfile = (format: "arm64" | "armnt"): ExceptionRenderProfile => {
+  const architecture = format === "armnt" ? "ARMNT" : "ARM64";
+  return {
+    chainedLabel: "Chained entries", handlerLabel: `Handlers present (${architecture} X bit)`,
+    introNote: `${architecture} .pdata stores packed unwind data or points to .xdata records used for ` +
+      `stack unwinding and exception dispatch.`,
+    renderFormatNote: format === "armnt" ? renderArmntDetails : renderNoFormatDetails,
+    renderFormatStats: format === "armnt" ? renderArmntSummary : renderNoFormatDetails,
+    unwindLabel: "Unique unwind descriptions (.xdata or packed .pdata)"
+  };
+};
+
+const getUnknownProfile = (): ExceptionRenderProfile => ({
+  chainedLabel: "Chained entries", handlerLabel: "Handlers present",
+  introNote: "The exception-table format is unknown or unsupported for this machine.",
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderNoFormatDetails,
+  unwindLabel: "Unique unwind descriptions"
+});
+
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
+  if (format == null) return getUnknownProfile();
   if (format === "native-aot-x86") {
     return {
       chainedLabel: "Chained entries",
@@ -96,18 +125,7 @@ const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderPr
       unwindLabel: "Unique unwind blobs"
     };
   }
-  if (format === "arm64") {
-    return {
-      chainedLabel: "Chained entries",
-      handlerLabel: "Handlers present (ARM64 X bit)",
-      introNote:
-        "ARM64 .pdata stores packed unwind data or points to .xdata records used for " +
-        "stack unwinding and exception dispatch.",
-      renderFormatNote: renderNoFormatDetails,
-      renderFormatStats: renderNoFormatDetails,
-      unwindLabel: "Unique unwind descriptions (.xdata or packed .pdata)"
-    };
-  }
+  if (format === "arm64" || format === "armnt") return getArmProfile(format);
   return {
     chainedLabel: "Chained (CHAININFO)",
     handlerLabel: "Handlers present (EHANDLER/UHANDLER)",

@@ -258,10 +258,10 @@ void test("exception copy reads its first byte from the copy and leaves table-en
 
 void test("unsupported exception-copy machines with a known origin retain an explicit diagnostic", async () => {
   const parsed = await parseExceptionDebugInfo(subject(), mapRva, 0, 0x20, 24,
-    0x1c4, assert.fail, exception);
+    0xdead, assert.fail, exception);
 
   assert.equal(parsed?.functionCount, 0);
-  assert.deepEqual(parsed?.issues, ["Exception directory decoding is not implemented for machine 0x1c4."]);
+  assert.deepEqual(parsed?.issues, ["Exception directory decoding is not implemented for machine 0xdead."]);
 });
 
 for (const [size, count, issues] of [

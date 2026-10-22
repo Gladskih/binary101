@@ -1,6 +1,7 @@
 "use strict";
 
 import type { Amd64UnwindV3Statistics } from "./amd64/unwind-v3-types.js";
+import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
 
 export interface PeExceptionDirectory {
   functionCount: number;
@@ -16,9 +17,11 @@ export interface PeExceptionDirectory {
   epilogScopeCount?: number;
   handlerUnwindInfoCount: number;
   chainedUnwindInfoCount: number;
+  armntPacked?: ArmntPackedStatistics;
+  fragmentEntryCount?: number;
   invalidEntryCount: number;
   issues: string[];
-  format?: "amd64" | "arm64" | "ready-to-run-x86" | "native-aot-x86";
+  format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86";
   exceptionInfoMethodCount?: number;
   exceptionClauseCount?: number;
   catchClauseCount?: number;

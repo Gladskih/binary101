@@ -5,6 +5,7 @@ import { createEmptyExceptionDirectory } from "../../../../analyzers/pe/exceptio
 
 for (const [format, intro, unwindLabel] of [
   ["arm64", "ARM64 .pdata stores packed unwind data", "Unique unwind descriptions"],
+  ["armnt", "ARMNT .pdata stores packed unwind data", "Unique unwind descriptions"],
   ["native-aot-x86", "NativeAOT x86 uses 12-byte RuntimeFunction", "Unique x86 UNWIND_INFO blocks"],
   ["ready-to-run-x86", "ReadyToRun x86 uses 8-byte RuntimeFunction", "Unique unwind blobs"]
 ] as const) {
@@ -42,4 +43,25 @@ void test("Exception renderer keeps readable diagnostics", () => {
 
   assert.match(out.join(""), /Exception directory warnings/);
   assert.doesNotMatch(out.join(""), /<metadata>/);
+});
+
+void test("Unknown exception formats keep generic labels instead of claiming x64 metadata", () => {
+  const out: string[] = [];
+  renderException(createEmptyExceptionDirectory(["unsupported machine"]), out);
+
+  assert.match(out.join(""), /exception-table format is unknown/);
+  assert.doesNotMatch(out.join(""), /x64 .pdata|EHANDLER|UNWIND_INFO/);
+});
+
+void test("ARMNT profile displays packed statistics and fragment counts", () => {
+  const out: string[] = [];
+  renderException({ ...createEmptyExceptionDirectory([], "armnt"), fragmentEntryCount: 2,
+    armntPacked: { returnKinds: { popPc: 0, branch16: 1, branch32: 0, noEpilog: 0 },
+      registerGroups: { "r4-r7": 1 }, stackAdjustments: { 16: 1 }, homesParametersCount: 0,
+      savesLinkRegisterCount: 0, frameChainCount: 0, prologFoldingCount: 0, epilogFoldingCount: 0 }
+  }, out);
+
+  assert.match(out.join(""), /Function fragments<\/dt><dd>2<\/dd>/);
+  assert.match(out.join(""), /Packed return modes/);
+  assert.match(out.join(""), /r4-r7/);
 });
