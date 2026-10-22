@@ -1,7 +1,14 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { readLegacyCodeViewSymbolName } from "./legacy-codeview-symbol-names.js";
+import { readLegacyCodeViewNameIndex, readLegacyCodeViewAddressIndex,
+  type LegacyCodeViewIndex } from "./legacy-codeview-index.js";
 
-export interface LegacyCodeViewSymbols { kind: "symbols"; records: { type: number; name?: string }[]; }
+export interface LegacyCodeViewSymbols {
+  kind: "symbols";
+  records: { type: number; name?: string }[];
+  nameIndex?: LegacyCodeViewIndex;
+  addressIndex?: LegacyCodeViewIndex;
+}
 
 export const readLegacyCodeViewSymbols = async (
   reader: LegacyCodeViewReader, start: number, end: number
@@ -33,7 +40,15 @@ export const readLegacyCodeViewGlobalSymbols = async (
   const total = 16 + size + header.getUint32(8, true) + header.getUint32(12, true);
   if (total > reader.size) reader.warn("CodeView symbol or address hash tables are truncated.");
   if (size > reader.size - 16) throw new Error("CodeView global symbol array is truncated.");
-  return readLegacyCodeViewSymbols(reader, 16, 16 + size);
+  const symbols = await readLegacyCodeViewSymbols(reader, 16, 16 + size);
+  const nameSize = header.getUint32(8, true);
+  const nameStart = 16 + size;
+  const addressStart = nameStart + nameSize;
+  const nameIndex = await readLegacyCodeViewNameIndex(reader.subsection(nameStart,
+    Math.min(nameSize, reader.size - nameStart)), header.getUint16(0, true));
+  const addressIndex = await readLegacyCodeViewAddressIndex(reader.subsection(addressStart,
+    Math.max(0, Math.min(header.getUint32(12, true), reader.size - addressStart))), header.getUint16(2, true));
+  return { ...symbols, ...(nameIndex ? { nameIndex } : {}), ...(addressIndex ? { addressIndex } : {}) };
 };
 
 export const readLegacyCodeViewModuleSymbols = async (

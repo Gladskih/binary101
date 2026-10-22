@@ -655,6 +655,7 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .tableWrap > .directoryFolderTable{min-width:680px}
 .tableWrap > .directoryFileTable{min-width:860px}
 .tableWrap > .peDataDirectoryTable{min-width:640px}
+.tableWrap > .peCodeViewIndexTable{min-width:64rem}
 .peMsvcRttiTable th,.peMsvcRttiTable td{white-space:nowrap}
 .peDataDirectoryTable{table-layout:auto}
 .peDataDirectoryTable__status,

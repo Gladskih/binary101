@@ -4,6 +4,7 @@ import type { LegacyCodeViewFiles } from "../../analyzers/pe/debug/legacy-codevi
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
 import { legacyCodeViewFieldName } from "./legacy-codeview-kinds.js";
 import type { LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
+import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -155,5 +156,6 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
     for (const [type, group] of groups) inventory.rows.push([String(index + 1), legacyCodeViewSubsectionName(type),
       String(group.count), String(group.size), `${group.decoded} / ${group.count}`]);
   });
-  return [inventory, histogram, ...tables.values()].filter(table => table.rows.length > 0);
+  return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info)]
+    .filter(table => table.rows.length > 0);
 };

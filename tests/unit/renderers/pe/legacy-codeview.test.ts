@@ -34,6 +34,32 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   assert.equal(model.sortValueAt(0, 9), "");
 });
 
+void test("CodeView index statistics retain escaped section names and right-align numeric counts", () => {
+  const { pe, entry } = subject();
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x12e, module: 0, offset: 0, size: 0,
+    data: { kind: "segmentNames", names: [{ offset: 0, name: "<section>" }] } });
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x12a, module: 0, offset: 0, size: 0,
+    data: { kind: "symbols", records: [], addressIndex: { algorithm: 12, counts: [7] },
+      nameIndex: { algorithm: 10, counts: [7] } } });
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out);
+  const sections = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-indexedSections")!;
+  const summary = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-indexes")!;
+  const buckets = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-buckets")!;
+
+  assert.match(out.join(""), /Symbol index statistics \(declared counts\)/);
+  assert.doesNotMatch(out.join(""), /<section>|RVA<\/th>|Chain offset/);
+  assert.equal(sections.rowAt(0)?.cells[3]?.html, "&lt;section>");
+  assert.equal(sections.columns[4]?.className, "peNumeric");
+  assert.equal(sections.rowAt(0)?.cells[4]?.className, "peNumeric");
+  assert.equal(summary.columns[3]?.className, "");
+  assert.equal(summary.tableClassName, "peCodeViewIndexTable");
+  assert.equal(buckets.tableClassName, undefined);
+  assert.deepEqual(summary.columns.slice(5).map(column => column.className),
+    ["peNumeric", "peNumeric", "peNumeric", "peNumeric"]);
+  assert.deepEqual(buckets.columns.slice(3).map(column => column.className), ["peNumeric", "peNumeric"]);
+});
+
 void test("CodeView stored strings are escaped, paginated and available through the table dispatcher", () => {
   const { pe, entry } = subject();
   entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x121, module: 2, offset: 0, size: 0,

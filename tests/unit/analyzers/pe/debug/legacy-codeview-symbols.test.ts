@@ -2,7 +2,86 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readLegacyCodeViewSymbols, readLegacyCodeViewGlobalSymbols,
   readLegacyCodeViewModuleSymbols } from "../../../../../analyzers/pe/debug/legacy-codeview-symbols.js";
-import { legacyReader, legacySymbol, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { legacyReader, legacySymbol, legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { codeViewHashIndex, codeViewGlobalSymbols } from "../../../../fixtures/pe-codeview-hash-index.js";
+
+void test("CodeView global symbols retain stored name-bucket and section-index counts", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(codeViewGlobalSymbols(legacySymbol(),
+    codeViewHashIndex([0, 2, 1]), codeViewHashIndex([1, 0, 2])), warnings));
+
+  assert.deepEqual(parsed, { kind: "symbols", records: [{ type: 0x203, name: "public_name" }],
+    nameIndex: { algorithm: 10, counts: [0, 2, 1] }, addressIndex: { algorithm: 12, counts: [1, 0, 2] } });
+  assert.deepEqual(warnings, []);
+});
+
+for (const length of [0, 1, 4]) {
+  void test(`CodeView symbol bounds reject length ${length} before scanning following index bytes`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewSymbols(legacyReader([0, 0, 0, 0,
+      ...legacyU16(length), 6, 0, 2, 0, 6, 0], warnings), 4, 8);
+
+    assert.deepEqual(parsed.records, []);
+    assert.deepEqual(warnings, ["Error: Invalid CodeView symbol record length."]);
+  });
+}
+
+void test("CodeView address index counts cannot use declared chain bytes missing from the file", async () => {
+  const warnings: string[] = [];
+  const bytes = codeViewGlobalSymbols(legacySymbol(), codeViewHashIndex([1]), codeViewHashIndex([1]));
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(bytes.slice(0, -1), warnings));
+
+  assert.deepEqual(parsed.addressIndex, { algorithm: 12, counts: [1] });
+  assert.deepEqual(warnings, ["CodeView symbol or address hash tables are truncated.",
+    "CodeView index group 1 has a misaligned or truncated chain."]);
+});
+
+void test("CodeView address indexes cannot borrow trailing data outside their declared extent", async () => {
+  const warnings: string[] = [];
+  const bytes = codeViewGlobalSymbols(legacySymbol(), [], codeViewHashIndex([1]), 0);
+  bytes.splice(12, 4, ...legacyU32(12)); // Only header + parallel arrays belong to the address index.
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(bytes, warnings));
+
+  assert.deepEqual(parsed.addressIndex, { algorithm: 12, counts: [1] });
+  assert.deepEqual(warnings, ["CodeView index group 1 has a misaligned or truncated chain."]);
+});
+
+void test("CodeView damaged name index cannot consume a valid following address index", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(codeViewGlobalSymbols(legacySymbol(),
+    [1, 0], codeViewHashIndex([1])), warnings));
+
+  assert.deepEqual(parsed.nameIndex, { algorithm: 10 });
+  assert.deepEqual(parsed.addressIndex, { algorithm: 12, counts: [1] });
+  assert.equal(parsed.records[0]?.name, "public_name");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /^CodeView index counts:/);
+});
+
+void test("CodeView truncated name data never shifts the declared address-index origin", async () => {
+  const warnings: string[] = [];
+  const bytes = codeViewGlobalSymbols(legacySymbol(), codeViewHashIndex([1]), codeViewHashIndex([2]));
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(bytes.slice(0, -30), warnings));
+
+  assert.deepEqual(parsed.nameIndex, { algorithm: 10, counts: [1] });
+  assert.deepEqual(parsed.addressIndex, { algorithm: 12 });
+  assert.equal(parsed.records.length, 1);
+  assert.ok(warnings.includes("CodeView symbol or address hash tables are truncated."));
+  assert.ok(warnings.some(warning => warning.includes("truncated chain")));
+  assert.ok(warnings.some(warning => warning.includes("index counts:")));
+});
+
+void test("CodeView unknown index algorithms remain visible without suppressing symbol names", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(codeViewGlobalSymbols(legacySymbol(),
+    [], [], 1, 7), warnings));
+
+  assert.deepEqual(parsed.nameIndex, { algorithm: 1 });
+  assert.deepEqual(parsed.addressIndex, { algorithm: 7 });
+  assert.equal(parsed.records[0]?.name, "public_name");
+  assert.deepEqual(warnings, ["CodeView index algorithm 1 is not decoded.",
+    "CodeView index algorithm 7 is not decoded."]);
+});
 
 void test("CodeView symbol scan retains named symbols and unnamed scope records", async () => {
   const records = [...legacySymbol(), 2, 0, 6, 0];
