@@ -4,6 +4,21 @@ import { readLegacyCodeViewSymbols, readLegacyCodeViewGlobalSymbols,
   readLegacyCodeViewModuleSymbols } from "../../../../../analyzers/pe/debug/legacy-codeview-symbols.js";
 import { legacyReader, legacySymbol, legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewHashIndex, codeViewGlobalSymbols } from "../../../../fixtures/pe-codeview-hash-index.js";
+import { codeViewAnnotations } from "../../../../fixtures/pe-codeview-symbol-strings.js";
+import { codeViewTextRecord, codeViewUtf8 } from "../../../../fixtures/pe-codeview-type-strings.js";
+
+void test("CodeView symbol scan keeps multi-string prefixes and later records after a damaged field", async () => {
+  const warnings: string[] = [];
+  const bytes = [...codeViewAnnotations([...codeViewUtf8("kept"), 0xff, 0], 2),
+    ...codeViewTextRecord(0x113d, 5, [...codeViewUtf8("cwd"), ...codeViewUtf8("path"), 0]),
+    2, 0, 6, 0];
+  const parsed = await readLegacyCodeViewSymbols(legacyReader(bytes, warnings), 0, bytes.length);
+
+  assert.deepEqual(parsed.records, [{ type: 0x1019, strings: ["kept"] },
+    { type: 0x113d, strings: ["cwd", "path"] }, { type: 6 }]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /^CodeView symbol string:/);
+});
 
 void test("CodeView global symbols retain stored name-bucket and section-index counts", async () => {
   const warnings: string[] = [];

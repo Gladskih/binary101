@@ -34,6 +34,25 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   assert.equal(model.sortValueAt(0, 9), "");
 });
 
+void test("CodeView symbol strings remain escaped and available beyond the first page", () => {
+  const { pe, entry } = subject();
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x125, module: 2, offset: 0, size: 0,
+    data: { kind: "symbols", records: [{ type: 0x1019, strings:
+      Array.from({ length: 101 }, (_, index) => `<annotation_${index}>`) }] } });
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out);
+  const model = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-symbolStrings")!;
+
+  assert.match(out.join(""), /Stored symbol strings/);
+  assert.match(out.join(""), /&lt;annotation_0>/);
+  assert.doesNotMatch(out.join(""), /<annotation_0>/);
+  assert.equal(model.rowCount, 101);
+  assert.equal(model.pageSize, 100);
+  assert.equal(model.rowAt(100)?.cells[3]?.html, "String 101");
+  assert.equal(model.rowAt(100)?.cells[4]?.html, "&lt;annotation_100>");
+  assert.equal(model.sortValueAt(100, 4), "<annotation_100>");
+});
+
 void test("CodeView index statistics retain escaped section names and right-align numeric counts", () => {
   const { pe, entry } = subject();
   entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x12e, module: 0, offset: 0, size: 0,

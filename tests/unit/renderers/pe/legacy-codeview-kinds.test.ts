@@ -32,3 +32,22 @@ void test("CodeView record categories use published meanings and explicit unknow
   assert.equal(legacyCodeViewFieldName(0x151a), "Base interface");
   assert.equal(legacyCodeViewFieldName(0xffff), "Field record 0xffff");
 });
+
+for (const [types, name] of [
+  [[0x1019], "Annotations"], [[0x113d], "Environment"], [[0x1161], "PDB mapping"],
+  [[0x101a, 0x112a], "Global managed procedure"], [[0x101b, 0x112b], "Local managed procedure"],
+  [[0x1022, 0x111e], "Managed frame-relative variable"], [[0x1023, 0x111f], "Managed register variable"],
+  [[0x1024, 0x1120], "Managed slot variable"], [[0x1025, 0x1027, 0x1121, 0x1123], "Managed multi-register variable"],
+  [[0x1026, 0x1122], "Managed register-relative variable"], [[0x112e], "Attributed frame-relative variable"],
+  [[0x112f], "Attributed register variable"], [[0x1130], "Attributed register-relative variable"],
+  [[0x1131], "Attributed multi-register variable"], [[0x1148], "Local MIPS procedure"],
+  [[0x1149], "Global MIPS procedure"], [[0x114a], "Local IA64 procedure"], [[0x114b], "Global IA64 procedure"],
+  [[0x1151, 0x1162, 0x1164], "Global HLSL data"], [[0x1152, 0x1163, 0x1165], "Local HLSL data"],
+  [[0x1153], "File-static variable"], [[0x1154], "Group-shared local variable"],
+  [[0x1155, 0x1156], "Local DPC procedure"], [[0x1160], "Mini-PDB symbol reference"],
+  [[0x1169], "Hot-patch function"], [[0x1171], "Indirect register-relative variable"]
+] as const) for (const type of types) {
+  void test(`CodeView additional symbol ${type} has a readable category`, () => {
+    assert.equal(legacyCodeViewSymbolName(type), name);
+  });
+}

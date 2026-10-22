@@ -58,6 +58,23 @@ void test("CodeView tables retain readable names and summarize symbol, line and 
   assert.ok(tables.find(table => table.key === "records")?.rows.some(row => row.includes("Scope end")));
 });
 
+void test("CodeView tables preserve annotations and associate environment keys with their values", () => {
+  const info = createLegacyCodeViewInfo();
+  info.directories[0]!.subsections.push({ type: 0x125, module: 2, offset: 0, size: 0,
+    data: { kind: "symbols", records: [{ type: 0x1019, strings: ["<annotation>", ""] },
+      { type: 0x113d, strings: ["cwd", "<path>", "exe", "tool.exe"] },
+      { type: 0x1161, strings: ["source.pdb", "target.pdb"] }] } });
+  const table = buildLegacyCodeViewTables(info).find(value => value.key === "symbolStrings");
+
+  assert.deepEqual(table, { key: "symbolStrings", title: "Stored symbol strings",
+    columns: ["Directory", "Module", "Symbol kind", "Field", "Text"], rows: [
+      ["1", "2", "Annotations", "String 1", "<annotation>"], ["1", "2", "Annotations", "String 2", "(empty)"],
+      ["1", "2", "Environment", "cwd", "<path>"], ["1", "2", "Environment", "exe", "tool.exe"],
+      ["1", "2", "PDB mapping", "Source PDB", "source.pdb"],
+      ["1", "2", "PDB mapping", "Destination PDB", "target.pdb"]
+    ] });
+});
+
 void test("CodeView table inventory includes unknown and malformed subsections without empty details", () => {
   const info = createLegacyCodeViewInfo();
   info.directories[0]!.subsections = [{ type: 0x999, module: 1, offset: 0, size: 8 },

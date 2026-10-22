@@ -1,11 +1,11 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
-import { readLegacyCodeViewSymbolName } from "./legacy-codeview-symbol-names.js";
+import { readLegacyCodeViewSymbolText, type LegacyCodeViewSymbolText } from "./legacy-codeview-symbol-text.js";
 import { readLegacyCodeViewNameIndex, readLegacyCodeViewAddressIndex,
   type LegacyCodeViewIndex } from "./legacy-codeview-index.js";
 
 export interface LegacyCodeViewSymbols {
   kind: "symbols";
-  records: { type: number; name?: string }[];
+  records: (LegacyCodeViewSymbolText & { type: number })[];
   nameIndex?: LegacyCodeViewIndex;
   addressIndex?: LegacyCodeViewIndex;
 }
@@ -19,10 +19,10 @@ export const readLegacyCodeViewSymbols = async (
       const length = await reader.uint16(offset);
       if (length < 2 || length + 2 > end - offset) throw new Error("Invalid CodeView symbol record length.");
       const type = await reader.uint16(offset + 2);
-      let name: string | null = null;
-      try { name = await readLegacyCodeViewSymbolName(reader.subsection(offset, length + 2), type); }
+      let text: LegacyCodeViewSymbolText = {};
+      try { text = await readLegacyCodeViewSymbolText(reader.subsection(offset, length + 2), type); }
       catch (error) { reader.warn(`CodeView symbol ${type}: ${String(error)}`); }
-      records.push(name == null ? { type } : { type, name });
+      records.push({ type, ...text });
       offset += length + 2;
     } catch (error) { reader.warn(String(error)); break; }
   }

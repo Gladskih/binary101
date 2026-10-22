@@ -2,6 +2,28 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { LegacyCodeViewReader } from "../../../../../analyzers/pe/debug/legacy-codeview-reader.js";
 import { legacyReader } from "../../../../fixtures/pe-legacy-codeview.js";
+import { codeViewUtf16 } from "../../../../fixtures/pe-codeview-symbol-strings.js";
+
+void test("CodeView UTF-16 PDB paths stream surrogate pairs across read boundaries", async () => {
+  const text = "x".repeat(127) + "😀" + "путь";
+  const bytes = codeViewUtf16(text);
+
+  assert.deepEqual(await legacyReader(bytes).utf16Name(0), { name: text, end: bytes.length });
+  assert.deepEqual(await legacyReader([0, 0]).utf16Name(0), { name: "", end: 2 });
+  assert.deepEqual(await legacyReader([0xff, 0xfe, 65, 0, 0, 0]).utf16Name(0), { name: "\ufeffA", end: 6 });
+});
+
+for (const bytes of [[], [65], [65, 0], [65, 0, 0]]) {
+  void test(`CodeView UTF-16 PDB paths require a complete two-byte terminator: ${bytes.length}`, async () => {
+    await assert.rejects(legacyReader(bytes).utf16Name(0), /UTF-16.*NUL-terminated/);
+  });
+}
+
+for (const bytes of [[0, 0xd8, 0, 0], [0, 0xdc, 0, 0]]) {
+  void test(`CodeView UTF-16 PDB paths reject unpaired surrogates: ${bytes}`, async () => {
+    await assert.rejects(legacyReader(bytes).utf16Name(0), /encoded data/);
+  });
+}
 
 const subject = (bytes: number[]) => {
   const data = Uint8Array.from(bytes);

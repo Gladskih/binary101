@@ -21,7 +21,15 @@ const NAME_OFFSETS = new Map<number, number>([
   [0x1114, 56], [0x1115, 56], [0x1116, 22], [0x1118, 41], [0x1119, 41],
   [0x111a, 12], [0x111b, 12], [0x111c, 14], [0x111d, 14], [0x1124, 4],
   [0x1125, 14], [0x1126, 14], [0x1127, 14], [0x1128, 14], [0x1129, 14],
-  [0x1136, 20], [0x1137, 18], [0x1138, 8], [0x113c, 26], [0x113e, 10], [0x1146, 39], [0x1147, 39]
+  [0x1136, 20], [0x1137, 18], [0x1138, 8], [0x113c, 26], [0x113e, 10], [0x1146, 39], [0x1147, 39],
+  [0x101a, 41], [0x101b, 41], [0x1022, 20], [0x1023, 18], [0x1024, 20], [0x1026, 22],
+  [0x111e, 20], [0x111f, 18], [0x1120, 20], [0x1122, 22], [0x112a, 41], [0x112b, 41],
+  [0x112e, 20], [0x112f, 18], [0x1130, 22], [0x1148, 56], [0x1149, 56], [0x114a, 41], [0x114b, 41],
+  [0x1151, 20], [0x1152, 20], [0x1153, 14], [0x1154, 14], [0x1155, 39], [0x1156, 39], [0x1160, 12],
+  [0x1162, 30], [0x1163, 30], [0x1164, 26], [0x1165, 26],
+  // LLVM additionally publishes HotPatchFuncSym and RegRelativeIndirSym.
+  // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/lib/DebugInfo/CodeView/SymbolRecordMapping.cpp
+  [0x1169, 8], [0x1171, 18]
 ]);
 
 const variableNameOffset = async (reader: LegacyCodeViewReader, type: number): Promise<number | null> => {
@@ -30,6 +38,8 @@ const variableNameOffset = async (reader: LegacyCodeViewReader, type: number): P
   if (type === 0xc) return 7 + (await reader.view(6, 1)).getUint8(0);
   if ([0x1005, 0x110a].includes(type)) return 9 + (await reader.view(8, 1)).getUint8(0);
   if ([0x1014, 0x1117].includes(type)) return 10 + 2 * await reader.uint16(8);
+  if ([0x1025, 0x1121].includes(type)) return 17 + (await reader.view(16, 1)).getUint8(0);
+  if ([0x1027, 0x1123, 0x1131].includes(type)) return 18 + 2 * await reader.uint16(16);
   return null;
 };
 
@@ -38,5 +48,10 @@ export const readLegacyCodeViewSymbolName = async (
 ): Promise<string | null> => {
   const offset = NAME_OFFSETS.get(type) ?? await variableNameOffset(reader, type);
   if (offset == null) return null;
+  // MANPROCSYM explicitly permits the name to be absent after its fixed fields.
+  if ([0x101a, 0x101b, 0x112a, 0x112b].includes(type)) {
+    await reader.view(0, offset);
+    if (reader.size === offset) return null;
+  }
   return type >= 0x1100 ? reader.utf8(offset) : (await reader.pascal(offset)).name;
 };

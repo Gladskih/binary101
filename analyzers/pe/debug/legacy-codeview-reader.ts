@@ -55,6 +55,25 @@ export class LegacyCodeViewReader {
     return (await this.utf8Name(offset)).name;
   }
 
+  // PDBMAP stores two Windows wchar_t stringZ paths, including record-local
+  // terminators. Preserve literal BOMs, as for UTF-8 CodeView names.
+  // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h#L4565
+  async utf16Name(offset: number): Promise<{ name: string; end: number }> {
+    const decoder = new TextDecoder("utf-16le", { fatal: true, ignoreBOM: true });
+    let value = "";
+    for (let cursor = offset; cursor + 1 < this.size; cursor += 256) {
+      const view = await this.view(cursor, Math.min(256, 2 * Math.floor((this.size - cursor) / 2)));
+      const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+      let end = 0;
+      while (end < view.byteLength && view.getUint16(end, true) !== 0) end += 2;
+      if (end < view.byteLength) return {
+        name: value + decoder.decode(bytes.subarray(0, end)), end: cursor + end + 2
+      };
+      value += decoder.decode(bytes, { stream: true });
+    }
+    throw new Error("CodeView UTF-16 path is not NUL-terminated.");
+  }
+
   async utf8Name(offset: number): Promise<{ name: string; end: number }> {
     const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
     let value = "";
