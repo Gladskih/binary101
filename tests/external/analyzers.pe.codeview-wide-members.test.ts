@@ -30,3 +30,32 @@ void test("MSVC wide-index CodeView retains LLVM member names and decorated type
   assert.deepEqual(identities, [...types.matchAll(/^ {4}LinkageName: (.+)\r?$/gm)].map(match => match[1]!.trim()));
   assert.deepEqual(warnings, []);
 });
+
+void test("MSVC function IDs and stored string fragments match unchanged LLVM", async () => {
+  const root = resolve("scan-results/pe-debug-native");
+  const oracle = execFileSync("C:/Program Files/LLVM/bin/llvm-readobj.exe", ["--codeview",
+    resolve(root, "Legacy-members-wide.obj")], { maxBuffer: 4 * 1024 * 1024 }).toString("utf8");
+  const blocks = [...oracle.matchAll(/^ {2}(?:StringId|FuncId|MemberFuncId) \([^]*?^ {2}\}/gm)];
+  const expected = blocks.map(block => /^ {4}(?:Name|StringData): (.*?)\r?$/m.exec(block[0])?.[1]);
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader(await readFile(
+    resolve(root, "codeview-wide-types.bin")), warnings));
+
+  assert.equal(expected.length, 10);
+  assert.deepEqual(parsed.records.flatMap(record => record.strings ?? []), expected);
+  assert.deepEqual(warnings, []);
+});
+
+// /Zi uses a genuine LF_TYPESERVER2 record instead of embedding /Z7 type records.
+void test("MSVC type-server PDB path matches unchanged LLVM", async () => {
+  const root = resolve("scan-results/pe-debug-native");
+  const oracle = execFileSync("C:/Program Files/LLVM/bin/llvm-readobj.exe", ["--codeview",
+    resolve(root, "Legacy-typeserver.obj")], { maxBuffer: 4 * 1024 * 1024 }).toString("utf8");
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader(await readFile(
+    resolve(root, "codeview-typeserver.bin")), warnings));
+
+  assert.deepEqual(parsed.records, [{ type: 0x1515, strings: [/^ {4}Name: (.*?)\r?$/m.exec(oracle)![1]!] }]);
+  assert.match(parsed.records[0]!.strings![0]!, /Legacy-typeserver\.pdb$/);
+  assert.deepEqual(warnings, []);
+});

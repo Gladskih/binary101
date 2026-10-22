@@ -34,6 +34,24 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   assert.equal(model.sortValueAt(0, 9), "");
 });
 
+void test("CodeView stored strings are escaped, paginated and available through the table dispatcher", () => {
+  const { pe, entry } = subject();
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x121, module: 2, offset: 0, size: 0,
+    data: { kind: "types", records: Array.from({ length: 101 }, (_, index) =>
+      ({ type: 0x1605, strings: [`<string_${index}>`] })) } });
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out);
+  const model = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-typeStrings")!;
+
+  assert.match(out.join(""), /Stored type and ID strings/);
+  assert.match(out.join(""), /&lt;string_0>/);
+  assert.doesNotMatch(out.join(""), /<string_0>/);
+  assert.equal(model.rowCount, 101);
+  assert.equal(model.pageSize, 100);
+  assert.equal(model.rowAt(100)?.cells[3]?.html, "&lt;string_100>");
+  assert.equal(model.sortValueAt(100, 3), "<string_100>");
+});
+
 void test("legacy CodeView names remain accessible beyond a page and across directory generations", () => {
   const { pe, entry } = subject();
   entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x12a, module: 0xffff, offset: 0, size: 0,

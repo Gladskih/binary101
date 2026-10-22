@@ -3,6 +3,65 @@ import { test } from "node:test";
 import { readLegacyCodeViewGlobalTypes, readLegacyCodeViewModuleTypes } from "../../../../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { legacyReader, legacySymbol, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewField, codeViewFieldList, codeViewUniqueType } from "../../../../fixtures/pe-codeview-fields.js";
+import { codeViewTextRecord, codeViewUtf8, codeViewVtableRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
+import { legacyPascal } from "../../../../fixtures/pe-legacy-codeview.js";
+
+// Microsoft cvinfo.h: DIMARRAY, STRIDED_ARRAY, VECTOR and packed MATRIX.
+for (const [type, offset] of [[0x11, 8], [0x100c, 12], [0x1508, 12],
+  [0x1516, 18], [0x151b, 14], [0x151c, 23]] as const) {
+  void test(`CodeView named array-like leaf ${type} retains its stored name`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+      ...codeViewTextRecord(type, offset, type < 0x1500 ? legacyPascal("Named") : codeViewUtf8("Named"))], warnings));
+
+    assert.deepEqual(parsed.records, [{ type, name: "Named" }]);
+    assert.deepEqual(warnings, []);
+  });
+}
+
+for (const [type, offset] of [[0x13, 12], [0x100e, 16], [0x1509, 16], [0x16, 12],
+  [0x1501, 12], [0x1515, 24], [0x202, 6], [0x1202, 8], [0x150b, 8],
+  [0x1601, 12], [0x1602, 12], [0x1605, 8]] as const) {
+  void test(`CodeView string leaf ${type} retains text without mislabelling it as a type name`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+      ...codeViewTextRecord(type, offset, type < 0x1500 ? legacyPascal("stored") : codeViewUtf8("stored"))], warnings));
+
+    assert.deepEqual(parsed.records, [{ type, strings: ["stored"] }]);
+    assert.deepEqual(warnings, []);
+  });
+}
+
+void test("CodeView virtual table strings respect Names length and retain all methods", async () => {
+  const text = [...codeViewUtf8("Table"), ...codeViewUtf8("first"), ...codeViewUtf8("second")];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewVtableRecord([...text, ...codeViewUtf8("padding")], text.length)]));
+
+  assert.deepEqual(parsed.records, [{ type: 0x151d, strings: ["Table", "first", "second"] }]);
+});
+
+for (const [type, offset, bytes] of [[0x1605, 8, [0xff, 0]], [0x1501, 12, [65]],
+  [0x13, 12, [2, 65]], [0x1515, 4, []], [0x151d, 4, []]] as const) {
+  void test(`CodeView malformed string leaf ${type} retains its tag and the following record`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+      ...codeViewTextRecord(type, offset, bytes), 2, 0, 2, 0], warnings));
+
+    assert.deepEqual(parsed.records, [{ type }, { type: 2 }]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0]!, /^CodeView type name:/);
+  });
+}
+
+void test("CodeView type streams preserve a virtual table's complete string prefix", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewVtableRecord([...codeViewUtf8("Table"), 65]), 2, 0, 2, 0], warnings));
+
+  assert.deepEqual(parsed.records, [{ type: 0x151d, strings: ["Table"] }, { type: 2 }]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /virtual table name/);
+});
 
 for (const [type, offset] of [[0x1504, 22], [0x1505, 22], [0x1506, 14],
   [0x1507, 16], [0x1519, 22]] as const) {

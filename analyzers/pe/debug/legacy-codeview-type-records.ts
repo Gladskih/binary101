@@ -1,19 +1,22 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { skipLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
 import { readLegacyCodeViewFields, type LegacyCodeViewField } from "./legacy-codeview-fields.js";
+import { readLegacyCodeViewTypeStrings } from "./legacy-codeview-type-strings.js";
 
 export interface LegacyCodeViewTypes {
   kind: "types";
-  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[] }[];
+  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[]; strings?: string[] }[];
 }
 
-// Offset of size numeric leaf, or name for enum/alias; includes record length.
+// Offsets of size numeric leaves and inline names, including the record length.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
 const NUMERIC_OFFSETS = new Map([
   [3, 8], [4, 14], [5, 14], [6, 10], [0x1003, 12], [0x1004, 20], [0x1005, 20], [0x1006, 12],
-  [0x1503, 12], [0x1504, 20], [0x1505, 20], [0x1506, 12], [0x1519, 20]
+  [0x1503, 12], [0x1504, 20], [0x1505, 20], [0x1506, 12], [0x1519, 20],
+  [0x1516, 16], [0x151b, 12], [0x151c, 21] // MATRIX has a one-byte CV_matrixattr_t.
 ]);
-const NAME_OFFSETS = new Map([[7, 12], [0x1007, 16], [0x1010, 8], [0x1507, 16], [0x150a, 8]]);
+const NAME_OFFSETS = new Map([[7, 12], [0x1007, 16], [0x1010, 8], [0x1507, 16], [0x150a, 8],
+  [0x11, 8], [0x100c, 12], [0x1508, 12]]);
 
 const readUtf8TypeName = async (reader: LegacyCodeViewReader, type: number, offset: number) => {
   const { name, end } = await reader.utf8Name(offset);
@@ -30,6 +33,8 @@ const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTyp
   if (type === 0x204 || type === 0x1203) return { type,
     members: await readLegacyCodeViewFields(reader.subsection(4, reader.size - 4)) };
   try {
+    const strings = await readLegacyCodeViewTypeStrings(reader, type);
+    if (strings !== undefined) return { type, strings };
     const numeric = NUMERIC_OFFSETS.get(type);
     const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
     if (offset == null) return { type };

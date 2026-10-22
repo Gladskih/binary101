@@ -3,6 +3,40 @@ import { test } from "node:test";
 import { buildLegacyCodeViewTables } from "../../../../renderers/pe/legacy-codeview-tables.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
 
+void test("CodeView stored strings remain separate from type names and distinguish virtual methods", () => {
+  const info = createLegacyCodeViewInfo();
+  info.directories[0]!.subsections.push({ type: 0x121, module: 7, offset: 0, size: 0,
+    data: { kind: "types", records: [{ type: 0x1515, strings: ["file.pdb"] },
+      { type: 0x1601, strings: ["function"] }, { type: 0x1602, strings: ["method"] },
+      { type: 0x1605, strings: ["", "<identifier>"] },
+      { type: 0x151d, strings: ["table", "virtual1", "virtual2"] }] } });
+  const tables = buildLegacyCodeViewTables(info);
+
+  assert.deepEqual(tables.find(table => table.key === "typeStrings"), {
+    key: "typeStrings", title: "Stored type and ID strings",
+    columns: ["Directory", "Module", "Record kind", "Text"], rows: [
+      ["1", "7", "Type server PDB path", "file.pdb"], ["1", "7", "Function ID", "function"],
+      ["1", "7", "Member function ID", "method"], ["1", "7", "String ID", "(empty)"],
+      ["1", "7", "String ID", "<identifier>"], ["1", "7", "Virtual table name", "table"],
+      ["1", "7", "Virtual method name", "virtual1"], ["1", "7", "Virtual method name", "virtual2"]
+    ]
+  });
+  assert.equal(tables.find(table => table.key === "types")?.rows.length, 2);
+});
+
+void test("CodeView stored strings accumulate across subsections and directory generations", () => {
+  const info = createLegacyCodeViewInfo();
+  info.directories[0]!.subsections.push({ type: 0x121, module: 7, offset: 0, size: 0,
+    data: { kind: "types", records: [{ type: 0x1605, strings: ["first"] }] } });
+  info.directories.push({ flags: 0, subsections: [{ type: 0x12b, module: 0xffff, offset: 0, size: 0,
+    data: { kind: "types", records: [{ type: 0x1605, strings: ["second"] }] } }] });
+  const tables = buildLegacyCodeViewTables(info).filter(table => table.key === "typeStrings");
+
+  assert.equal(tables.length, 1);
+  assert.deepEqual(tables[0]!.rows,
+    [["1", "7", "String ID", "first"], ["2", "65535", "String ID", "second"]]);
+});
+
 void test("CodeView tables retain readable names and summarize symbol, line and frame arrays", () => {
   const tables = buildLegacyCodeViewTables(createLegacyCodeViewInfo());
 

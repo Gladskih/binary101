@@ -104,6 +104,19 @@ const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCo
   tables.set("members", table);
 };
 
+const addTypeStrings = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCodeViewData,
+  directory: number, module: number): void => {
+  if (data.kind !== "types") return;
+  const table = tables.get("typeStrings") ?? { key: "typeStrings", title: "Stored type and ID strings",
+    columns: ["Directory", "Module", "Record kind", "Text"], rows: [] };
+  for (const record of data.records) (record.strings ?? []).forEach((text, index) => {
+    const label = record.type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
+      : legacyCodeViewTypeName(record.type);
+    table.rows.push([String(directory), String(module), label, text || "(empty)"]);
+  });
+  tables.set("typeStrings", table);
+};
+
 const addHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewData,
   directory: number, module: number): void => {
   if (data.kind !== "symbols" && data.kind !== "types") return;
@@ -136,6 +149,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       for (const row of rows) table.rows.push([String(index + 1), String(section.module), ...row]);
       tables.set(data.kind, table);
       addMemberNames(tables, data, index + 1, section.module);
+      addTypeStrings(tables, data, index + 1, section.module);
       addHistogram(histogram, data, index + 1, section.module);
     }
     for (const [type, group] of groups) inventory.rows.push([String(index + 1), legacyCodeViewSubsectionName(type),

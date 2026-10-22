@@ -40,13 +40,19 @@ export const legacyCodeViewSymbolName = (type: number): string => {
 const TYPE_NAMES = new Map<number, string>([
   [1, "Modifier"], [2, "Pointer"], [3, "Array"], [4, "Class"], [5, "Structure"], [6, "Union"], [7, "Enum"],
   [8, "Procedure"], [9, "Member function"], [10, "Virtual table shape"], [0x200, "Skip"], [0x201, "Arguments"],
-  [0x202, "Defaults"], [0x203, "List"], [0x204, "Fields"], [0x205, "Derived types"],
+  [0x202, "Default argument"], [0x203, "List"], [0x204, "Fields"], [0x205, "Derived types"],
   [0x206, "Bitfield"], [0x207, "Methods"], [0x208, "Array dimensions"], [0x209, "Array dimensions"],
   [0x1001, "Modifier"], [0x1002, "Pointer"], [0x1003, "Array"], [0x1004, "Class"], [0x1005, "Structure"],
   [0x1006, "Union"], [0x1007, "Enum"], [0x1008, "Procedure"], [0x1009, "Member function"], [0x1010, "Alias"],
   [0x1201, "Arguments"], [0x1203, "Fields"], [0x1205, "Bitfield"], [0x1206, "Methods"],
   [0x1503, "Array"], [0x1504, "Class"], [0x1505, "Structure"], [0x1506, "Union"], [0x1507, "Enum"],
-  [0x150a, "Alias"], [0x1519, "Interface"]
+  [0x150a, "Alias"], [0x1519, "Interface"],
+  [0x11, "Dimensioned array"], [0x100c, "Dimensioned array"], [0x1508, "Dimensioned array"],
+  [0x13, "Precompiled type file"], [0x100e, "Precompiled type file"], [0x1509, "Precompiled type file"],
+  [0x16, "Type server PDB path"], [0x1501, "Type server PDB path"], [0x1515, "Type server PDB path"],
+  [0x1202, "Default argument"], [0x150b, "Default argument"], [0x1516, "Strided array"],
+  [0x151b, "Vector"], [0x151c, "Matrix"], [0x151d, "Virtual table"],
+  [0x1601, "Function ID"], [0x1602, "Member function ID"], [0x1605, "String ID"]
 ]);
 
 export const legacyCodeViewTypeName = (type: number): string => TYPE_NAMES.get(type) ??

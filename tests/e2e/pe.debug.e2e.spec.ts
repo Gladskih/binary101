@@ -7,6 +7,28 @@ import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-le
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
 import { codeViewField, codeViewFieldList } from "../fixtures/pe-codeview-fields.js";
 import { createPeTd32Overlay, createPeTd32Section } from "../fixtures/pe-td32-locations.js";
+import { codeViewTextRecord, codeViewUtf8 } from "../fixtures/pe-codeview-type-strings.js";
+
+test("CodeView stored strings remain readable and pageable without being called type names", async ({ page }, testInfo) => {
+  const records = Array.from({ length: 101 }, (_, index) =>
+    codeViewTextRecord(0x1605, 8, codeViewUtf8(`<stored_${index}>`))).flat();
+  const file = createPeWithDebugPayloads([{ type: 2, data: createLegacyCodeView([
+    { type: 0x121, module: 1, data: Uint8Array.from([...legacyU32(4), ...records]) }
+  ]) }]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await expect(panel).toContainText("Stored type and ID strings");
+  const strings = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-typeStrings"]');
+  await expect(strings.getByRole("cell", { name: "<stored_0>", exact: true })).toBeVisible();
+  await expect(strings.getByRole("cell", { name: "String ID", exact: true })).toHaveCount(100);
+  await strings.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(strings.getByRole("cell", { name: "<stored_100>", exact: true })).toBeVisible();
+  await expect(panel).not.toContainText("Named types");
+  await page.screenshot({ path: testInfo.outputPath("codeview-stored-strings.png"), fullPage: true });
+});
 
 for (const [label, create] of [["appended", createPeTd32Overlay], ["section", createPeTd32Section]] as const) {
   test(`TD32 ${label} data remains accessible without a debug directory entry`, async ({ page }) => {
