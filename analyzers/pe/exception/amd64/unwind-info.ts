@@ -3,6 +3,9 @@
 import { createRvaRangeReader } from "../../rva-range-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { RvaToOffset } from "../../types.js";
+import type { Amd64UnwindV3Statistics } from "./unwind-v3-types.js";
+import { decodeAmd64UnwindV3 } from "./unwind-v3.js";
+import { createV3Statistics, recordV3Statistics } from "./unwind-v3-statistics.js";
 import {
   AMD64_UNWIND_INFO_VERSION_1,
   AMD64_UNWIND_INFO_VERSION_2,
@@ -32,6 +35,7 @@ export interface Amd64UnwindInfoTable {
   uniqueUnwindInfoCount: number;
   unwindInfoVersion1Count: number;
   unwindInfoVersion2Count: number;
+  version3?: Amd64UnwindV3Statistics;
 }
 
 interface Amd64UnwindScanState extends Amd64UnwindInfoTable {
@@ -104,7 +108,7 @@ const recordVersion = (version: number, state: Amd64UnwindScanState): void => {
     state.unwindInfoVersion1Count += 1;
   } else if (version === AMD64_UNWIND_INFO_VERSION_2) {
     state.unwindInfoVersion2Count += 1;
-  } else {
+  } else if (version !== 3) {
     state.unexpectedUnwindVersionCount += 1;
   }
 };
@@ -112,8 +116,15 @@ const recordVersion = (version: number, state: Amd64UnwindScanState): void => {
 const recordUnwindCodeAnalysis = async (
   reader: FileRangeReader,
   header: Amd64UnwindHeader,
-  state: Amd64UnwindScanState
+  state: Amd64UnwindScanState,
+  issues: string[]
 ): Promise<void> => {
+  if (header.version === 3) {
+    state.version3 ??= createV3Statistics();
+    recordV3Statistics(state.version3, decodeAmd64UnwindV3(
+      await reader.read(header.offset, UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2), issues));
+    return;
+  }
   const analysis = await analyzeAmd64UnwindCodeSlots(
     reader,
     header.offset,
@@ -150,8 +161,48 @@ const toUnwindInfoTable = (state: Amd64UnwindScanState): Amd64UnwindInfoTable =>
   handlerUnwindInfoCount: state.handlerUnwindInfoCount,
   uniqueUnwindInfoCount: state.uniqueUnwindInfoCount,
   unwindInfoVersion1Count: state.unwindInfoVersion1Count,
-  unwindInfoVersion2Count: state.unwindInfoVersion2Count
+  unwindInfoVersion2Count: state.unwindInfoVersion2Count,
+  ...(state.version3 ? { version3: state.version3 } : {})
 });
+
+const processUnwindInfo = async (
+  unwindReader: FileRangeReader, header: Amd64UnwindHeader | null,
+  state: Amd64UnwindScanState, issues: string[], enqueueUnwindRva: (rva: number) => void,
+  handlerRvasSet: Set<number>
+): Promise<void> => {
+  if (!header) {
+    state.unreadableUnwindCount += 1;
+    return;
+  }
+  recordVersion(header.version, state);
+  await recordUnwindCodeAnalysis(unwindReader, header, state, issues);
+  if ((header.flags & UNW_FLAG_CHAININFO) !== 0) {
+    state.chainedUnwindInfoCount += 1;
+    if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
+      issues.push("UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER.");
+    }
+    const chainedRva = await readTrailingUint32(
+      unwindReader,
+      header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2) + 8,
+      "UNWIND_INFO declares CHAININFO, but the trailing chained RUNTIME_FUNCTION is truncated.",
+      issues
+    );
+    if (chainedRva) enqueueUnwindRva(chainedRva);
+    return;
+  }
+  if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) return;
+  state.handlerUnwindInfoCount += 1;
+  const handlerRva = await readTrailingUint32(
+    unwindReader,
+    header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2),
+    "UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated.",
+    issues
+  );
+  if (handlerRva && !handlerRvasSet.has(handlerRva)) {
+    handlerRvasSet.add(handlerRva);
+    state.handlerRvas.push(handlerRva);
+  }
+};
 
 export const scanAmd64UnwindInfos = async (
   reader: FileRangeReader,
@@ -175,42 +226,12 @@ export const scanAmd64UnwindInfos = async (
     const unwindInfoRva = unwindQueue[unwindQueueIndex]!;
     unwindQueueIndex += 1;
     const unwindOffset = getUnwindOffset(unwindInfoRva);
-    // UNWIND_INFO: BYTE CountOfCodes bounds slots to 255; trailing data is at most 12 bytes.
+    // CountOfCodes (v1/v2) or PayloadWords (v3) bounds the payload to 510 bytes.
+    // DWORD alignment and a trailing 12-byte chain give a structural maximum of 528 bytes.
     // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#struct-unwind_info
     const unwindReader = createRvaRangeReader(reader, rvaToOff, unwindInfoRva, 528);
     const header = unwindOffset == null ? null : await readUnwindHeader(unwindReader, 0);
-    if (!header) {
-      state.unreadableUnwindCount += 1;
-      continue;
-    }
-    recordVersion(header.version, state);
-    await recordUnwindCodeAnalysis(unwindReader, header, state);
-    if ((header.flags & UNW_FLAG_CHAININFO) !== 0) {
-      state.chainedUnwindInfoCount += 1;
-      if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
-        issues.push("UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER.");
-      }
-      const chainedRva = await readTrailingUint32(
-        unwindReader,
-        header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2) + 8,
-        "UNWIND_INFO declares CHAININFO, but the trailing chained RUNTIME_FUNCTION is truncated.",
-        issues
-      );
-      if (chainedRva) enqueueUnwindRva(chainedRva);
-      continue;
-    }
-    if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) continue;
-    state.handlerUnwindInfoCount += 1;
-    const handlerRva = await readTrailingUint32(
-      unwindReader,
-      header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2),
-      "UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated.",
-      issues
-    );
-    if (handlerRva && !handlerRvasSet.has(handlerRva)) {
-      handlerRvasSet.add(handlerRva);
-      state.handlerRvas.push(handlerRva);
-    }
+    await processUnwindInfo(unwindReader, header, state, issues, enqueueUnwindRva, handlerRvasSet);
   }
   state.uniqueUnwindInfoCount = visitedUnwindRvas.size;
   appendSummaryIssues(state, issues);

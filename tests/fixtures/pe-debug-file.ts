@@ -2,6 +2,7 @@ import { createPePlusWithSection } from "./sample-files-pe.js";
 import { createEmbeddedPdbPayload, createPortablePdbRoot, createPortablePdbStreams } from "./portable-pdb.js";
 import { createPogoPayload } from "./pe-debug-payload-subject.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { createV3Unwind } from "./pe-unwind-v3.js";
 
 const miscPaths = (paths: string[]): Uint8Array => Uint8Array.from(paths.flatMap(path => {
   const text = new TextEncoder().encode(`${path}\0`);
@@ -106,4 +107,15 @@ export const createPeWithRawArm64ExceptionCopy = (): MockFile => {
   view.setUint32(0x300 + 16, 16, true);
   [0x1000, 5, 0x1004, 5].forEach((word, index) => view.setUint32(0x400 + index * 4, word, true));
   return new MockFile(bytes, "debug-raw-arm64-exception-copy.exe");
+};
+
+export const createPeWithV3ExceptionCopy = (): MockFile => {
+  const bytes = createPeWithRawExceptionCopy().data.slice();
+  const view = new DataView(bytes.buffer);
+  [0x1000, 0x1010, 0x10c0, 0x1010, 0x1020, 0x10c0]
+    .forEach((word, index) => view.setUint32(0x400 + index * 4, word, true));
+  // PUSH R16 is shared by the prolog and epilog; FirstOp is a byte index.
+  const unwind = createV3Unwind([0, 8, 0xfb, 0xff, 0, 0, 4, 0, 0x84], 33, 0, 4);
+  bytes.set(new Uint8Array(unwind.buffer), 0x2c0);
+  return new MockFile(bytes, "debug-v3-exception-copy.exe");
 };

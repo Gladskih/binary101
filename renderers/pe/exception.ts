@@ -4,6 +4,8 @@ import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
+import { renderExceptionV3 } from "./exception-v3.js";
+import { renderDefinitionRow } from "../../html-utils.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -19,25 +21,54 @@ interface ExceptionRenderProfile {
 
 const renderNoFormatDetails = (): void => undefined;
 
-const renderAmd64UnwindStats = (ex: PeExceptionSection, out: string[]): void => {
+const renderV3Summary = (statistics: NonNullable<PeExceptionSection["unwindInfoV3"]>, out: string[]): void => {
+  out.push(renderDefinitionRow("UNWIND_INFO v3 blocks", String(statistics.blockCount)));
+  out.push(renderDefinitionRow("UNWIND_INFO v3 epilogs", String(statistics.epilogCount)));
   ([
-    ["UNWIND_INFO v1 blocks", ex.unwindInfoVersion1Count],
+    ["UNWIND_INFO v3 inherited epilogs", statistics.inheritedEpilogCount],
+    ["UNWIND_INFO v3 LARGE prologs", statistics.largePrologCount],
+    ["UNWIND_INFO v3 LARGE epilogs", statistics.largeEpilogCount]
+  ] as const).forEach(([label, count]) => {
+    if (count > 0) out.push(renderDefinitionRow(label, String(count)));
+  });
+};
+
+const renderAmd64UnwindStats = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.unwindInfoVersion1Count) {
+    out.push(renderDefinitionRow("UNWIND_INFO v1 blocks", String(ex.unwindInfoVersion1Count)));
+  }
+  if (ex.unwindInfoVersion2Count) ([
     ["UNWIND_INFO v2 blocks", ex.unwindInfoVersion2Count],
     ["UNWIND_INFO v2 epilog records", ex.epilogUnwindInfoCount],
     ["UNWIND_INFO v2 epilog scopes", ex.epilogScopeCount]
   ] as const).forEach(([label, count]) => {
-    if (count != null) out.push(`<dt>${label}</dt><dd>${count}</dd>`);
+    if (count != null) out.push(renderDefinitionRow(label, String(count)));
   });
+  if (ex.unwindInfoV3) renderV3Summary(ex.unwindInfoV3, out);
 };
 
 const renderAmd64VersionNote = (ex: PeExceptionSection, out: string[]): void => {
-  if ((ex.unwindInfoVersion2Count ?? 0) === 0) return;
-  out.push(
+  if ((ex.unwindInfoVersion2Count ?? 0) > 0) out.push(
     `<div class="smallNote">` +
       `UNWIND_INFO v2 epilog records mark explicit epilog scopes emitted by newer ` +
-      `MSVC-compatible toolchains; Microsoft Learn still documents v1 as the public baseline.` +
+      `MSVC-compatible toolchains.` +
     `</div>`
   );
+  if (ex.unwindInfoV3) out.push(renderExceptionV3(ex.unwindInfoV3));
+};
+
+const renderReadyToRunStats = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.exceptionInfoMethodCount != null) {
+    out.push(`<dt>ExceptionInfo methods</dt><dd>${ex.exceptionInfoMethodCount}</dd>`);
+  }
+  ([
+    ["Catch clauses", ex.catchClauseCount],
+    ["Filter clauses", ex.filterClauseCount],
+    ["Finally clauses", ex.finallyClauseCount],
+    ["Fault clauses", ex.faultClauseCount]
+  ] as const).forEach(([label, count]) => {
+    if (count != null) out.push(`<dt>${label}</dt><dd>${count}</dd>`);
+  });
 };
 
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
@@ -61,22 +92,7 @@ const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderPr
         "ReadyToRun x86 uses 8-byte RuntimeFunction rows with code start and x86 " +
         "unwind/GC-info RVAs; the row has no explicit end RVA.",
       renderFormatNote: renderNoFormatDetails,
-      renderFormatStats: (ex, out) => {
-        if (ex.exceptionInfoMethodCount != null) {
-          out.push(`<dt>ExceptionInfo methods</dt><dd>${ex.exceptionInfoMethodCount}</dd>`);
-        }
-        if (ex.exceptionClauseCount != null) {
-          out.push(`<dt>Exception clauses</dt><dd>${ex.exceptionClauseCount}</dd>`);
-        }
-        ([
-          ["Catch clauses", ex.catchClauseCount],
-          ["Filter clauses", ex.filterClauseCount],
-          ["Finally clauses", ex.finallyClauseCount],
-          ["Fault clauses", ex.faultClauseCount]
-        ] as const).forEach(([label, count]) => {
-          if (count != null) out.push(`<dt>${label}</dt><dd>${count}</dd>`);
-        });
-      },
+      renderFormatStats: renderReadyToRunStats,
       unwindLabel: "Unique unwind blobs"
     };
   }
@@ -109,17 +125,17 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(
     renderPeSectionStart(
       "Exception directory (.pdata)",
-      `${ex.functionCount ?? 0} function${(ex.functionCount ?? 0) === 1 ? "" : "s"}`
+      `${ex.functionCount} function${(ex.functionCount) === 1 ? "" : "s"}`
     )
   );
   out.push(`<div class="smallNote">${profile.introNote}</div>`);
   out.push(`<dl class="peExceptionStats">`);
-  out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount ?? 0}</dd>`);
-  out.push(`<dt>${profile.unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount ?? 0}</dd>`);
+  out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount}</dd>`);
+  out.push(`<dt>${profile.unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount}</dd>`);
   profile.renderFormatStats(ex, out);
-  out.push(`<dt>${profile.handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>${profile.chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount ?? 0}</dd>`);
-  out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount ?? 0}</dd>`);
+  out.push(`<dt>${profile.handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount}</dd>`);
+  out.push(`<dt>${profile.chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount}</dd>`);
+  out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount}</dd>`);
   out.push(`</dl>`);
   profile.renderFormatNote(ex, out);
   out.push(renderExceptionRangeHistogram(ex));

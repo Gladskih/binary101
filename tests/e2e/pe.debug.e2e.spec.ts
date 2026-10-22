@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { createPeWithRawArm64ExceptionCopy } from "../fixtures/pe-debug-file.js";
+import { createPeWithV3ExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy, createPeWithRawExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32, legacySymbol } from "../fixtures/pe-legacy-codeview.js";
 import { createTd32, td32Names } from "../fixtures/pe-td32.js";
@@ -99,6 +100,24 @@ test("raw-only ARM64 exception copy exposes readable unwind statistics without a
   await expect(panel.locator("dt").filter({ hasText: "Missing/invalid ranges" }).locator("+ dd")).toHaveText("0");
   await expect(panel).not.toContainText("not implemented");
   await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+});
+
+test("Unwind V3 shows operations and APX register statistics without an address matrix", async ({ page }, testInfo) => {
+  const file = createPeWithV3ExceptionCopy();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await panel.locator("summary").filter({ hasText: /^Exception directory/ }).click();
+  const operations = panel.getByRole("table", { name: "Winding operations", exact: true });
+  await expect(operations.getByRole("cell", { name: "PUSH", exact: true })).toBeVisible();
+  await expect(operations.getByRole("row").nth(1).getByRole("cell").nth(1)).toHaveText("1");
+  await expect(panel.getByRole("table", { name: "Registers referenced by winding operations" })).toContainText("R16");
+  await expect(panel).toContainText("UNWIND_INFO v3 blocks");
+  await expect(panel).not.toContainText("unexpected version");
+  await expect(panel.getByRole("columnheader", { name: "RVA", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("unwind-v3.png"), fullPage: true });
 });
 
 test("PE inline CodeView preserves named records with pagination and no address matrix", async ({ page }, testInfo) => {

@@ -1,5 +1,7 @@
 "use strict";
 
+import type { Amd64UnwindV3Statistics } from "./amd64/unwind-v3-types.js";
+
 export interface PeExceptionDirectory {
   functionCount: number;
   beginRvas: number[];
@@ -9,6 +11,7 @@ export interface PeExceptionDirectory {
   uniqueUnwindInfoCount: number;
   unwindInfoVersion1Count?: number;
   unwindInfoVersion2Count?: number;
+  unwindInfoV3?: Amd64UnwindV3Statistics;
   epilogUnwindInfoCount?: number;
   epilogScopeCount?: number;
   handlerUnwindInfoCount: number;

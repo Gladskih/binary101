@@ -45,6 +45,7 @@ export const parseAmd64ExceptionTable = async (
     uniqueUnwindInfoCount: unwindInfo.uniqueUnwindInfoCount,
     unwindInfoVersion1Count: unwindInfo.unwindInfoVersion1Count,
     unwindInfoVersion2Count: unwindInfo.unwindInfoVersion2Count,
+    ...(unwindInfo.version3 ? { unwindInfoV3: unwindInfo.version3 } : {}),
     epilogUnwindInfoCount: unwindInfo.epilogUnwindInfoCount,
     epilogScopeCount: unwindInfo.epilogScopeCount,
     handlerUnwindInfoCount: unwindInfo.handlerUnwindInfoCount,

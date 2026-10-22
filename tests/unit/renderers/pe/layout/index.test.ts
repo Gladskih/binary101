@@ -50,12 +50,12 @@ void test("renderException renders pdata stats", () => {
   assert.match(html, /<dl class="peExceptionStats">/);
   assert.ok(html.includes("<dd>1</dd>"));
   assert.ok(html.includes("Unique UNWIND_INFO blocks"));
-  assert.ok(html.includes("UNWIND_INFO v1 blocks"));
+  assert.ok(!html.includes("UNWIND_INFO v1 blocks"));
   assert.ok(html.includes("UNWIND_INFO v2 blocks"));
   assert.ok(html.includes("UNWIND_INFO v2 epilog records"));
   assert.ok(html.includes("UNWIND_INFO v2 epilog scopes"));
   assert.ok(html.includes("x64 .pdata maps code ranges"));
-  assert.ok(html.includes("Microsoft Learn still documents v1"));
+  assert.ok(html.includes("MSVC-compatible toolchains"));
   assert.match(html, /Range length distribution/);
   assert.match(html, /16–31 bytes: 1 ranges/);
   assert.ok(html.includes("Handlers present (EHANDLER/UHANDLER)"));

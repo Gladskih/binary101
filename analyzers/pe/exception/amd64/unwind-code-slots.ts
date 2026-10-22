@@ -2,7 +2,7 @@
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
 
-// Microsoft Learn still documents x64 UNWIND_INFO version 1 as the public format:
+// Conventional x64 UNWIND_INFO uses version 1; V3 has a separate payload decoder:
 // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
 export const AMD64_UNWIND_INFO_VERSION_1 = 1;
 // LLVM documents and emits Windows x64 unwind v2 for MSVC-compatible epilog unwind
