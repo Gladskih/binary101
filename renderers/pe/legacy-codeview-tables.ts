@@ -9,6 +9,7 @@ import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-
 import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embedded-symbols.js";
 import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
 import { hllSourceRows } from "./hll-source-rows.js";
+import { buildCodeViewFunctionTables } from "./codeview-function-tables.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -169,6 +170,6 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
   });
   return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info),
     ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewEmbeddedSymbolTables(info),
-    ...buildLegacyCodeViewDiscardedStatistics(info)]
+    ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info)]
     .filter(table => table.rows.length > 0);
 };

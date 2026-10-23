@@ -6,6 +6,7 @@ import { createExtraDebugPayloadSubject, identityRvaToOff } from "../../../../fi
 import { createPeWithEmbeddedCodeView } from "../../../../fixtures/pe-codeview-embedded-symbols.js";
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
+import { codeViewStoredTypeText } from "../../../../fixtures/pe-codeview-type-strings.js";
 
 const parse = async (bytes: Uint8Array, declaredSize = bytes.length) => {
   const subject = createExtraDebugPayloadSubject(bytes, declaredSize);
@@ -40,7 +41,7 @@ void test("PE debug-directory integration retains embedded symbols, base names a
   assert.equal(symbols.records[0]!.children?.length, 102);
   assert.deepEqual(symbols.records[0]!.discarded, { reason: 2, fileId: 7, line: 42 });
   assert.deepEqual(symbols.records[2]!.children, [{ type: 0x110e, name: "thisAlias" }]);
-  assert.deepEqual(types.records, [{ type: 0x20c, symbols: [{ type: 0x110e, name: "referenced" }] },
+  assert.deepEqual(codeViewStoredTypeText(types.records), [{ type: 0x20c, symbols: [{ type: 0x110e, name: "referenced" }] },
     { type: 2, strings: ["BaseType"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "basedValue" }] }]);
 });
 
@@ -84,7 +85,8 @@ void test("legacy CodeView dispatches global type origins and retains unknown bu
     { type: 0x999, module: 0xffff, data: new Uint8Array() }
   ]));
 
-  assert.deepEqual(parsed?.directories[0]?.subsections[0]?.data, { kind: "types", records: [{ type: 0x7777 }] });
+  assert.deepEqual(parsed?.directories[0]?.subsections[0]?.data,
+    { kind: "types", records: [{ type: 0x7777, index: 0x1000 }] });
   assert.equal(parsed?.directories[0]?.subsections[1]?.data, undefined);
   assert.deepEqual(warnings, []);
 });

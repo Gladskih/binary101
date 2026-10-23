@@ -4,12 +4,23 @@ import { readLegacyCodeViewFields, type LegacyCodeViewField } from "./legacy-cod
 import { readLegacyCodeViewTypeStrings } from "./legacy-codeview-type-strings.js";
 import { readLegacyCodeViewEmbeddedSymbol, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
 import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js";
+import { readCodeViewTypeShape, type CodeViewTypeShape } from "./legacy-codeview-type-shapes.js";
+
+export interface LegacyCodeViewTypeRecord {
+  type: number;
+  index?: number;
+  shape?: CodeViewTypeShape;
+  name?: string;
+  uniqueName?: string;
+  members?: LegacyCodeViewField[];
+  strings?: string[];
+  symbols?: LegacyCodeViewSymbol[];
+}
 
 export interface LegacyCodeViewTypes {
   kind: "types";
   encoding?: "c6" | "hll";
-  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[];
-    strings?: string[]; symbols?: LegacyCodeViewSymbol[] }[];
+  records: LegacyCodeViewTypeRecord[];
 }
 
 // Offsets of size numeric leaves and inline names, including the record length.
@@ -32,23 +43,37 @@ const readUtf8TypeName = async (reader: LegacyCodeViewReader, type: number, offs
   catch (error) { reader.warn(`CodeView decorated type name: ${String(error)}`); return { type, name }; }
 };
 
-const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTypes["records"][number]> => {
-  const type = await reader.uint16(2);
+const readTypeName = async (reader: LegacyCodeViewReader, type: number): Promise<LegacyCodeViewTypeRecord> => {
+  const numeric = NUMERIC_OFFSETS.get(type);
+  const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
+  if (offset == null) return { type };
+  return type >= 0x1500 ? readUtf8TypeName(reader, type, offset) :
+    { type, name: (await reader.pascal(offset)).name };
+};
+
+const readTypeContent = async (reader: LegacyCodeViewReader, type: number): Promise<LegacyCodeViewTypeRecord> => {
   if (type === 0x204 || type === 0x1203) return { type,
     members: await readLegacyCodeViewFields(reader.subsection(4, reader.size - 4)) };
+  if (type === 2 || type === 0x1002) return { type, ...await readLegacyCodeViewPointerBase(reader, type) };
+  // TIS 3.4 LF_REFSYM stores a complete length-prefixed symbol at offset 4.
+  // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
+  if (type === 0x20c) return { type, symbols: await readLegacyCodeViewEmbeddedSymbol(reader, 4) };
+  const strings = await readLegacyCodeViewTypeStrings(reader, type);
+  if (strings !== undefined) return { type, strings };
+  return readTypeName(reader, type);
+};
+
+const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTypeRecord> => {
+  const type = await reader.uint16(2);
+  let shape: CodeViewTypeShape | undefined;
   try {
-    if (type === 2 || type === 0x1002) return { type, ...await readLegacyCodeViewPointerBase(reader, type) };
-    // TIS 3.4 LF_REFSYM stores a complete length-prefixed symbol at offset 4.
-    // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
-    if (type === 0x20c) return { type, symbols: await readLegacyCodeViewEmbeddedSymbol(reader, 4) };
-    const strings = await readLegacyCodeViewTypeStrings(reader, type);
-    if (strings !== undefined) return { type, strings };
-    const numeric = NUMERIC_OFFSETS.get(type);
-    const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
-    if (offset == null) return { type };
-    return type >= 0x1500 ? await readUtf8TypeName(reader, type, offset) :
-      { type, name: (await reader.pascal(offset)).name };
-  } catch (error) { reader.warn(`CodeView type name: ${String(error)}`); return { type }; }
+    shape = await readCodeViewTypeShape(reader, type);
+    const record = await readTypeContent(reader, type);
+    return shape ? { ...record, shape } : record;
+  } catch (error) {
+    reader.warn(`CodeView type name: ${String(error)}`);
+    return shape ? { type, shape } : { type };
+  }
 };
 
 const globalTypeOffset = (signature: string, base: number, offset: number): number => {
@@ -82,10 +107,28 @@ export const readLegacyCodeViewGlobalTypes = async (
         decoded.set(offset, (await readTypeAt(reader, globalTypeOffset(signature, base, offset))).record);
       }
       const record = decoded.get(offset);
-      if (record) records.push(record);
+      // OMFGlobalTypes slots retain their identity even when earlier offsets are invalid.
+      if (record) records.push({ ...record, index: 0x1000 + index });
     } catch (error) { reader.warn(`CodeView type ${index}: ${String(error)}`); }
   }
   return { kind: "types", records };
+};
+
+// LF_PRECOMP/type servers reference external namespaces. Do not invent local
+// indices for records after such an import without loading its actual type table.
+const EXTERNAL_TYPE_TABLES = new Set([0x13, 0x100e, 0x1509, 0x16, 0x1501, 0x1515, 0x14]);
+
+const nextTypeIndex = (record: LegacyCodeViewTypeRecord, index: number | undefined,
+  warn: (message: string) => void): number | undefined => {
+  if (index === undefined || EXTERNAL_TYPE_TABLES.has(record.type)) return undefined;
+  if (index === 0xffffffff) {
+    warn("CodeView type index space is exhausted; later indices are unresolved.");
+    return undefined;
+  }
+  if (record.type !== 0x200 && record.type !== 0x1200) return index + 1;
+  if (record.shape?.kind === "skip" && record.shape.nextIndex > index) return record.shape.nextIndex;
+  warn("CodeView LF_SKIP has no valid forward type index; later indices are unresolved.");
+  return undefined;
 };
 
 export const readLegacyCodeViewModuleTypes = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTypes> => {
@@ -93,10 +136,13 @@ export const readLegacyCodeViewModuleTypes = async (reader: LegacyCodeViewReader
   if (![1, 2, 4].includes(signature)) throw new Error(`Unsupported CodeView type stream signature ${signature}.`);
   const records: LegacyCodeViewTypes["records"] = [];
   let offset = 4;
+  let index: number | undefined = 0x1000;
   while (offset < reader.size) {
     try {
       const value = await readTypeAt(reader, offset);
-      records.push(value.record);
+      records.push(index === undefined || EXTERNAL_TYPE_TABLES.has(value.record.type)
+        ? value.record : { ...value.record, index });
+      index = nextTypeIndex(value.record, index, reader.warn);
       offset = value.end;
     } catch (error) { reader.warn(String(error)); break; }
   }

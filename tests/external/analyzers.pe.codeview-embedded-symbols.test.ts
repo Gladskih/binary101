@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { codeViewStoredTypeText } from "../fixtures/pe-codeview-type-strings.js";
 import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -38,7 +39,8 @@ void test("controlled embedded symbols and pointer base names match unchanged cv
   assert.equal(view.getUint32(8, true) + 12, bytes.length);
   const symbols = await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 12, bytes.length);
 
-  assert.deepEqual(types.records, [{ type: 2, strings: ["OldBase"] }, { type: 0x1002, strings: ["WideBase"] },
+  assert.deepEqual(codeViewStoredTypeText(types.records), [{ type: 2, strings: ["OldBase"] },
+    { type: 0x1002, strings: ["WideBase"] },
     { type: 0x20c, symbols: [{ type: 0x110d, name: "referenced" }] }]);
   assert.deepEqual(types.records.flatMap(record => record.strings ?? []),
     [...oracle.matchAll(/name = '([^']*)'/g)].map(match => match[1]));

@@ -6,6 +6,7 @@ import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createDebugViewEntry } from "../../../fixtures/pe-debug-view-subject.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
+import { codeViewInfoWithTypes } from "../../../fixtures/pe-codeview-callables.js";
 
 const subject = () => {
   const pe = createBasePe();
@@ -13,6 +14,27 @@ const subject = () => {
   pe.debug = { entry: null, entries: [entry] };
   return { pe, entry };
 };
+
+void test("CodeView function signatures retain literal entities and remain pageable", () => {
+  const pe = createBasePe();
+  const entry = { ...createDebugViewEntry(2, 0, 128), legacyCodeView: codeViewInfoWithTypes([
+    { type: 0x1201, index: 0x1000, shape: { kind: "arguments", types: [] } },
+    { type: 0x1008, index: 0x1001, shape: { kind: "procedure", returnType: 3,
+      parameterCount: 0, argumentList: 0x1000, callingConvention: 0, attributes: 0 } },
+    ...Array.from({ length: 101 }, (_, index) => ({ type: 0x1601, index: 0x1002 + index,
+      strings: [`<function_${index}>&amp;`], shape: { kind: "functionId" as const, scopeId: 0, functionType: 0x1001 } }))
+  ]) };
+  pe.debug = { entry: null, entries: [entry] };
+  const model = getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-functions")!;
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out);
+  assert.equal(model.rowCount, 101);
+  assert.equal(model.pageSize, 100);
+  assert.equal(model.rowAt(100)?.cells[2]?.html, "&lt;function_100&gt;&amp;amp;");
+  assert.equal(model.rowAt(0)?.cells[5]?.className, "peNumeric");
+  assert.equal(model.sortValueAt(100, 2), "<function_100>&amp;");
+  assert.match(out.join(""), /Function type signatures/);
+});
 
 for (const kind of ["overlay", "section", "directory"] as const) {
   void test(`Standalone CodeView ${kind} sources retain escaped, pageable tables`, () => {

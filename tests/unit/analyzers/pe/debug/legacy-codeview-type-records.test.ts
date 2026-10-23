@@ -3,9 +3,11 @@ import { test } from "node:test";
 import { readLegacyCodeViewGlobalTypes, readLegacyCodeViewModuleTypes } from "../../../../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { legacyReader, legacySymbol, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewField, codeViewFieldList, codeViewUniqueType } from "../../../../fixtures/pe-codeview-fields.js";
-import { codeViewTextRecord, codeViewUtf8, codeViewVtableRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
+import { codeViewStoredTypeText, codeViewTextRecord, codeViewUtf8, codeViewVtableRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
 import { legacyPascal } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewEntryThis, codeViewPointerBase } from "../../../../fixtures/pe-codeview-embedded-symbols.js";
+import { codeViewArguments, codeViewCallableStream, codeViewProcedure } from "../../../../fixtures/pe-codeview-callables.js";
+import { legacyU16 } from "../../../../fixtures/pe-legacy-codeview.js";
 
 void test("CodeView type leaves preserve referenced symbols and based-pointer names without consuming padding", async () => {
   const warnings: string[] = [];
@@ -14,7 +16,7 @@ void test("CodeView type leaves preserve referenced symbols and based-pointer na
     ...codeViewPointerBase(2, 8, [0, 0, ...legacyPascal("Base")]),
     ...codeViewPointerBase(0x1002, 4, legacySymbol(0x110d, "base", 14))], warnings));
 
-  assert.deepEqual(parsed.records, [
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [
     { type: 0x20c, symbols: [{ type: 0xe, children: [{ type: 0x203, name: "public_name" }] }] },
     { type: 2, strings: ["Base"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "base" }] }
   ]);
@@ -30,7 +32,7 @@ for (const [type, offset] of [[0x11, 8], [0x100c, 12], [0x1508, 12],
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
       ...codeViewTextRecord(type, offset, type < 0x1500 ? legacyPascal("Named") : codeViewUtf8("Named"))], warnings));
 
-    assert.deepEqual(parsed.records, [{ type, name: "Named" }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type, name: "Named" }]);
     assert.deepEqual(warnings, []);
   });
 }
@@ -43,7 +45,7 @@ for (const [type, offset] of [[0x13, 12], [0x100e, 16], [0x1509, 16], [0x16, 12]
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
       ...codeViewTextRecord(type, offset, type < 0x1500 ? legacyPascal("stored") : codeViewUtf8("stored"))], warnings));
 
-    assert.deepEqual(parsed.records, [{ type, strings: ["stored"] }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type, strings: ["stored"] }]);
     assert.deepEqual(warnings, []);
   });
 }
@@ -53,7 +55,7 @@ void test("CodeView virtual table strings respect Names length and retain all me
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
     ...codeViewVtableRecord([...text, ...codeViewUtf8("padding")], text.length)]));
 
-  assert.deepEqual(parsed.records, [{ type: 0x151d, strings: ["Table", "first", "second"] }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x151d, strings: ["Table", "first", "second"] }]);
 });
 
 for (const [type, offset, bytes] of [[0x1605, 8, [0xff, 0]], [0x1501, 12, [65]],
@@ -63,7 +65,7 @@ for (const [type, offset, bytes] of [[0x1605, 8, [0xff, 0]], [0x1501, 12, [65]],
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
       ...codeViewTextRecord(type, offset, bytes), 2, 0, 0x77, 0x77], warnings));
 
-    assert.deepEqual(parsed.records, [{ type }, { type: 0x7777 }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type }, { type: 0x7777 }]);
     assert.equal(warnings.length, 1);
     assert.match(warnings[0]!, /^CodeView type name:/);
   });
@@ -74,7 +76,7 @@ void test("CodeView type streams preserve a virtual table's complete string pref
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
     ...codeViewVtableRecord([...codeViewUtf8("Table"), 65]), 2, 0, 0x77, 0x77], warnings));
 
-  assert.deepEqual(parsed.records, [{ type: 0x151d, strings: ["Table"] }, { type: 0x7777 }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x151d, strings: ["Table"] }, { type: 0x7777 }]);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /virtual table name/);
 });
@@ -86,7 +88,7 @@ for (const [type, offset] of [[0x1504, 22], [0x1505, 22], [0x1506, 14],
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
       ...codeViewUniqueType(type, offset, "名", [...new TextEncoder().encode(".?AUNamed@@"), 0])], warnings));
 
-    assert.deepEqual(parsed.records, [{ type, name: "名", uniqueName: ".?AUNamed@@" }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type, name: "名", uniqueName: ".?AUNamed@@" }]);
     assert.deepEqual(warnings, []);
   });
 }
@@ -97,7 +99,7 @@ for (const identity of [[], [0x41], [0xff, 0]]) {
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
       ...codeViewUniqueType(0x1505, 22, "Readable", identity), 2, 0, 0x77, 0x77], warnings));
 
-    assert.deepEqual(parsed.records, [{ type: 0x1505, name: "Readable" }, { type: 0x7777 }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x1505, name: "Readable" }, { type: 0x7777 }]);
     assert.match(warnings.join(" | "), /decorated type name/);
   });
 }
@@ -106,7 +108,7 @@ void test("CodeView does not infer a decorated identity without the UDT property
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
     ...legacySymbol(0x1505, "Readable", 22), ...codeViewUniqueType(0x1503, 14, "Array", [0]) ]));
 
-  assert.deepEqual(parsed.records, [{ type: 0x1505, name: "Readable" }, { type: 0x1503, name: "Array" }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x1505, name: "Readable" }, { type: 0x1503, name: "Array" }]);
 });
 
 for (const [recordType, fieldType, body] of [[0x204, 0x407, [0x74, 0, 3, 0]],
@@ -116,7 +118,7 @@ for (const [recordType, fieldType, body] of [[0x204, 0x407, [0x74, 0, 3, 0]],
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1),
       ...codeViewFieldList(codeViewField(fieldType, body, "value"), recordType)], warnings));
 
-    assert.deepEqual(parsed.records, [{ type: recordType, members: [{ type: fieldType, name: "value" }] }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: recordType, members: [{ type: fieldType, name: "value" }] }]);
     assert.deepEqual(warnings, []);
   });
 }
@@ -127,7 +129,7 @@ void test("CodeView caches malformed type records as well as successfully decode
     ...legacyU32(1), ...legacyU32(3), ...legacyU32(0), ...legacyU32(0), ...legacyU32(2),
     0, 0, 2, 0, 0x77, 0x77], warnings));
 
-  assert.deepEqual(parsed.records, [{ type: 0x7777 }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x7777 }]);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /Invalid CodeView type record length/);
 });
@@ -138,7 +140,7 @@ for (const signature of ["NB07", "NB08"]) {
     const parsed = await readLegacyCodeViewGlobalTypes(legacyReader([
       ...legacyU32(1), ...legacyU32(2), ...legacyU32(8), ...legacyU32(16), 2, 0, 0x77, 0x77], warnings), signature);
 
-    assert.deepEqual(parsed.records, [{ type: 0x7777 }]);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x7777 }]);
     assert.match(warnings.join(" | "), /overlaps/);
   });
 }
@@ -150,7 +152,7 @@ void test("CodeView malformed type names retain the bounded record kind and late
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([
     ...legacyU32(4), ...bytes, 2, 0, 0x77, 0x77], warnings));
 
-  assert.deepEqual(parsed.records, [{ type: 0x1504 }, { type: 0x7777 }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x1504 }, { type: 0x7777 }]);
   assert.match(warnings.join(" | "), /type name/);
 });
 
@@ -159,7 +161,8 @@ void test("CodeView type streams retain structural records and names from sized 
   const warnings: string[] = [];
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1), ...records], warnings));
 
-  assert.deepEqual(parsed, { kind: "types", records: [{ type: 5, name: "MyStruct" }, { type: 0x7777 }] });
+  assert.deepEqual(parsed, { kind: "types", records: [
+    { type: 5, name: "MyStruct", index: 0x1000 }, { type: 0x7777, index: 0x1001 }] });
   assert.deepEqual(warnings, []);
   await assert.rejects(readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(9)])), /signature/);
 });
@@ -184,7 +187,7 @@ void test("CodeView modern type names use UTF-8 and enum names have no numeric s
   const records = [...legacySymbol(0x1504, "😀", 22), ...legacySymbol(7, "Enum", 12)];
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(2), ...records]));
 
-  assert.deepEqual(parsed.records, [{ type: 0x1504, name: "😀" }, { type: 7, name: "Enum" }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x1504, name: "😀" }, { type: 7, name: "Enum" }]);
 });
 
 void test("CodeView global type offsets use record-base for NB09 and subsection-base before it", async () => {
@@ -194,7 +197,7 @@ void test("CodeView global type offsets use record-base for NB09 and subsection-
   const parsed = await readLegacyCodeViewGlobalTypes(legacyReader(nb09));
 
   assert.equal(parsed.records.length, 2);
-  assert.equal(parsed.records[0], parsed.records[1]);
+  assert.notEqual(parsed.records[0], parsed.records[1]);
   assert.deepEqual((await readLegacyCodeViewGlobalTypes(legacyReader(nb08), "NB08")).records, [parsed.records[0]]);
   assert.deepEqual((await readLegacyCodeViewGlobalTypes(legacyReader(nb08), "NB07")).records, [parsed.records[0]]);
   await assert.rejects(readLegacyCodeViewGlobalTypes(legacyReader([0, 0, 0, 0, 255, 255, 255, 255])), /offsets/);
@@ -205,8 +208,69 @@ void test("CodeView global types warn for invalid individual offsets without dis
   const parsed = await readLegacyCodeViewGlobalTypes(legacyReader([
     1, 0, 0, 0, ...legacyU32(2), ...legacyU32(999), ...legacyU32(0), 2, 0, 0x77, 0x77], warnings));
 
-  assert.deepEqual(parsed.records, [{ type: 0x7777 }]);
+  assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x7777 }]);
   assert.match(warnings.join(" | "), /type 0:.*bounds/);
+  assert.equal(parsed.records[0]?.index, 0x1001);
+});
+
+void test("CodeView callable relationships retain the original type namespace", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader(codeViewCallableStream(), warnings));
+  assert.deepEqual(parsed.records.map(record => record.index), [0x1000, 0x1001, 0x1002]);
+  assert.deepEqual(parsed.records[0]?.shape, { kind: "arguments", types: [0x74, 0x41] });
+  assert.deepEqual(parsed.records[1]?.shape, { kind: "procedure", returnType: 0x74,
+    callingConvention: 7, attributes: 1, parameterCount: 2, argumentList: 0x1000 });
+  assert.deepEqual(parsed.records[2]?.shape, { kind: "functionId", scopeId: 0, functionType: 0x1001 });
+  assert.deepEqual(warnings, []);
+});
+
+for (const [leaf, next] of [[0x200, legacyU16(0x1010)], [0x1200, legacyU32(0x1010)]] as const) {
+  void test(`CodeView LF_SKIP ${leaf} preserves nonconsecutive type indices`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1),
+      ...codeViewTextRecord(leaf, 4, next), ...codeViewArguments()], warnings));
+    assert.deepEqual(parsed.records.map(record => record.index), [0x1000, 0x1010]);
+    assert.deepEqual(warnings, []);
+  });
+}
+
+void test("CodeView invalid skips and external imports do not invent type identities", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1200, 4, legacyU32(0x1000)), ...codeViewProcedure()], warnings));
+  assert.equal(parsed.records[1]?.index, undefined);
+  assert.match(warnings.join(" | "), /no valid forward type index/);
+  const imported = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1515, 24, codeViewUtf8("external.pdb")), ...codeViewProcedure()]));
+  assert.deepEqual(imported.records.map(record => record.index), [undefined, undefined]);
+});
+
+void test("CodeView a malformed callable body does not discard a following framed type", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1008, 4, []), ...codeViewArguments()], warnings));
+  assert.deepEqual(parsed.records[0], { type: 0x1008, index: 0x1000 });
+  assert.equal(parsed.records[1]?.shape?.kind, "arguments");
+  assert.equal(parsed.records[1]?.index, 0x1001);
+  assert.match(warnings.join(" | "), /bounds/);
+});
+
+void test("CodeView function IDs retain valid references when only their UTF-8 name is malformed", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1601, 4, [...legacyU32(0), ...legacyU32(0x1000), 0xff, 0])], warnings));
+  assert.deepEqual(parsed.records[0], { type: 0x1601, index: 0x1000,
+    shape: { kind: "functionId", scopeId: 0, functionType: 0x1000 } });
+  assert.match(warnings.join(" | "), /type name/);
+});
+
+void test("CodeView type indices never wrap beyond their 32-bit namespace", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1200, 4, legacyU32(0xffffffff)),
+    ...codeViewProcedure(), ...codeViewArguments()], warnings));
+  assert.deepEqual(parsed.records.map(record => record.index), [0x1000, 0xffffffff, undefined]);
+  assert.match(warnings.join(" | "), /index space is exhausted/);
 });
 
 for (const record of [[1, 0, 2], [255, 255, 2], [1]]) {
@@ -214,7 +278,7 @@ for (const record of [[1, 0, 2], [255, 255, 2], [1]]) {
     const warnings: string[] = [];
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1), ...record], warnings));
 
-    assert.deepEqual(parsed.records, []);
+    assert.deepEqual(codeViewStoredTypeText(parsed.records), []);
     assert.match(warnings.join(" | "), /length|bounds/);
   });
 }

@@ -103,9 +103,10 @@ void test("NB04 repeated subsection references share one decoded object", async 
 void test("NB04 recognizes C7 type streams even when the module style and version are unspecified", async () => {
   const result = await parse(createHll([
     { type: 0x101, module: 1, data: hllModule("\0\0", 0) },
-    { type: 0x103, module: 1, data: Uint8Array.from([...legacyU32(1), 2, 0, 1, 0]) }
+    { type: 0x103, module: 1, data: Uint8Array.from([...legacyU32(1), 2, 0, 0x77, 0x77]) }
   ]));
-  assert.deepEqual(result.data!.directories[0]!.subsections[1]!.data, { kind: "types", records: [{ type: 1 }] });
+  assert.deepEqual(result.data!.directories[0]!.subsections[1]!.data,
+    { kind: "types", records: [{ type: 0x7777, index: 0x1000 }] });
   assert.deepEqual(result.warnings, []);
 });
 

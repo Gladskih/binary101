@@ -1,4 +1,9 @@
 import { legacyU16, legacyU32 } from "./pe-legacy-codeview.js";
+import type { LegacyCodeViewTypeRecord } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
+
+/** Existing text tests check stored text independently of newly decoded type relationships. */
+export const codeViewStoredTypeText = (records: readonly LegacyCodeViewTypeRecord[]) => records.map(
+  record => Object.fromEntries(Object.entries(record).filter(([key]) => key !== "index" && key !== "shape")));
 
 // Offsets include the two-byte record length, as in cvinfo.h's packed layouts.
 export const codeViewTextRecord = (type: number, offset: number, text: readonly number[]): number[] => {
