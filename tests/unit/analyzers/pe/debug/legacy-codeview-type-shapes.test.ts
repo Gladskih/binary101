@@ -5,6 +5,18 @@ import { legacyReader, legacyU16, legacyU32 } from "../../../../fixtures/pe-lega
 import { codeViewTextRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
 import { codeViewArguments, codeViewMemberFunction, codeViewProcedure } from "../../../../fixtures/pe-codeview-callables.js";
 
+for (const [leaf, bytes, expected] of [
+  [0x206, [3, 5, ...legacyU16(0x75)], { kind: "bitfield", typeIndex: 0x75, length: 3, position: 5 }],
+  [0x1205, [...legacyU32(0x12345678), 255, 254],
+    { kind: "bitfield", typeIndex: 0x12345678, length: 255, position: 254 }]
+] as const) {
+  void test(`CodeView bitfield ${leaf} retains its base type, width and bit position`, async () => {
+    const record = codeViewTextRecord(leaf, 4, bytes);
+    assert.deepEqual(await readCodeViewTypeShape(legacyReader(record), leaf), expected);
+    await assert.rejects(readCodeViewTypeShape(legacyReader(record.slice(0, -1)), leaf), /bounds/);
+  });
+}
+
 for (const leaf of [8, 0x1008]) {
   void test(`CodeView procedure ${leaf} retains its return type, attributes and argument-list reference`, async () => {
     const warnings: string[] = [];

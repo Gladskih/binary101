@@ -9,6 +9,18 @@ import { codeViewEntryThis, codeViewPointerBase } from "../../../../fixtures/pe-
 import { codeViewArguments, codeViewCallableStream, codeViewProcedure } from "../../../../fixtures/pe-codeview-callables.js";
 import { legacyU16 } from "../../../../fixtures/pe-legacy-codeview.js";
 
+void test("CodeView malformed bitfields warn without losing following type records", async () => {
+  const warnings: string[] = [];
+  const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
+    ...codeViewTextRecord(0x1205, 4, [...legacyU32(0x75), 3]),
+    ...codeViewTextRecord(0x206, 4, [5, 1, ...legacyU16(0x74)])], warnings));
+  assert.deepEqual(parsed.records, [{ type: 0x1205, index: 0x1000 },
+    { type: 0x206, index: 0x1001,
+      shape: { kind: "bitfield", typeIndex: 0x74, length: 5, position: 1 } }]);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /CodeView type record:.*bounds/);
+});
+
 void test("CodeView type leaves preserve referenced symbols and based-pointer names without consuming padding", async () => {
   const warnings: string[] = [];
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
@@ -67,7 +79,7 @@ for (const [type, offset, bytes] of [[0x1605, 8, [0xff, 0]], [0x1501, 12, [65]],
 
     assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type }, { type: 0x7777 }]);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0]!, /^CodeView type name:/);
+    assert.match(warnings[0]!, /^CodeView type record:/);
   });
 }
 
@@ -153,7 +165,7 @@ void test("CodeView malformed type names retain the bounded record kind and late
     ...legacyU32(4), ...bytes, 2, 0, 0x77, 0x77], warnings));
 
   assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type: 0x1504 }, { type: 0x7777 }]);
-  assert.match(warnings.join(" | "), /type name/);
+  assert.match(warnings.join(" | "), /type record/);
 });
 
 void test("CodeView type streams retain structural records and names from sized type leaves", async () => {
@@ -261,7 +273,7 @@ void test("CodeView function IDs retain valid references when only their UTF-8 n
     ...codeViewTextRecord(0x1601, 4, [...legacyU32(0), ...legacyU32(0x1000), 0xff, 0])], warnings));
   assert.deepEqual(parsed.records[0], { type: 0x1601, index: 0x1000,
     shape: { kind: "functionId", scopeId: 0, functionType: 0x1000 } });
-  assert.match(warnings.join(" | "), /type name/);
+  assert.match(warnings.join(" | "), /type record/);
 });
 
 void test("CodeView type indices never wrap beyond their 32-bit namespace", async () => {

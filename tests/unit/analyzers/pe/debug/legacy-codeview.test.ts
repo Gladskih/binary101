@@ -7,6 +7,24 @@ import { createPeWithEmbeddedCodeView } from "../../../../fixtures/pe-codeview-e
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { codeViewStoredTypeText } from "../../../../fixtures/pe-codeview-type-strings.js";
+import { createPeWithCodeViewMemberValues } from "../../../../fixtures/pe-codeview-numeric-values.js";
+
+void test("PE debug-directory integration preserves exact enum values and bitfield type references", async () => {
+  const file = createPeWithCodeViewMemberValues();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const data = debug.entries[0]?.legacyCodeView?.directories[0]?.subsections[0]?.data;
+  assert.ok(data?.kind === "types");
+  assert.deepEqual(data.records[0]?.members?.map(member => [member.name, member.value, member.typeIndex]), [
+    ["largest", "18446744073709551615", undefined],
+    ["previous", "18446744073709551614", undefined],
+    ["<count>&amp;", undefined, 0x74], ["mode", undefined, 0x1001]
+  ]);
+  assert.equal(data.records[1]?.index, 0x1001);
+  assert.deepEqual(data.records[1]?.shape, { kind: "bitfield", typeIndex: 0x75, length: 3, position: 1 });
+  assert.equal(debug.warning, null);
+});
 
 const parse = async (bytes: Uint8Array, declaredSize = bytes.length) => {
   const subject = createExtraDebugPayloadSubject(bytes, declaredSize);

@@ -16,6 +16,7 @@ export type CodeViewTypeShape =
   | { kind: "pointer"; typeIndex: number; attributes: number;
       classType?: number; representation?: number }
   | { kind: "alias"; typeIndex: number }
+  | { kind: "bitfield"; typeIndex: number; length: number; position: number }
   | { kind: "functionId"; scopeId: number; functionType: number }
   | { kind: "memberFunctionId"; classType: number; functionType: number }
   | { kind: "skip"; nextIndex: number };
@@ -91,12 +92,21 @@ const readFunctionId = async (reader: LegacyCodeViewReader, leaf: number): Promi
 const readSkip = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> =>
   ({ kind: "skip", nextIndex: leaf === 0x200 ? await reader.uint16(4) : await reader.uint32(4) });
 
+// lfBitfield_16t stores length/position before the type; lfBitfield stores them after.
+const readBitfield = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> => {
+  const view = await reader.view(0, leaf === 0x206 ? 8 : 10);
+  const position = leaf === 0x206 ? 4 : 8;
+  return { kind: "bitfield", typeIndex: leaf === 0x206 ? view.getUint16(6, true) : view.getUint32(4, true),
+    length: view.getUint8(position), position: view.getUint8(position + 1) };
+};
+
 const SHAPE_READERS = new Map<number,
   (reader: LegacyCodeViewReader, leaf: number) => Promise<CodeViewTypeShape>>([
   [8, readProcedure], [9, readProcedure], [0x1008, readProcedure], [0x1009, readProcedure],
   [0x201, readArgumentList], [0x1201, readArgumentList], [1, readModifier], [0x1001, readModifier],
   [2, readPointer], [0x1002, readPointer], [0x1010, readAlias], [0x150a, readAlias],
-  [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip]
+  [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip],
+  [0x206, readBitfield], [0x1205, readBitfield]
 ]);
 
 /** Read stored type relationships without resolving external PDB/type-server references. */

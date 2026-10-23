@@ -71,7 +71,7 @@ const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTyp
     const record = await readTypeContent(reader, type);
     return shape ? { ...record, shape } : record;
   } catch (error) {
-    reader.warn(`CodeView type name: ${String(error)}`);
+    reader.warn(`CodeView type record: ${String(error)}`);
     return shape ? { type, shape } : { type };
   }
 };

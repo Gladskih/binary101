@@ -18,6 +18,9 @@ for (const width of [390, 1280]) {
     await expect(table.getByRole("cell", { name: "<count>&amp;", exact: true })).toBeVisible();
     await expect(table.getByRole("cell", { name: "offset: 12 bytes", exact: true })).toBeVisible();
     await expect(table.getByRole("cell", { name: "int32", exact: true })).toBeVisible();
+    await expect(table.getByRole("cell", {
+      name: "bitfield (bit width: 3, bit offset: 1) of uint32", exact: true
+    })).toBeVisible();
     await expect(table.getByRole("cell", { name: "private", exact: true })).toBeVisible();
     await expect(table).not.toContainText("0x");
     await expect(panel).not.toContainText("payload is not decoded");

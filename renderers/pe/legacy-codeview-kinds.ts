@@ -99,7 +99,7 @@ const TYPE_NAMES = new Map<number, string>([
   [0x206, "Bitfield"], [0x207, "Methods"], [0x208, "Array dimensions"], [0x209, "Array dimensions"],
   [0x1001, "Modifier"], [0x1002, "Pointer"], [0x1003, "Array"], [0x1004, "Class"], [0x1005, "Structure"],
   [0x1006, "Union"], [0x1007, "Enum"], [0x1008, "Procedure"], [0x1009, "Member function"], [0x1010, "Alias"],
-  [0x1201, "Arguments"], [0x1203, "Fields"], [0x1205, "Bitfield"], [0x1206, "Methods"],
+  [0x1200, "Skip"], [0x1201, "Arguments"], [0x1203, "Fields"], [0x1205, "Bitfield"], [0x1206, "Methods"],
   [0x1503, "Array"], [0x1504, "Class"], [0x1505, "Structure"], [0x1506, "Union"], [0x1507, "Enum"],
   [0x150a, "Alias"], [0x1519, "Interface"],
   [0x11, "Dimensioned array"], [0x100c, "Dimensioned array"], [0x1508, "Dimensioned array"],

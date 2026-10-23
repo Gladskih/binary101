@@ -63,9 +63,14 @@ const typeStep = (record: LegacyCodeViewTypeRecord,
   indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): { text: string; next?: number } => {
   if (record.name !== undefined) return { text: record.name || "(unnamed type)" };
   const shape = record.shape;
-  if (shape?.kind === "modifier") return { text: modifierText(shape.attributes), next: shape.typeIndex };
-  if (shape?.kind === "pointer") return { text: pointerText(shape, indexed), next: shape.typeIndex };
-  if (shape?.kind === "alias") return { text: "", next: shape.typeIndex };
+  if (shape) {
+    if (shape.kind === "modifier") return { text: modifierText(shape.attributes), next: shape.typeIndex };
+    if (shape.kind === "pointer") return { text: pointerText(shape, indexed), next: shape.typeIndex };
+    if (shape.kind === "alias") return { text: "", next: shape.typeIndex };
+    if (shape.kind === "bitfield") return {
+      text: `bitfield (bit width: ${shape.length}, bit offset: ${shape.position}) of`, next: shape.typeIndex
+    };
+  }
   return { text: `${legacyCodeViewTypeName(record.type)} #${record.index}` };
 };
 

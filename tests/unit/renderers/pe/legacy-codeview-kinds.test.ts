@@ -40,6 +40,7 @@ void test("CodeView record categories use published meanings and explicit unknow
   assert.equal(legacyCodeViewSymbolName(0x110e), "Public symbol");
   assert.equal(legacyCodeViewSymbolName(0xffff), "Symbol record 0xffff");
   assert.equal(legacyCodeViewTypeName(0x204), "Fields");
+  assert.equal(legacyCodeViewTypeName(0x1200), "Skip");
   assert.equal(legacyCodeViewTypeName(0xffff), "Type record 0xffff");
   assert.equal(legacyCodeViewFieldName(0x406), "Data member");
   assert.equal(legacyCodeViewFieldName(0x1502), "Enumerator");

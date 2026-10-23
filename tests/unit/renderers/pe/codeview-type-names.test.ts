@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createCodeViewTypeFormatter, indexCodeViewTypes } from "../../../../renderers/pe/codeview-type-names.js";
 
+void test("CodeView bitfields describe bit width and position without hiding the base type", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1205, index: 0x1000, shape: { kind: "bitfield", typeIndex: 0x75, length: 3, position: 1 } },
+    { type: 0x206, index: 0x1001, shape: { kind: "bitfield", typeIndex: 0x2000, length: 0, position: 0 } },
+    { type: 0x1205, index: 0x1002, shape: { kind: "bitfield", typeIndex: 0x1002, length: 255, position: 254 } }
+  ]));
+  assert.equal(format(0x1000), "bitfield (bit width: 3, bit offset: 1) of uint32");
+  assert.equal(format(0x1001), "bitfield (bit width: 0, bit offset: 0) of unresolved type #8192");
+  assert.equal(format(0x1002), "bitfield (bit width: 255, bit offset: 254) of recursive type #4098");
+});
+
 void test("CodeView primitive names retain width and pointer model", () => {
   const format = createCodeViewTypeFormatter(indexCodeViewTypes([]));
   assert.equal(format(0x74), "int32");
@@ -72,12 +83,14 @@ void test("CodeView cycles, missing and duplicate indices stay explicit", () => 
     { type: 0x1505, index: 0x1001, name: "First" },
     { type: 0x1505, index: 0x1001, name: "Second" },
     { type: 0x7777, index: 0x1002 },
+    { type: 0x1200, index: 0x1004, shape: { kind: "skip", nextIndex: 0x2000 } },
     { type: 0x1505, name: "No inferred index" }
   ]));
   assert.equal(format(0x1000), "volatile recursive type #4096");
   assert.equal(format(0x1001), "ambiguous type #4097");
   assert.equal(format(0x1002), "Type record 0x7777 #4098");
   assert.equal(format(0x1003), "unresolved type #4099");
+  assert.equal(format(0x1004), "Skip #4100");
 });
 
 void test("CodeView aliases retain their name or follow their stored reference", () => {
