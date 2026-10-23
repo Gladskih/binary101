@@ -17,6 +17,8 @@ const isLineKind = (value: number): value is LineKind => [0, 1, 2, 4].includes(v
 // are publicly reversed in Open Watcom hll.h / hllcue.c (HL1/HL2/HL3).
 // https://www.os2site.com/sw/dev/openwatcom/docs/ibmhll.htm
 // https://github.com/open-watcom/open-watcom-v2/blob/065b3083b9f06919c871c67ce608e3b29674ffce/bld/watcom/h/hll.h
+// hllcue.c explicitly routes HL04/HL05/HL06 through its shared source-table reader.
+// https://github.com/open-watcom/open-watcom-v2/blob/065b3083b9f06919c871c67ce608e3b29674ffce/bld/dip/hllcv/c/hllcue.c#L523
 const readFiles = async (reader: LegacyCodeViewReader, result: HllSource, version: number): Promise<void> => {
   const header = await reader.view(0, 12);
   const count = header.getUint32(8, true);
@@ -93,7 +95,7 @@ const readBlock = async (reader: LegacyCodeViewReader, result: HllSource): Promi
 
 export const readHllSource = async (reader: LegacyCodeViewReader, version: number): Promise<HllSource> => {
   const result: HllSource = { kind: "hllSource", files: [], groups: [] };
-  if (![0x100, 0x200, 0x300, 0x400].includes(version)) {
+  if (![0x100, 0x200, 0x300, 0x400, 0x500, 0x600].includes(version)) {
     reader.warn(`Unsupported HLL source format version ${version}.`);
     return result;
   }

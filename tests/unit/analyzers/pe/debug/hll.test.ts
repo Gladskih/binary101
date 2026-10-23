@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseHll } from "../../../../../analyzers/pe/debug/hll.js";
-import { createHll, hllModule } from "../../../../fixtures/pe-hll.js";
+import { createHll, hllModule, createHllSourceInspection } from "../../../../fixtures/pe-hll.js";
 import { legacyU16, legacyU32, legacySymbol } from "../../../../fixtures/pe-legacy-codeview.js";
 import { c6Symbol, c6Type, c6Index, c6Name } from "../../../../fixtures/pe-codeview-c6.js";
 import { createExtraDebugPayloadSubject, identityRvaToOff } from "../../../../fixtures/pe-debug-extra-payloads.js";
@@ -28,6 +28,17 @@ void test("NB04 modules select their own HLL or CodeView stream dialect regardle
     { kind: "symbols", records: [{ type: 0x203, name: "public_name" }] });
   assert.deepEqual(cv.warnings, []);
 });
+
+for (const version of [0x500, 0x600]) {
+  void test(`NB04 module version ${version} retains compatible source names independently of type support`, async () => {
+    const result = await parse(createHllSourceInspection(version));
+    assert.deepEqual(result.data?.directories[0]?.subsections[1]?.data, {
+      kind: "hllSource", files: [{ index: 1, name: "<source.c>" }],
+      groups: [{ file: 1, segment: 1, category: "Source lines", values: [7] }]
+    });
+    assert.deepEqual(result.warnings, []);
+  });
+}
 
 void test("NB04 directory header sizes and entry bounds are checked before decoding", async () => {
   const bytes = createHll([]);

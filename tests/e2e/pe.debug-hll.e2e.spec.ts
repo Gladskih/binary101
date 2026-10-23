@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createHllInspection } from "../fixtures/pe-hll.js";
+import { createHllInspection, createHllSourceInspection } from "../fixtures/pe-hll.js";
 import { createPeCodeViewOverlay, createPeDirectHll } from "../fixtures/pe-codeview-locations.js";
 
 for (const [create, width] of [[createPeCodeViewOverlay, 390], [createPeDirectHll, 1280]] as const) {
@@ -27,5 +27,21 @@ test(`HLL source ${create.name} keeps names and statistics readable at ${width}`
   await expect(source.getByRole("columnheader", { name: /Distinct lines or path codes/ })).toHaveClass(/peNumeric/);
   await expect(panel.locator("script")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("codeview-hll.png"), fullPage: true });
+});
+}
+
+for (const version of [0x500, 0x600]) {
+test(`HLL ${version} source names and line summaries remain available`, async ({ page }) => {
+  const file = createPeCodeViewOverlay(createHllSourceInspection(version));
+  await page.setViewportSize({ width: 390, height: 960 });
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }).click();
+  await expect(panel).toContainText(`HL (version ${version >> 8}.0)`);
+  await expect(panel).toContainText("<source.c>");
+  await expect(panel).toContainText("Source lines");
+  await expect(panel).not.toContainText("Unsupported HLL source format");
 });
 }

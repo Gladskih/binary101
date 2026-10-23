@@ -37,6 +37,18 @@ export const createHll = (entries = [
 
 export const createPeWithHll = () => createPeWithDebugPayloads([{ type: 2, data: createHll() }]);
 
+export const createHllSourceInspection = (version: number): Uint8Array => {
+  const fileNames = [...legacyU32(0), ...legacyU32(0), ...legacyU32(1), ...legacyPascal("<source.c>")];
+  return createHll([
+    { type: 0x101, module: 1, data: hllModule("HL", version) },
+    { type: 0x10b, module: 1, data: Uint8Array.from([
+      0, 0, 3, 0, 0, 0, 0, 0, ...legacyU32(fileNames.length), ...fileNames,
+      0, 0, 0, 0, ...legacyU16(1), ...legacyU16(1), ...legacyU32(0),
+      ...legacyU16(7), ...legacyU16(1), ...legacyU32(16)
+    ]) }
+  ]);
+};
+
 export const createHllInspection = (): Uint8Array => {
   const fileNames = [...legacyU32(0), ...legacyU32(0), ...legacyU32(1), ...legacyPascal("<source.c>")];
   return createHll([

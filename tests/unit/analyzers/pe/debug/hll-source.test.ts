@@ -172,3 +172,17 @@ void test("HLL impossible file counts reject the table before returning partial 
   assert.deepEqual(data.files, []);
   assert.match(warnings[0]!, /file names are truncated/);
 });
+
+// Open Watcom hllcue.c explicitly shares the source-table reader for HL04/05/06.
+// This does not establish that later type records also share the HLL4 layout.
+for (const version of [0x500, 0x600]) {
+  void test(`HLL ${version} source records use the publicly reversed HLL4-compatible layout`, async () => {
+    const warnings: string[] = [];
+    const data = await readHllSource(legacyReader([...names,
+      0, 0, 0, 0, ...legacyU16(1), ...legacyU16(2), ...legacyU32(0),
+      ...legacyU16(7), ...legacyU16(1), ...legacyU32(16)], warnings), version);
+    assert.deepEqual(data.files, [{ index: 1, name: "first.c" }, { index: 2, name: "second.c" }]);
+    assert.deepEqual(data.groups, [{ file: 1, segment: 2, category: "Source lines", values: [7] }]);
+    assert.deepEqual(warnings, []);
+  });
+}
