@@ -1,3 +1,5 @@
+// DMD 2.100.2 -m32omf -g emits a genuine PE with embedded legacy NB09 CodeView.
+// This exercises old member records; the MSVC .cpp fixture covers modern records.
 module legacy_members;
 
 struct Packet {

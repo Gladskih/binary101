@@ -6,8 +6,12 @@ using System.Linq;
 using System.Reflection;
 using System.Web.Script.Serialization;
 
-// Reflection adapter only. The referenced map2dbg/tds2pdb assembly is compiled
-// from unchanged upstream sources at 70cd89ff693cd622215309b0acb4326e530e7884.
+// Test adapter for map2dbg/tds2pdb, compiled from unchanged upstream sources at
+// 70cd89ff693cd622215309b0acb4326e530e7884. ParseTds supplies the main results.
+// ClassTypes walks the TD32 directory/index itself and prepares private reference
+// slots before calling upstream TypStruct.Read. Class-record contents are decoded
+// independently, but their directory/index traversal is not an independent oracle.
+// This executable is external test tooling, never part of browser analysis.
 class Oracle
 {
     static object Field(object value, string name)
