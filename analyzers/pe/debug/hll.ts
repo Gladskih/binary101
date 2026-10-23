@@ -11,6 +11,7 @@ import { readHllTypes } from "./hll-type-records.js";
 import { readHllSource } from "./hll-source.js";
 import { readCodeViewC6Symbols } from "./codeview-c6-symbols.js";
 import { readCodeViewC6Types } from "./codeview-c6-type-records.js";
+import { readCodeViewCv3SourceLines } from "./codeview-cv3.js";
 import { readLegacyCodeViewModuleSymbols } from "./legacy-codeview-symbols.js";
 import { readLegacyCodeViewModuleTypes } from "./legacy-codeview-type-records.js";
 import { readLegacyCodeViewLibraries } from "./legacy-codeview-modules.js";
@@ -37,7 +38,7 @@ const decodeModuleStream = async (reader: LegacyCodeViewReader, type: number,
 
 const DECODERS: Partial<Record<number, (reader: LegacyCodeViewReader) => Promise<LegacyCodeViewData>>> = {
   0x101: readHllModule, 0x102: readLegacyCodeViewPublics, 0x106: readLegacyCodeViewLibraries,
-  0x109: readLegacyCodeViewOldLines
+  0x105: readCodeViewCv3SourceLines, 0x109: readLegacyCodeViewOldLines
 };
 
 const decodeSubsection = async (reader: LegacyCodeViewReader, entry: LegacyCodeViewSubsection,

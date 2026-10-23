@@ -59,7 +59,7 @@ void test("legacy CodeView keeps valid subsections when another is malformed or 
 });
 
 void test("legacy CodeView rejects unknown signatures, short headers and unmapped data", async () => {
-  const unknown = await parse(createLegacyCodeView([], "NB00"));
+  const unknown = await parse(createLegacyCodeView([], "NB03"));
   const short = await parse(Uint8Array.of(78, 66, 48));
   const empty = await parse(new Uint8Array());
 

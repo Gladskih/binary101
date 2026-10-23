@@ -40,6 +40,7 @@ void test("NB02 directory empty, zero and truncated headers remain bounded", asy
   assert.deepEqual(await readCodeViewC6Directories(legacyReader(createC6CodeView([])), 8), [{ flags: 0, entries: [] }]);
   assert.deepEqual(await readCodeViewC6Directories(legacyReader([], warnings), 0), []);
   await assert.rejects(readCodeViewC6Directories(legacyReader([]), 8), /bounds/);
+  await assert.rejects(readCodeViewC6Directories(legacyReader(createC6CodeView([])), 7), /overlaps/);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /directory offset is zero/);
 });

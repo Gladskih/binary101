@@ -5,6 +5,7 @@ import { readLegacyCodeViewLibraries } from "./legacy-codeview-modules.js";
 import { readLegacyCodeViewPublics, readLegacyCodeViewOldLines } from "./legacy-codeview-compatibility.js";
 import { readCodeViewC6Symbols } from "./codeview-c6-symbols.js";
 import { readCodeViewC6Types } from "./codeview-c6-type-records.js";
+import { readCodeViewCv3SourceLines } from "./codeview-cv3.js";
 
 // NB02 uses a WORD count and packed 10-byte directory entries (WORD size).
 // Module SegInfo is 16-bit even in Microsoft's PE path; cSeg=0 means one segment.
@@ -16,6 +17,7 @@ export const readCodeViewC6Directories = async (
   reader: LegacyCodeViewReader, offset: number
 ): Promise<LegacyCodeViewDirectory[]> => {
   if (!offset) { reader.warn("C6 CodeView directory offset is zero."); return []; }
+  if (offset < 8) throw new Error("CV3 directory overlaps its signature header.");
   const count = await reader.uint16(offset);
   const available = Math.floor((reader.size - offset - 2) / 10);
   if (count > available) reader.warn("C6 CodeView directory entries extend past payload bounds.");
@@ -47,6 +49,7 @@ export const readCodeViewC6Module = async (reader: LegacyCodeViewReader): Promis
 
 export const CODEVIEW_C6_DECODERS = {
   0x101: readCodeViewC6Module, 0x102: readLegacyCodeViewPublics,
-  0x103: readCodeViewC6Types, 0x104: readCodeViewC6Symbols, 0x106: readLegacyCodeViewLibraries,
+  0x103: readCodeViewC6Types, 0x104: readCodeViewC6Symbols, 0x105: readCodeViewCv3SourceLines,
+  0x106: readLegacyCodeViewLibraries,
   0x108: readCodeViewC6Types, 0x109: readLegacyCodeViewOldLines
 };

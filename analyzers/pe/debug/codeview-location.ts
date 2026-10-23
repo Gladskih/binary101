@@ -3,7 +3,7 @@ import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import { contiguousRvaOffset } from "../rva-mapping.js";
 
 export interface CodeViewLocation { offset: number; size: number; }
-const isSignature = (value: number): boolean => value === 0x3430424e || value === 0x3230424e;
+const isSignature = (value: number): boolean => [0x3030424e, 0x3230424e, 0x3430424e].includes(value);
 const isRange = (fileSize: number, offset: number, size: number): boolean =>
   Number.isSafeInteger(offset) && Number.isSafeInteger(size) && offset >= 0 && size >= 0 && size <= fileSize - offset;
 

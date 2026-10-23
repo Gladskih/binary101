@@ -3,7 +3,7 @@ import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 export interface LegacyCodeViewPublics { kind: "publics"; names: string[]; }
 export interface LegacyCodeViewFrameMap { kind: "frameMap"; frames: number[]; }
 export interface LegacyCodeViewOldLines {
-  kind: "oldLines"; files: { name: string; segment: number; lines: { line: number; offset: number }[] }[];
+  kind: "oldLines"; files: { name: string; segment?: number; lines: { line: number; offset: number }[] }[];
 }
 
 // Microsoft Symbol and Type Information (TIS), section 7.4: sstPublic,

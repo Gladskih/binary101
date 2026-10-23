@@ -10,6 +10,8 @@ const C6_SUBSECTIONS = new Map([[0x101, "Modules (C6)"], [0x102, "Public symbols
   [0x106, "Libraries (C6)"], [0x108, "Compacted types (C6)"], [0x109, "Source lines with segments (C6)"]]);
 
 export const legacyCodeViewSubsectionName = (type: number, signature?: string): string => {
+  if (signature === "NB00") return C6_SUBSECTIONS.get(type)?.replace(" (C6)", " (CV3)")
+    ?? `Unknown subsection 0x${type.toString(16)}`;
   if (signature === "NB04") return type === 0x10b ? "HLL source mappings"
     : C6_SUBSECTIONS.get(type)?.replace(" (C6)", "") ?? `Unknown subsection 0x${type.toString(16)}`;
   return SUBSECTIONS[type - 0x120] ?? C6_SUBSECTIONS.get(type) ?? `Unknown subsection 0x${type.toString(16)}`;

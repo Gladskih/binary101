@@ -6,6 +6,8 @@ import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName,
 void test("C6 kinds use their own namespace, retaining offset widths and unknown values", () => {
   assert.equal(legacyCodeViewSubsectionName(0x101), "Modules (C6)");
   assert.equal(legacyCodeViewSubsectionName(0x109), "Source lines with segments (C6)");
+  assert.equal(legacyCodeViewSubsectionName(0x101, "NB00"), "Modules (CV3)");
+  assert.equal(legacyCodeViewSubsectionName(0x999, "NB00"), "Unknown subsection 0x999");
   assert.equal(legacyCodeViewSymbolName(1, "c6"), "Procedure (16-bit offsets)");
   assert.equal(legacyCodeViewSymbolName(0x84, "c6"), "Stack variable (32-bit offsets)");
   assert.equal(legacyCodeViewSymbolName(2, "c6"), "Scope end");

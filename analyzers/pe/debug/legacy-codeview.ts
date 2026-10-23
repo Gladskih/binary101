@@ -5,6 +5,7 @@ import { readDebugPayload } from "./payload-reader.js";
 import { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import type { HllSource } from "./hll-source.js";
 import { readCodeViewC6Directories, CODEVIEW_C6_DECODERS } from "./codeview-c6.js";
+import { readCodeViewCv3Module32, readCodeViewCv3Payload } from "./codeview-cv3.js";
 import { readLegacyCodeViewDirectories, type LegacyCodeViewSubsection } from "./legacy-codeview-directory.js";
 import { readLegacyCodeViewModule, readLegacyCodeViewLibraries, readLegacyCodeViewSegmentNames,
   readLegacyCodeViewSegmentMap, readLegacyCodeViewFiles, type LegacyCodeViewModule,
@@ -38,12 +39,16 @@ const DECODERS: Partial<Record<number, (reader: LegacyCodeViewReader) => Promise
   0x12e: readLegacyCodeViewSegmentNames, 0x133: readLegacyCodeViewFiles, 0x134: readLegacyCodeViewGlobalSymbols
 };
 
+const subsectionDecoder = (type: number, signature: string) => {
+  if (type === 0x12b) return (source: LegacyCodeViewReader) => readLegacyCodeViewGlobalTypes(source, signature);
+  return signature === "NB00" && type === 0x101 ? readCodeViewCv3Module32 : DECODERS[type];
+};
+
 const decodeSubsection = async (reader: LegacyCodeViewReader, entry: LegacyCodeViewSubsection, signature: string,
   decoded: Map<string, LegacyCodeViewData | undefined>) => {
-  const decode = entry.type === 0x12b
-    ? (source: LegacyCodeViewReader) => readLegacyCodeViewGlobalTypes(source, signature) : DECODERS[entry.type];
+  const decode = subsectionDecoder(entry.type, signature);
   try {
-    if (entry.offset > reader.size || entry.size > reader.size - entry.offset) {
+    if (entry.offset < 8 || entry.offset > reader.size || entry.size > reader.size - entry.offset) {
       throw new Error("CodeView subsection lies outside payload bounds.");
     }
     const key = `${entry.type}:${entry.offset}:${entry.size}`;
@@ -69,14 +74,16 @@ export const parseLegacyCodeView = async (
   try {
     const header = await source.view(0, 8);
     const signature = String.fromCharCode(...new Uint8Array(header.buffer, header.byteOffset, 4));
-    if (!/^NB0[25-9]$|^NB11$/.test(signature)) { addWarning("Unsupported legacy CodeView signature."); return null; }
+    if (!/^NB0[025-9]$|^NB11$/.test(signature)) { addWarning("Unsupported legacy CodeView signature."); return null; }
+    const payload = ["NB00", "NB02"].includes(signature) ? await readCodeViewCv3Payload(source) : source;
     const directories: PeLegacyCodeViewInfo["directories"] = [];
     const decoded = new Map<string, LegacyCodeViewData | undefined>();
-    const readDirectories = signature === "NB02" ? readCodeViewC6Directories : readLegacyCodeViewDirectories;
-    for (const directory of await readDirectories(source, header.getUint32(4, true))) {
+    const readDirectories = ["NB00", "NB02"].includes(signature)
+      ? readCodeViewC6Directories : readLegacyCodeViewDirectories;
+    for (const directory of await readDirectories(payload, header.getUint32(4, true))) {
       const subsections: PeLegacyCodeViewInfo["directories"][number]["subsections"] = [];
       for (const entry of directory.entries) {
-        subsections.push(await decodeSubsection(source, entry, signature, decoded));
+        subsections.push(await decodeSubsection(payload, entry, signature, decoded));
       }
       directories.push({ flags: directory.flags, subsections });
     }

@@ -15,7 +15,7 @@ export const decodeCodeViewPayload = async (
     addressOfRawDataRva, pointerToRawDataOff, 0, 4) : null;
   const name = signature?.byteLength === 4 ? String.fromCharCode(
     ...new Uint8Array(signature.buffer, signature.byteOffset, 4)) : "";
-  if (/^NB0[245-9]$|^NB11$/.test(name)) {
+  if (/^NB0[0245-9]$|^NB11$/.test(name)) {
     const parse = name === "NB04" ? parseHll : parseLegacyCodeView;
     const legacyCodeView = await parse(reader, fileSize, rvaToOff,
       addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning);
