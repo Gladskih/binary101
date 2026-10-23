@@ -7,7 +7,8 @@ import { parseArmntExceptionDirectory } from "./armnt.js";
 import { parseNativeAotX86ExceptionDirectory } from "./native-aot-x86.js";
 import { parseReadyToRunX86ExceptionDirectory } from "./ready-to-run-x86.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
-import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
+import { parseNtRiscExceptionDirectory } from "./nt-risc-directory.js";
 import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
 import type { PeNativeAotAnalysis } from "../native-aot.js";
 import {
@@ -29,30 +30,33 @@ const isArm64ExceptionMachine = (machine: number): boolean =>
 
 export { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 
+const parseManagedX86Exceptions = async (reader: FileRangeReader, dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset, readyToRun: PeClrReadyToRun | null | undefined,
+  nativeAotCandidate: PeNativeAotAnalysis | null | undefined): Promise<PeExceptionDirectory | null> =>
+  await parseReadyToRunX86ExceptionDirectory(reader, dataDirs, rvaToOff, readyToRun) ??
+    parseNativeAotX86ExceptionDirectory(reader, dataDirs, rvaToOff, nativeAotCandidate);
+
+const unsupportedExceptionDirectory = (dataDirs: PeDataDirectory[], machine: number): PeExceptionDirectory | null => {
+  const directory = dataDirs.find(entry => entry.name === "EXCEPTION");
+  if (!directory || (directory.rva === 0 && directory.size === 0)) return null;
+  return createEmptyExceptionDirectory([directory.rva === 0
+    ? "Exception directory has a non-zero size but RVA is 0."
+    : `Exception directory decoding is not implemented for machine 0x${machine.toString(16)}.`]);
+};
+
 export async function parseExceptionDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
   machine = IMAGE_FILE_MACHINE_AMD64,
   readyToRun?: PeClrReadyToRun | null,
-  nativeAotCandidate?: PeNativeAotAnalysis | null
+  nativeAotCandidate?: PeNativeAotAnalysis | null,
+  header?: PeWindowsOptionalHeader
 ): Promise<PeExceptionDirectory | null> {
   const canonicalMachine = getCanonicalPeMachine(machine);
   if (canonicalMachine === IMAGE_FILE_MACHINE_I386) {
-    const readyToRunException = await parseReadyToRunX86ExceptionDirectory(
-      reader,
-      dataDirs,
-      rvaToOff,
-      readyToRun
-    );
-    if (readyToRunException) return readyToRunException;
-    const nativeAotException = await parseNativeAotX86ExceptionDirectory(
-      reader,
-      dataDirs,
-      rvaToOff,
-      nativeAotCandidate
-    );
-    if (nativeAotException) return nativeAotException;
+    const managed = await parseManagedX86Exceptions(reader, dataDirs, rvaToOff, readyToRun, nativeAotCandidate);
+    if (managed) return managed;
   }
   if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
     return parseAmd64ExceptionDirectory(reader, dataDirs, rvaToOff);
@@ -63,16 +67,7 @@ export async function parseExceptionDirectory(
   if (isArm64ExceptionMachine(canonicalMachine)) {
     return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
-  const dir = dataDirs.find(directory => directory.name === "EXCEPTION");
-  if (!dir || (dir.rva === 0 && dir.size === 0)) {
-    return null;
-  }
-  if (dir.rva === 0) {
-    return createEmptyExceptionDirectory([
-      "Exception directory has a non-zero size but RVA is 0."
-    ]);
-  }
-  return createEmptyExceptionDirectory([
-    `Exception directory decoding is not implemented for machine 0x${machine.toString(16)}.`
-  ]);
+  const ntRisc = await parseNtRiscExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
+  if (ntRisc) return ntRisc;
+  return unsupportedExceptionDirectory(dataDirs, machine);
 }

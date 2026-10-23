@@ -16,9 +16,40 @@ for (const [format, intro, unwindLabel] of [
 
     assert.ok(html.includes(intro));
     assert.ok(html.includes(unwindLabel));
+    assert.match(html, /Chained entries<\/dt><dd>0<\/dd>/);
     assert.doesNotMatch(html, /Winding operations|UNWIND_INFO v3/);
   });
 }
+
+for (const format of ["nt-risc32", "nt-risc64"] as const) {
+  void test(`Exception renderer summarizes ${format} prologs without address tables`, () => {
+    const out: string[] = [];
+    renderException({ ...createEmptyExceptionDirectory([], format), functionCount: 3,
+      uniqueUnwindInfoCount: 3, handlerUnwindInfoCount: 1, beginRvas: [0x1000, 0x1040, 0x1080],
+      riscPrologs: { count: 3, empty: 1, minimumBytes: 0, maximumBytes: 16 }
+    }, out);
+
+    assert.match(out.join(""), /full virtual addresses/);
+    assert.match(out.join(""), /Inline function descriptions<\/dt><dd>3<\/dd>/);
+    assert.match(out.join(""), /Resolved functions with exception handlers<\/dt><dd>1<\/dd>/);
+    assert.match(out.join(""), /Prologs with resolved boundaries<\/dt><dd>3<\/dd>/);
+    assert.match(out.join(""), /Empty prologs<\/dt><dd>1<\/dd>/);
+    assert.match(out.join(""), /Shortest prolog \(bytes\)<\/dt><dd>0<\/dd>/);
+    assert.match(out.join(""), /Longest prolog \(bytes\)<\/dt><dd>16<\/dd>/);
+    assert.doesNotMatch(out.join(""), /UNWIND_INFO|CHAININFO|EHANDLER|<table/);
+    assert.doesNotMatch(out.join(""), /Ranges with unresolved inline metadata/);
+  });
+}
+
+void test("NT RISC renderer omits prolog statistics when their boundaries are unresolved", () => {
+  const out: string[] = [];
+  renderException({ ...createEmptyExceptionDirectory([], "nt-risc32"), functionCount: 1,
+    beginRvas: [0x1000] }, out);
+
+  assert.doesNotMatch(out.join(""), /Prologs with resolved|Empty prologs|Shortest prolog|Longest prolog/);
+  assert.match(out.join(""), /Ranges with unresolved inline metadata<\/dt><dd>1<\/dd>/);
+  assert.doesNotMatch(out.join(""), /chained entries|<dt>undefined<\/dt>/i);
+});
 
 void test("ReadyToRun renders each exception-clause count once alongside its subtypes", () => {
   const out: string[] = [];

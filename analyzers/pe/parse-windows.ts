@@ -136,7 +136,7 @@ const parsePeDebugArtifacts = async (
   context: PeWindowsParseContext
 ): Promise<PeDebugArtifacts> => {
   const { reader, core, canonicalMachine } = context;
-  const debugResult = await parseDebugDirectory(reader, core.dataDirs, core.rvaToOff, canonicalMachine);
+  const debugResult = await parseDebugDirectory(reader, core.dataDirs, core.rvaToOff, canonicalMachine, core.opt);
   const td32Warnings: string[] = [];
   const td32Sources = await parseTd32Sources(reader, core.sections, core.opt.SizeOfHeaders,
     debugResult.entries, core.rvaToOff, warning => td32Warnings.push(warning));
@@ -209,7 +209,7 @@ const parsePeDirectoryArtifacts = async (
     ...runtime,
     exception: await parseExceptionDirectory(
       reader, core.dataDirs, core.rvaToOff, canonicalMachine,
-      runtime.clr?.readyToRun ?? runtime.readyToRun, runtime.nativeAotCandidate
+      runtime.clr?.readyToRun ?? runtime.readyToRun, runtime.nativeAotCandidate, core.opt
     ),
     manifestValidation: analyzeManifestConsistency(resources, canonicalMachine, runtime.clr)
   };

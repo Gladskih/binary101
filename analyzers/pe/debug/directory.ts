@@ -6,7 +6,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.js";
 import { DEBUG_TYPE_NAMES } from "./types.js";
-import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import { validateDebugEntry, validatePortablePdbLinks } from "./entry-validation.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
@@ -113,7 +113,8 @@ const decodeDebugDirectoryEntry = async (
   machine: number,
   addWarning: (message: string | null) => void,
   rawDataRanges: FileRange[],
-  exceptionDirectory: PeDataDirectory | undefined
+  exceptionDirectory: PeDataDirectory | undefined,
+  header: PeWindowsOptionalHeader | undefined
 ): Promise<PeDebugDirectoryEntry> => {
   const characteristics = view.getUint32(IMAGE_DEBUG_DIRECTORY_OFF_CHARACTERISTICS, true);
   if (characteristics !== 0) {
@@ -138,7 +139,7 @@ const decodeDebugDirectoryEntry = async (
   };
   Object.assign(currentEntry, await decodeDebugEntryPayload(reader, {
     type, typeName: currentEntry.typeName, fileSize: reader.size, rvaToOff,
-    addressOfRawDataRva, pointerToRawDataOff, dataSize, machine, exceptionDirectory
+    addressOfRawDataRva, pointerToRawDataOff, dataSize, machine, exceptionDirectory, header
   }, addWarning));
   validateDebugEntry(currentEntry, rvaToOff, reader.size).forEach(addWarning);
   return currentEntry;
@@ -193,7 +194,8 @@ export async function parseDebugDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
   rvaToOff: RvaToOffset,
-  machine: number
+  machine: number,
+  header?: PeWindowsOptionalHeader
 ): Promise<{
   entry: PeCodeViewEntry | null;
   entries: PeDebugDirectoryEntry[];
@@ -217,7 +219,7 @@ export async function parseDebugDirectory(
     if (!view) break;
     const currentEntry = await decodeDebugDirectoryEntry(reader, rvaToOff, view, machine,
       message => addWarning(message ? `Debug entry #${index + 1}: ${message}` : null), rawDataRanges,
-      exceptionDirectory);
+      exceptionDirectory, header);
     if (currentEntry.codeView && !entry) entry = currentEntry.codeView;
     entries.push(currentEntry);
   }

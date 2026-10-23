@@ -2,7 +2,7 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
-import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import type { PeCodeViewEntry } from "./codeview.js";
 import { decodeCodeViewPayload } from "./codeview-payload.js";
 import type { PeLegacyCodeViewInfo } from "./legacy-codeview.js";
@@ -11,7 +11,7 @@ import {
   parseEmbeddedPortablePdbInfo,
   type PeEmbeddedPortablePdbInfo
 } from "./embedded-portable-pdb.js";
-import { parseExceptionDebugInfo } from "./exception.js";
+import { createExceptionDebugParser } from "./exception.js";
 import type { PeExceptionDirectory } from "../exception/index.js";
 import {
   parseExDllCharacteristicsInfo,
@@ -76,6 +76,7 @@ type DecodeInput = {
   dataSize: number;
   machine: number;
   exceptionDirectory?: PeDataDirectory | undefined;
+  header?: PeWindowsOptionalHeader | undefined;
 };
 
 const hasDecodedPayload = (payloads: PeDebugPayloads): boolean => Object.values(payloads).some(Boolean);
@@ -136,9 +137,8 @@ const parseKnownPayload = async (
   if (input.type === IMAGE_DEBUG_TYPE_CODEVIEW) return decodeCodeViewPayload(reader, input.fileSize,
     input.rvaToOff, input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning);
   if (input.type === IMAGE_DEBUG_TYPE_EXCEPTION) {
-    const exception = await parseExceptionDebugInfo(
-      reader, input.rvaToOff, input.addressOfRawDataRva,
-      input.pointerToRawDataOff, input.dataSize, input.machine, addWarning, input.exceptionDirectory
+    const exception = await createExceptionDebugParser(reader, input.rvaToOff, input.machine, input.header)(
+      input.addressOfRawDataRva, input.pointerToRawDataOff, input.dataSize, addWarning, input.exceptionDirectory
     );
     return exception ? { exception } : {};
   }

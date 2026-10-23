@@ -2,7 +2,9 @@
 
 import type { FileRangeReader } from "../../file-range-reader.js";
 import { parseExceptionDirectory, createEmptyExceptionDirectory, type PeExceptionDirectory } from "../exception/index.js";
-import type { PeDataDirectory, RvaToOffset } from "../types.js";
+import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
+import { getNtRiscExceptionFormat } from "../exception/nt-risc-directory.js";
+import { parseNtRiscExceptionTable } from "../exception/nt-risc.js";
 import { getReadableDebugData } from "./data.js";
 import { createDebugPayloadReader } from "./payload-reader.js";
 import { parseAmd64ExceptionTable } from "../exception/amd64/index.js";
@@ -23,18 +25,30 @@ const parseAmd64Copy = async (reader: FileRangeReader, source: FileRangeReader,
     rvaToOff, issues, tableRva);
 };
 
+const parseMachineCopy = async (reader: FileRangeReader, source: FileRangeReader,
+  rvaToOff: RvaToOffset, dataSize: number, machine: number, tableRva: number | undefined,
+  header: PeWindowsOptionalHeader | undefined): Promise<PeExceptionDirectory | null> => {
+  if (machine === IMAGE_FILE_MACHINE_AMD64) return parseAmd64Copy(reader, source, rvaToOff, dataSize, tableRva);
+  if ([IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X].includes(machine)) {
+    return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva);
+  }
+  if (machine === IMAGE_FILE_MACHINE_ARMNT) return parseArmntExceptionTable(reader, source, dataSize, rvaToOff);
+  const ntRiscFormat = getNtRiscExceptionFormat(machine, header);
+  return ntRiscFormat
+    ? parseNtRiscExceptionTable(reader, source, dataSize, rvaToOff, ntRiscFormat, header?.ImageBase) : null;
+};
+
 // Microsoft PE format, "Debug Type": IMAGE_DEBUG_TYPE_EXCEPTION is a copy of
 // the .pdata section, so it can be decoded with the same machine-specific parser.
-// Entries retain image RVAs, including indirect references into the original
-// table. The debug copy's storage RVA is not a replacement for that origin.
+// Entries retain image addresses (VAs or RVAs according to the machine ABI),
+// including indirect references. The copy's storage RVA does not replace its origin.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-type
-export const parseExceptionDebugInfo = async (
-  reader: FileRangeReader,
-  rvaToOff: RvaToOffset,
+export const createExceptionDebugParser = (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, machine: number, header?: PeWindowsOptionalHeader
+) => async (
   addressOfRawDataRva: number,
   pointerToRawDataOff: number,
   dataSize: number,
-  machine: number,
   addWarning: (message: string) => void,
   exceptionDirectory?: PeDataDirectory
 ): Promise<PeExceptionDirectory | null> => {
@@ -43,19 +57,11 @@ export const parseExceptionDebugInfo = async (
     addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning);
   if (!location) return null;
   const tableRva = exceptionDirectory?.rva || addressOfRawDataRva;
-  const canonicalMachine = getCanonicalPeMachine(machine);
   const source = createDebugPayloadReader(reader, rvaToOff,
     addressOfRawDataRva, pointerToRawDataOff, location.size);
-  if (canonicalMachine === IMAGE_FILE_MACHINE_AMD64) {
-    return parseAmd64Copy(reader, source, rvaToOff, dataSize, tableRva || undefined);
-  }
-  if ([IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X]
-    .includes(canonicalMachine)) {
-    return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva || undefined);
-  }
-  if (canonicalMachine === IMAGE_FILE_MACHINE_ARMNT) {
-    return parseArmntExceptionTable(reader, source, dataSize, rvaToOff);
-  }
+  const parsed = await parseMachineCopy(reader, source, rvaToOff, dataSize,
+    getCanonicalPeMachine(machine), tableRva || undefined, header);
+  if (parsed) return parsed;
   if (!tableRva) {
     addWarning(`EXCEPTION debug payload has no known table RVA; raw-table decoding is not implemented for machine 0x${machine.toString(16)}.`);
     return null;
@@ -67,3 +73,10 @@ export const parseExceptionDebugInfo = async (
     machine
   );
 };
+
+export const parseExceptionDebugInfo = (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, addressOfRawDataRva: number,
+  pointerToRawDataOff: number, dataSize: number, machine: number,
+  addWarning: (message: string) => void, exceptionDirectory?: PeDataDirectory
+): Promise<PeExceptionDirectory | null> => createExceptionDebugParser(reader, rvaToOff, machine)(
+  addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning, exceptionDirectory);

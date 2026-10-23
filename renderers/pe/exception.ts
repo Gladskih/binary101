@@ -12,7 +12,7 @@ type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
 
 interface ExceptionRenderProfile {
-  chainedLabel: string;
+  chainedLabel?: string;
   handlerLabel: string;
   introNote: string;
   renderFormatNote: (ex: PeExceptionSection, out: string[]) => void;
@@ -99,8 +99,26 @@ const getUnknownProfile = (): ExceptionRenderProfile => ({
   unwindLabel: "Unique unwind descriptions"
 });
 
+const renderRiscPrologs = (ex: PeExceptionSection, out: string[]): void => {
+  const unresolved = ex.beginRvas.length - (ex.riscPrologs?.count ?? 0);
+  if (unresolved > 0) out.push(renderDefinitionRow("Ranges with unresolved inline metadata", String(unresolved)));
+  if (!ex.riscPrologs) return;
+  for (const [label, count] of [
+    ["Prologs with resolved boundaries", ex.riscPrologs.count], ["Empty prologs", ex.riscPrologs.empty],
+    ["Shortest prolog (bytes)", ex.riscPrologs.minimumBytes], ["Longest prolog (bytes)", ex.riscPrologs.maximumBytes]
+  ] as const) out.push(renderDefinitionRow(label, String(count)));
+};
+
+const getNtRiscProfile = (): ExceptionRenderProfile => ({
+  handlerLabel: "Resolved functions with exception handlers",
+  introNote: "NT RISC .pdata stores full virtual addresses, inline handler metadata, and prolog boundaries.",
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderRiscPrologs,
+  unwindLabel: "Inline function descriptions"
+});
+
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
   if (format == null) return getUnknownProfile();
+  if (format === "nt-risc32" || format === "nt-risc64") return getNtRiscProfile();
   if (format === "native-aot-x86") {
     return {
       chainedLabel: "Chained entries",
@@ -152,7 +170,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<dt>${profile.unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount}</dd>`);
   profile.renderFormatStats(ex, out);
   out.push(`<dt>${profile.handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount}</dd>`);
-  out.push(`<dt>${profile.chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount}</dd>`);
+  if (profile.chainedLabel) out.push(`<dt>${profile.chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount}</dd>`);
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount}</dd>`);
   out.push(`</dl>`);
   profile.renderFormatNote(ex, out);
