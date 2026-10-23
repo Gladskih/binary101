@@ -2,6 +2,7 @@ import type { PeLegacyCodeViewInfo } from "../../analyzers/pe/debug/legacy-codev
 import type { LegacyCodeViewSymbols } from "../../analyzers/pe/debug/legacy-codeview-symbols.js";
 import type { LegacyCodeViewTable } from "./legacy-codeview-tables.js";
 import { legacyCodeViewSymbolName } from "./legacy-codeview-kinds.js";
+import { iterateLegacyCodeViewSymbols } from "./legacy-codeview-symbol-walk.js";
 
 const pairedRows = (strings: readonly string[]): string[][] => {
   const rows: string[][] = [];
@@ -27,9 +28,10 @@ export const buildLegacyCodeViewSymbolStringTables = (info: PeLegacyCodeViewInfo
     columns: ["Directory", "Module", "Symbol kind", "Field", "Text"], rows: [] };
   info.directories.forEach((directory, index) => {
     for (const section of directory.subsections) {
-      if (section.data?.kind !== "symbols") continue;
-      for (const record of section.data.records) for (const row of symbolTextRows(record)) {
-        table.rows.push([String(index + 1), String(section.module), ...row]);
+      if (!section.data) continue;
+      for (const { record, container } of iterateLegacyCodeViewSymbols(section.data)) {
+        for (const row of symbolTextRows(record)) table.rows.push([String(index + 1), String(section.module),
+          container === undefined ? row[0]! : `${container} / ${row[0]}`, ...row.slice(1)]);
       }
     }
   });

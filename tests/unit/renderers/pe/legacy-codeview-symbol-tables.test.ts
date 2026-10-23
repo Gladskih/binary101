@@ -53,3 +53,16 @@ void test("CodeView symbol text keeps record ordering across multiple modules", 
     ["1", "4", "Annotations", "String 1", "first"], ["1", "5", "Symbol record 0xffff", "String 1", "second"]
   ]);
 });
+
+void test("CodeView strings inside symbol wrappers and type leaves retain their nearest container", () => {
+  const info = createLegacyCodeViewInfo();
+  info.directories[0]!.subsections.push({ type: 0x125, module: 4, offset: 0, size: 0,
+    data: { kind: "symbols", records: [{ type: 0xe, children: [{ type: 0x1019, strings: ["inside"] }] }] } });
+  info.directories[0]!.subsections.push({ type: 0x121, module: 5, offset: 0, size: 0,
+    data: { kind: "types", records: [{ type: 0x20c, symbols: [{ type: 0x113d, strings: ["cwd", "workspace"] }] }] } });
+
+  assert.deepEqual(buildLegacyCodeViewSymbolStringTables(info)[0]!.rows, [
+    ["1", "4", "This pointer / Annotations", "String 1", "inside"],
+    ["1", "5", "Referenced symbol / Environment", "cwd", "workspace"]
+  ]);
+});

@@ -5,12 +5,13 @@ import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../p
 import { buildLegacyCodeViewTables, type LegacyCodeViewTable } from "./legacy-codeview-tables.js";
 
 const columnClass = (label: string): string =>
-  /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets)$/.test(label)
+  /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets|With source line|First source line|Last source line)$/.test(label)
     ? "peNumeric" : "";
 
 const model = (table: LegacyCodeViewTable, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
   ...(table.key === "indexes" ? { tableClassName: "peCodeViewIndexTable" } : {}),
+  ...(table.key === "discardedSymbols" ? { tableClassName: "peCodeViewDiscardedTable" } : {}),
   columns: table.columns.map(label => ({ label, className: columnClass(label) })),
   rowAt: index => table.rows[index] ? { cells: table.rows[index]!.map((value, column) =>
     ({ html: escapeHtml(value), className: columnClass(table.columns[column] ?? "") })) } : null,

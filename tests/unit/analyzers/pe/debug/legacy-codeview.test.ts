@@ -3,6 +3,9 @@ import { test } from "node:test";
 import { parseLegacyCodeView } from "../../../../../analyzers/pe/debug/legacy-codeview.js";
 import { createLegacyCodeView, legacyModule, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { createExtraDebugPayloadSubject, identityRvaToOff } from "../../../../fixtures/pe-debug-extra-payloads.js";
+import { createPeWithEmbeddedCodeView } from "../../../../fixtures/pe-codeview-embedded-symbols.js";
+import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
+import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 
 const parse = async (bytes: Uint8Array, declaredSize = bytes.length) => {
   const subject = createExtraDebugPayloadSubject(bytes, declaredSize);
@@ -19,6 +22,26 @@ void test("legacy CodeView decodes supported directory subsections and retains u
   assert.deepEqual(parsed?.directories[0]?.subsections.map(section => section.data?.kind),
     ["module", "libraries", "symbols", "source"]);
   assert.deepEqual(warnings, []);
+});
+
+void test("PE debug-directory integration retains embedded symbols, base names and discard source metadata", async () => {
+  const file = createPeWithEmbeddedCodeView();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const parsed = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const sections = parsed.entries[0]!.legacyCodeView!.directories[0]!.subsections;
+  const symbols = sections[0]!.data;
+  const types = sections[1]!.data;
+  assert.equal(symbols?.kind, "symbols");
+  assert.equal(types?.kind, "types");
+
+  assert.equal(parsed.warning, null);
+  assert.equal(symbols.records.length, 3);
+  assert.equal(symbols.records[0]!.children?.length, 102);
+  assert.deepEqual(symbols.records[0]!.discarded, { reason: 2, fileId: 7, line: 42 });
+  assert.deepEqual(symbols.records[2]!.children, [{ type: 0x110e, name: "thisAlias" }]);
+  assert.deepEqual(types.records, [{ type: 0x20c, symbols: [{ type: 0x110e, name: "referenced" }] },
+    { type: 2, strings: ["BaseType"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "basedValue" }] }]);
 });
 
 void test("legacy CodeView keeps valid subsections when another is malformed or unknown", async () => {
@@ -56,11 +79,12 @@ void test("legacy CodeView retains an available header when SizeOfData is trunca
 
 void test("legacy CodeView dispatches global type origins and retains unknown but bounded subsections", async () => {
   const { parsed, warnings } = await parse(createLegacyCodeView([
-    { type: 0x12b, module: 0xffff, data: Uint8Array.from([1, 0, 0, 0, ...legacyU32(1), ...legacyU32(0), 2, 0, 2, 0]) },
+    { type: 0x12b, module: 0xffff, data: Uint8Array.from([1, 0, 0, 0,
+      ...legacyU32(1), ...legacyU32(0), 2, 0, 0x77, 0x77]) },
     { type: 0x999, module: 0xffff, data: new Uint8Array() }
   ]));
 
-  assert.deepEqual(parsed?.directories[0]?.subsections[0]?.data, { kind: "types", records: [{ type: 2 }] });
+  assert.deepEqual(parsed?.directories[0]?.subsections[0]?.data, { kind: "types", records: [{ type: 0x7777 }] });
   assert.equal(parsed?.directories[0]?.subsections[1]?.data, undefined);
   assert.deepEqual(warnings, []);
 });

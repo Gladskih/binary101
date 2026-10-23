@@ -116,3 +116,14 @@ void test("CodeView module inventory distinguishes missing libraries and zero ac
   assert.equal(tables.find(table => table.key === "module")?.rows[0]?.[3], "#1");
   assert.equal(tables.find(table => table.key === "segmentMap")?.rows[0]?.[6], "No access flags");
 });
+void test("CodeView record histograms count repeated symbols without counting their text twice", () => {
+  const tables = buildLegacyCodeViewTables(createLegacyCodeViewInfo());
+
+  assert.deepEqual(tables.find(table => table.key === "records")!.rows.filter(row => row[2] === "Symbols"), [
+    ["1", "1", "Symbols", "Public symbol", "2"], ["1", "1", "Symbols", "Scope end", "1"]
+  ]);
+  assert.deepEqual(tables.find(table => table.key === "records")!.rows.filter(row => row[2] === "Types"), [
+    ["1", "1", "Types", "Structure", "1"], ["1", "1", "Types", "Pointer", "1"],
+    ["1", "1", "Types", "Fields", "1"]
+  ]);
+});

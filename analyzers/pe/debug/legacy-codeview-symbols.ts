@@ -1,33 +1,19 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
-import { readLegacyCodeViewSymbolText, type LegacyCodeViewSymbolText } from "./legacy-codeview-symbol-text.js";
+import { readLegacyCodeViewSymbolRecords, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
 import { readLegacyCodeViewNameIndex, readLegacyCodeViewAddressIndex,
   type LegacyCodeViewIndex } from "./legacy-codeview-index.js";
 
 export interface LegacyCodeViewSymbols {
   kind: "symbols";
-  records: (LegacyCodeViewSymbolText & { type: number })[];
+  records: LegacyCodeViewSymbol[];
   nameIndex?: LegacyCodeViewIndex;
   addressIndex?: LegacyCodeViewIndex;
 }
 
 export const readLegacyCodeViewSymbols = async (
   reader: LegacyCodeViewReader, start: number, end: number
-): Promise<LegacyCodeViewSymbols> => {
-  const records: LegacyCodeViewSymbols["records"] = [];
-  for (let offset = start; offset < end;) {
-    try {
-      const length = await reader.uint16(offset);
-      if (length < 2 || length + 2 > end - offset) throw new Error("Invalid CodeView symbol record length.");
-      const type = await reader.uint16(offset + 2);
-      let text: LegacyCodeViewSymbolText = {};
-      try { text = await readLegacyCodeViewSymbolText(reader.subsection(offset, length + 2), type); }
-      catch (error) { reader.warn(`CodeView symbol ${type}: ${String(error)}`); }
-      records.push({ type, ...text });
-      offset += length + 2;
-    } catch (error) { reader.warn(String(error)); break; }
-  }
-  return { kind: "symbols", records };
-};
+): Promise<LegacyCodeViewSymbols> => ({ kind: "symbols",
+  records: await readLegacyCodeViewSymbolRecords(reader, start, end) });
 
 // Packed global/public/static symbols start after OMFSymHash; the hash tables
 // are indexes over these same records, not additional symbol definitions.

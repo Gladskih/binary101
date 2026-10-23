@@ -79,6 +79,36 @@ void test("CodeView index statistics retain escaped section names and right-alig
   assert.deepEqual(buckets.columns.slice(3).map(column => column.className), ["peNumeric", "peNumeric"]);
 });
 
+void test("CodeView embedded names are paginated, escaped and accompanied by numeric discard statistics", () => {
+  const { pe, entry } = subject();
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x125, module: 2, offset: 0, size: 0,
+    data: { kind: "symbols", records: [{ type: 0x113b, discarded: { reason: 2, fileId: 0, line: 42 },
+      children: Array.from({ length: 101 }, (_, index) => ({ type: 0x110d, name: `<removed_${index}>` })) }] } });
+  entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x121, module: 3, offset: 0, size: 0,
+    data: { kind: "types", records: [{ type: 2, strings: ["Base"] }, { type: 0x1002, strings: ["WideBase"] }] } });
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out);
+  const names = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-embeddedSymbols")!;
+  const statistics = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-discardedSymbols")!;
+  const strings = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-typeStrings")!;
+
+  assert.match(out.join(""), /Embedded symbol names|Embedded symbol statistics/);
+  assert.match(out.join(""), /Pointer base type/);
+  assert.match(out.join(""), /&lt;removed_0>/);
+  assert.doesNotMatch(out.join(""), /<removed_0>/);
+  assert.equal(names.rowCount, 101);
+  assert.equal(names.id, "pe-debug-entry-0-legacy-embeddedSymbols");
+  assert.equal(statistics.id, "pe-debug-entry-0-legacy-discardedSymbols");
+  assert.equal(names.rowAt(100)?.cells[4]?.html, "&lt;removed_100>");
+  assert.equal(names.sortValueAt(100, 4), "<removed_100>");
+  assert.equal(statistics.tableClassName, "peCodeViewDiscardedTable");
+  assert.deepEqual(statistics.columns.slice(3).map(column => column.className),
+    ["peNumeric", "peNumeric", "peNumeric", "peNumeric"]);
+  assert.deepEqual(statistics.rowAt(0)?.cells.slice(3).map(cell => cell.html), ["1", "1", "42", "42"]);
+  assert.equal(strings.sortValueAt(0, 2), "Pointer base type");
+  assert.equal(strings.sortValueAt(1, 2), "Pointer base type");
+});
+
 void test("CodeView stored strings are escaped, paginated and available through the table dispatcher", () => {
   const { pe, entry } = subject();
   entry.legacyCodeView.directories[0]!.subsections.push({ type: 0x121, module: 2, offset: 0, size: 0,

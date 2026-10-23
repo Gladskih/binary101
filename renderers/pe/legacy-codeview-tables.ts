@@ -6,6 +6,8 @@ import { legacyCodeViewFieldName } from "./legacy-codeview-kinds.js";
 import type { LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.js";
 import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-tables.js";
+import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embedded-symbols.js";
+import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -106,15 +108,17 @@ const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCo
   tables.set("members", table);
 };
 
+const typeStringKind = (type: number, index: number): string => type === 2 || type === 0x1002
+  ? "Pointer base type" : type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
+    : legacyCodeViewTypeName(type);
+
 const addTypeStrings = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCodeViewData,
   directory: number, module: number): void => {
   if (data.kind !== "types") return;
   const table = tables.get("typeStrings") ?? { key: "typeStrings", title: "Stored type and ID strings",
     columns: ["Directory", "Module", "Record kind", "Text"], rows: [] };
   for (const record of data.records) (record.strings ?? []).forEach((text, index) => {
-    const label = record.type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
-      : legacyCodeViewTypeName(record.type);
-    table.rows.push([String(directory), String(module), label, text || "(empty)"]);
+    table.rows.push([String(directory), String(module), typeStringKind(record.type, index), text || "(empty)"]);
   });
   tables.set("typeStrings", table);
 };
@@ -158,6 +162,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       String(group.count), String(group.size), `${group.decoded} / ${group.count}`]);
   });
   return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info),
-    ...buildLegacyCodeViewSymbolStringTables(info)]
+    ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewEmbeddedSymbolTables(info),
+    ...buildLegacyCodeViewDiscardedStatistics(info)]
     .filter(table => table.rows.length > 0);
 };

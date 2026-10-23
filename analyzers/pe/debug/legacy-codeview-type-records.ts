@@ -2,10 +2,13 @@ import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { skipLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
 import { readLegacyCodeViewFields, type LegacyCodeViewField } from "./legacy-codeview-fields.js";
 import { readLegacyCodeViewTypeStrings } from "./legacy-codeview-type-strings.js";
+import { readLegacyCodeViewEmbeddedSymbol, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
+import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js";
 
 export interface LegacyCodeViewTypes {
   kind: "types";
-  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[]; strings?: string[] }[];
+  records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[];
+    strings?: string[]; symbols?: LegacyCodeViewSymbol[] }[];
 }
 
 // Offsets of size numeric leaves and inline names, including the record length.
@@ -33,6 +36,10 @@ const readType = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTyp
   if (type === 0x204 || type === 0x1203) return { type,
     members: await readLegacyCodeViewFields(reader.subsection(4, reader.size - 4)) };
   try {
+    if (type === 2 || type === 0x1002) return { type, ...await readLegacyCodeViewPointerBase(reader, type) };
+    // TIS 3.4 LF_REFSYM stores a complete length-prefixed symbol at offset 4.
+    // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
+    if (type === 0x20c) return { type, symbols: await readLegacyCodeViewEmbeddedSymbol(reader, 4) };
     const strings = await readLegacyCodeViewTypeStrings(reader, type);
     if (strings !== undefined) return { type, strings };
     const numeric = NUMERIC_OFFSETS.get(type);
