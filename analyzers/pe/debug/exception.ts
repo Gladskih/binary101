@@ -7,13 +7,15 @@ import { getNtRiscExceptionFormat } from "../exception/nt-risc-directory.js";
 import { parseNtRiscExceptionTable } from "../exception/nt-risc.js";
 import { isCeExceptionMachine } from "../exception/ce-directory.js";
 import { parseCeExceptionTable } from "../exception/ce.js";
+import { parseIa64ExceptionTable } from "../exception/ia64.js";
 import { getReadableDebugData } from "./data.js";
 import { createDebugPayloadReader } from "./payload-reader.js";
 import { parseAmd64ExceptionTable } from "../exception/amd64/index.js";
 import { parseArm64ExceptionTable } from "../exception/arm64.js";
 import { parseArmntExceptionTable } from "../exception/armnt.js";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_ARM64,
-  IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X, IMAGE_FILE_MACHINE_ARMNT } from "../../coff/machine.js";
+  IMAGE_FILE_MACHINE_ARM64EC, IMAGE_FILE_MACHINE_ARM64X, IMAGE_FILE_MACHINE_ARMNT,
+  IMAGE_FILE_MACHINE_IA64 } from "../../coff/machine.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "../exception/amd64/directory.js";
 
@@ -35,6 +37,7 @@ const parseMachineCopy = async (reader: FileRangeReader, source: FileRangeReader
     return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva);
   }
   if (machine === IMAGE_FILE_MACHINE_ARMNT) return parseArmntExceptionTable(reader, source, dataSize, rvaToOff);
+  if (machine === IMAGE_FILE_MACHINE_IA64) return parseIa64ExceptionTable(reader, source, dataSize, rvaToOff);
   if (isCeExceptionMachine(machine, header)) {
     return parseCeExceptionTable(reader, source, dataSize, rvaToOff, header?.ImageBase, machine);
   }

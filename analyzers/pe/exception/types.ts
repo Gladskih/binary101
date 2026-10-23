@@ -29,7 +29,7 @@ export interface PeExceptionDirectory {
   fragmentEntryCount?: number;
   invalidEntryCount: number;
   issues: string[];
-  format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce";
+  format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce" | "ia64";
   riscPrologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
   ceCompressed?: PeCeExceptionStatistics;
   exceptionInfoMethodCount?: number;

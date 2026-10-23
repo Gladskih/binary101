@@ -10,6 +10,7 @@ import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./type
 import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import { parseNtRiscExceptionDirectory } from "./nt-risc-directory.js";
 import { parseCeExceptionDirectory } from "./ce-directory.js";
+import { parseIa64ExceptionDirectory } from "./ia64-directory.js";
 import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
 import type { PeNativeAotAnalysis } from "../native-aot.js";
 import {
@@ -18,7 +19,8 @@ import {
   IMAGE_FILE_MACHINE_ARM64EC,
   IMAGE_FILE_MACHINE_ARM64X,
   IMAGE_FILE_MACHINE_ARMNT,
-  IMAGE_FILE_MACHINE_I386
+  IMAGE_FILE_MACHINE_I386,
+  IMAGE_FILE_MACHINE_IA64
 } from "../../coff/machine.js";
 import {
   getCanonicalPeMachine
@@ -45,6 +47,14 @@ const unsupportedExceptionDirectory = (dataDirs: PeDataDirectory[], machine: num
     : `Exception directory decoding is not implemented for machine 0x${machine.toString(16)}.`]);
 };
 
+const parseLegacyExceptionDirectory = async (reader: FileRangeReader, dataDirs: PeDataDirectory[],
+  rvaToOff: RvaToOffset, machine: number, header: PeWindowsOptionalHeader | undefined
+): Promise<PeExceptionDirectory | null> => {
+  if (machine === IMAGE_FILE_MACHINE_IA64) return parseIa64ExceptionDirectory(reader, dataDirs, rvaToOff);
+  return await parseNtRiscExceptionDirectory(reader, dataDirs, rvaToOff, machine, header) ??
+    parseCeExceptionDirectory(reader, dataDirs, rvaToOff, machine, header);
+};
+
 export async function parseExceptionDirectory(
   reader: FileRangeReader,
   dataDirs: PeDataDirectory[],
@@ -68,9 +78,7 @@ export async function parseExceptionDirectory(
   if (isArm64ExceptionMachine(canonicalMachine)) {
     return parseArm64ExceptionDirectory(reader, dataDirs, rvaToOff);
   }
-  const ntRisc = await parseNtRiscExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
-  if (ntRisc) return ntRisc;
-  const ce = await parseCeExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
-  if (ce) return ce;
+  const legacy = await parseLegacyExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
+  if (legacy) return legacy;
   return unsupportedExceptionDirectory(dataDirs, machine);
 }

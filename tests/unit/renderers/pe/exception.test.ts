@@ -3,6 +3,19 @@ import { test } from "node:test";
 import { renderException } from "../../../../renderers/pe/exception.js";
 import { createEmptyExceptionDirectory } from "../../../../analyzers/pe/exception/types.js";
 
+void test("IA64 renders mapped references and range statistics without inventing handler counts", () => {
+  const out: string[] = [];
+  renderException({ ...createEmptyExceptionDirectory([], "ia64"), functionCount: 2,
+    beginRvas: [0x1000, 0x1040], rangeLengths: [64, 64], uniqueUnwindInfoCount: 1 }, out);
+  const html = out.join("");
+
+  assert.match(html, /IA64 .pdata stores three 32-bit image-relative addresses/);
+  assert.match(html, /Unique mapped unwind references<\/dt><dd>1<\/dd>/);
+  assert.match(html, /Unwind payloads remain undecoded/);
+  assert.match(html, /Range length distribution/);
+  assert.doesNotMatch(html, /Handlers present|Chained|CHAININFO|EHANDLER|<dt>undefined|UNWIND_INFO/);
+});
+
 for (const [format, intro, unwindLabel] of [
   ["arm64", "ARM64 .pdata stores packed unwind data", "Unique unwind descriptions"],
   ["armnt", "ARMNT .pdata stores packed unwind data", "Unique unwind descriptions"],

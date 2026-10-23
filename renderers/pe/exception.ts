@@ -14,7 +14,7 @@ type PeExceptionFormat = PeExceptionSection["format"];
 
 interface ExceptionRenderProfile {
   chainedLabel?: string;
-  handlerLabel: string;
+  handlerLabel?: string;
   introNote: string;
   renderFormatNote: (ex: PeExceptionSection, out: string[]) => void;
   renderFormatStats: (ex: PeExceptionSection, out: string[]) => void;
@@ -125,10 +125,24 @@ const getCeProfile = (): ExceptionRenderProfile => ({
   unwindLabel: "Inline function descriptions"
 });
 
-const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
-  if (format == null) return getUnknownProfile();
+const getIa64Profile = (): ExceptionRenderProfile => ({
+  introNote: "IA64 .pdata stores three 32-bit image-relative addresses for each code range and its unwind data. " +
+    "Unwind payloads remain undecoded; handler and chaining information is unavailable.",
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderNoFormatDetails,
+  unwindLabel: "Unique mapped unwind references"
+});
+
+const getLegacyProfile = (format: NonNullable<PeExceptionFormat>): ExceptionRenderProfile | undefined => {
+  if (format === "ia64") return getIa64Profile();
   if (format === "ce") return getCeProfile();
   if (format === "nt-risc32" || format === "nt-risc64") return getNtRiscProfile();
+  return undefined;
+};
+
+const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
+  if (format == null) return getUnknownProfile();
+  const legacy = getLegacyProfile(format);
+  if (legacy) return legacy;
   if (format === "native-aot-x86") {
     return {
       chainedLabel: "Chained entries",
@@ -179,7 +193,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<dt>Functions (RUNTIME_FUNCTION entries)</dt><dd>${ex.functionCount}</dd>`);
   out.push(`<dt>${profile.unwindLabel}</dt><dd>${ex.uniqueUnwindInfoCount}</dd>`);
   profile.renderFormatStats(ex, out);
-  out.push(`<dt>${profile.handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount}</dd>`);
+  if (profile.handlerLabel) out.push(`<dt>${profile.handlerLabel}</dt><dd>${ex.handlerUnwindInfoCount}</dd>`);
   if (profile.chainedLabel) out.push(`<dt>${profile.chainedLabel}</dt><dd>${ex.chainedUnwindInfoCount}</dd>`);
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount}</dd>`);
   out.push(`</dl>`);
