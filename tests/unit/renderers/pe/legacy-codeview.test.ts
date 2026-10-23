@@ -60,9 +60,11 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   assert.match(out.join(""), /Embedded CodeView format/);
   assert.match(out.join(""), /&lt;module>.obj/);
   assert.match(out.join(""), /&lt;public>/);
-  assert.match(out.join(""), /&lt;field>/);
+  assert.match(out.join(""), /&lt;field&gt;/);
   assert.match(out.join(""), /\.\?AU&lt;Structure>@@/);
   assert.match(out.join(""), /Member and enumerator names/);
+  assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-members")?.tableClassName,
+    "peCodeViewMemberTable");
   assert.match(out.join(""), /Line\/address pairs/);
   assert.doesNotMatch(out.join(""), /<public>|RVA<\/th>|0x00000010/);
   assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module>.obj");

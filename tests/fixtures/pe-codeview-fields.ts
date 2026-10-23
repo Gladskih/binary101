@@ -1,4 +1,11 @@
 import { legacyPascal, legacySymbol, legacyU16, legacyU32 } from "./pe-legacy-codeview.js";
+import type { LegacyCodeViewField } from "../../analyzers/pe/debug/legacy-codeview-fields.js";
+
+/** Text/boundary checks are independent of separately tested field semantics. */
+export const codeViewStoredFieldNames = (fields: readonly LegacyCodeViewField[]) => fields.map(field => ({
+  type: field.type, ...(field.name === undefined ? {} : { name: field.name }),
+  ...(field.continuation === undefined ? {} : { continuation: field.continuation })
+}));
 
 export const codeViewUniqueType = (type: number, offset: number, name: string,
   identity: readonly number[]): number[] => {

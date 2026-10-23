@@ -1,17 +1,65 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readLegacyCodeViewFields } from "../../../../../analyzers/pe/debug/legacy-codeview-fields.js";
+import { readLegacyCodeViewFields as readFieldData } from "../../../../../analyzers/pe/debug/legacy-codeview-fields.js";
 import { legacyReader, legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
-import { codeViewField, codeViewMethodField, codeViewBaseField } from "../../../../fixtures/pe-codeview-fields.js";
+import { codeViewStoredFieldNames, codeViewField, codeViewMethodField, codeViewBaseField } from "../../../../fixtures/pe-codeview-fields.js";
+import { codeViewInteger } from "../../../../fixtures/pe-codeview-numeric-values.js";
+
+const readLegacyCodeViewFields = async (reader: Parameters<typeof readFieldData>[0]) =>
+  codeViewStoredFieldNames(await readFieldData(reader));
+
+void test("CodeView enum values and data-member offsets retain exact integers and type references", async () => {
+  const fields = await readFieldData(legacyReader([
+    ...codeViewField(0x1502, [...legacyU16(3), ...codeViewInteger(0x800a, (1n << 64n) - 1n, 8)], "largest"),
+    ...codeViewField(0x150d, [...legacyU16(1), ...legacyU32(0x74), ...legacyU16(12)], "count")
+  ]));
+  assert.deepEqual(fields, [
+    { type: 0x1502, name: "largest", attributes: 3, value: "18446744073709551615" },
+    { type: 0x150d, name: "count", attributes: 1, typeIndex: 0x74, offset: "12" }
+  ]);
+});
+
+void test("CodeView base, virtual-base and method metadata retain their distinct numeric meanings", async () => {
+  const fields = await readFieldData(legacyReader([
+    ...codeViewBaseField(0x1400, 8), ...codeViewBaseField(0x1401, 12),
+    ...codeViewMethodField(0x1511, 4, "virtualMethod"),
+    ...codeViewField(0x150f, [...legacyU16(2), ...legacyU32(0x12345678)], "overloaded")
+  ]));
+  assert.deepEqual(fields, [
+    { type: 0x1400, typeIndex: 0, attributes: 0, offset: "65536" },
+    { type: 0x1401, typeIndex: 0, virtualBasePointer: 0, attributes: 0,
+      offset: "65536", virtualBaseTableIndex: "8" },
+    { type: 0x1511, typeIndex: 0, attributes: 19, vtableOffset: 32, name: "virtualMethod" },
+    { type: 0x150f, typeIndex: 0x12345678, methodCount: 2, name: "overloaded" }
+  ]);
+});
+
+void test("CodeView noninteger member values keep their name and a visible diagnostic", async () => {
+  const warnings: string[] = [];
+  const fields = await readFieldData(legacyReader(codeViewField(0x1502,
+    [...legacyU16(3), ...legacyU16(0x8005), ...legacyU32(0)], "notInteger"), warnings));
+  assert.deepEqual(fields, [{ type: 0x1502, attributes: 3, name: "notInteger" }]);
+  assert.match(warnings.join(" | "), /value is not an integer encoding/);
+});
+
+void test("CodeView a method's negative virtual-table displacement stays signed", async () => {
+  const fields = await readFieldData(legacyReader(codeViewField(0x1511,
+    [...legacyU16(3 | 4 << 2), ...legacyU32(0x12345678), ...legacyU32(-8)], "adjusted")));
+  assert.deepEqual(fields, [{ type: 0x1511, attributes: 19,
+    typeIndex: 0x12345678, vtableOffset: -8, name: "adjusted" }]);
+});
 
 void test("CodeView field lists retain names and advance through real field boundaries and padding", async () => {
   const bytes = [...codeViewField(0x406, [...legacyU16(0x74), ...legacyU16(3), ...legacyU16(0)], "count"),
     ...codeViewField(0x403, [...legacyU16(0), ...legacyU16(7)], "last")];
   const warnings: string[] = [];
 
-  const fields = await readLegacyCodeViewFields(legacyReader(bytes, warnings));
+  const fields = await readFieldData(legacyReader(bytes, warnings));
 
-  assert.deepEqual(fields, [{ type: 0x406, name: "count" }, { type: 0x403, name: "last" }]);
+  assert.deepEqual(fields, [
+    { type: 0x406, typeIndex: 0x74, attributes: 3, offset: "0", name: "count" },
+    { type: 0x403, attributes: 0, value: "7", name: "last" }
+  ]);
   assert.deepEqual(warnings, []);
 });
 

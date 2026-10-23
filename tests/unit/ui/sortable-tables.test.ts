@@ -63,6 +63,24 @@ void test("compareSortValues sorts numeric strings numerically", () => {
   assert.equal(compareSortValues("16", "16"), 0);
 });
 
+void test("compareSortValues orders adjacent 64-bit and 128-bit integers without rounding", () => {
+  assert.ok(compareSortValues("18446744073709551614", "18446744073709551615") < 0);
+  assert.ok(compareSortValues("-9223372036854775808", "-9223372036854775807") < 0);
+  assert.ok(compareSortValues("340282366920938463463374607431768211455",
+    "340282366920938463463374607431768211454") > 0);
+  assert.equal(compareSortValues("18,446,744,073,709,551,615", "18446744073709551615"), 0);
+  assert.ok(compareSortValues("0xffffffffffffffff", "18446744073709551614") > 0);
+  assert.equal(compareSortValues("0xffffffffffffffff", "18446744073709551615"), 0);
+});
+
+void test("compareSortValues compares exact integers with decimal and human-readable values", () => {
+  assert.equal(compareSortValues("1", "1.0"), 0);
+  assert.ok(compareSortValues("1", "1.5") < 0);
+  assert.ok(compareSortValues("1.5", "1") > 0);
+  assert.equal(compareSortValues("1024", "1 KB"), 0);
+  assert.ok(compareSortValues("18446744073709551615", "2.5 KB") > 0);
+});
+
 void test("compareSortValues sorts hex and human-readable sizes numerically", () => {
   assert.ok(compareSortValues("0x00000010", "0x00000100") < 0);
   assert.ok(compareSortValues("120 KB", "1020 B") > 0);

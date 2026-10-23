@@ -1,7 +1,15 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
-import { skipLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
+import { readLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
+import { readCodeViewFieldPrefix, type CodeViewFieldReferences } from "./legacy-codeview-field-prefix.js";
 
-export interface LegacyCodeViewField { type: number; name?: string; continuation?: number; }
+export interface LegacyCodeViewField extends CodeViewFieldReferences {
+  type: number;
+  name?: string;
+  continuation?: number;
+  value?: string;
+  offset?: string;
+  virtualBaseTableIndex?: string;
+}
 
 // All offsets are from the subrecord's leaf tag (there is no per-field length).
 // lfMember, lfSTMember, lfMethod, lfNestType, lfOneMethod and their 16t/ST/SZ variants:
@@ -19,40 +27,51 @@ const BASE_OFFSETS = new Map([[0x400, 6], [0x1400, 8], [0x151a, 8]]);
 const VIRTUAL_BASE_OFFSETS = new Map([[0x401, 8], [0x402, 8], [0x1401, 12], [0x1402, 12]]);
 const PADDED_PREFIXES = new Set([0x1403, 0x1404, 0x1408, 0x1409, 0x140a, 0x140c, 0x150c, 0x1510]);
 
-const nameOffset = async (reader: LegacyCodeViewReader, type: number): Promise<number | undefined> => {
-  const numeric = NUMERIC_NAMES.get(type);
-  if (numeric !== undefined) return skipLegacyCodeViewNumeric(reader, numeric);
-  const method = METHOD_NAMES.get(type);
-  if (method !== undefined) {
-    // CV_fldattr_t.mprop is bits 2..4; only intro/pureintro add a DWORD vbaseoff.
-    const property = await reader.uint16(2) >>> 2 & 7;
-    if (property === 7) reader.warn("CodeView method property is reserved.");
-    return method + ([4, 6].includes(property) ? 4 : 0);
-  }
-  return NAME_OFFSETS.get(type);
+const readFieldNumber = async (reader: LegacyCodeViewReader, record: LegacyCodeViewField,
+  start: number, key: "value" | "offset" | "virtualBaseTableIndex"): Promise<number> => {
+  const numeric = await readLegacyCodeViewNumeric(reader, start);
+  if (numeric.value === undefined) reader.warn(`CodeView field ${key} is not an integer encoding; its value is unavailable.`);
+  else record[key] = numeric.value;
+  return numeric.end;
 };
 
-const unnamedEnd = async (reader: LegacyCodeViewReader, type: number): Promise<number> => {
-  const fixed = FIXED_SIZES.get(type);
+const nameOffset = async (reader: LegacyCodeViewReader, record: LegacyCodeViewField): Promise<number | undefined> => {
+  const numeric = NUMERIC_NAMES.get(record.type);
+  if (numeric !== undefined) return readFieldNumber(reader, record, numeric,
+    record.type === 0x403 || record.type === 0x1502 ? "value" : "offset");
+  const method = METHOD_NAMES.get(record.type);
+  if (method !== undefined) {
+    // CV_fldattr_t.mprop is bits 2..4; only intro/pureintro add a DWORD vbaseoff.
+    const property = record.attributes! >>> 2 & 7;
+    if (property === 7) reader.warn("CodeView method property is reserved.");
+    if (![4, 6].includes(property)) return method;
+    record.vtableOffset = (await reader.view(method, 4)).getInt32(0, true);
+    return method + 4;
+  }
+  return NAME_OFFSETS.get(record.type);
+};
+
+const unnamedEnd = async (reader: LegacyCodeViewReader, record: LegacyCodeViewField): Promise<number> => {
+  const fixed = FIXED_SIZES.get(record.type);
   if (fixed !== undefined) { await reader.view(0, fixed); return fixed; }
-  const base = BASE_OFFSETS.get(type);
-  if (base !== undefined) return skipLegacyCodeViewNumeric(reader, base);
-  const virtualBase = VIRTUAL_BASE_OFFSETS.get(type);
-  if (virtualBase !== undefined) return skipLegacyCodeViewNumeric(reader,
-    await skipLegacyCodeViewNumeric(reader, virtualBase));
-  throw new Error(`Unsupported CodeView field kind ${type}; remaining field bytes were not decoded.`);
+  const base = BASE_OFFSETS.get(record.type);
+  if (base !== undefined) return readFieldNumber(reader, record, base, "offset");
+  const virtualBase = VIRTUAL_BASE_OFFSETS.get(record.type);
+  if (virtualBase !== undefined) return readFieldNumber(reader, record,
+    await readFieldNumber(reader, record, virtualBase, "offset"), "virtualBaseTableIndex");
+  throw new Error(`Unsupported CodeView field kind ${record.type}; remaining field bytes were not decoded.`);
 };
 
 const readField = async (reader: LegacyCodeViewReader) => {
   const type = await reader.uint16(0);
+  const record: LegacyCodeViewField = { type, ...await readCodeViewFieldPrefix(reader, type) };
   if (PADDED_PREFIXES.has(type) && await reader.uint16(2) !== 0) reader.warn("CodeView field reserved padding is nonzero.");
-  const offset = await nameOffset(reader, type);
+  const offset = await nameOffset(reader, record);
   if (offset !== undefined) {
     const text = type >= 0x1500 ? await reader.utf8Name(offset) : await reader.pascal(offset);
-    return { record: { type, name: text.name }, end: text.end };
+    return { record: { ...record, name: text.name }, end: text.end };
   }
-  const end = await unnamedEnd(reader, type);
-  const record: LegacyCodeViewField = { type };
+  const end = await unnamedEnd(reader, record);
   if (type === 0x405) record.continuation = await reader.uint16(2);
   if (type === 0x1404) record.continuation = await reader.uint32(4);
   return { record, end };

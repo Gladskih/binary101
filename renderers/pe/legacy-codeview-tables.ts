@@ -10,6 +10,7 @@ import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embed
 import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
 import { hllSourceRows } from "./hll-source-rows.js";
 import { buildCodeViewFunctionTables } from "./codeview-function-tables.js";
+import { buildCodeViewMemberTables } from "./codeview-member-tables.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -102,18 +103,6 @@ const addMemberHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewType
     "Type members", legacyCodeViewFieldName(type), String(count)]);
 };
 
-const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCodeViewData,
-  directory: number, module: number): void => {
-  if (data.kind !== "types") return;
-  const table = tables.get("members") ?? { key: "members", title: "Member and enumerator names",
-    columns: ["Directory", "Module", "Member kind", "Name"], rows: [] };
-  for (const record of data.records) for (const member of record.members ?? []) {
-    if (member.name === undefined) continue;
-    table.rows.push([String(directory), String(module), legacyCodeViewFieldName(member.type), member.name || "(unnamed)"]);
-  }
-  tables.set("members", table);
-};
-
 const typeStringKind = (type: number, index: number, encoding?: "c6" | "hll"): string => type === 2 || type === 0x1002
   ? "Pointer base type" : type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
     : legacyCodeViewTypeName(type, encoding);
@@ -160,7 +149,6 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       const table = tables.get(data.kind) ?? { key: data.kind, title, columns: ["Directory", "Module", ...columns], rows: [] };
       for (const row of rows) table.rows.push([String(index + 1), String(section.module), ...row]);
       tables.set(data.kind, table);
-      addMemberNames(tables, data, index + 1, section.module);
       addTypeStrings(tables, data, index + 1, section.module);
       addHistogram(histogram, data, index + 1, section.module);
     }
@@ -170,6 +158,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
   });
   return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info),
     ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewEmbeddedSymbolTables(info),
-    ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info)]
+    ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
+    ...buildCodeViewMemberTables(info)]
     .filter(table => table.rows.length > 0);
 };

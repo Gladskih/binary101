@@ -11,9 +11,10 @@ export type SortableTableState = {
   path?: string;
 };
 
-const parseSortNumber = (value: string): number | null => {
+const parseSortNumber = (value: string): number | bigint | null => {
   const normalized = value.trim().replace(/,/g, "");
-  if (/^0x[0-9a-f]+$/i.test(normalized)) return Number.parseInt(normalized.slice(2), 16);
+  // Preserve exact enum values, file sizes and addresses beyond Number's 53-bit precision.
+  if (/^(?:-?\d+|0x[0-9a-f]+)$/i.test(normalized)) return BigInt(normalized);
   const sizeMatch = normalized.match(/^(-?\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)\b/i);
   if (sizeMatch?.[1] && sizeMatch[2]) {
     const unitPower = ["B", "KB", "MB", "GB", "TB"].indexOf(sizeMatch[2].toUpperCase());
@@ -32,7 +33,7 @@ const compareSortValues = (left: string, right: string): number => {
   const leftNumber = parseSortNumber(left);
   const rightNumber = parseSortNumber(right);
   if (leftNumber != null && rightNumber != null) {
-    return leftNumber - rightNumber;
+    return leftNumber < rightNumber ? -1 : leftNumber > rightNumber ? 1 : 0;
   }
   return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 };
