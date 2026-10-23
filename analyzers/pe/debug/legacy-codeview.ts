@@ -3,6 +3,7 @@ import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
 import { readDebugPayload } from "./payload-reader.js";
 import { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
+import { readCodeViewC6Directories, CODEVIEW_C6_DECODERS } from "./codeview-c6.js";
 import { readLegacyCodeViewDirectories, type LegacyCodeViewSubsection } from "./legacy-codeview-directory.js";
 import { readLegacyCodeViewModule, readLegacyCodeViewLibraries, readLegacyCodeViewSegmentNames,
   readLegacyCodeViewSegmentMap, readLegacyCodeViewFiles, type LegacyCodeViewModule,
@@ -25,6 +26,7 @@ export interface PeLegacyCodeViewInfo {
 }
 
 const DECODERS: Partial<Record<number, (reader: LegacyCodeViewReader) => Promise<LegacyCodeViewData>>> = {
+  ...CODEVIEW_C6_DECODERS,
   0x120: readLegacyCodeViewModule, 0x121: readLegacyCodeViewModuleTypes,
   0x122: readLegacyCodeViewPublics, 0x126: readLegacyCodeViewOldLines,
   0x123: readLegacyCodeViewModuleSymbols, 0x124: readLegacyCodeViewModuleSymbols,
@@ -66,10 +68,11 @@ export const parseLegacyCodeView = async (
   try {
     const header = await source.view(0, 8);
     const signature = String.fromCharCode(...new Uint8Array(header.buffer, header.byteOffset, 4));
-    if (!/^NB0[5-9]$|^NB11$/.test(signature)) { addWarning("Unsupported legacy CodeView signature."); return null; }
+    if (!/^NB0[25-9]$|^NB11$/.test(signature)) { addWarning("Unsupported legacy CodeView signature."); return null; }
     const directories: PeLegacyCodeViewInfo["directories"] = [];
     const decoded = new Map<string, LegacyCodeViewData | undefined>();
-    for (const directory of await readLegacyCodeViewDirectories(source, header.getUint32(4, true))) {
+    const readDirectories = signature === "NB02" ? readCodeViewC6Directories : readLegacyCodeViewDirectories;
+    for (const directory of await readDirectories(source, header.getUint32(4, true))) {
       const subsections: PeLegacyCodeViewInfo["directories"][number]["subsections"] = [];
       for (const entry of directory.entries) {
         subsections.push(await decodeSubsection(source, entry, signature, decoded));

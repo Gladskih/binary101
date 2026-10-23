@@ -12,7 +12,7 @@ export const decodeCodeViewPayload = async (
 ): Promise<PeDebugPayloads> => {
   const signature = dataSize >= 4 ? await readDebugPayload(reader, rvaToOff,
     addressOfRawDataRva, pointerToRawDataOff, 0, 4) : null;
-  if (signature?.byteLength === 4 && /^NB0[5-9]$|^NB11$/.test(String.fromCharCode(
+  if (signature?.byteLength === 4 && /^NB0[25-9]$|^NB11$/.test(String.fromCharCode(
     ...new Uint8Array(signature.buffer, signature.byteOffset, 4)))) {
     const legacyCodeView = await parseLegacyCodeView(reader, fileSize, rvaToOff,
       addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning);

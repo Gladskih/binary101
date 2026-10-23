@@ -3,8 +3,24 @@ const SUBSECTIONS = ["Modules", "Module types", "Publics", "Public symbols", "Sy
   "MPC", "Segment map", "Segment names", "Precompiled types", "Precompiled type map",
   "16-bit offset map", "32-bit offset map", "File index", "Static symbols"];
 
+const C6_SUBSECTIONS = new Map([[0x101, "Modules (C6)"], [0x102, "Public symbols (C6)"],
+  [0x103, "Module types (C6)"], [0x104, "Symbols (C6)"], [0x105, "Source lines (C6)"],
+  [0x106, "Libraries (C6)"], [0x108, "Compacted types (C6)"], [0x109, "Source lines with segments (C6)"]]);
+
 export const legacyCodeViewSubsectionName = (type: number): string =>
-  SUBSECTIONS[type - 0x120] ?? `Unknown subsection 0x${type.toString(16)}`;
+  SUBSECTIONS[type - 0x120] ?? C6_SUBSECTIONS.get(type) ?? `Unknown subsection 0x${type.toString(16)}`;
+
+// Microsoft C Developer's Toolkit, 1.3/1.4; dumpsym6.cpp/debsym.h/typeinfo.h.
+// https://www.pcjs.org/documents/books/mspl13/c/ctoolkit/
+const C6_SYMBOLS = new Map([[0, "Block"], [1, "Procedure"], [2, "Scope end"], [4, "Stack variable"],
+  [5, "Local data"], [11, "Label"], [12, "With expression"], [13, "Register variable"], [14, "Constant"],
+  [15, "FORTRAN entry"], [16, "Padding"], [17, "Default segment"], [18, "COBOL typedef"], [22, "Execution model"]]);
+const C6_TYPES = new Map([[92, "Bitfield"], [93, "Type alias"], [96, "String"], [103, "File"],
+  [106, "Set"], [113, "Constant"], [114, "Code label"], [117, "Procedure"], [118, "Parameter"],
+  [120, "Array"], [121, "Structure"], [122, "Pointer"], [123, "Scalar"], [126, "Real"],
+  [127, "Type or member list"], [128, "Empty type"], [140, "Basic array"], [141, "FORTRAN string"],
+  [142, "FORTRAN array bounds"], [144, "Skipped type indices"], [145, "Based pointer"],
+  [166, "COBOL type reference"], [167, "COBOL type"]]);
 
 // Microsoft cvinfo.h CV_SYMBOL_ENUM / LEAF_ENUM_e. These are record categories,
 // not invented meanings for opaque data or vendor records.
@@ -50,7 +66,15 @@ const WIDE_SYMBOLS = ["Register variable", "Constant", "User-defined type", "COB
   "Stack variable", "Local data", "Global data", "Public symbol", "Local procedure", "Global procedure",
   "Virtual table", "Register-relative variable", "Local thread data", "Global thread data"];
 
-export const legacyCodeViewSymbolName = (type: number): string => {
+const c6SymbolName = (type: number): string => {
+  const name = C6_SYMBOLS.get(type & 0x7f);
+  if (!name) return `C6 symbol record 0x${type.toString(16)}`;
+  return [0, 1, 4, 5, 11, 12, 15].includes(type & 0x7f)
+    ? `${name} (${type & 0x80 ? 32 : 16}-bit offsets)` : name;
+};
+
+export const legacyCodeViewSymbolName = (type: number, encoding?: "c6"): string => {
+  if (encoding === "c6") return c6SymbolName(type);
   const classic = type >= 0x100 && type <= 0x10c ? CLASSIC_SYMBOLS[type - 0x100]
     : type >= 0x200 && type <= 0x20f ? CLASSIC_SYMBOLS[type - 0x200] : undefined;
   return SYMBOL_NAMES.get(type) ?? classic ?? WIDE_SYMBOLS[type - 0x1001] ?? `Symbol record 0x${type.toString(16)}`;
@@ -75,8 +99,9 @@ const TYPE_NAMES = new Map<number, string>([
   [0x1601, "Function ID"], [0x1602, "Member function ID"], [0x1605, "String ID"]
 ]);
 
-export const legacyCodeViewTypeName = (type: number): string => TYPE_NAMES.get(type) ??
-  `Type record 0x${type.toString(16)}`;
+export const legacyCodeViewTypeName = (type: number, encoding?: "c6"): string => encoding === "c6"
+  ? C6_TYPES.get(type) ?? `C6 type record 0x${type.toString(16)}`
+  : TYPE_NAMES.get(type) ?? `Type record 0x${type.toString(16)}`;
 
 // Field-list categories use separate leaf tags for 16-bit indices, ST and SZ names.
 const FIELD_NAMES = new Map<number, string>([

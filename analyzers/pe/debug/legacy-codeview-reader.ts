@@ -26,9 +26,12 @@ export class LegacyCodeViewReader {
   // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/cvdump/cvdump.cpp#L394
   async pascal(offset: number): Promise<{ name: string; end: number }> {
     const size = (await this.view(offset, 1)).getUint8(0);
-    const view = await this.view(offset + 1, size);
-    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-    return { name: this.decodeAnsi(bytes), end: offset + size + 1 };
+    return { name: await this.ansiBytes(offset + 1, size), end: offset + size + 1 };
+  }
+
+  async ansiBytes(offset: number, size: number): Promise<string> {
+    const view = await this.view(offset, size);
+    return this.decodeAnsi(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
   }
 
   private decodeAnsi(bytes: Uint8Array): string {

@@ -45,10 +45,10 @@ const segmentAccess = (flags: number): string => [
 const recordRows = (data: LegacyCodeViewData): string[][] => {
   if (data.kind === "publics") return data.names.map(name => [name]);
   if (data.kind === "symbols") return data.records.flatMap(record => record.name == null ? [] :
-    [[legacyCodeViewSymbolName(record.type), record.name]]);
+    [[legacyCodeViewSymbolName(record.type, data.encoding), record.name]]);
   if (data.kind === "types") return data.records.flatMap(record => [
-    ...(record.name == null ? [] : [[legacyCodeViewTypeName(record.type), record.name]]),
-    ...(record.uniqueName == null ? [] : [[`${legacyCodeViewTypeName(record.type)} (decorated)`, record.uniqueName]])
+    ...(record.name == null ? [] : [[legacyCodeViewTypeName(record.type, data.encoding), record.name]]),
+    ...(record.uniqueName == null ? [] : [[`${legacyCodeViewTypeName(record.type, data.encoding)} (decorated)`, record.uniqueName]])
   ]);
   return [];
 };
@@ -108,9 +108,9 @@ const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCo
   tables.set("members", table);
 };
 
-const typeStringKind = (type: number, index: number): string => type === 2 || type === 0x1002
+const typeStringKind = (type: number, index: number, encoding?: "c6"): string => type === 2 || type === 0x1002
   ? "Pointer base type" : type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
-    : legacyCodeViewTypeName(type);
+    : legacyCodeViewTypeName(type, encoding);
 
 const addTypeStrings = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCodeViewData,
   directory: number, module: number): void => {
@@ -118,7 +118,7 @@ const addTypeStrings = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCo
   const table = tables.get("typeStrings") ?? { key: "typeStrings", title: "Stored type and ID strings",
     columns: ["Directory", "Module", "Record kind", "Text"], rows: [] };
   for (const record of data.records) (record.strings ?? []).forEach((text, index) => {
-    table.rows.push([String(directory), String(module), typeStringKind(record.type, index), text || "(empty)"]);
+    table.rows.push([String(directory), String(module), typeStringKind(record.type, index, data.encoding), text || "(empty)"]);
   });
   tables.set("typeStrings", table);
 };
@@ -130,7 +130,7 @@ const addHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewData,
   for (const record of data.records) counts.set(record.type, (counts.get(record.type) ?? 0) + 1);
   for (const [type, count] of counts) table.rows.push([String(directory), String(module),
     data.kind === "symbols" ? "Symbols" : "Types",
-    data.kind === "symbols" ? legacyCodeViewSymbolName(type) : legacyCodeViewTypeName(type), String(count)]);
+    data.kind === "symbols" ? legacyCodeViewSymbolName(type, data.encoding) : legacyCodeViewTypeName(type, data.encoding), String(count)]);
   if (data.kind === "types") addMemberHistogram(table, data, directory, module);
 };
 

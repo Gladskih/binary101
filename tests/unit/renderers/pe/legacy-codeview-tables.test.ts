@@ -3,6 +3,26 @@ import { test } from "node:test";
 import { buildLegacyCodeViewTables } from "../../../../renderers/pe/legacy-codeview-tables.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
 
+void test("C6 names and record statistics use C6 categories rather than colliding C7 IDs", () => {
+  const tables = buildLegacyCodeViewTables({ signature: "NB02", directories: [{ flags: 0, subsections: [
+    { type: 0x104, module: 1, offset: 0, size: 0,
+      data: { kind: "symbols", encoding: "c6", records: [{ type: 1, name: "procedure" }] } },
+    { type: 0x103, module: 1, offset: 0, size: 0,
+      data: { kind: "types", encoding: "c6", records: [{ type: 93, name: "Alias" },
+        { type: 127, strings: ["member"] }, { type: 255 }] } }
+  ] }] });
+
+  assert.deepEqual(tables.find(table => table.key === "symbols")?.rows,
+    [["1", "1", "Procedure (16-bit offsets)", "procedure"]]);
+  assert.deepEqual(tables.find(table => table.key === "types")?.rows, [["1", "1", "Type alias", "Alias"]]);
+  assert.deepEqual(tables.find(table => table.key === "typeStrings")?.rows,
+    [["1", "1", "Type or member list", "member"]]);
+  assert.deepEqual(tables.find(table => table.key === "records")?.rows, [
+    ["1", "1", "Symbols", "Procedure (16-bit offsets)", "1"], ["1", "1", "Types", "Type alias", "1"],
+    ["1", "1", "Types", "Type or member list", "1"], ["1", "1", "Types", "C6 type record 0xff", "1"]
+  ]);
+});
+
 void test("CodeView stored strings remain separate from type names and distinguish virtual methods", () => {
   const info = createLegacyCodeViewInfo();
   info.directories[0]!.subsections.push({ type: 0x121, module: 7, offset: 0, size: 0,

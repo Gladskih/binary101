@@ -4,6 +4,15 @@ import { LegacyCodeViewReader } from "../../../../../analyzers/pe/debug/legacy-c
 import { legacyReader } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewUtf16 } from "../../../../fixtures/pe-codeview-symbol-strings.js";
 
+void test("CodeView fixed-length ANSI values preserve long literals with shared code-page diagnostics", async () => {
+  const warnings: string[] = [];
+  const reader = legacyReader([...new Array<number>(300).fill(65), 0xe9], warnings);
+  assert.equal(await reader.ansiBytes(0, 301), "A".repeat(300) + "é");
+  assert.equal(await reader.ansiBytes(300, 1), "é");
+  assert.equal(warnings.length, 1);
+  await assert.rejects(reader.ansiBytes(300, 2), /bounds/);
+});
+
 void test("CodeView UTF-16 PDB paths stream surrogate pairs across read boundaries", async () => {
   const text = "x".repeat(127) + "😀" + "путь";
   const bytes = codeViewUtf16(text);

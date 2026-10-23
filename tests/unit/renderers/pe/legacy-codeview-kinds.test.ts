@@ -3,6 +3,18 @@ import { test } from "node:test";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName,
   legacyCodeViewTypeName, legacyCodeViewFieldName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
 
+void test("C6 kinds use their own namespace, retaining offset widths and unknown values", () => {
+  assert.equal(legacyCodeViewSubsectionName(0x101), "Modules (C6)");
+  assert.equal(legacyCodeViewSubsectionName(0x109), "Source lines with segments (C6)");
+  assert.equal(legacyCodeViewSymbolName(1, "c6"), "Procedure (16-bit offsets)");
+  assert.equal(legacyCodeViewSymbolName(0x84, "c6"), "Stack variable (32-bit offsets)");
+  assert.equal(legacyCodeViewSymbolName(2, "c6"), "Scope end");
+  assert.equal(legacyCodeViewSymbolName(99, "c6"), "C6 symbol record 0x63");
+  assert.equal(legacyCodeViewTypeName(93, "c6"), "Type alias");
+  assert.equal(legacyCodeViewTypeName(127, "c6"), "Type or member list");
+  assert.equal(legacyCodeViewTypeName(255, "c6"), "C6 type record 0xff");
+});
+
 // LEAF_ENUM_e in Microsoft's published cvinfo.h; retain useful domain labels.
 for (const [type, name] of [[0x11, "Dimensioned array"], [0x100c, "Dimensioned array"],
   [0x1508, "Dimensioned array"], [0x13, "Precompiled type file"], [0x100e, "Precompiled type file"],
