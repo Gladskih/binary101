@@ -7,6 +7,7 @@ import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 import { renderExceptionV3 } from "./exception-v3.js";
 import { renderDefinitionRow } from "../../html-utils.js";
 import { renderArmntPackedStatistics } from "./exception-armnt.js";
+import { renderCeExceptionStatistics } from "./exception-ce.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -116,8 +117,17 @@ const getNtRiscProfile = (): ExceptionRenderProfile => ({
   unwindLabel: "Inline function descriptions"
 });
 
+const getCeProfile = (): ExceptionRenderProfile => ({
+  handlerLabel: "Functions with handler metadata",
+  introNote: "Windows CE .pdata stores virtual function addresses and lengths in 16-bit or 32-bit instructions. " +
+    "Associated handler metadata immediately precedes the function.",
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderCeExceptionStatistics,
+  unwindLabel: "Inline function descriptions"
+});
+
 const getExceptionRenderProfile = (format: PeExceptionFormat): ExceptionRenderProfile => {
   if (format == null) return getUnknownProfile();
+  if (format === "ce") return getCeProfile();
   if (format === "nt-risc32" || format === "nt-risc64") return getNtRiscProfile();
   if (format === "native-aot-x86") {
     return {

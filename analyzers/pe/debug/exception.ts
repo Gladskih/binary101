@@ -5,6 +5,8 @@ import { parseExceptionDirectory, createEmptyExceptionDirectory, type PeExceptio
 import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import { getNtRiscExceptionFormat } from "../exception/nt-risc-directory.js";
 import { parseNtRiscExceptionTable } from "../exception/nt-risc.js";
+import { isCeExceptionMachine } from "../exception/ce-directory.js";
+import { parseCeExceptionTable } from "../exception/ce.js";
 import { getReadableDebugData } from "./data.js";
 import { createDebugPayloadReader } from "./payload-reader.js";
 import { parseAmd64ExceptionTable } from "../exception/amd64/index.js";
@@ -33,6 +35,9 @@ const parseMachineCopy = async (reader: FileRangeReader, source: FileRangeReader
     return parseArm64ExceptionTable(reader, source, dataSize, rvaToOff, tableRva);
   }
   if (machine === IMAGE_FILE_MACHINE_ARMNT) return parseArmntExceptionTable(reader, source, dataSize, rvaToOff);
+  if (isCeExceptionMachine(machine, header)) {
+    return parseCeExceptionTable(reader, source, dataSize, rvaToOff, header?.ImageBase, machine);
+  }
   const ntRiscFormat = getNtRiscExceptionFormat(machine, header);
   return ntRiscFormat
     ? parseNtRiscExceptionTable(reader, source, dataSize, rvaToOff, ntRiscFormat, header?.ImageBase) : null;

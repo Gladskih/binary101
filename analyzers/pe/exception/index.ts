@@ -9,6 +9,7 @@ import { parseReadyToRunX86ExceptionDirectory } from "./ready-to-run-x86.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
 import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import { parseNtRiscExceptionDirectory } from "./nt-risc-directory.js";
+import { parseCeExceptionDirectory } from "./ce-directory.js";
 import type { PeClrReadyToRun } from "../clr/ready-to-run-types.js";
 import type { PeNativeAotAnalysis } from "../native-aot.js";
 import {
@@ -69,5 +70,7 @@ export async function parseExceptionDirectory(
   }
   const ntRisc = await parseNtRiscExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
   if (ntRisc) return ntRisc;
+  const ce = await parseCeExceptionDirectory(reader, dataDirs, rvaToOff, canonicalMachine, header);
+  if (ce) return ce;
   return unsupportedExceptionDirectory(dataDirs, machine);
 }

@@ -3,6 +3,14 @@
 import type { Amd64UnwindV3Statistics } from "./amd64/unwind-v3-types.js";
 import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
 
+export interface PeCeExceptionStatistics {
+  instruction16Count: number;
+  instruction32Count: number;
+  extendedEntryCount: number;
+  handlerDataCount: number;
+  prologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
+}
+
 export interface PeExceptionDirectory {
   functionCount: number;
   beginRvas: number[];
@@ -21,8 +29,9 @@ export interface PeExceptionDirectory {
   fragmentEntryCount?: number;
   invalidEntryCount: number;
   issues: string[];
-  format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64";
+  format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce";
   riscPrologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
+  ceCompressed?: PeCeExceptionStatistics;
   exceptionInfoMethodCount?: number;
   exceptionClauseCount?: number;
   catchClauseCount?: number;
