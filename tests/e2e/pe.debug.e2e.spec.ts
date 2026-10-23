@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createMpxPayload, createSpgoPayload } from "../fixtures/pe-debug-optimization.js";
 import { createPeWithRawArm64ExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createPeWithV3ExceptionCopy } from "../fixtures/pe-debug-file.js";
 import { createPeWithRawArmntExceptionCopy } from "../fixtures/pe-armnt-debug-file.js";
@@ -83,7 +84,7 @@ test("TD32 in an UNKNOWN directory entry preserves names and exposes paginated d
   await expect(panel).not.toContainText("payload is not decoded");
 });
 
-test("SPGO debug type 18 stays explicitly undecoded even with a recognized POGO signature", async ({ page }) => {
+test("SPGO type 18 reports unterminated text instead of decoding a POGO signature", async ({ page }) => {
   // DWORD 0x5350474f is SPGO inside a type-13 POGO record, not a type-18 contract.
   const file = createPeWithDebugPayloads([{ type: 18, data: Uint8Array.of(0x4f, 0x47, 0x50, 0x53) }]);
   await page.goto("/");
@@ -93,6 +94,29 @@ test("SPGO debug type 18 stays explicitly undecoded even with a recognized POGO 
   await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
   await expect(panel).toContainText("SPGO payload is not decoded");
   await expect(panel).toContainText("no semantic decoding is available");
+  await expect(panel).toContainText("unterminated or odd-length UTF-16 string");
+});
+
+test("MPX settings and Unicode SPGO text are readable without hex tables", async ({ page }, testInfo) => {
+  const file = createPeWithDebugPayloads([
+    { type: 15, data: createMpxPayload() },
+    { type: 18, data: createSpgoPayload("<профиль>&amp;😀") }
+  ]);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  const mpx = panel.locator("summary").filter({ hasText: /^Entry #1:/ }).locator("..");
+  await mpx.locator("summary").click();
+  await expect(mpx.locator(".opt.sel", { hasText: "MPX enabled" })).toBeVisible();
+  await expect(mpx.locator(".opt.dim", { hasText: "Driver runtime" })).toBeVisible();
+  await expect(mpx.locator(".opt.sel", { hasText: "Fail fast" })).toBeVisible();
+  await expect(mpx).toContainText("3 unnamed fields; 0 nonzero");
+  await expect(mpx.locator("table")).toHaveCount(0);
+  await panel.locator("summary").filter({ hasText: /^Entry #2:/ }).click();
+  await expect(panel).toContainText("<профиль>&amp;😀");
+  await expect(panel).not.toContainText("payload is not decoded");
+  await page.screenshot({ path: testInfo.outputPath("pe-debug-mpx-spgo.png"), fullPage: true });
 });
 
 for (const create of [createPeWithExceptionCopy, createPeWithRawExceptionCopy]) {

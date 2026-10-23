@@ -54,7 +54,7 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
     description: "Incremental Link-Time Code Generation: MSVC /LTCG:INCREMENTAL " +
       "reoptimizes files affected by edits during linking."
   },
-  15: { label: "MPX", description: "Intel MPX metadata emitted by the toolchain." },
+  15: { label: "MPX", description: "Intel Memory Protection Extensions configuration emitted by the toolchain." },
   16: { label: "REPRO", description: "PE determinism or reproducibility metadata." },
   17: {
     label: "EMBEDDED DEBUG",
@@ -62,7 +62,7 @@ const DEBUG_TYPE_INFOS: Record<number, DebugTypeInfo> = {
   },
   18: {
     label: "SPGO",
-    description: "Sample profile-guided optimization metadata emitted by the toolchain."
+    description: "SPGO UTF-16 text metadata emitted by the toolchain."
   },
   19: {
     label: "SYMBOL HASH",

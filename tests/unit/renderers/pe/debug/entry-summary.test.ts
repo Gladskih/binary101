@@ -100,3 +100,11 @@ void test("getEntrySummary falls back to debug type descriptions", () => {
 
   assert.equal(result, "Copy of the .pdata exception data.");
 });
+
+void test("getEntrySummary describes decoded MPX and SPGO payloads", () => {
+  assert.equal(getEntrySummary({ ...createDebugViewEntry(15, 0, 128), mpx: {
+    flags: 0, unknown1: 0, unknown2: 0, unknown3: 0 } }),
+  "Intel MPX configuration: enablement, runtime support and bounds-violation handling.");
+  assert.equal(getEntrySummary({ ...createDebugViewEntry(18, 0, 128), spgo: { text: "" } }),
+    "SPGO UTF-16 text metadata.");
+});

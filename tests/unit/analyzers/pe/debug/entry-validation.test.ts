@@ -22,10 +22,10 @@ void test("unknown debug payloads are explicitly reported as unsupported", () =>
   assert.match(validateDebugEntry(entry, value => value, 512).join(" | "), /not decoded/i);
 });
 
-void test("SPGO directory type is unsupported even when no readable fallback bytes are available", () => {
+void test("decoded SPGO text is supported by entry validation", () => {
   const entry = { ...createDebugViewEntry(18, 0, 128, 8), typeName: "SPGO" };
 
-  assert.match(validateDebugEntry(entry, value => value, 512).join(" | "), /SPGO payload is not decoded/);
+  assert.deepEqual(validateDebugEntry({ ...entry, spgo: { text: "abc" } }, value => value, 512), []);
 });
 
 void test("debug versions and file bounds are diagnosed", () => {

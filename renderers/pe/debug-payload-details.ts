@@ -14,6 +14,8 @@ import { renderFixupStatistics } from "./fixup.js";
 import { renderPortablePdb } from "./portable-pdb.js";
 import { renderPogoRegions } from "./pogo.js";
 import { renderMiscDebug } from "./debug-misc.js";
+import { renderMpxDebug } from "./debug-mpx.js";
+import { renderSpgoDebug } from "./debug-spgo.js";
 import { renderOmap } from "./omap.js";
 import { renderLegacyCodeView } from "./legacy-codeview.js";
 import { renderTd32 } from "./td32.js";
@@ -223,6 +225,8 @@ export const renderDecodedEntryDetails = (
     renderMiscDebug(entry, entryIndex, out);
     renderOmap(entry, entryIndex, out);
     renderVcFeatureFields(entry, out);
+    renderMpxDebug(entry, out);
+    renderSpgoDebug(entry, out);
     renderPogoStatistics(entry, out);
     renderPogoRegions(entry, entryIndex, out);
     renderReproFields(entry, out);

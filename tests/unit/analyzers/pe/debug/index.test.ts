@@ -22,11 +22,13 @@ import {
 } from "../../../../fixtures/pe-debug-directory-subject.js";
 import {
   createExceptionDebugDirectorySubject,
+  createDebugDirectorySubject,
   createPogoDebugDirectorySubject,
   createSpgoSignatureDebugDirectorySubject,
   createTruncatedExceptionDebugDirectorySubject,
   createVcFeatureDebugDirectorySubject
 } from "../../../../fixtures/pe-debug-payload-subject.js";
+import { createMpxPayload, createSpgoPayload } from "../../../../fixtures/pe-debug-optimization.js";
 
 // Microsoft PE/COFF debug types used in these tests.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
@@ -263,8 +265,9 @@ void test("parseDebugDirectory does not mistake debug type 18 for a type-13 POGO
   const entry = expectDefined(result.entries[0]);
   assert.equal(entry.typeName, "SPGO");
   assert.equal(entry.pogo, undefined);
-  assert.ok(entry.rawPayload);
-  assert.match(expectDefined(result.warning), /SPGO payload is not decoded/);
+  assert.ok(entry.spgo);
+  assert.equal(entry.rawPayload, undefined);
+  assert.match(expectDefined(result.warning), /trailing bytes after its text/);
 });
 
 void test("parseDebugDirectory retains supported SPGO signatures inside type-13 POGO tables", async () => {
@@ -274,5 +277,18 @@ void test("parseDebugDirectory retains supported SPGO signatures inside type-13 
   const entry = expectDefined(result.entries[0]);
   assert.equal(entry.typeName, "POGO");
   assert.deepEqual(entry.pogo, expected);
+  assert.equal(result.warning, null);
+});
+
+void test("parseDebugDirectory dispatches MPX and SPGO to their separate semantic parsers", async () => {
+  const { file, dataDirs } = createDebugDirectorySubject([
+    { type: 15, payload: createMpxPayload() },
+    { type: 18, payload: createSpgoPayload("<профиль>😀") }
+  ]);
+  const result = await parseDebugDirectory(file, dataDirs, value => value, IMAGE_FILE_MACHINE_AMD64);
+  assert.deepEqual(result.entries[0]?.mpx, { flags: 5, unknown1: 0, unknown2: 0, unknown3: 0 });
+  assert.deepEqual(result.entries[1]?.spgo, { text: "<профиль>😀" });
+  assert.equal(result.entries[0]?.rawPayload, undefined);
+  assert.equal(result.entries[1]?.pogo, undefined);
   assert.equal(result.warning, null);
 });

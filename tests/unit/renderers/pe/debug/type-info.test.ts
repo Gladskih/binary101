@@ -27,7 +27,7 @@ void test("getDebugTypeInfo returns Microsoft metadata for SPGO", () => {
 
   assert.deepEqual(info, {
     label: "SPGO",
-    description: "Sample profile-guided optimization metadata emitted by the toolchain."
+    description: "SPGO UTF-16 text metadata emitted by the toolchain."
   });
 });
 

@@ -15,6 +15,8 @@ export type { PeEmbeddedPortablePdbInfo } from "./embedded-portable-pdb.js";
 export type { PeExDllCharacteristicsInfo } from "./ex-dll-characteristics.js";
 export type { PeFpoInfo, PeFpoRecord } from "./fpo.js";
 export type { PeMiscDebugInfo } from "./misc.js";
+export type { PeMpxInfo } from "./mpx.js";
+export type { PeSpgoInfo } from "./spgo.js";
 export type { PePdbChecksumInfo } from "./pdb-checksum.js";
 export type { PePogoEntry, PePogoInfo } from "./pogo.js";
 export type { PeR2rPerfMapInfo } from "./r2r-perfmap.js";

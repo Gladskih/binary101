@@ -88,6 +88,8 @@ const payloadSummaries: ReadonlyArray<(entry: PeDebugDirectoryEntry) => string |
     `${formatDebugCount(entry.misc.records.length, "MISC record")}.` : null,
   entry => entry.omap ? `Address map with ${formatDebugCount(entry.omap.records.length, "record")}.` : null,
   entry => entry.vcFeature ? "MSVC toolchain counters such as /GS, /sdl, and guardN." : null,
+  entry => entry.mpx ? "Intel MPX configuration: enablement, runtime support and bounds-violation handling." : null,
+  entry => entry.spgo ? "SPGO UTF-16 text metadata." : null,
   entry => entry.pogo ? `Linker layout map with ${formatDebugCount(entry.pogo.entries.length, "record")}.` : null,
   entry => entry.repro ? "Deterministic build marker." : null,
   embeddedPdbSummary,
