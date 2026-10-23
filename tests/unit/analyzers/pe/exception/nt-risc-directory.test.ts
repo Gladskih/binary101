@@ -4,7 +4,7 @@ import { getNtRiscExceptionFormat, parseNtRiscExceptionDirectory } from "../../.
 import { parsePeHeaders, isPeWindowsCore } from "../../../../../analyzers/pe/core/index.js";
 import { parseExceptionDirectory } from "../../../../../analyzers/pe/exception/index.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
-import { createNtRiscPe, createNtRiscSecondaryPe } from "../../../../fixtures/pe-risc-exception.js";
+import { createNtRiscPe, createNtRiscSecondaryPe, createAlphaRiscPe } from "../../../../fixtures/pe-risc-exception.js";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
 
 for (const machine of [0x162, 0x166, 0x168, 0x184, 0x1f0, 0x1f1, 0x284]) {
@@ -26,6 +26,19 @@ for (const machine of [0x162, 0x166, 0x168, 0x184, 0x1f0, 0x1f1, 0x284]) {
     assert.equal(debug.warning, null);
   });
 }
+
+void test("Alpha mode and secondary-reference summaries agree between the directory and debug copy", async () => {
+  const file = createAlphaRiscPe();
+  const core = await parsePeHeaders(file);
+  assert.ok(core && isPeWindowsCore(core));
+  const directory = await parseExceptionDirectory(file, core.dataDirs, core.rvaToOff, 0x184,
+    undefined, undefined, core.opt);
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, 0x184, core.opt);
+  assert.deepEqual(debug.entries[0]?.exception, directory);
+  assert.deepEqual(directory?.alphaPrologs, { resolvedSecondaryRanges: 1, unresolvedSecondaryRanges: 0 });
+  assert.deepEqual(directory?.riscExceptionModes, [1, 0, 0, 0, 0, 0, 0, 1]);
+  assert.deepEqual(directory?.issues, []);
+});
 
 void test("NT RISC selection does not guess the PowerPC ABI without a subsystem", async () => {
   const core = await parsePeHeaders(createNtRiscPe(0x1f0));

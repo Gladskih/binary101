@@ -43,7 +43,7 @@ const parseMachineCopy = async (reader: FileRangeReader, source: FileRangeReader
   }
   const ntRiscFormat = getNtRiscExceptionFormat(machine, header);
   return ntRiscFormat
-    ? parseNtRiscExceptionTable(reader, source, dataSize, rvaToOff, ntRiscFormat, header?.ImageBase) : null;
+    ? parseNtRiscExceptionTable(reader, source, dataSize, rvaToOff, ntRiscFormat, header?.ImageBase, machine) : null;
 };
 
 // Microsoft PE format, "Debug Type": IMAGE_DEBUG_TYPE_EXCEPTION is a copy of

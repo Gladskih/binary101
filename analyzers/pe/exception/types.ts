@@ -40,6 +40,8 @@ export interface PeExceptionDirectory {
   issues: string[];
   format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce" | "ia64";
   riscPrologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
+  riscExceptionModes?: number[];
+  alphaPrologs?: { resolvedSecondaryRanges: number; unresolvedSecondaryRanges: number };
   ceCompressed?: PeCeExceptionStatistics;
   ia64Unwind?: PeIa64UnwindStatistics;
   exceptionInfoMethodCount?: number;

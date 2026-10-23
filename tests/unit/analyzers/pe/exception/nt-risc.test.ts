@@ -100,7 +100,7 @@ void test("Alpha64 VA subtraction rejects offsets beyond the PE RVA space withou
   assert.deepEqual(parsed.beginRvas, []);
 });
 
-void test("NT RISC strips documented address tags and retains unresolved metadata warnings", async () => {
+void test("NT RISC decodes documented exception modes and retains unresolved metadata warnings", async () => {
   const source = riscExceptionRows([[0x401000n, 0x401040n, 0x401101n, 0n, 0x401013n],
     [0x401040n, 0x401080n, 1n, 0n, 0x401000n],
     [0x401080n, 0x4010c0n, 0x401100n, 0x401110n, 0x401090n]]);
@@ -111,10 +111,76 @@ void test("NT RISC strips documented address tags and retains unresolved metadat
   assert.equal(parsed.handlerUnwindInfoCount, 2);
   assert.equal(parsed.invalidEntryCount, 0);
   assert.deepEqual(parsed.riscPrologs, { count: 2, empty: 0, minimumBytes: 16, maximumBytes: 16 });
-  assert.deepEqual(parsed.issues, ["Tagged NT RISC prolog metadata is not decoded.",
-    "Tagged NT RISC handler metadata is not decoded.",
+  assert.deepEqual(parsed.issues, [
     "NT RISC prolog location is outside its function; indirect prolog metadata is not decoded."]);
 });
+
+void test("NT RISC combines the handler mode bit with both prolog mode bits", async () => {
+  const source = riscExceptionRows(Array.from({ length: 8 }, (_, mode) => {
+    const begin = 0x401000n + BigInt(mode * 16);
+    return [begin, begin + 16n, BigInt(mode >> 2), 0n, begin + 4n + BigInt(mode & 3)];
+  }));
+  const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+    riscExceptionMap, "nt-risc32", 0x400000n);
+  assert.deepEqual(parsed.riscExceptionModes, [1, 1, 1, 1, 1, 1, 1, 1]);
+  assert.equal(parsed.handlerUnwindInfoCount, 0);
+  assert.deepEqual(parsed.issues, []);
+});
+
+void test("Unknown handler tag bit 1 remains diagnostic independently of the known mode bit", async () => {
+  const source = riscExceptionRows([[0x401000n, 0x401040n, 0x401102n, 0n, 0x401010n]]);
+  const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+    riscExceptionMap, "nt-risc32", 0x400000n);
+  assert.deepEqual(parsed.issues, ["Unknown NT RISC handler address tag bit 1 is set."]);
+  assert.deepEqual(parsed.riscExceptionModes, [1, 0, 0, 0, 0, 0, 0, 0]);
+});
+
+void test("Alpha secondary ranges retain their own handlers and resolve a later primary procedure", async () => {
+  const source = riscExceptionRows([[0x401080n, 0x4010c0n, 0x401100n, 0x401110n, 0x401000n],
+    [0x401000n, 0x401040n, 0n, 0n, 0x401011n]]);
+  const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+    riscExceptionMap, "nt-risc32", 0x400000n, 0x184);
+  assert.deepEqual(parsed.alphaPrologs, { resolvedSecondaryRanges: 1, unresolvedSecondaryRanges: 0 });
+  assert.deepEqual(parsed.handlerRvas, [0x1100]);
+  assert.equal(parsed.riscPrologs?.count, 1);
+  assert.equal(parsed.riscPrologs?.maximumBytes, 16);
+  assert.deepEqual(parsed.riscExceptionModes, [1, 1, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(parsed.issues, ["NT RISC .pdata entries are not sorted by function start VA."]);
+});
+
+void test("Alpha references to absent primary procedures remain explicit", async () => {
+  const source = riscExceptionRows([[0x401000n, 0x401040n, 0x401100n, 3n, 0x401100n]]);
+  const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+    riscExceptionMap, "nt-risc32", 0x400000n, 0x184);
+  assert.deepEqual(parsed.alphaPrologs, { resolvedSecondaryRanges: 0, unresolvedSecondaryRanges: 1 });
+  assert.deepEqual(parsed.issues, [
+    "Alpha secondary ranges do not match known procedure-start references; other secondary ABIs are not decoded."
+  ]);
+  assert.deepEqual(parsed.handlerRvas, []);
+  assert.equal(parsed.handlerUnwindInfoCount, 0);
+  assert.equal(parsed.riscPrologs, undefined);
+});
+
+void test("Alpha primary handlers remain counted independently of secondary handler metadata", async () => {
+  const source = riscExceptionRows([[0x401000n, 0x401040n, 0x401101n, 0x401110n, 0x401010n],
+    [0x401040n, 0x401080n, 0n, 0n, 0x401000n]]);
+  const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+    riscExceptionMap, "nt-risc32", 0x400000n, 0x184);
+  assert.equal(parsed.handlerUnwindInfoCount, 1);
+  assert.deepEqual(parsed.handlerRvas, [0x1100]);
+  assert.deepEqual(parsed.riscExceptionModes, [1, 0, 0, 0, 1, 0, 0, 0]);
+  assert.deepEqual(parsed.issues, []);
+});
+
+for (const [handler, prolog] of [[1n, 0x401010n], [0n, 0x401011n]] as const) {
+  void test(`Alpha64 tagged metadata ${handler}/${prolog} keeps an explicit unsupported warning`, async () => {
+    const source = riscExceptionRows([[0x401000n, 0x401040n, handler, 0n, prolog]], 8);
+    const parsed = await parseNtRiscExceptionTable(riscExceptionImage(), source, source.size,
+      riscExceptionMap, "nt-risc64", 0x400000n);
+    assert.equal(parsed.riscExceptionModes, undefined);
+    assert.deepEqual(parsed.issues, ["Tagged Alpha64 exception metadata is not decoded."]);
+  });
+}
 
 for (const base of [-1n, 0x10000000000000000n]) {
   void test(`NT RISC rejects an ImageBase outside the unsigned 64-bit domain: ${base}`, async () => {

@@ -55,3 +55,18 @@ export const createNtRiscSecondaryPe = (type = 3): MockFile => {
   bytes.set(payload.data, view.getUint32(0x340 + 24, true));
   return new MockFile(bytes);
 };
+
+// Digital Alpha NT section 9.1: secondary ranges name the original procedure.
+// GNU peXXigen.c: EM = (handler bit 0 << 2) | prolog bits 0-1.
+export const createAlphaRiscPe = (): MockFile => {
+  const file = createNtRiscSecondaryPe(0);
+  const view = new DataView(file.data.buffer);
+  view.setUint16(view.getUint32(0x3c, true) + 4, 0x184, true);
+  view.setUint32(0x308, 1, true);
+  view.setUint32(0x310, 0x401013, true);
+  view.setUint32(0x31c, 0x401100, true);
+  view.setUint32(0x320, 0x401110, true);
+  view.setUint32(0x324, 0x401000, true);
+  file.data.set(file.data.slice(0x300, 0x328), view.getUint32(0x340 + 24, true));
+  return new MockFile(file.data);
+};

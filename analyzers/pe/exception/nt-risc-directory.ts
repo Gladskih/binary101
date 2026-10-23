@@ -22,11 +22,11 @@ export const parseNtRiscExceptionDirectory = async (
   const format = getNtRiscExceptionFormat(machine, header);
   const directory = dataDirs.find(entry => entry.name === "EXCEPTION");
   if (!format || !directory) return null;
-  return parseDirectory(reader, directory, rvaToOff, format, header);
+  return parseDirectory(reader, directory, rvaToOff, format, machine, header);
 };
 
 const parseDirectory = async (reader: FileRangeReader, directory: PeDataDirectory,
-  rvaToOff: RvaToOffset, format: NtRiscExceptionFormat,
+  rvaToOff: RvaToOffset, format: NtRiscExceptionFormat, machine: number,
   header: PeWindowsOptionalHeader | undefined): Promise<PeExceptionDirectory | null> => {
   if (directory.rva === 0 && directory.size === 0) return null;
   if (directory.rva === 0) return createEmptyExceptionDirectory([
@@ -38,5 +38,5 @@ const parseDirectory = async (reader: FileRangeReader, directory: PeDataDirector
     "Exception directory location is outside the file."], format);
   return parseNtRiscExceptionTable(reader,
     createRvaRangeReader(reader, rvaToOff, directory.rva, directory.size), directory.size,
-    rvaToOff, format, header?.ImageBase);
+    rvaToOff, format, header?.ImageBase, machine);
 };

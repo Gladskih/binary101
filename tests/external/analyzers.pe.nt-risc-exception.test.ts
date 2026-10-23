@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { createNtRiscPe, createNtRiscSecondaryPe } from "../fixtures/pe-risc-exception.js";
+import { createNtRiscPe, createNtRiscSecondaryPe, createAlphaRiscPe } from "../fixtures/pe-risc-exception.js";
 import { parsePeHeaders, isPeWindowsCore } from "../../analyzers/pe/core/index.js";
 import { parseExceptionDirectory } from "../../analyzers/pe/exception/index.js";
 import { parseDebugDirectory } from "../../analyzers/pe/debug/directory.js";
@@ -57,4 +57,27 @@ void test("Microsoft dumpbin distinguishes secondary type bits from primary hand
   assert.deepEqual(parsed?.handlerRvas, []);
   assert.deepEqual(parsed?.issues,
     ["NT RISC prolog location is outside its function; indirect prolog metadata is not decoded."]);
+});
+
+// dumpbin validates the raw fields and classifies the secondary row; it does not
+// implement our early-Alpha procedure-start interpretation. That interpretation
+// is checked against Digital's 1993 section 9.1, not treated as a native oracle result.
+void test("controlled Alpha modes and secondary fields retain unchanged Microsoft dumpbin values", async () => {
+  const file = createAlphaRiscPe();
+  const path = resolve("scan-results/pe-debug-native/alpha-secondary-controlled.exe");
+  await writeFile(path, file.data);
+  const oracle = execFileSync("C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/" +
+    "MSVC/14.51.36231/bin/Hostx64/x64/dumpbin.exe", ["/pdata", path],
+  { encoding: "utf8", timeout: 5000, maxBuffer: 1024 * 1024 });
+  assert.match(oracle, /00401000 00401040 00000001 00000000 00401013 Primary/);
+  assert.match(oracle, /00401040 00401080 00401100 00401110 00401000 0->/);
+  const core = await parsePeHeaders(file);
+  assert.ok(core && isPeWindowsCore(core));
+  const parsed = await parseExceptionDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine,
+    undefined, undefined, core.opt);
+  assert.deepEqual(parsed?.beginRvas, [0x1000, 0x1040]);
+  assert.deepEqual(parsed?.alphaPrologs, { resolvedSecondaryRanges: 1, unresolvedSecondaryRanges: 0 });
+  assert.deepEqual(parsed?.riscExceptionModes, [1, 0, 0, 0, 0, 0, 0, 1]);
+  assert.deepEqual(parsed?.handlerRvas, [0x1100]);
+  assert.deepEqual(parsed?.issues, []);
 });

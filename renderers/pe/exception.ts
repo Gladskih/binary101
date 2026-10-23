@@ -9,6 +9,7 @@ import { renderDefinitionRow } from "../../html-utils.js";
 import { renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
 import { renderIa64UnwindStatistics } from "./exception-ia64.js";
+import { renderNtRiscStatistics } from "./exception-nt-risc.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -101,20 +102,10 @@ const getUnknownProfile = (): ExceptionRenderProfile => ({
   unwindLabel: "Unique unwind descriptions"
 });
 
-const renderRiscPrologs = (ex: PeExceptionSection, out: string[]): void => {
-  const unresolved = ex.beginRvas.length - (ex.riscPrologs?.count ?? 0);
-  if (unresolved > 0) out.push(renderDefinitionRow("Ranges with unresolved inline metadata", String(unresolved)));
-  if (!ex.riscPrologs) return;
-  for (const [label, count] of [
-    ["Prologs with resolved boundaries", ex.riscPrologs.count], ["Empty prologs", ex.riscPrologs.empty],
-    ["Shortest prolog (bytes)", ex.riscPrologs.minimumBytes], ["Longest prolog (bytes)", ex.riscPrologs.maximumBytes]
-  ] as const) out.push(renderDefinitionRow(label, String(count)));
-};
-
 const getNtRiscProfile = (): ExceptionRenderProfile => ({
   handlerLabel: "Resolved functions with exception handlers",
   introNote: "NT RISC .pdata stores full virtual addresses, inline handler metadata, and prolog boundaries.",
-  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderRiscPrologs,
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderNtRiscStatistics,
   unwindLabel: "Inline function descriptions"
 });
 
