@@ -32,6 +32,7 @@ import type {
   RvaToOffset
 } from "../types.js";
 import type { PeSubtype } from "../subtype.js";
+import type { PeCodeViewSource } from "../debug/codeview-sources.js";
 import type { parseExportDirectory } from "../directories/exports.js";
 import type { parseBaseRelocations } from "../directories/reloc.js";
 import type { MsvcRttiAnalysis } from "../msvc-rtti/types.js";
@@ -46,6 +47,7 @@ export interface PeDebugSection {
   entry: PeCodeViewEntry | null;
   entries?: PeDebugDirectoryEntry[];
   td32Sources?: PeTd32Source[];
+  codeViewSources?: PeCodeViewSource[];
   notes?: string[];
   warning?: string;
   rawDataRanges?: Array<{ start: number; end: number }>;

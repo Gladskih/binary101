@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderLegacyCodeView, getLegacyCodeViewTableModel } from "../../../../renderers/pe/legacy-codeview.js";
+import { renderLegacyCodeView, getLegacyCodeViewTableModel,
+  renderCodeViewSources } from "../../../../renderers/pe/legacy-codeview.js";
 import { getPePagedTableModel } from "../../../../renderers/pe/paged-tables.js";
 import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createDebugViewEntry } from "../../../fixtures/pe-debug-view-subject.js";
@@ -12,6 +13,21 @@ const subject = () => {
   pe.debug = { entry: null, entries: [entry] };
   return { pe, entry };
 };
+
+for (const kind of ["overlay", "section", "directory"] as const) {
+  void test(`Standalone CodeView ${kind} sources retain escaped, pageable tables`, () => {
+    const { pe, entry } = subject();
+    pe.debug = { entry: null, codeViewSources: [
+      { kind, offset: 512, size: 128, legacyCodeView: entry.legacyCodeView }] };
+    const out: string[] = [];
+    renderCodeViewSources(pe, out);
+    const model = getLegacyCodeViewTableModel(pe, "pe-debug-codeviewSource-0-legacy-module")!;
+    assert.match(out.join(""), /CodeView source #1:/);
+    assert.match(out.join(""), /&lt;module>.obj/);
+    assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module>.obj");
+    assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-codeviewSource-1-legacy-module"), null);
+  });
+}
 
 void test("legacy CodeView renders escaped readable tables and statistical summaries", () => {
   const { pe, entry } = subject();

@@ -8,6 +8,7 @@ import { decodeDebugEntryPayload, type PeDebugPayloads } from "./entry-decoders.
 import { DEBUG_TYPE_NAMES } from "./types.js";
 import type { PeDataDirectory, PeWindowsOptionalHeader, RvaToOffset } from "../types.js";
 import { validateDebugEntry, validatePortablePdbLinks } from "./entry-validation.js";
+import { directHllDirectory } from "./codeview-location.js";
 
 export type { PeCodeViewEntry } from "./codeview.js";
 export type { PeEmbeddedPortablePdbInfo } from "./embedded-portable-pdb.js";
@@ -209,6 +210,9 @@ export async function parseDebugDirectory(
   const debugDir = findDebugDirectory(dataDirs, addWarning);
   if (!debugDir) return { entry: null, entries: [],
     warning: warnings.size ? [...warnings].join(" | ") : null, rawDataRanges: [] };
+  if (await directHllDirectory(reader, debugDir, rvaToOff, message => addWarning(message))) {
+    return { entry: null, entries: [], warning: null, rawDataRanges: [] };
+  }
   const maxEntries = readableDebugEntryCount(reader.size, debugDir, rvaToOff, addWarning);
   const rawDataRanges: FileRange[] = [];
   const exceptionDirectory = dataDirs.find(directory => directory.name === "EXCEPTION");

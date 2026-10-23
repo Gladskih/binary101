@@ -14,6 +14,7 @@ import {
 } from "./debug-payload-details.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderTd32Sources } from "./td32.js";
+import { renderCodeViewSources } from "./legacy-codeview.js";
 import { getPeDebugSectionDescriptor } from "./debug-section-descriptor.js";
 
 const formatEntryType = (entry: PeDebugDirectoryEntry): string => {
@@ -61,6 +62,7 @@ export function renderDebug(pe: PeWindowsParseResult, out: string[]): void {
   renderEntryTable(pe, out);
   renderDecodedEntryDetails(pe, pe.debug, out);
   renderTd32Sources(pe, out);
+  renderCodeViewSources(pe, out);
   if (pe.debug.notes?.length) out.push(`<div class="smallNote">${escapeHtml(pe.debug.notes.join(" | "))}</div>`);
   if (pe.debug.warning) out.push(`<div class="smallNote">${escapeHtml(pe.debug.warning)}</div>`);
   out.push(renderPeSectionEnd());

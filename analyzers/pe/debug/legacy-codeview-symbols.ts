@@ -5,7 +5,7 @@ import { readLegacyCodeViewNameIndex, readLegacyCodeViewAddressIndex,
 
 export interface LegacyCodeViewSymbols {
   kind: "symbols";
-  encoding?: "c6";
+  encoding?: "c6" | "hll";
   records: LegacyCodeViewSymbol[];
   nameIndex?: LegacyCodeViewIndex;
   addressIndex?: LegacyCodeViewIndex;

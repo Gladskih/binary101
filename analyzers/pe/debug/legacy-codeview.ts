@@ -3,6 +3,7 @@ import type { RvaToOffset } from "../types.js";
 import { getReadableDebugData } from "./data.js";
 import { readDebugPayload } from "./payload-reader.js";
 import { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
+import type { HllSource } from "./hll-source.js";
 import { readCodeViewC6Directories, CODEVIEW_C6_DECODERS } from "./codeview-c6.js";
 import { readLegacyCodeViewDirectories, type LegacyCodeViewSubsection } from "./legacy-codeview-directory.js";
 import { readLegacyCodeViewModule, readLegacyCodeViewLibraries, readLegacyCodeViewSegmentNames,
@@ -19,7 +20,7 @@ import { readLegacyCodeViewPublics, readLegacyCodeViewOldLines, readLegacyCodeVi
 
 export type LegacyCodeViewData = LegacyCodeViewModule | LegacyCodeViewLibraries | LegacyCodeViewSegmentNames |
   LegacyCodeViewSegmentMap | LegacyCodeViewFiles | LegacyCodeViewSource | LegacyCodeViewSymbols | LegacyCodeViewTypes |
-  LegacyCodeViewPublics | LegacyCodeViewOldLines | LegacyCodeViewFrameMap;
+  LegacyCodeViewPublics | LegacyCodeViewOldLines | LegacyCodeViewFrameMap | HllSource;
 export interface PeLegacyCodeViewInfo {
   signature: string;
   directories: { flags: number; subsections: (LegacyCodeViewSubsection & { data?: LegacyCodeViewData })[] }[];

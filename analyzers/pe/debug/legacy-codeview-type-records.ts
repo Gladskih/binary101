@@ -7,7 +7,7 @@ import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js
 
 export interface LegacyCodeViewTypes {
   kind: "types";
-  encoding?: "c6";
+  encoding?: "c6" | "hll";
   records: { type: number; name?: string; uniqueName?: string; members?: LegacyCodeViewField[];
     strings?: string[]; symbols?: LegacyCodeViewSymbol[] }[];
 }

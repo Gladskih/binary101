@@ -13,14 +13,14 @@ const pairedRows = (strings: readonly string[]): string[][] => {
   return rows;
 };
 
-const symbolTextRows = (record: LegacyCodeViewSymbols["records"][number]): string[][] => {
+const symbolTextRows = (record: LegacyCodeViewSymbols["records"][number], encoding?: "c6" | "hll"): string[][] => {
   const strings = record.strings ?? [];
   // Microsoft's C7Compile2 / C7Envblock consume command-block fields as pairs.
   // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/cvdump/dumpsym7.cpp#L5849
   return ([0x1013, 0x1116, 0x113d].includes(record.type) ? pairedRows(strings)
     : strings.map((text, index) => [record.type === 0x1161
       ? (index === 0 ? "Source PDB" : "Destination PDB") : `String ${index + 1}`, text || "(empty)"]))
-    .map(row => [legacyCodeViewSymbolName(record.type), ...row]);
+    .map(row => [legacyCodeViewSymbolName(record.type, encoding), ...row]);
 };
 
 export const buildLegacyCodeViewSymbolStringTables = (info: PeLegacyCodeViewInfo): LegacyCodeViewTable[] => {
@@ -30,8 +30,10 @@ export const buildLegacyCodeViewSymbolStringTables = (info: PeLegacyCodeViewInfo
     for (const section of directory.subsections) {
       if (!section.data) continue;
       for (const { record, container } of iterateLegacyCodeViewSymbols(section.data)) {
-        for (const row of symbolTextRows(record)) table.rows.push([String(index + 1), String(section.module),
+        for (const row of symbolTextRows(record, section.data.kind === "symbols" ? section.data.encoding : undefined)) {
+          table.rows.push([String(index + 1), String(section.module),
           container === undefined ? row[0]! : `${container} / ${row[0]}`, ...row.slice(1)]);
+        }
       }
     }
   });

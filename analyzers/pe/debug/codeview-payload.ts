@@ -3,6 +3,7 @@ import type { RvaToOffset } from "../types.js";
 import { readDebugPayload } from "./payload-reader.js";
 import { parseCodeViewEntry } from "./codeview.js";
 import { parseLegacyCodeView } from "./legacy-codeview.js";
+import { parseHll } from "./hll.js";
 import type { PeDebugPayloads } from "./entry-decoders.js";
 
 export const decodeCodeViewPayload = async (
@@ -12,9 +13,11 @@ export const decodeCodeViewPayload = async (
 ): Promise<PeDebugPayloads> => {
   const signature = dataSize >= 4 ? await readDebugPayload(reader, rvaToOff,
     addressOfRawDataRva, pointerToRawDataOff, 0, 4) : null;
-  if (signature?.byteLength === 4 && /^NB0[25-9]$|^NB11$/.test(String.fromCharCode(
-    ...new Uint8Array(signature.buffer, signature.byteOffset, 4)))) {
-    const legacyCodeView = await parseLegacyCodeView(reader, fileSize, rvaToOff,
+  const name = signature?.byteLength === 4 ? String.fromCharCode(
+    ...new Uint8Array(signature.buffer, signature.byteOffset, 4)) : "";
+  if (/^NB0[245-9]$|^NB11$/.test(name)) {
+    const parse = name === "NB04" ? parseHll : parseLegacyCodeView;
+    const legacyCodeView = await parse(reader, fileSize, rvaToOff,
       addressOfRawDataRva, pointerToRawDataOff, dataSize, addWarning);
     return legacyCodeView ? { legacyCodeView } : {};
   }

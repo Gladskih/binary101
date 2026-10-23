@@ -107,17 +107,25 @@ const buildWindowsPeDebug = (
   artifacts: PeDebugArtifacts, clr: PeDirectoryArtifacts["clr"]
 ): PeDebugSection | null => resolveDebugConstants(buildPeDebugSection(artifacts), clr?.meta?.tables);
 
-const hasDebugSection = ({ debugResult, td32Sources, debugNotes, debugWarning }: PeDebugArtifacts): boolean =>
-  Boolean(debugResult.entry || debugWarning || debugNotes?.length || debugResult.entries.length || td32Sources?.length);
+const hasDebugSection = (
+  { debugResult, td32Sources, codeViewSources, debugNotes, debugWarning }: PeDebugArtifacts
+): boolean =>
+  Boolean(debugResult.entry || debugWarning || debugNotes?.length || debugResult.entries.length ||
+    td32Sources?.length || codeViewSources?.length);
+
+const standaloneDebugSources = ({ td32Sources, codeViewSources }: PeDebugArtifacts) => ({
+  ...(td32Sources?.length ? { td32Sources } : {}),
+  ...(codeViewSources?.length ? { codeViewSources } : {})
+});
 
 export const buildPeDebugSection = (
   debugArtifacts: PeDebugArtifacts
 ): PeDebugSection | null => {
-  const { debugResult, td32Sources, debugNotes, debugWarning } = debugArtifacts;
+  const { debugResult, debugNotes, debugWarning } = debugArtifacts;
   if (!hasDebugSection(debugArtifacts)) return null;
   return {
     entry: debugResult.entry,
-    ...(td32Sources?.length ? { td32Sources } : {}),
+    ...standaloneDebugSources(debugArtifacts),
     ...(debugResult.entries.length ? { entries: debugResult.entries } : {}),
     ...(debugNotes?.length ? { notes: debugNotes } : {}),
     ...(debugResult.rawDataRanges.length ? { rawDataRanges: debugResult.rawDataRanges } : {}),

@@ -2,6 +2,7 @@ import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 
 export interface LegacyCodeViewModule {
   kind: "module"; name: string; library: number; overlay: number; style: string;
+  version?: number;
   segments: { segment: number; offset: number; size: number }[];
 }
 export interface LegacyCodeViewLibraries { kind: "libraries"; names: string[]; }

@@ -8,6 +8,7 @@ import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.j
 import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-tables.js";
 import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embedded-symbols.js";
 import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
+import { hllSourceRows } from "./hll-source-rows.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -69,6 +70,7 @@ const schemas: Record<LegacyCodeViewData["kind"], [string, string[]]> = {
   libraries: ["Libraries", ["Index", "Name"]], segmentNames: ["Segment names", ["Name"]],
   segmentMap: ["Segments", ["Segment", "Name", "Class", "Bytes", "Attributes"]],
   source: ["Source mappings", ["File", "Segments", "Line/address pairs", "Distinct source lines"]],
+  hllSource: ["HLL source mappings", ["File", "Mapping kind", "Segments", "Records", "Distinct lines or path codes"]],
   files: ["Source file index", ["File", "Referencing modules"]],
   symbols: ["Named symbols", ["Symbol kind", "Name"]], types: ["Named types", ["Type kind", "Name"]],
   publics: ["Public symbols", ["Name"]], oldLines: ["Legacy source mappings", ["File", "Line/address pairs", "Distinct source lines"]],
@@ -76,9 +78,12 @@ const schemas: Record<LegacyCodeViewData["kind"], [string, string[]]> = {
 };
 
 const dataRows = (data: LegacyCodeViewData, names: DirectoryNames): string[][] => {
+  if (data.kind === "hllSource") return hllSourceRows(data);
   if (data.kind === "module") {
     return [[data.name, names.libraries ? (names.libraries[data.library] ?? `#${data.library}`) || "(none)" : `#${data.library}`,
-      data.style, String(data.segments.length), String(data.segments.reduce((sum, segment) => sum + segment.size, 0))]];
+      data.version === undefined ? data.style : `${data.style === "\0\0" ? "CodeView (unspecified)" : data.style} ` +
+        `(version ${data.version >>> 8}.${data.version & 255})`,
+      String(data.segments.length), String(data.segments.reduce((sum, segment) => sum + segment.size, 0))]];
   }
   if (data.kind !== "segmentMap") return namedRows(data);
   return data.segments.map((segment, index) => [String(index + 1),
@@ -108,7 +113,7 @@ const addMemberNames = (tables: Map<string, LegacyCodeViewTable>, data: LegacyCo
   tables.set("members", table);
 };
 
-const typeStringKind = (type: number, index: number, encoding?: "c6"): string => type === 2 || type === 0x1002
+const typeStringKind = (type: number, index: number, encoding?: "c6" | "hll"): string => type === 2 || type === 0x1002
   ? "Pointer base type" : type === 0x151d ? (index === 0 ? "Virtual table name" : "Virtual method name")
     : legacyCodeViewTypeName(type, encoding);
 
@@ -158,7 +163,8 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       addTypeStrings(tables, data, index + 1, section.module);
       addHistogram(histogram, data, index + 1, section.module);
     }
-    for (const [type, group] of groups) inventory.rows.push([String(index + 1), legacyCodeViewSubsectionName(type),
+    for (const [type, group] of groups) inventory.rows.push([String(index + 1),
+      legacyCodeViewSubsectionName(type, info.signature),
       String(group.count), String(group.size), `${group.decoded} / ${group.count}`]);
   });
   return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info),
