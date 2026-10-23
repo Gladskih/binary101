@@ -1,0 +1,201 @@
+import { DEFAULT_FILE_READ_WINDOW_BYTES, type FileRangeReader } from "../../file-range-reader.js";
+
+export interface Ia64DescriptorStatistics {
+  counts: Record<string, number>;
+  maximumFixedStackBytes?: number;
+  issues: string[];
+}
+
+// Intel 245358-003, chapter 11 and appendix B; libunwind's generic IA64 decoder.
+// Windows compatibility: https://groups.google.com/g/microsoft.public.windbg/c/iX3KQeqe3_E
+// https://github.com/libunwind/libunwind/blob/v1.8.1/src/ia64/unwind_decoder.h
+// Only aggregate metadata: this does not execute an unwind or rebuild machine state.
+class DescriptorReader {
+  position = 0;
+  error: string | undefined;
+  private window: Uint8Array = new Uint8Array(0);
+  private windowStart = 0;
+  private end: number;
+  constructor(readonly source: FileRangeReader) { this.end = source.size; }
+  async byte(): Promise<number> {
+    if (this.position >= this.end) {
+      this.error ??= "IA64 unwind descriptor is truncated.";
+      return 0;
+    }
+    if (this.position >= this.windowStart + this.window.length) {
+      this.windowStart = this.position;
+      this.window = await this.source.readBytes(this.position,
+        Math.min(DEFAULT_FILE_READ_WINDOW_BYTES, this.end - this.position));
+      if (this.window.length < Math.min(DEFAULT_FILE_READ_WINDOW_BYTES, this.end - this.position)) {
+        this.end = this.position + this.window.length;
+      }
+    }
+    const value = this.window[this.position - this.windowStart];
+    if (value == null) {
+      this.error ??= "IA64 unwind descriptor read is truncated.";
+      return 0;
+    }
+    this.position++;
+    return value;
+  }
+  skip(length: bigint): void {
+    if (length > BigInt(this.end - this.position)) {
+      this.error ??= "IA64 unwind descriptor is truncated.";
+    } else this.position += Number(length);
+  }
+  async unsigned(): Promise<bigint> {
+    let value = 0n;
+    for (let shift = 0n; shift < 64n; shift += 7n) {
+      const part = await this.byte();
+      value |= BigInt(part & 127) << shift;
+      if (value > 0xffffffffffffffffn) break;
+      if (!(part & 128)) return value;
+    }
+    this.error ??= "IA64 unwind descriptor ULEB128 exceeds 64 bits.";
+    return 0n;
+  }
+}
+
+interface DescriptorState {
+  reader: DescriptorReader;
+  body: boolean;
+  hasRegion: boolean;
+  regionSlots: bigint;
+  statistics: Ia64DescriptorStatistics;
+}
+
+const reserved = (reader: DescriptorReader): string => {
+  reader.error ??= "Unknown or reserved IA64 unwind descriptor encoding.";
+  return "";
+};
+
+const parseRegion = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code < 0x40) {
+    state.body = (code & 0x20) !== 0;
+    state.regionSlots = BigInt(code & 31);
+  } else if (code >= 0x40 && code <= 0x47) {
+    await state.reader.byte(); // R2 saved-register mask and first GR.
+    state.body = false;
+    state.regionSlots = await state.reader.unsigned();
+  } else if (code === 0x60 || code === 0x61) {
+    state.body = code === 0x61;
+    state.regionSlots = await state.reader.unsigned();
+  } else return reserved(state.reader);
+  state.hasRegion = true;
+  if (state.body) return "Body regions";
+  return state.regionSlots ? "Prologue regions" : "Empty prologues / padding";
+};
+
+const parseStackRule = async (state: DescriptorState, code: number): Promise<string> => {
+  await state.reader.unsigned(); // P7 time, stack offset, or spill-base displacement.
+  if (code === 0xe0) {
+    const bytes = await state.reader.unsigned() * 16n;
+    if (state.reader.error) return "";
+    if (bytes > BigInt(Number.MAX_SAFE_INTEGER)) {
+      state.statistics.issues.push("IA64 fixed stack size exceeds the exact numeric range.");
+    } else state.statistics.maximumFixedStackBytes =
+      Math.max(state.statistics.maximumFixedStackBytes ?? 0, Number(bytes));
+    return "Fixed stack allocations";
+  }
+  if (code === 0xe1) return "Variable stack allocations";
+  return code === 0xe2 ? "Spill-base changes" : "Register rules";
+};
+
+const parseLongPrologueRule = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code === 0xf0) {
+    const selector = await state.reader.byte();
+    if (selector < 1 || selector > 19) return reserved(state.reader);
+    await state.reader.unsigned();
+    return "Register rules";
+  }
+  if (code === 0xf1) {
+    state.reader.skip(2n);
+    return "Register rules";
+  }
+  if (code === 0xff) {
+    state.reader.skip(2n);
+    return "ABI context records";
+  }
+  return reserved(state.reader);
+};
+
+const parseSpillRule = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code === 0xb8) {
+    // P4 has one two-bit spill-schedule entry per instruction slot, MSB first.
+    state.reader.skip((state.regionSlots + 3n) / 4n);
+    return "Spill schedules";
+  }
+  if (code === 0xb9) {
+    state.reader.skip(3n);
+    return "Register rules";
+  }
+  return reserved(state.reader);
+};
+
+const parsePrologueRule = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code < 0xa0) return "Register rules"; // P1.
+  if (code < 0xb0) {
+    await state.reader.byte(); // P2 branch-register mask and first GR.
+    return "Register rules";
+  }
+  if (code < 0xb8) {
+    const selector = (code & 7) * 2 + ((await state.reader.byte()) >> 7);
+    return selector <= 11 ? "Register rules" : reserved(state.reader);
+  }
+  if (code < 0xc0) return parseSpillRule(state, code);
+  if (code < 0xe0) return "Register rules"; // P6 floating/general register mask.
+  if (code < 0xf0) return parseStackRule(state, code);
+  return parseLongPrologueRule(state, code);
+};
+
+const parseBodyRule = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code < 0xc0) return code & 0x20 ? "Saved-state copies" : "Saved-state labels";
+  if (code < 0xe0) {
+    await state.reader.unsigned();
+    return "Epilogues";
+  }
+  if (code === 0xe0) {
+    await state.reader.unsigned();
+    await state.reader.unsigned();
+    return "Epilogues";
+  }
+  if (code === 0xf0 || code === 0xf8) {
+    await state.reader.unsigned();
+    return code === 0xf8 ? "Saved-state copies" : "Saved-state labels";
+  }
+  return reserved(state.reader);
+};
+
+const parseGeneralRule = async (state: DescriptorState, code: number): Promise<string> => {
+  // X1/X3 carry time and offset ULEB128s; X2/X4 carry only time.
+  state.reader.skip(code === 0xf9 ? 1n : code === 0xfc ? 3n : 2n);
+  await state.reader.unsigned();
+  if (code === 0xf9 || code === 0xfb) await state.reader.unsigned();
+  return "Register rules";
+};
+
+const parseDescriptor = async (state: DescriptorState, code: number): Promise<string> => {
+  if (code < 0x80) return parseRegion(state, code);
+  if (!state.hasRegion) {
+    state.reader.error = "IA64 unwind descriptor precedes its region header.";
+    return "";
+  }
+  if (code >= 0xf9 && code <= 0xfc) return parseGeneralRule(state, code);
+  return state.body ? parseBodyRule(state, code) : parsePrologueRule(state, code);
+};
+
+export const parseIa64Descriptors = async (source: FileRangeReader): Promise<Ia64DescriptorStatistics> => {
+  const statistics: Ia64DescriptorStatistics = { counts: {}, issues: [] };
+  if (!Number.isSafeInteger(source.size) || source.size < 0) {
+    statistics.issues.push("IA64 unwind descriptor area size is invalid.");
+    return statistics;
+  }
+  const state: DescriptorState = { reader: new DescriptorReader(source), body: false,
+    hasRegion: false, regionSlots: 0n, statistics };
+  while (state.reader.position < source.size && !state.reader.error) {
+    const kind = await parseDescriptor(state, await state.reader.byte());
+    if (!state.reader.error) statistics.counts[kind] = (statistics.counts[kind] ?? 0) + 1;
+  }
+  if (state.reader.error) statistics.issues.push(state.reader.error);
+  return statistics;
+};

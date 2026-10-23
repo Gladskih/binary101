@@ -3,7 +3,8 @@ import type { RvaToOffset } from "../types.js";
 import { mappedRvaSize } from "../rva-mapping.js";
 import { isValidFunctionRange } from "./function-range.js";
 import { readRuntimeFunctionChunks } from "./runtime-function-chunks.js";
-import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
+import { createEmptyExceptionDirectory, type PeExceptionDirectory, type PeIa64UnwindStatistics } from "./types.js";
+import { parseIa64UnwindInfo, type Ia64UnwindInfo } from "./ia64-unwind.js";
 
 interface Ia64TableState {
   result: PeExceptionDirectory;
@@ -39,6 +40,35 @@ const recordFunction = (state: Ia64TableState, view: DataView, offset: number,
   recordUnwindReference(state, view.getUint32(offset + 8, true), reader, rvaToOff);
 };
 
+const mergeDescriptorStatistics = (statistics: PeIa64UnwindStatistics, info: Ia64UnwindInfo): void => {
+  for (const [kind, count] of Object.entries(info.counts)) {
+    statistics.descriptorCounts[kind] = (statistics.descriptorCounts[kind] ?? 0) + count;
+  }
+  if (info.maximumFixedStackBytes != null) statistics.maximumFixedStackBytes =
+    Math.max(statistics.maximumFixedStackBytes ?? 0, info.maximumFixedStackBytes);
+};
+
+const readUnwindReferences = async (state: Ia64TableState, reader: FileRangeReader,
+  rvaToOff: RvaToOffset): Promise<void> => {
+  if (!state.references.size) return;
+  const versions = new Map<number, number>();
+  const statistics: PeIa64UnwindStatistics = { versions: [], descriptorCounts: {},
+    exceptionHandlerCount: 0, unwindHandlerCount: 0 };
+  state.result.ia64Unwind = statistics;
+  for (const reference of state.references) {
+    const info = await parseIa64UnwindInfo(reader, rvaToOff, reference);
+    if (info.version != null) versions.set(info.version, (versions.get(info.version) ?? 0) + 1);
+    if (info.version === 3) {
+      state.result.handlerUnwindInfoCount += Number((info.flags! & 3) !== 0);
+      statistics.exceptionHandlerCount += Number((info.flags! & 1) !== 0);
+      statistics.unwindHandlerCount += Number((info.flags! & 2) !== 0);
+    }
+    mergeDescriptorStatistics(statistics, info);
+    for (const issue of info.issues) state.issues.add(issue);
+  }
+  statistics.versions = [...versions].map(([version, count]) => ({ version, count }));
+};
+
 // IMAGE_IA64_RUNTIME_FUNCTION_ENTRY has three DWORD RVAs even for PE32+.
 // Its unwind payload is not AMD64 UNWIND_INFO; do not apply that decoder.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-pdata-section
@@ -61,9 +91,7 @@ export const parseIa64ExceptionTable = async (reader: FileRangeReader,
     }
   }
   result.uniqueUnwindInfoCount = state.references.size;
-  if (state.references.size) {
-    state.issues.add("IA64 unwind payloads are not decoded; handler and chaining information is unavailable.");
-  }
+  await readUnwindReferences(state, reader, rvaToOff);
   result.issues.push(...state.issues);
   return result;
 };

@@ -11,7 +11,9 @@ void test("IA64 renders mapped references and range statistics without inventing
 
   assert.match(html, /IA64 .pdata stores three 32-bit image-relative addresses/);
   assert.match(html, /Unique mapped unwind references<\/dt><dd>1<\/dd>/);
-  assert.match(html, /Unwind payloads remain undecoded/);
+  assert.match(html, /Recognized Windows unwind records are summarized by operation/);
+  assert.match(html, /Each unique block is counted once/);
+  assert.match(html, /language-specific handler data is not decoded/);
   assert.match(html, /Range length distribution/);
   assert.doesNotMatch(html, /Handlers present|Chained|CHAININFO|EHANDLER|<dt>undefined|UNWIND_INFO/);
 });

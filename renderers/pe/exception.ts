@@ -8,6 +8,7 @@ import { renderExceptionV3 } from "./exception-v3.js";
 import { renderDefinitionRow } from "../../html-utils.js";
 import { renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
+import { renderIa64UnwindStatistics } from "./exception-ia64.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -127,8 +128,9 @@ const getCeProfile = (): ExceptionRenderProfile => ({
 
 const getIa64Profile = (): ExceptionRenderProfile => ({
   introNote: "IA64 .pdata stores three 32-bit image-relative addresses for each code range and its unwind data. " +
-    "Unwind payloads remain undecoded; handler and chaining information is unavailable.",
-  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderNoFormatDetails,
+    "Recognized Windows unwind records are summarized by operation. Each unique block is counted once; " +
+    "language-specific handler data is not decoded.",
+  renderFormatNote: renderNoFormatDetails, renderFormatStats: renderIa64UnwindStatistics,
   unwindLabel: "Unique mapped unwind references"
 });
 

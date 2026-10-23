@@ -11,6 +11,15 @@ export interface PeCeExceptionStatistics {
   prologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
 }
 
+export interface PeIa64UnwindStatistics {
+  versions: { version: number; count: number }[];
+  descriptorCounts: Record<string, number>;
+  exceptionHandlerCount: number;
+  unwindHandlerCount: number;
+  /** Largest P7 mem_stack_f allocation, not reconstructed peak stack usage. */
+  maximumFixedStackBytes?: number;
+}
+
 export interface PeExceptionDirectory {
   functionCount: number;
   beginRvas: number[];
@@ -32,6 +41,7 @@ export interface PeExceptionDirectory {
   format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce" | "ia64";
   riscPrologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
   ceCompressed?: PeCeExceptionStatistics;
+  ia64Unwind?: PeIa64UnwindStatistics;
   exceptionInfoMethodCount?: number;
   exceptionClauseCount?: number;
   catchClauseCount?: number;

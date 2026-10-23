@@ -14,6 +14,16 @@ export const ia64ExceptionRows = (rows: readonly (readonly [number, number, numb
 export const ia64ExceptionMap = (rva: number): number | null =>
   rva >= 0x1000 && rva < 0x1200 ? rva - 0x1000 : null;
 
+export const ia64ExceptionImage = (): MockFile => {
+  const bytes = new Uint8Array(512);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(0x180, 3, true);
+  view.setUint32(0x184, 1, true);
+  view.setUint16(0x190, 3, true);
+  view.setUint32(0x194, 1, true);
+  return new MockFile(bytes);
+};
+
 export const createIa64ExceptionPe = (): MockFile => {
   const template = createPePlusWithSection();
   const payload = ia64ExceptionRows([[0x1000, 0x1040, 0x1180], [0x1040, 0x1080, 0x1180]]);
@@ -34,5 +44,8 @@ export const createIa64ExceptionPe = (): MockFile => {
   view.setUint32(0x340 + 12, 5, true); // IMAGE_DEBUG_TYPE_EXCEPTION, raw-only copy.
   view.setUint32(0x340 + 16, payload.size, true);
   view.setUint32(0x340 + 24, template.length, true);
+  view.setUint16(0x380, 3, true); // Windows IA64 unwind version (USHORT).
+  view.setUint32(0x384, 1, true); // One 8-byte descriptor word.
+  bytes.set([3, 0xe0, 0, 3, 0x25, 0xc0, 0, 0], 0x388);
   return new MockFile(bytes);
 };
