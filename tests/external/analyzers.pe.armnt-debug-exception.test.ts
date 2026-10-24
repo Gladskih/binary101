@@ -71,6 +71,11 @@ for (const name of ["raw-exception-armnt.exe", "raw-exception-armnt-packed.exe",
     assert.equal(expected.handlerUnwindInfoCount, [...oracle.matchAll(/Routine:/g)].length);
     assert.equal(expected.fragmentEntryCount, [...oracle.matchAll(/Fragment: Yes/g)].length);
     verifyPacked(expected.armntPacked, oracle);
+    assert.ok(expected.armntOpcodes);
+    if (name !== "raw-exception-armnt-packed.exe") {
+      assert.ok(Object.keys(expected.armntOpcodes.opcodeCounts).length > 0 ||
+        expected.armntOpcodes.incompleteSequenceCount > 0);
+    }
     assert.equal(expected.invalidEntryCount, 0);
     assert.deepEqual(expected.issues, []);
     assert.deepEqual(copied, expected);

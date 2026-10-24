@@ -13,6 +13,16 @@ export const createArmntXdata = (header: number, size = 32, extension = 0, handl
   if (size >= 12) view.setUint32(8, header, true);
   if (size >= 16) view.setUint32(12, extension, true);
   if (handler) view.setUint32(size - 4, handler, true);
+  const extended = (header >>> 23) === 0;
+  const scopeCount = extended ? extension & 0xffff : (header >>> 23) & 31;
+  const codeWords = extended ? (extension >>> 16) & 255 : header >>> 28;
+  const codeOffset = (extended ? 8 : 4) + ((header & (1 << 21)) !== 0 ? 0 : scopeCount * 4);
+  if ((header & (1 << 21)) === 0) {
+    for (let index = 0; index < scopeCount && 8 + (extended ? 8 : 4) + index * 4 + 4 <= size; index += 1) {
+      view.setUint32(8 + (extended ? 8 : 4) + index * 4, index, true);
+    }
+  }
+  bytes.fill(0xff, 8 + codeOffset, Math.min(size - (handler ? 4 : 0), 8 + codeOffset + codeWords * 4));
   return new MockFile(bytes);
 };
 
@@ -27,6 +37,7 @@ export const createArmntTable = (words: readonly number[]) => {
   });
   bytes.set(table, 16);
   new DataView(bytes.buffer).setUint32(ARMNT_FIXTURE_XDATA_RVA, 2 | (1 << 28), true);
+  bytes.fill(0xff, ARMNT_FIXTURE_XDATA_RVA + 4, ARMNT_FIXTURE_XDATA_RVA + 8);
   return { file: new MockFile(bytes), source: new MockFile(table), code, xdata: ARMNT_FIXTURE_XDATA_RVA,
     directory: { name: "EXCEPTION", rva: 16, size: table.length } };
 };

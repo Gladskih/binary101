@@ -36,9 +36,13 @@ void test("ARMNT caches shared xdata and keeps its fragment flag", async context
   const info = await read(8, issues);
 
   assert.deepEqual(info, { functionLengthBytes: 4, handlerRva: null,
-    hasHandler: false, fragment: true, version: 0 });
+    hasHandler: false, fragment: true, version: 0, opcodes: {
+      opcodeCounts: {}, instructionCount: 0, complete: true, stackAdjustments: [],
+      integerRegisterPopCount: 0, floatingRegisterPopCount: 0, framePointerRestores: 0,
+      returnAddressLoads: 0, specialMarkers: {}, unknownOpcodeCount: 0
+    } });
   assert.equal(await read(8, issues), info);
-  assert.equal(calls.mock.callCount(), 1);
+  assert.equal(calls.mock.callCount(), 2);
   assert.deepEqual(issues, []);
 });
 
@@ -76,6 +80,16 @@ void test("ARMNT reads the extension's 16-bit scope count and 8-bit code-word co
   const info = await createArmntUnwindInfoReader(file, rva => rva)(8, issues);
 
   assert.equal(info?.handlerRva, 101);
+  assert.deepEqual(issues, []);
+});
+
+void test("ARMNT reads a single-epilogue index with the extended header", async () => {
+  const file = createArmntXdata(2 | (1 << 21), 20, 1 << 16);
+  const issues: string[] = [];
+
+  const info = await createArmntUnwindInfoReader(file, rva => rva)(8, issues);
+
+  assert.equal(info?.opcodes?.specialMarkers["end"], 1);
   assert.deepEqual(issues, []);
 });
 
@@ -124,6 +138,7 @@ void test("ARMNT exposes reserved xdata versions as a warning", async () => {
 void test("ARMNT xdata supports a header at physical offset zero", async () => {
   const bytes = new Uint8Array(8);
   new DataView(bytes.buffer).setUint32(0, 2 | (1 << 28), true);
+  bytes.fill(0xff, 4);
   const issues: string[] = [];
   const info = await createArmntUnwindInfoReader(new MockFile(bytes), rva => rva - 8)(8, issues);
 
@@ -160,6 +175,65 @@ void test("ARMNT xdata detects a physically short handler read", async context =
   assert.deepEqual(issues, ["ARMNT .xdata handler RVA is truncated."]);
 });
 
+for (const [description, scopeWord, sequenceIndex] of [
+  ["reserved scope bits", (1 << 18) | 1, false],
+  ["scope offsets outside the function", 2, false],
+  ["non-increasing scope offsets", 0, false],
+  ["scope sequence index outside the code pool", (4 << 24), false],
+  ["single-epilogue index outside the code pool", 0, true]
+] as const) {
+  void test(`ARMNT rejects ${description}`, async () => {
+    const header = 2 | (1 << 28) | (description.includes("single-epilogue") ?
+      (1 << 21) | (4 << 23) : (2 << 23));
+    const bytes = createArmntXdata(header, 24).data.slice();
+    if (!sequenceIndex) new DataView(bytes.buffer).setUint32(
+      12 + (description.includes("non-increasing") ? 4 : 0), scopeWord, true);
+    const file = new MockFile(bytes);
+    const issues: string[] = [];
+
+    assert.equal(new DataView(file.data.buffer).getUint32(8, true), header);
+    await createArmntUnwindInfoReader(file, rva => rva)(8, issues);
+    assert.ok(issues.some(issue => issue.includes(description.includes("index") ||
+      description.includes("epilogue") ? "sequence index" : "scope")));
+  });
+}
+
+void test("ARMNT warns when an epilogue scope read is truncated", async context => {
+  const file = createArmntXdata(2 | (2 << 23) | (1 << 28), 24);
+  const original = file.read.bind(file);
+  context.mock.method(file, "read", (offset: number, size: number) => offset === 12
+    ? Promise.resolve(new DataView(new ArrayBuffer(4))) : original(offset, size));
+  const issues: string[] = [];
+
+  await createArmntUnwindInfoReader(file, rva => rva)(8, issues);
+
+  assert.ok(issues.some(issue => issue.includes("scope table is truncated")));
+});
+
+void test("ARMNT warns when the unwind code pool is physically truncated", async context => {
+  const file = createArmntXdata(2 | (1 << 28), 16);
+  const original = file.read.bind(file);
+  context.mock.method(file, "read", (offset: number, size: number) => offset === 12
+    ? Promise.resolve(new DataView(new ArrayBuffer(2))) : original(offset, size));
+  const issues: string[] = [];
+
+  await createArmntUnwindInfoReader(file, rva => rva)(8, issues);
+
+  assert.ok(issues.some(issue => issue.includes("code pool is truncated")));
+});
+
+void test("ARMNT records unknown code pool instructions as incomplete", async () => {
+  const bytes = createArmntXdata(2 | (1 << 28), 16).data.slice();
+  bytes[12] = 0xf0;
+  const issues: string[] = [];
+
+  const info = await createArmntUnwindInfoReader(new MockFile(bytes), rva => rva)(8, issues);
+
+  assert.equal(info?.opcodes?.complete, false);
+  assert.equal(info?.opcodes?.unknownOpcodeCount, 1);
+  assert.ok(issues.some(issue => issue.includes("unknown opcode")));
+});
+
 void test("ARMNT maximum extended counts remain bounded and use sparse word reads", async context => {
   const file = createArmntXdata(0x3ffff | (1 << 20), 263180, 0xffff | (255 << 16), 101);
   const calls = context.mock.method(file, "read");
@@ -168,7 +242,7 @@ void test("ARMNT maximum extended counts remain bounded and use sparse word read
 
   assert.equal(info?.functionLengthBytes, 524286);
   assert.equal(info?.handlerRva, 101);
-  assert.deepEqual(calls.mock.calls.map(call => call.arguments[1]), [4, 4, 4]);
+  assert.deepEqual(calls.mock.calls.map(call => call.arguments[1]), [4, 4, 1020, 262140, 4]);
   assert.deepEqual(issues, []);
 });
 

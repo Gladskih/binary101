@@ -4,6 +4,7 @@ import { createRvaRangeReader } from "../rva-range-reader.js";
 import { createArmntUnwindInfoReader, type ArmntUnwindInfo } from "./armnt-unwind-info.js";
 import { isValidFunctionRange } from "./function-range.js";
 import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
+import type { ArmntOpcodeStatistics } from "./armnt-opcode-types.js";
 import { createArmntPackedStatistics, recordArmntPackedStatistics } from "./armnt-packed-statistics.js";
 import { readRuntimeFunctionChunks } from "./runtime-function-chunks.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
@@ -22,6 +23,7 @@ interface ArmntExceptionState {
   invalidEntryCount: number;
   packed: ArmntPackedStatistics | null;
   fragmentEntryCount: number;
+  opcodes: ArmntOpcodeStatistics;
   previousBegin: number | null;
   reportedUnsortedEntries: boolean;
 }
@@ -29,10 +31,14 @@ interface ArmntExceptionState {
 const createState = (): ArmntExceptionState => ({
   functionCount: 0, beginRvas: [], rangeLengths: [], handlerRvas: new Set(),
   uniqueUnwindWords: new Set(), handlerUnwindInfoCount: 0, invalidEntryCount: 0,
-  packed: null, fragmentEntryCount: 0, previousBegin: null, reportedUnsortedEntries: false
+  packed: null, fragmentEntryCount: 0, previousBegin: null, reportedUnsortedEntries: false,
+  opcodes: { opcodeCounts: {}, stackAdjustments: {}, integerRegisterPopCount: 0,
+    floatingRegisterPopCount: 0, framePointerRestores: 0, returnAddressLoads: 0,
+    specialMarkers: {}, incompleteSequenceCount: 0 }
 });
 
 const recordMetadata = (word: number, info: ArmntUnwindInfo, state: ArmntExceptionState): void => {
+  const isUnique = !state.uniqueUnwindWords.has(word);
   state.uniqueUnwindWords.add(word);
   if ((word & 3) !== 0) {
     state.packed ??= createArmntPackedStatistics();
@@ -40,6 +46,22 @@ const recordMetadata = (word: number, info: ArmntUnwindInfo, state: ArmntExcepti
   }
   if (info.fragment) state.fragmentEntryCount += 1;
   if (info.hasHandler) state.handlerUnwindInfoCount += 1;
+  if (isUnique && info.opcodes) {
+    for (const [name, count] of Object.entries(info.opcodes.opcodeCounts)) {
+      state.opcodes.opcodeCounts[name] = (state.opcodes.opcodeCounts[name] ?? 0) + count;
+    }
+    for (const adjustment of info.opcodes.stackAdjustments) {
+      state.opcodes.stackAdjustments[adjustment] = (state.opcodes.stackAdjustments[adjustment] ?? 0) + 1;
+    }
+    state.opcodes.integerRegisterPopCount += info.opcodes.integerRegisterPopCount;
+    state.opcodes.floatingRegisterPopCount += info.opcodes.floatingRegisterPopCount;
+    state.opcodes.framePointerRestores += info.opcodes.framePointerRestores;
+    state.opcodes.returnAddressLoads += info.opcodes.returnAddressLoads;
+    state.opcodes.incompleteSequenceCount += Number(!info.opcodes.complete);
+    for (const [name, count] of Object.entries(info.opcodes.specialMarkers)) {
+      state.opcodes.specialMarkers[name] = (state.opcodes.specialMarkers[name] ?? 0) + count;
+    }
+  }
   // LLVM's ARM SEH emitter also stores Thumb state in the handler pointer.
   // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/test/MC/ARM/seh.s
   const handlerRva = info.handlerRva == null ? 0 : info.handlerRva - (info.handlerRva & 1);
@@ -107,5 +129,6 @@ export const parseArmntExceptionTable = async (reader: FileRangeReader, source: 
     handlerRvas: [...state.handlerRvas], uniqueUnwindInfoCount: state.uniqueUnwindWords.size,
     handlerUnwindInfoCount: state.handlerUnwindInfoCount, chainedUnwindInfoCount: 0,
     ...(state.packed ? { armntPacked: state.packed } : {}), fragmentEntryCount: state.fragmentEntryCount,
+    armntOpcodes: state.opcodes,
     invalidEntryCount: state.invalidEntryCount, issues, format: "armnt" };
 };

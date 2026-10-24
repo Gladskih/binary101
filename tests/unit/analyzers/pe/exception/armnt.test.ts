@@ -84,7 +84,7 @@ void test("ARMNT normalizes handler pointers, counts references, and decodes sha
   assert.equal(parsed.handlerUnwindInfoCount, 2);
   assert.deepEqual(parsed.handlerRvas, [fixture.code]);
   assert.equal(parsed.fragmentEntryCount, 2);
-  assert.equal(calls.mock.callCount(), 2);
+  assert.equal(calls.mock.callCount(), 3);
   assert.deepEqual(parsed.issues, []);
 });
 
