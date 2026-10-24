@@ -75,9 +75,12 @@ void test("PE debug-directory integration retains embedded symbols, base names a
   assert.equal(symbols.records.length, 3);
   assert.equal(symbols.records[0]!.children?.length, 102);
   assert.deepEqual(symbols.records[0]!.discarded, { reason: 2, fileId: 7, line: 42 });
-  assert.deepEqual(symbols.records[2]!.children, [{ type: 0x110e, name: "thisAlias" }]);
-  assert.deepEqual(codeViewStoredTypeText(types.records), [{ type: 0x20c, symbols: [{ type: 0x110e, name: "referenced" }] },
-    { type: 2, strings: ["BaseType"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "basedValue" }] }]);
+  assert.deepEqual(symbols.records[2]!.children, [{ type: 0x110e, name: "thisAlias",
+    data: { kind: "public", location: { segment: 0, offset: 0 }, publicFlags: 0 } }]);
+  assert.deepEqual(codeViewStoredTypeText(types.records), [{ type: 0x20c, symbols: [{ type: 0x110e, name: "referenced",
+    data: { kind: "public", location: { segment: 0, offset: 0 }, publicFlags: 0 } }] },
+    { type: 2, strings: ["BaseType"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "basedValue",
+      data: { kind: "data", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }]);
 });
 
 void test("legacy CodeView keeps valid subsections when another is malformed or unknown", async () => {

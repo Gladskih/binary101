@@ -12,7 +12,7 @@ const PROCEDURE_FLAGS = [
   [64, "No inline"], [128, "Optimized debug information"]
 ] as const;
 
-const flagsText = (flags: number | undefined): string => flags === undefined ? "unavailable"
+export const legacyCodeViewProcedureFlags = (flags: number | undefined): string => flags === undefined ? "unavailable"
   : PROCEDURE_FLAGS.filter(([mask]) => (flags & mask) !== 0).map(([, name]) => name).join(", ") || "None";
 
 const referenceText = (procedure: LegacyCodeViewProcedure): string =>
@@ -47,7 +47,8 @@ export const buildLegacyCodeViewProcedureTables = (info: PeLegacyCodeViewInfo): 
           legacyCodeViewSymbolName(record.type, encoding), record.name ?? "(name unavailable)",
           referenceText(record.procedure), locationText(record.procedure),
           record.procedure.codeLength === undefined ? "unavailable" : String(record.procedure.codeLength),
-          debugSpanText(record.procedure), scopeOffsetsText(record.procedure), flagsText(record.procedure.flags)]);
+          debugSpanText(record.procedure), scopeOffsetsText(record.procedure),
+          legacyCodeViewProcedureFlags(record.procedure.flags)]);
       }
     }
   });

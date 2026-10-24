@@ -18,7 +18,8 @@ for (const type of [2, 0x1002] as const) {
       const bytes = codeViewPointerBase(type, kind, [...codeViewEntryThis(legacySymbol()), 0xf2, 0xf1]);
 
       assert.deepEqual(await readLegacyCodeViewPointerBase(legacyReader(bytes, warnings), type),
-        { symbols: [{ type: 0xe, children: [{ type: 0x203, name: "public_name" }] }] });
+        { symbols: [{ type: 0xe, children: [{ type: 0x203, name: "public_name",
+          data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }] });
       assert.deepEqual(warnings, []);
     });
   }

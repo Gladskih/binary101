@@ -163,9 +163,10 @@ for (const tail of [[], [65, 0], [0, 0xd8, 0, 0]]) {
 }
 
 void test("CodeView ordinary symbol names and unnamed record kinds keep their existing contract", async () => {
-  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(legacySymbol()), 0x203), { name: "public_name" });
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(legacySymbol()), 0x203), { name: "public_name",
+    data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } });
   assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader([]), 6), {});
-  await assert.rejects(readLegacyCodeViewSymbolText(legacyReader([]), 0x110e), /terminated/);
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader([]), 0x110e), { data: { kind: "public" } });
 });
 
 for (const type of [0x1013, 0x1116, 0x1019, 0x113d]) {

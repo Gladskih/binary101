@@ -2,12 +2,14 @@ import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { readLegacyCodeViewSymbolName } from "./legacy-codeview-symbol-names.js";
 import { readLegacyCodeViewConstantSymbol, type LegacyCodeViewConstant } from "./legacy-codeview-constant-symbols.js";
 import { readLegacyCodeViewProcedureSymbol, type LegacyCodeViewProcedure } from "./legacy-codeview-procedure-symbols.js";
+import { readLegacyCodeViewDataSymbol, type LegacyCodeViewDataSymbol } from "./legacy-codeview-data-symbols.js";
 
 export interface LegacyCodeViewSymbolText {
   name?: string;
   strings?: string[];
   constant?: LegacyCodeViewConstant;
   procedure?: LegacyCodeViewProcedure;
+  data?: LegacyCodeViewDataSymbol;
 }
 type ReadCodeViewString = (offset: number) => Promise<{ name: string; end: number }>;
 
@@ -64,6 +66,8 @@ export const readLegacyCodeViewSymbolText = async (
   if (constant) return constant;
   const procedure = await readLegacyCodeViewProcedureSymbol(reader, type);
   if (procedure) return procedure;
+  const data = await readLegacyCodeViewDataSymbol(reader, type);
+  if (data) return data;
   if (type === 0x1013 || type === 0x1116) return readCompilerText(reader, type);
   // ANNOTATIONSYM has a WORD count; PDBMAP has exactly two UTF-16 paths.
   // ENVBLOCKSYM is one flags byte followed by a stringZ-vectorZ.

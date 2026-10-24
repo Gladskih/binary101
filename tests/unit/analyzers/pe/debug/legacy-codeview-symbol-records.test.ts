@@ -14,10 +14,13 @@ void test("CodeView symbol records preserve nested entry-this and discarded symb
     ...legacySymbol(0x110e, "removed", 14), ...codeViewEntryThis(legacySymbol())])];
 
   assert.deepEqual(await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length), [
-    { type: 0xe, children: [{ type: 0x203, name: "public_name" }] },
+    { type: 0xe, children: [{ type: 0x203, name: "public_name",
+      data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] },
     { type: 0x113b, discarded: { reason: 0, fileId: 0xffffffff, line: 0 },
-      children: [{ type: 0x110e, name: "removed" },
-      { type: 0xe, children: [{ type: 0x203, name: "public_name" }] }] }
+      children: [{ type: 0x110e, name: "removed",
+        data: { kind: "public", location: { segment: 0, offset: 0 }, publicFlags: 0 } },
+      { type: 0xe, children: [{ type: 0x203, name: "public_name",
+        data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }] }
   ]);
   assert.deepEqual(warnings, []);
 });
@@ -28,7 +31,9 @@ void test("CodeView nested record corruption does not consume its parent's follo
 
   assert.deepEqual(await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length), [
     { type: 0x113b, discarded: { reason: 0, fileId: 0xffffffff, line: 0 },
-      children: [{ type: 0x203, name: "public_name" }] }, { type: 0x203, name: "public_name" }
+      children: [{ type: 0x203, name: "public_name",
+        data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }, { type: 0x203, name: "public_name",
+        data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }
   ]);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /record length/);
@@ -51,7 +56,7 @@ void test("CodeView discarded symbols validate their mandatory header and allow 
 
   assert.deepEqual(await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length), [
     { type: 0x113b }, { type: 0x113b, discarded: { reason: 0, fileId: 0xffffffff, line: 0 }, children: [] },
-    { type: 0x203, name: "public_name" }
+    { type: 0x203, name: "public_name", data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }
   ]);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0]!, /bounds/);
@@ -62,7 +67,8 @@ void test("CodeView embedded fixed headers remain bounded at nonzero record offs
   const bytes = [...legacySymbol(), ...codeViewTextRecord(0x113b, 4, []), ...legacySymbol()];
 
   assert.deepEqual(await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length), [
-    { type: 0x203, name: "public_name" }, { type: 0x113b }, { type: 0x203, name: "public_name" }
+    { type: 0x203, name: "public_name", data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } },
+    { type: 0x113b }, { type: 0x203, name: "public_name", data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }
   ]);
   assert.deepEqual(warnings,
     ["CodeView symbol 4411: Error: CodeView embedded symbol header exceeds record bounds."]);
@@ -77,7 +83,8 @@ void test("CodeView nested symbols use structural bounds without recursion or a 
 
   assert.equal(chain.length, depth + 1);
   assert.ok(chain.slice(0, -1).every(record => record.children?.length === 1));
-  assert.deepEqual(chain.at(-1), { type: 0x110e, name: "deep" });
+  assert.deepEqual(chain.at(-1), { type: 0x110e, name: "deep",
+    data: { kind: "public", location: { segment: 0, offset: 0 }, publicFlags: 0 } });
   assert.deepEqual(warnings, []);
 });
 
@@ -86,9 +93,9 @@ void test("CodeView symbol records retain malformed text tags and stop on invali
   const bytes = [...codeViewTextRecord(0x110e, 4, []), 1, 0, 0, 0];
 
   assert.deepEqual(await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length),
-    [{ type: 0x110e }]);
+    [{ type: 0x110e, data: { kind: "public" } }]);
   assert.equal(warnings.length, 2);
-  assert.match(warnings[0]!, /symbol 4366/);
+  assert.match(warnings[0]!, /symbol fixed fields/);
   assert.match(warnings[1]!, /record length/);
 });
 
@@ -107,7 +114,8 @@ void test("CodeView embedded symbols exclude trailing type padding and preserve 
   const bytes = [...codeViewEntryThis(legacySymbol()), 0xf2, 0xf1];
 
   assert.deepEqual(await readLegacyCodeViewEmbeddedSymbol(legacyReader(bytes, warnings), 0),
-    [{ type: 0xe, children: [{ type: 0x203, name: "public_name" }] }]);
+    [{ type: 0xe, children: [{ type: 0x203, name: "public_name",
+      data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }]);
   assert.deepEqual(warnings, []);
 });
 
@@ -140,7 +148,8 @@ void test("CodeView discarded records warn on unknown reasons and reserved bits 
   const parsed = await readLegacyCodeViewSymbolRecords(legacyReader(bytes, warnings), 0, bytes.length);
 
   assert.deepEqual(parsed[0]!.discarded, { reason: 3, fileId: 0xffffffff, line: 0 });
-  assert.deepEqual(parsed[0]!.children, [{ type: 0x203, name: "public_name" }]);
+  assert.deepEqual(parsed[0]!.children, [{ type: 0x203, name: "public_name",
+    data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }]);
   assert.deepEqual(warnings, ["CodeView discarded-symbol reserved bits are nonzero.",
     "CodeView discarded-symbol reason is unknown."]);
 });

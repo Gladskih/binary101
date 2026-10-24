@@ -25,7 +25,8 @@ void test("NB04 modules select their own HLL or CodeView stream dialect regardle
     ["module", "libraries", "symbols", "types"]);
   assert.deepEqual(hll.warnings, []);
   assert.deepEqual(cv.data?.directories[0]!.subsections[0]!.data,
-    { kind: "symbols", records: [{ type: 0x203, name: "public_name" }] });
+    { kind: "symbols", records: [{ type: 0x203, name: "public_name",
+      data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] });
   assert.deepEqual(cv.warnings, []);
 });
 

@@ -25,7 +25,8 @@ void test("CodeView global symbols retain stored name-bucket and section-index c
   const parsed = await readLegacyCodeViewGlobalSymbols(legacyReader(codeViewGlobalSymbols(legacySymbol(),
     codeViewHashIndex([0, 2, 1]), codeViewHashIndex([1, 0, 2])), warnings));
 
-  assert.deepEqual(parsed, { kind: "symbols", records: [{ type: 0x203, name: "public_name" }],
+  assert.deepEqual(parsed, { kind: "symbols", records: [{ type: 0x203, name: "public_name",
+    data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }],
     nameIndex: { algorithm: 10, counts: [0, 2, 1] }, addressIndex: { algorithm: 12, counts: [1, 0, 2] } });
   assert.deepEqual(warnings, []);
 });
@@ -104,7 +105,8 @@ void test("CodeView symbol scan retains named symbols and unnamed scope records"
     0, 0, 0, 0, ...legacyU32(records.length), ...legacyU32(0), ...legacyU32(0), ...records]));
   const local = await readLegacyCodeViewModuleSymbols(legacyReader([...legacyU32(1), ...records]));
 
-  assert.deepEqual(global, { kind: "symbols", records: [{ type: 0x203, name: "public_name" }, { type: 6 }] });
+  assert.deepEqual(global, { kind: "symbols", records: [{ type: 0x203, name: "public_name",
+    data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }, { type: 6 }] });
   assert.deepEqual(local, global);
   await assert.rejects(readLegacyCodeViewModuleSymbols(legacyReader([...legacyU32(9)])), /signature/);
 });
@@ -114,8 +116,9 @@ void test("CodeView damaged name does not discard later symbols", async () => {
   const warnings: string[] = [];
   const parsed = await readLegacyCodeViewSymbols(legacyReader(bytes, warnings), 0, bytes.length);
 
-  assert.deepEqual(parsed.records, [{ type: 0x203 }, { type: 0x203, name: "public_name" }]);
-  assert.match(warnings.join(" | "), /symbol 515:.*bounds/);
+  assert.deepEqual(parsed.records, [{ type: 0x203, data: { kind: "public" } }, { type: 0x203, name: "public_name",
+    data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }]);
+  assert.match(warnings.join(" | "), /symbol fixed fields:.*bounds/);
 });
 
 for (const suffix of [[1, 0, 0], [255, 255], [1]]) {

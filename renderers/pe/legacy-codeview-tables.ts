@@ -8,6 +8,7 @@ import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.j
 import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-tables.js";
 import { buildLegacyCodeViewConstantTables } from "./legacy-codeview-constant-tables.js";
 import { buildLegacyCodeViewProcedureTables } from "./legacy-codeview-procedure-tables.js";
+import { buildLegacyCodeViewDataSymbolTables } from "./legacy-codeview-data-symbol-tables.js";
 import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embedded-symbols.js";
 import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
 import { hllSourceRows } from "./hll-source-rows.js";
@@ -179,6 +180,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
     ...buildLegacyCodeViewEmbeddedSymbolTables(info),
     ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
     ...buildLegacyCodeViewProcedureTables(info),
+    ...buildLegacyCodeViewDataSymbolTables(info),
     ...buildCodeViewMemberTables(info), ...buildCodeViewBuildTables(info), ...buildCodeViewDerivedTables(info),
     ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info), ...buildCodeViewC6TypeTables(info)]
     .filter(table => table.rows.length > 0);

@@ -30,8 +30,10 @@ void test("CodeView type leaves preserve referenced symbols and based-pointer na
     ...codeViewPointerBase(0x1002, 4, legacySymbol(0x110d, "base", 14))], warnings));
 
   assert.deepEqual(codeViewStoredTypeText(parsed.records), [
-    { type: 0x20c, symbols: [{ type: 0xe, children: [{ type: 0x203, name: "public_name" }] }] },
-    { type: 2, strings: ["Base"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "base" }] }
+    { type: 0x20c, symbols: [{ type: 0xe, children: [{ type: 0x203, name: "public_name",
+      data: { kind: "public", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }] },
+    { type: 2, strings: ["Base"] }, { type: 0x1002, symbols: [{ type: 0x110d, name: "base",
+      data: { kind: "data", typeIndex: 0, location: { segment: 0, offset: 0 } } }] }
   ]);
   assert.deepEqual(warnings, []);
 });
