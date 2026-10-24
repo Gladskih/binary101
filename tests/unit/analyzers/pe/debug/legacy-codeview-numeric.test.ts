@@ -12,18 +12,22 @@ for (const [leaf, width, value] of [
 ] as const) {
   void test(`CodeView integer leaf ${leaf} retains its exact signed or unsigned value`, async () => {
     assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader(codeViewInteger(leaf, value, width)), 0),
-      { end: 2 + width, value: value.toString() });
+      { end: 2 + width, leaf, value: value.toString() });
     assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader(codeViewInteger(leaf, 1n, width)), 0),
-      { end: 2 + width, value: "1" });
+      { end: 2 + width, leaf, value: "1" });
     await assert.rejects(readLegacyCodeViewNumeric(legacyReader(codeViewInteger(leaf, value, width).slice(0, -1)), 0), /bounds/);
   });
 }
 
 void test("CodeView immediate integer and noninteger numeric leaves remain distinguishable", async () => {
-  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0xff, 0x7f]), 0), { end: 2, value: "32767" });
-  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0x1b, 0x80, 65, 0]), 0), { end: 4 });
-  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0x10, 0x80, 1, 0, 65]), 0), { end: 5 });
-  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([5, 0x80, 0, 0, 0, 0]), 0), { end: 6 });
+  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0xff, 0x7f]), 0),
+    { end: 2, value: "32767" });
+  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0x1b, 0x80, 65, 0]), 0),
+    { end: 4, leaf: 0x801b });
+  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([0x10, 0x80, 1, 0, 65]), 0),
+    { end: 5, leaf: 0x8010 });
+  assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader([5, 0x80, 0, 0, 0, 0]), 0),
+    { end: 6, leaf: 0x8005 });
   await assert.rejects(readLegacyCodeViewNumeric(legacyReader([0, 0]), -1), /bounds/);
   await assert.rejects(readLegacyCodeViewNumeric(legacyReader([0, 0]), Infinity), /bounds/);
 });
@@ -32,9 +36,9 @@ void test("CodeView octwords preserve byte order in both 64-bit halves", async (
   // CV4 LF_OCTWORD/LF_UOCTWORD use little-endian high and low halves (cvinfo.h).
   const value = 0x123456789abcdef0fedcba9876543210n;
   assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader(codeViewInteger(0x8018, value, 16)), 0),
-    { end: 18, value: value.toString() });
+    { end: 18, leaf: 0x8018, value: value.toString() });
   assert.deepEqual(await readLegacyCodeViewNumeric(legacyReader(codeViewInteger(0x8017, -value, 16)), 0),
-    { end: 18, value: (-value).toString() });
+    { end: 18, leaf: 0x8017, value: (-value).toString() });
 });
 
 void test("CodeView numeric leaf skips immediate, variable-length and UTF-8 strings exactly", async () => {

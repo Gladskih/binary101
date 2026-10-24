@@ -6,6 +6,7 @@ import { legacyCodeViewFieldName, legacyCodeViewVtableSlotName } from "./legacy-
 import type { LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.js";
 import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-tables.js";
+import { buildLegacyCodeViewConstantTables } from "./legacy-codeview-constant-tables.js";
 import { buildLegacyCodeViewEmbeddedSymbolTables } from "./legacy-codeview-embedded-symbols.js";
 import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discarded-statistics.js";
 import { hllSourceRows } from "./hll-source-rows.js";
@@ -172,7 +173,8 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       String(group.count), String(group.size), `${group.decoded} / ${group.count}`]);
   });
   return [inventory, histogram, ...tables.values(), ...buildLegacyCodeViewIndexTables(info),
-    ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewEmbeddedSymbolTables(info),
+    ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewConstantTables(info),
+    ...buildLegacyCodeViewEmbeddedSymbolTables(info),
     ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
     ...buildCodeViewMemberTables(info), ...buildCodeViewBuildTables(info), ...buildCodeViewDerivedTables(info),
     ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info)]

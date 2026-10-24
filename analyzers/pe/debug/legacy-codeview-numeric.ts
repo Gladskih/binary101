@@ -18,18 +18,28 @@ const INTEGER_VALUES = new Map<number, (view: DataView) => string>([
   [0x8018, view => String(view.getBigUint64(8, true) << 64n | view.getBigUint64(0, true))]
 ]);
 
+export interface LegacyCodeViewNumeric {
+  end: number;
+  leaf?: number;
+  value?: string;
+}
+
 /** Exact decimal integers; noninteger encodings retain only their validated extent. */
 export const readLegacyCodeViewNumeric = async (
   reader: LegacyCodeViewReader, offset: number
-): Promise<{ end: number; value?: string }> => {
+): Promise<LegacyCodeViewNumeric> => {
   const type = await reader.uint16(offset);
   if (type < 0x8000) return { end: offset + 2, value: String(type) };
-  if (type === 0x801b) return { end: (await reader.utf8Name(offset + 2)).end };
+  if (type === 0x801b) {
+    const end = (await reader.utf8Name(offset + 2)).end;
+    return { end, leaf: type };
+  }
   const size = type === 0x8010 ? 2 + await reader.uint16(offset + 2) : NUMERIC_SIZES.get(type);
   if (size == null) throw new Error(`Unknown CodeView numeric leaf ${type}.`);
   const view = await reader.view(offset + 2, size);
   const integer = INTEGER_VALUES.get(type);
-  return { end: offset + 2 + size, ...(integer ? { value: integer(view) } : {}) };
+  return { end: offset + 2 + size, leaf: type,
+    ...(integer ? { value: integer(view) } : {}) };
 };
 
 export const skipLegacyCodeViewNumeric = async (reader: LegacyCodeViewReader, offset: number): Promise<number> =>
