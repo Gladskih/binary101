@@ -42,6 +42,16 @@ const modifierText = (attributes: number): string => [
   attributes & ~7 ? `unknown modifier bits 0x${(attributes & ~7).toString(16)}` : ""
 ].filter(Boolean).join(" ");
 
+const EXTENDED_MODIFIERS = new Map<number, string>([[0, "invalid"], [1, "const"], [2, "volatile"],
+  [3, "unaligned"], [0x200, "HLSL uniform"], [0x201, "HLSL line"], [0x202, "HLSL triangle"],
+  [0x203, "HLSL line adjacency"], [0x204, "HLSL triangle adjacency"], [0x205, "HLSL linear"],
+  [0x206, "HLSL centroid"], [0x207, "HLSL constant interpolation"], [0x208, "HLSL no perspective"],
+  [0x209, "HLSL sample"], [0x20a, "HLSL center"], [0x20b, "HLSL snorm"], [0x20c, "HLSL unorm"],
+  [0x20d, "HLSL precise"], [0x20e, "HLSL UAV globally coherent"]]);
+
+const extendedModifierText = (modifiers: readonly number[]): string => modifiers.map(value =>
+  EXTENDED_MODIFIERS.get(value) ?? `unknown modifier enum 0x${value.toString(16)}`).join(" ");
+
 const pointerQualifiers = (attributes: number): string[] => [
   attributes & 0x200 ? "volatile" : "", attributes & 0x400 ? "const" : "",
   attributes & 0x800 ? "unaligned" : "", attributes & 0x1000 ? "restrict" : ""
@@ -76,8 +86,18 @@ const arrayStep = (shape: Extract<CodeViewTypeShape,
   return { text: `array (byte size: ${size}) of`, next: shape.elementType };
 };
 
+const specialReferenceStep = (shape: CodeViewTypeShape): TypeStep | undefined => {
+  if (shape.kind === "extendedModifier") return { text: extendedModifierText(shape.modifiers), next: shape.typeIndex };
+  if (shape.kind === "basicArray") return { text: "basic array of", next: shape.typeIndex };
+  if (shape.kind === "label") return { text: shape.mode === 0 ? "label (near return)" : shape.mode === 4
+    ? "label (far return)" : `label (unknown mode ${shape.mode})` };
+  return undefined;
+};
+
 const referencedStep = (shape: CodeViewTypeShape,
   indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): TypeStep | undefined => {
+  const special = specialReferenceStep(shape);
+  if (special) return special;
   switch (shape.kind) {
     case "modifier": return { text: modifierText(shape.attributes), next: shape.typeIndex };
     case "pointer": return { text: pointerText(shape, indexed), next: shape.typeIndex };

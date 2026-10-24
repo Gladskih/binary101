@@ -97,7 +97,8 @@ export const legacyCodeViewVtableSlotName = (kind: number): string =>
 
 const TYPE_NAMES = new Map<number, string>([
   [1, "Modifier"], [2, "Pointer"], [3, "Array"], [4, "Class"], [5, "Structure"], [6, "Union"], [7, "Enum"],
-  [8, "Procedure"], [9, "Member function"], [10, "Virtual table shape"], [0x200, "Skip"], [0x201, "Arguments"],
+  [8, "Procedure"], [9, "Member function"], [10, "Virtual table shape"], [0x0d, "Basic array"],
+  [0x0e, "Label"], [0x200, "Skip"], [0x201, "Arguments"],
   [0x202, "Default argument"], [0x203, "List"], [0x204, "Fields"], [0x205, "Derived types"],
   [0x20c, "Referenced symbol"],
   [0x206, "Bitfield"], [0x207, "Methods"], [0x208, "Array dimensions"], [0x209, "Array dimensions"],
@@ -106,9 +107,10 @@ const TYPE_NAMES = new Map<number, string>([
   [0x1209, "Variable array dimensions"], [0x120a, "Variable array dimensions"],
   [0x1001, "Modifier"], [0x1002, "Pointer"], [0x1003, "Array"], [0x1004, "Class"], [0x1005, "Structure"],
   [0x1006, "Union"], [0x1007, "Enum"], [0x1008, "Procedure"], [0x1009, "Member function"], [0x1010, "Alias"],
-  [0x1200, "Skip"], [0x1201, "Arguments"], [0x1203, "Fields"], [0x1205, "Bitfield"], [0x1206, "Methods"],
+  [0x100b, "Basic array"], [0x1200, "Skip"], [0x1201, "Arguments"], [0x1203, "Fields"],
+  [0x1205, "Bitfield"], [0x1206, "Methods"],
   [0x1503, "Array"], [0x1504, "Class"], [0x1505, "Structure"], [0x1506, "Union"], [0x1507, "Enum"],
-  [0x150a, "Alias"], [0x1519, "Interface"],
+  [0x150a, "Alias"], [0x1518, "Extended modifier"], [0x1519, "Interface"],
   // LLVM 007ca8ec1bd348000e42ada637c421cf5d28c11a CodeViewTypes.def.
   [0x1608, "Class (extended)"], [0x1609, "Structure (extended)"],
   [0x160a, "Union (extended)"], [0x160b, "Interface (extended)"],

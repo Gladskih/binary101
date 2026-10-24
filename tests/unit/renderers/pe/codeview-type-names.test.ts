@@ -140,6 +140,28 @@ void test("CodeView aliases retain their name or follow their stored reference",
   assert.equal(format(0x1001), "float64");
 });
 
+void test("CodeView basic arrays and labels expose their meaning without treating arrays as bounds", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x000d, index: 0x1000, shape: { kind: "basicArray", typeIndex: 0x74 } },
+    { type: 0x000e, index: 0x1001, shape: { kind: "label", mode: 0 } },
+    { type: 0x000e, index: 0x1002, shape: { kind: "label", mode: 4 } },
+    { type: 0x000e, index: 0x1003, shape: { kind: "label", mode: 9 } }
+  ]));
+  assert.equal(format(0x1000), "basic array of int32");
+  assert.equal(format(0x1001), "label (near return)");
+  assert.equal(format(0x1002), "label (far return)");
+  assert.equal(format(0x1003), "label (unknown mode 9)");
+});
+
+void test("CodeView extended modifiers name enum values and preserve their base types", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1518, index: 0x1000, shape: { kind: "extendedModifier", typeIndex: 0x74,
+      modifiers: [1, 2, 3, 0x200, 0x20e, 0x1234] } }
+  ]));
+  assert.equal(format(0x1000), "const volatile unaligned HLSL uniform HLSL UAV globally coherent " +
+    "unknown modifier enum 0x1234 int32");
+});
+
 void test("CodeView pointer qualifiers, unsupported modes and unnamed types stay readable", () => {
   const format = createCodeViewTypeFormatter(indexCodeViewTypes([
     { type: 0x1002, index: 0x1000, shape: { kind: "pointer", typeIndex: 0x40, attributes: 0x1e00 } },
