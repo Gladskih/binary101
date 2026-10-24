@@ -41,6 +41,7 @@ const createSharedXdataFixture = (
   );
   // Function Length = 1 instruction, with one unwind word (ARM64 .xdata header).
   view.setUint32(SHARED_XDATA_LAYOUT.xdataRva, 1 | ARM64_XDATA_HEADER_ONE_UNWIND_WORD, true);
+  bytes[SHARED_XDATA_LAYOUT.xdataRva + 4] = 0xe4; // END, followed by unused word padding.
   const reader = createFileRangeReader(new MockFile(bytes), 0, bytes.length);
   const offsets: number[] = [];
   return { offsets, parse: () => parseExceptionDirectory({
@@ -152,6 +153,7 @@ void test("parseExceptionDirectory parses ARM64 pdata entries that point to xdat
     true
   );
   dv.setUint32(xdataRva + Uint32Array.BYTES_PER_ELEMENT * 2, handlerRva, true);
+  bytes[xdataRva + 4] = 0xe4; // END; remaining bytes in the unwind word are padding.
 
   const parsed = await parseArm64ExceptionFixture(
     bytes,
@@ -216,7 +218,8 @@ void test("parseExceptionDirectory accepts ARM64 chained pdata entries", async (
   // whose second-word payload points at another 8-byte pdata record.
   writeArm64RuntimeFunction(dv, exOff, 0x100, targetPdataRva | 0x3);
   writeArm64RuntimeFunction(dv, targetPdataRva, 0x180, xdataRva);
-  dv.setUint32(xdataRva, 1, true);
+  dv.setUint32(xdataRva, 1 | ARM64_XDATA_HEADER_ONE_UNWIND_WORD, true);
+  bytes[xdataRva + 4] = 0xe4; // Minimal complete END sequence, not an empty code pool.
 
   const parsed = await parseArm64ExceptionFixture(
     bytes,
@@ -229,6 +232,7 @@ void test("parseExceptionDirectory accepts ARM64 chained pdata entries", async (
   assert.strictEqual(parsed.functionCount, 2);
   assert.deepEqual(parsed.beginRvas, [0x100, 0x180]);
   assert.strictEqual(parsed.chainedUnwindInfoCount, 1);
+  assert.equal(parsed.arm64Unwind?.blockCount, 1);
   // The chained entry validates only its start; the target's length must not be reused for it.
   assert.deepEqual(parsed.rangeLengths, [4]);
   assert.strictEqual(parsed.invalidEntryCount, 0);

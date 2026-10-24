@@ -1,6 +1,14 @@
 "use strict";
 
+import type { Arm64PackedStatistics } from "./arm64-packed-types.js";
+import { createArm64PackedStatistics } from "./arm64-packed-statistics.js";
+import type { Arm64DecodedUnwind, Arm64UnwindStatistics } from "./arm64-unwind-types.js";
+import { createArm64UnwindStatistics } from "./arm64-unwind-statistics.js";
+
 export type Arm64ExceptionState = {
+  packed: Arm64PackedStatistics;
+  unwind: Arm64UnwindStatistics;
+  seenXdata: WeakSet<Arm64DecodedUnwind>;
   beginRvas: number[];
   rangeLengths: number[];
   handlerRvas: number[];
@@ -16,6 +24,9 @@ export type Arm64ExceptionState = {
 };
 
 export const createArm64ExceptionState = (): Arm64ExceptionState => ({
+  packed: createArm64PackedStatistics(),
+  unwind: createArm64UnwindStatistics(),
+  seenXdata: new WeakSet(),
   beginRvas: [],
   rangeLengths: [],
   handlerRvas: [],

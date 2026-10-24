@@ -104,6 +104,7 @@ void test("ARM64 .xdata at the table-end RVA remains image data", async () => {
   const view = new DataView(bytes.buffer);
   [0x2004, 0x1010, 0x2008, 5].forEach((value, index) => view.setUint32(0x20 + index * 4, value, true));
   view.setUint32(0x90, 1 | (1 << 21) | (1 << 27), true); // Length=4, E=1, one code word.
+  bytes[0x94] = 0xe4; // Minimal complete END sequence; the remaining word bytes are padding.
   const parsed = await parseExceptionDebugInfo(new MockFile(bytes),
     rva => rva >= 0x1010 && rva < 0x1018 ? 0x90 + rva - 0x1010 : mapRva(rva),
     0, 0x20, 16, 0xaa64, assert.fail, { ...exception, size: 16 });

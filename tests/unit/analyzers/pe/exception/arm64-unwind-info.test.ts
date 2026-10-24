@@ -73,6 +73,16 @@ void test("ARM64 unwind reader decodes an extended header with a handler", async
   assert.deepEqual(issues, []);
 });
 
+void test("ARM64 unwind reader diagnoses reserved extension bits while decoding the bounded pool", async () => {
+  const file = xdataFile(1, 20, (1 << 24) | (1 << 16));
+  file.data[16] = 0xe4; // END in the single declared code word.
+  const issues: string[] = [];
+  const info = await createArm64UnwindInfoReader(new MockFile(file.data), rva => rva)(8, issues);
+
+  assert.equal(info?.unwind?.operations[0]?.opcode, "end");
+  assert.deepEqual(issues, ["ARM64 .xdata extended header sets reserved bits."]);
+});
+
 void test("ARM64 unwind reader diagnoses a physically short handler read", async context => {
   const file = xdataFile(1 | (1 << 20) | (1 << 21) | (1 << 27), 20);
   const original = file.read.bind(file);
@@ -132,6 +142,7 @@ for (const [extra, size, handlerOffset] of [[2 << 22, 28, 24], [(2 << 22) | (1 <
   void test(`ARM64 xdata locates handlers with scope bits ${extra}`, async () => {
     const file = xdataFile(1 | (1 << 20) | (1 << 27) | extra, size);
     new DataView(file.data.buffer).setUint32(handlerOffset, 100, true);
+    file.data.set([0xe4, 0xe3, 0xe4, 0xe3], handlerOffset - 4); // END at both referenced entry indices.
     const issues: string[] = [];
     const info = await createArm64UnwindInfoReader(new MockFile(file.data), rva => rva)(8, issues);
 
@@ -144,11 +155,13 @@ for (const [extra, size, handlerOffset] of [[2 << 22, 28, 24], [(2 << 22) | (1 <
 void test("ARM64 xdata accepts file offset zero and preserves the absence of a handler", async () => {
   const bytes = new Uint8Array(16);
   new DataView(bytes.buffer).setUint32(0, 1 | (1 << 27), true);
+  bytes[4] = 0xe4; // END, with the rest of the word unused.
   const issues: string[] = [];
   const info = await createArm64UnwindInfoReader(new MockFile(bytes), rva => rva - 8)(8, issues);
 
   assert.deepEqual(info, { functionLengthBytes: 4, handlerRva: null, hasHandler: false,
-    key: "xdata:8", chained: false, version: 0 });
+    key: "xdata:8", chained: false, version: 0,
+    unwind: { operations: [{ opcode: "end", offset: 0, byteLength: 1, kind: "marker" }], hasDecodeGaps: false } });
   assert.deepEqual(issues, []);
 });
 

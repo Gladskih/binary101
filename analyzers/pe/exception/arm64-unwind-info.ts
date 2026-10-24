@@ -4,6 +4,8 @@ import { mappedRvaSize } from "../rva-mapping.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
+import { readArm64XdataCodes } from "./arm64-xdata-codes.js";
+import type { Arm64DecodedUnwind, Arm64XdataCodeLayout } from "./arm64-unwind-types.js";
 
 // Microsoft ARM64 exception-handling docs:
 // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling
@@ -20,21 +22,30 @@ const ARM64_XDATA_SINGLE_EPILOG = 1 << 21;
 // Microsoft ARM64 exception-handling docs, "Packed unwind data":
 // packed records use bits 2-12 for Function Length.
 
-type Arm64UnwindInfo = {
+export type Arm64UnwindInfo = {
   chained: boolean;
   functionLengthBytes: number;
   handlerRva: number | null;
   hasHandler: boolean;
   key: string;
   version: number | null;
+  unwind?: Arm64DecodedUnwind;
 };
+
+interface Arm64XdataHeader extends Arm64XdataCodeLayout {
+  functionLengthBytes: number;
+  version: number;
+  handlerSlotRva: number | null;
+}
 
 const readUint32 = async (reader: FileRangeReader, rvaToOff: RvaToOffset, offset: number): Promise<number | null> => {
   const view = await readMappedRvaPrefix(reader, offset, Uint32Array.BYTES_PER_ELEMENT, rvaToOff);
   return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
 };
 
-const readPackedUnwindInfo = (packedWord: number): Arm64UnwindInfo => ({
+const readPackedUnwindInfo = (packedWord: number, issues: string[]): Arm64UnwindInfo => {
+  if (((packedWord >>> 16) & 15) > 10) issues.push("ARM64 packed RegI exceeds the X19-X28 register group.");
+  return {
   functionLengthBytes:
     ((packedWord >>> 2) & 0x7ff) * 4,
   handlerRva: null,
@@ -42,11 +53,26 @@ const readPackedUnwindInfo = (packedWord: number): Arm64UnwindInfo => ({
   key: `packed:${packedWord >>> 0}`,
   chained: false,
   version: null
-});
+  };
+};
 
-const readXdataHeader = async (
+const decodeXdataHeader = (word: number, extension: number, rva: number): Arm64XdataHeader => {
+  const extended = (word >>> 22) === 0;
+  const count = extended ? extension & 0xffff : (word >>> 22) & 31;
+  const words = extended ? (extension >>> 16) & 255 : word >>> 27;
+  const single = (word & ARM64_XDATA_SINGLE_EPILOG) !== 0;
+  const scopeRva = rva + (extended ? 8 : 4);
+  const scopeCount = single ? 0 : count;
+  const codeRva = scopeRva + scopeCount * 4;
+  const codeSize = words * 4;
+  return { functionLengthBytes: (word & 0x3ffff) * 4, version: (word >>> 18) & 3,
+    scopeRva, scopeCount, codeRva, codeSize, epilogIndex: single ? count : null,
+    handlerSlotRva: (word & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0 ? codeRva + codeSize : null };
+};
+
+const readXdataWord = async (
   reader: FileRangeReader, rvaToOff: RvaToOffset, xdataRva: number, issues: string[]
-): Promise<{ headerWord: number; recordSize: number } | null> => {
+): Promise<number | null> => {
   const xdataOff = rvaToOff(xdataRva);
   if (xdataOff == null || xdataOff < 0 || xdataOff >= reader.size) {
     issues.push("ARM64 .pdata entry points to an .xdata RVA that does not map to file data.");
@@ -57,6 +83,14 @@ const readXdataHeader = async (
     issues.push("ARM64 .xdata header is truncated.");
     return null;
   }
+  return headerWord;
+};
+
+const readXdataHeader = async (
+  reader: FileRangeReader, rvaToOff: RvaToOffset, xdataRva: number, issues: string[]
+): Promise<Arm64XdataHeader | null> => {
+  const headerWord = await readXdataWord(reader, rvaToOff, xdataRva, issues);
+  if (headerWord == null) return null;
   // Microsoft ARM64 exception-handling docs, ComputeXdataSize sample:
   // `(Xdata[0] >> 22) == 0` means Epilog Count and Code Words are both zero, so the
   // record carries the extra extension word with 16-bit Extended Epilog Count and 8-bit
@@ -69,22 +103,17 @@ const readXdataHeader = async (
     issues.push("ARM64 .xdata extended header is truncated.");
     return null;
   }
-  const epilogScopeCount = usesExtendedHeader
-    ? extendedHeader! & 0xffff
-    : (headerWord >>> 22) & 0x1f;
-  const unwindWordCount = usesExtendedHeader
-    ? (extendedHeader! >>> 16) & 0xff
-    : (headerWord >>> 27) & 0x1f;
-  const recordSize =
-    (usesExtendedHeader ? 8 : 4) +
-    ((headerWord & ARM64_XDATA_SINGLE_EPILOG) === 0 ? epilogScopeCount * 4 : 0) +
-    unwindWordCount * 4 +
-    ((headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0 ? 4 : 0);
+  if (usesExtendedHeader && (extendedHeader! >>> 24) !== 0) {
+    issues.push("ARM64 .xdata extended header sets reserved bits.");
+  }
+  const header = decodeXdataHeader(headerWord, extendedHeader!, xdataRva);
+  const endRva = header.handlerSlotRva == null ? header.codeRva + header.codeSize : header.handlerSlotRva + 4;
+  const recordSize = endRva - xdataRva;
   if (mappedRvaSize(rvaToOff, xdataRva, recordSize, reader.size) < recordSize) {
     issues.push("ARM64 .xdata record is truncated before its unwind metadata ends.");
     return null;
   }
-  return { headerWord, recordSize };
+  return header;
 };
 
 const readXdataUnwindInfo = async (
@@ -92,22 +121,24 @@ const readXdataUnwindInfo = async (
 ): Promise<Arm64UnwindInfo | null> => {
   const header = await readXdataHeader(reader, rvaToOff, xdataRva, issues);
   if (!header) return null;
-  const { headerWord, recordSize } = header;
-  const hasHandler = (headerWord & ARM64_XDATA_HAS_EXCEPTION_DATA) !== 0;
-  const handlerRva = hasHandler
-    ? await readUint32(reader, rvaToOff, xdataRva + recordSize - Uint32Array.BYTES_PER_ELEMENT)
+  const hasHandler = header.handlerSlotRva != null;
+  const handlerRva = header.handlerSlotRva != null
+    ? await readUint32(reader, rvaToOff, header.handlerSlotRva)
     : null;
   if (hasHandler && handlerRva == null) {
     issues.push("ARM64 .xdata declares exception data, but the handler RVA is truncated.");
     return null;
   }
+  const unwind = header.version === 0
+    ? await readArm64XdataCodes(reader, rvaToOff, header, header.functionLengthBytes, issues) : undefined;
   return {
-    functionLengthBytes: (headerWord & 0x3ffff) * 4,
+    functionLengthBytes: header.functionLengthBytes,
     handlerRva,
     hasHandler,
     key: `xdata:${xdataRva >>> 0}`,
     chained: false,
-    version: (headerWord >>> 18) & 0x3
+    version: header.version,
+    ...(unwind ? { unwind } : {})
   };
 };
 
@@ -141,7 +172,7 @@ const readArm64UnwindInfo = async (
     }
     return readXdataUnwindInfo(reader, rvaToOff, xdataRva >>> 0, issues);
   }
-  return readPackedUnwindInfo(unwindWord);
+  return readPackedUnwindInfo(unwindWord, issues);
 };
 
 // Flag 3 links to a parent .pdata record; no format depth limit is specified.

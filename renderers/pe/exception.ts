@@ -11,6 +11,7 @@ import { renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
 import { renderIa64UnwindStatistics } from "./exception-ia64.js";
 import { renderNtRiscStatistics } from "./exception-nt-risc.js";
+import { renderArm64PackedStatistics, renderArm64UnwindStatistics } from "./exception-arm64.js";
 
 type PeExceptionSection = NonNullable<PeWindowsParseResult["exception"]>;
 type PeExceptionFormat = PeExceptionSection["format"];
@@ -85,13 +86,18 @@ const renderArmntDetails = (ex: PeExceptionSection, out: string[]): void => {
   if (ex.armntPacked) out.push(renderArmntPackedStatistics(ex.armntPacked));
 };
 
+const renderArm64Details = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.arm64Packed) out.push(renderArm64PackedStatistics(ex.arm64Packed));
+  if (ex.arm64Unwind) out.push(renderArm64UnwindStatistics(ex.arm64Unwind));
+};
+
 const getArmProfile = (format: "arm64" | "armnt"): ExceptionRenderProfile => {
   const architecture = format === "armnt" ? "ARMNT" : "ARM64";
   return {
     chainedLabel: "Chained entries", handlerLabel: `Handlers present (${architecture} X bit)`,
     introNote: `${architecture} .pdata stores packed unwind data or points to .xdata records used for ` +
       `stack unwinding and exception dispatch.`,
-    renderFormatNote: format === "armnt" ? renderArmntDetails : renderNoFormatDetails,
+    renderFormatNote: format === "armnt" ? renderArmntDetails : renderArm64Details,
     renderFormatStats: format === "armnt" ? renderArmntSummary : renderNoFormatDetails,
     unwindLabel: "Unique unwind descriptions (.xdata or packed .pdata)"
   };
