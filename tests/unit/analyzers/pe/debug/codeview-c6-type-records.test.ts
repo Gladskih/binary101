@@ -18,7 +18,9 @@ for (const [type, body, name] of [
     const warnings: string[] = [];
     const data = await readCodeViewC6Types(legacyReader(c6Type(type, body), warnings));
 
-    assert.deepEqual(data, { kind: "types", encoding: "c6", records: [{ type, name }] });
+    assert.equal(data.kind, "types");
+    assert.equal(data.encoding, "c6");
+    assert.deepEqual(data.records.map(value => ({ type: value.type, name: value.name })), [{ type, name }]);
     assert.deepEqual(warnings, []);
   });
 }
@@ -83,7 +85,9 @@ for (const [type, body] of [[92, [8, 125, 0]], [96, [16]], [114, [128, 116]],
     const warnings: string[] = [];
     const data = await readCodeViewC6Types(legacyReader(c6Type(type, body), warnings));
 
-    assert.deepEqual(data.records, [{ type }]);
+    assert.equal(data.records[0]?.type, type);
+    assert.equal(data.records[0]?.name, undefined);
+    assert.equal(data.records[0]?.strings, undefined);
     assert.deepEqual(warnings, []);
   });
 }
@@ -107,8 +111,8 @@ void test("C6 variants preserve tag names and walk value and name/type lists wit
     ...c6Type(123, [8, 125, ...c6Name("Number"), 125, 0, 10])
   ], warnings));
 
-  assert.deepEqual(data.records, [{ type: 121, strings: ["tag"] }, { type: 121 },
-    { type: 123, name: "Range" }, { type: 123, name: "Number" }]);
+  assert.deepEqual(data.records.map(value => value.name), [undefined, undefined, "Range", "Number"]);
+  assert.deepEqual(data.records.map(value => value.strings), [["tag"], undefined, undefined, undefined]);
   assert.deepEqual(warnings, []);
 });
 
@@ -118,7 +122,8 @@ for (const [code, bytes] of [[133, [0, 1]], [134, [0, 1, 0, 0]], [135, [0, 1, 0,
   void test(`C6 numeric width ${code} consumes the complete value`, async () => {
     const warnings: string[] = [];
     const data = await readCodeViewC6Types(legacyReader(c6Type(123,
-      [code, ...bytes, 125, ...c6Name("Number")]), warnings));
+      [8, 125, ...c6Name("Number"), 125, code, ...bytes, 135,
+        255, 255, 255, 255, 255, 255, 255, 255]), warnings));
 
     assert.equal(data.records[0]?.name, "Number");
     assert.deepEqual(warnings, []);
@@ -163,7 +168,8 @@ void test("C6 array names can follow an omitted index type", async () => {
   const data = await readCodeViewC6Types(legacyReader(c6Type(120,
     [8, ...c6Index(), ...c6Name("Array")]), warnings));
 
-  assert.deepEqual(data.records, [{ type: 120, name: "Array" }]);
+  assert.deepEqual(data.records, [{ type: 120, name: "Array",
+    c6: { kind: "array", bitLength: "8", elementType: 512 } }]);
   assert.deepEqual(warnings, []);
 });
 
@@ -185,7 +191,8 @@ void test("C6 multi-byte variant counts consume all variants rather than their l
   const data = await readCodeViewC6Types(legacyReader(c6Type(121,
     [8, 0, 128, 128, 104, 133, 1, 1, 128, 128, ...variants]), warnings));
 
-  assert.deepEqual(data.records, [{ type: 121 }]);
+  assert.deepEqual(data.records, [{ type: 121,
+    c6: { kind: "structure", bitLength: "8", fieldCount: "0", packing: 104 } }]);
   assert.deepEqual(warnings, []);
 });
 

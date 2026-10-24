@@ -1,5 +1,6 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import type { LegacyCodeViewTypes } from "./legacy-codeview-type-records.js";
+import type { CodeViewC6ScalarBase } from "./codeview-c6-types.js";
 
 type TypeRecord = LegacyCodeViewTypes["records"][number];
 
@@ -14,9 +15,11 @@ class TypeCursor {
   async byte(): Promise<number> { return (await this.reader.view(this.offset++, 1)).getUint8(0); }
   async peek(): Promise<number> { return (await this.reader.view(this.offset, 1)).getUint8(0); }
   async skip(size: number): Promise<void> { await this.reader.view(this.offset, size); this.offset += size; }
-  async index(): Promise<void> {
+  async index(): Promise<number> {
     if (await this.byte() !== 131) throw new Error("Invalid C6 type index leaf.");
-    await this.skip(2);
+    const value = (await this.reader.view(this.offset, 2)).getUint16(0, true);
+    this.offset += 2;
+    return value;
   }
   async name(): Promise<string> {
     if (await this.byte() !== 130) throw new Error("Invalid C6 string leaf.");
@@ -38,6 +41,15 @@ class TypeCursor {
   async optionalName(record: TypeRecord): Promise<void> {
     if (this.offset < this.reader.size && await this.peek() === 130) record.name = await this.name();
   }
+  async bits(): Promise<string> {
+    const value = await this.numeric();
+    if (value < 0n) this.reader.warn("C6 type declares a negative bit length.");
+    return value.toString();
+  }
+  async base(): Promise<CodeViewC6ScalarBase> {
+    return await this.peek() === 131 ? { kind: "type", index: await this.index() }
+      : { kind: "style", value: (await this.numeric()).toString() };
+  }
 }
 
 const readList = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
@@ -52,27 +64,26 @@ const readList = async (cursor: TypeCursor, record: TypeRecord): Promise<void> =
 };
 
 const readScalar = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
-  await cursor.numeric();
-  if (await cursor.peek() === 131) await cursor.index();
-  else await cursor.numeric();
+  const shape = { kind: "scalar" as const, bitLength: await cursor.bits(), base: await cursor.base() };
+  record.c6 = shape;
   await cursor.optionalName(record);
   if (cursor.offset === cursor.reader.size) return;
-  if (await cursor.peek() === 131) await cursor.index();
-  else await cursor.numeric();
-  await cursor.numeric();
-  await cursor.numeric();
+  const base = await cursor.base();
+  const lower = (await cursor.numeric()).toString();
+  const upper = (await cursor.numeric()).toString();
+  record.c6 = { ...shape, range: { base, lower, upper } };
+  if (BigInt(lower) > BigInt(upper)) cursor.reader.warn("C6 scalar lower bound exceeds its upper bound.");
 };
 
 const readArray = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
-  await cursor.numeric();
-  await cursor.index();
-  if (cursor.offset < cursor.reader.size && await cursor.peek() === 131) await cursor.index();
+  record.c6 = { kind: "array", bitLength: await cursor.bits(), elementType: await cursor.index() };
+  if (cursor.offset < cursor.reader.size && await cursor.peek() === 131) record.c6.indexType = await cursor.index();
   await cursor.optionalName(record);
 };
 
 const readPointer = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
-  if (await cursor.peek() !== 131) await cursor.byte();
-  await cursor.index();
+  const style = await cursor.peek() !== 131 ? await cursor.byte() : undefined;
+  record.c6 = { kind: "pointer", typeIndex: await cursor.index(), ...(style === undefined ? {} : { style }) };
   await cursor.optionalName(record);
 };
 
@@ -90,14 +101,16 @@ const readStructureTags = async (cursor: TypeCursor, record: TypeRecord, fields:
 };
 
 const readStructure = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
-  await cursor.numeric();
+  const bitLength = await cursor.bits();
   const fields = await cursor.numeric();
   if (fields < 0n) throw new Error("Negative C6 structure field count.");
-  if (fields) { await cursor.index(); await cursor.index(); }
+  record.c6 = { kind: "structure", bitLength, fieldCount: fields.toString() };
+  if (fields) { record.c6.typeList = await cursor.index(); record.c6.nameList = await cursor.index(); }
   else { await cursor.byte(); await cursor.byte(); } // Two easy leaves for unions.
   await cursor.optionalName(record);
   if (cursor.offset === cursor.reader.size) return;
-  if (![104, 105].includes(await cursor.byte())) throw new Error("Unknown C6 structure packing leaf.");
+  record.c6.packing = await cursor.byte();
+  if (![104, 105].includes(record.c6.packing)) throw new Error("Unknown C6 structure packing leaf.");
   if (cursor.offset < cursor.reader.size) await readStructureTags(cursor, record, fields);
 };
 
@@ -158,13 +171,21 @@ const readCobol = async (cursor: TypeCursor, record: TypeRecord): Promise<void> 
   cursor.offset = cursor.reader.size; // Remaining root bytes are producer-specific data.
 };
 
-const readProcedure = async (cursor: TypeCursor): Promise<void> => {
+const readProcedure = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
   await cursor.byte(); // Null leaf, followed by a return type or void leaf.
-  if (await cursor.peek() === 131) await cursor.index();
-  else await cursor.byte();
-  await cursor.byte(); // Calling convention; no inline strings.
-  await cursor.numeric();
-  await cursor.index();
+  const returns = await cursor.peek() === 131 ? { returnType: await cursor.index() }
+    : { returnLeaf: await cursor.byte() };
+  const callingConvention = await cursor.byte();
+  const parameterCount = (await cursor.numeric()).toString();
+  record.c6 = { kind: "procedure", ...returns, callingConvention,
+    parameterCount, argumentsType: await cursor.index() };
+  if (BigInt(parameterCount) < 0n) cursor.reader.warn("C6 procedure parameter count is negative.");
+};
+
+const readBitfield = async (cursor: TypeCursor, record: TypeRecord): Promise<void> => {
+  record.c6 = { kind: "bitfield", bitLength: await cursor.bits(),
+    style: await cursor.byte(), position: await cursor.byte() };
+  if (![124, 125].includes(record.c6.style)) cursor.reader.warn("C6 bitfield has an unknown signedness leaf.");
 };
 
 const readBasedPointer = async (cursor: TypeCursor): Promise<void> => {
@@ -184,7 +205,7 @@ const readFortranString = async (cursor: TypeCursor): Promise<void> => {
 const READERS: Partial<Record<number, (cursor: TypeCursor, record: TypeRecord) => Promise<void>>> = {
   93: readAlias, 120: readArray, 121: readStructure, 122: readPointer,
   123: readScalar, 127: readList, 142: readArrayBounds, 166: readCobol, 167: readCobol,
-  92: async cursor => { await cursor.numeric(); await cursor.skip(2); },
+  92: readBitfield,
   96: async cursor => { await cursor.numeric(); },
   114: async cursor => { await cursor.skip(2); }, 117: readProcedure,
   118: async cursor => { await cursor.index(); }, 140: async cursor => { await cursor.index(); },

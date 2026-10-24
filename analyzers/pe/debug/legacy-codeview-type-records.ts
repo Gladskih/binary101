@@ -7,11 +7,13 @@ import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js
 import { readCodeViewTypeShape, type CodeViewTypeShape } from "./legacy-codeview-type-shapes.js";
 import { validateCodeViewMethodLists } from "./legacy-codeview-method-validation.js";
 import { resolveCodeViewConstantBounds } from "./legacy-codeview-constant-bounds.js";
+import type { CodeViewC6Type } from "./codeview-c6-types.js";
 
 export interface LegacyCodeViewTypeRecord {
   type: number;
   index?: number;
   shape?: CodeViewTypeShape;
+  c6?: CodeViewC6Type;
   name?: string;
   uniqueName?: string;
   members?: LegacyCodeViewField[];

@@ -18,6 +18,7 @@ import { buildCodeViewBuildTables } from "./codeview-build-tables.js";
 import { buildCodeViewDerivedTables } from "./codeview-derived-tables.js";
 import { buildCodeViewArrayBounds } from "./codeview-array-bounds.js";
 import { buildCodeViewVtableTables } from "./codeview-vtable-tables.js";
+import { buildCodeViewC6TypeTables } from "./codeview-c6-type-tables.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -179,6 +180,6 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
     ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
     ...buildLegacyCodeViewProcedureTables(info),
     ...buildCodeViewMemberTables(info), ...buildCodeViewBuildTables(info), ...buildCodeViewDerivedTables(info),
-    ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info)]
+    ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info), ...buildCodeViewC6TypeTables(info)]
     .filter(table => table.rows.length > 0);
 };
