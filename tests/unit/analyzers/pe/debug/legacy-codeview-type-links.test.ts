@@ -7,9 +7,17 @@ import { createPeWithCodeViewBuildInfo } from "../../../../fixtures/pe-codeview-
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { buildCodeViewBuildTables } from "../../../../../renderers/pe/codeview-build-tables.js";
+import { createPeWithCodeViewVtables } from "../../../../fixtures/pe-codeview-vtables.js";
+import { buildCodeViewVtableTables } from "../../../../../renderers/pe/codeview-vtable-tables.js";
 
 // Packed lfDerived, lfBuildInfo and lfUdt[Mod]SrcLine from Microsoft's cvinfo.h.
 for (const [leaf, bytes, expected] of [
+  [0x151d, [...legacyU32(0x12345678), ...legacyU32(0x87654321), ...legacyU32(0xfedcba98)],
+    { kind: "vtable", ownerType: 0x12345678, baseTable: 0x87654321, pointerOffset: 0xfedcba98 }],
+  [0x12, [...legacyU16(2), ...legacyU16(0x1000), ...legacyU16(0x1001)],
+    { kind: "vtablePath", indices: [0x1000, 0x1001] }],
+  [0x100d, [...legacyU32(2), ...legacyU32(0x12345678), ...legacyU32(0x87654321)],
+    { kind: "vtablePath", indices: [0x12345678, 0x87654321] }],
   [0x205, [...legacyU16(2), ...legacyU16(0x1000), ...legacyU16(7)], { kind: "derived", indices: [0x1000, 7] }],
   [0x1204, [...legacyU32(1), ...legacyU32(0x12345678)], { kind: "derived", indices: [0x12345678] }],
   [0x1603, [...legacyU16(2), ...legacyU32(0x1000), ...legacyU32(0x87654321)],
@@ -31,7 +39,8 @@ for (const [leaf, bytes, expected] of [
   });
 }
 
-for (const [leaf, bytes, kind] of [[0x205, legacyU16(0), "derived"], [0x1204, legacyU32(0), "derived"],
+for (const [leaf, bytes, kind] of [[0x12, legacyU16(0), "vtablePath"], [0x100d, legacyU32(0), "vtablePath"],
+  [0x205, legacyU16(0), "derived"], [0x1204, legacyU32(0), "derived"],
   [0x1603, legacyU16(0), "buildInfo"], [0x1604, legacyU32(0), "stringList"]] as const) {
   void test(`CodeView empty reference list ${leaf} remains an empty list`, async () => {
     assert.deepEqual((await readCodeViewTypeShape(legacyReader(codeViewTextRecord(leaf, 4, bytes)), leaf)),
@@ -58,4 +67,18 @@ void test("PE integration retains embedded build arguments and exact source line
     ["1", "1", "Base", "<source>&amp;.cpp", "123"],
     ["1", "1", "<Derived>&amp;", "module 2 string-table offset #32 (external)", "456"]
   ]);
+});
+
+void test("PE integration retains vtable ownership while preserving all stored method names", async () => {
+  const file = createPeWithCodeViewVtables();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const info = debug.entries[0]?.legacyCodeView;
+  assert.ok(info);
+  assert.equal(debug.warning, null);
+  assert.equal(buildCodeViewVtableTables(info).find(table => table.key === "virtualTables")?.rows[1]?.[5], "Base::table");
+  const records = info.directories.flatMap(directory => directory.subsections)
+    .flatMap(section => section.data?.kind === "types" ? section.data.records : []);
+  assert.deepEqual(records[3]?.strings, ["<Derived>&amp;::table", "read", "<write>&amp;"]);
 });
