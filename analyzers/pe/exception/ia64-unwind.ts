@@ -16,11 +16,16 @@ export const parseIa64UnwindInfo = async (reader: FileRangeReader, rvaToOff: Rva
   reference: number): Promise<Ia64UnwindInfo> => {
   const issues: string[] = [];
   const header = await createRvaRangeReader(reader, rvaToOff, reference, 8).read(0, 8);
-  if (header.byteLength < 8) return { counts: {}, issues: ["IA64 unwind header is unmapped or truncated."] };
+  if (header.byteLength < 8) return { counts: {},
+    regionLengths: { prologue: { count: 0 }, body: { count: 0 } }, savedRegisterRules: {},
+    registerSaveLocations: {}, spillScheduleSlots: {}, abiContextCounts: {},
+    issues: ["IA64 unwind header is unmapped or truncated."] };
   if (reference % 8) issues.push("IA64 unwind information is not 8-byte aligned.");
   const version = header.getUint16(0, true);
   const flags = header.getUint16(2, true);
   if (version !== 3) return { version, flags, counts: {},
+    regionLengths: { prologue: { count: 0 }, body: { count: 0 } }, savedRegisterRules: {},
+    registerSaveLocations: {}, spillScheduleSlots: {}, abiContextCounts: {},
     issues: [...issues, `IA64 unwind version ${version} is not decoded.`] };
   if (flags & ~3) issues.push("IA64 unwind header contains unknown flag bits.");
   const length = header.getUint32(4, true) * 8;

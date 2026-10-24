@@ -46,6 +46,20 @@ const mergeDescriptorStatistics = (statistics: PeIa64UnwindStatistics, info: Ia6
   }
   if (info.maximumFixedStackBytes != null) statistics.maximumFixedStackBytes =
     Math.max(statistics.maximumFixedStackBytes ?? 0, info.maximumFixedStackBytes);
+  for (const field of ["savedRegisterRules", "registerSaveLocations", "spillScheduleSlots", "abiContextCounts"] as const) {
+    for (const [name, count] of Object.entries(info[field])) {
+      statistics[field][name] = (statistics[field][name] ?? 0) + count;
+    }
+  }
+  for (const key of ["prologue", "body"] as const) {
+    const source = info.regionLengths[key];
+    const target = statistics.regionLengths[key];
+    target.count += source.count;
+    if (source.minimumSlots != null && (target.minimumSlots == null ||
+      BigInt(source.minimumSlots) < BigInt(target.minimumSlots))) target.minimumSlots = source.minimumSlots;
+    if (source.maximumSlots != null && (target.maximumSlots == null ||
+      BigInt(source.maximumSlots) > BigInt(target.maximumSlots))) target.maximumSlots = source.maximumSlots;
+  }
 };
 
 const readUnwindReferences = async (state: Ia64TableState, reader: FileRangeReader,
@@ -53,6 +67,8 @@ const readUnwindReferences = async (state: Ia64TableState, reader: FileRangeRead
   if (!state.references.size) return;
   const versions = new Map<number, number>();
   const statistics: PeIa64UnwindStatistics = { versions: [], descriptorCounts: {},
+    regionLengths: { prologue: { count: 0 }, body: { count: 0 } }, savedRegisterRules: {},
+    registerSaveLocations: {}, spillScheduleSlots: {}, abiContextCounts: {},
     exceptionHandlerCount: 0, unwindHandlerCount: 0 };
   state.result.ia64Unwind = statistics;
   for (const reference of state.references) {

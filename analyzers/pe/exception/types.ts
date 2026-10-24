@@ -18,6 +18,11 @@ export interface PeCeExceptionStatistics {
 export interface PeIa64UnwindStatistics {
   versions: { version: number; count: number }[];
   descriptorCounts: Record<string, number>;
+  regionLengths: Record<"prologue" | "body", { count: number; minimumSlots?: string; maximumSlots?: string }>;
+  savedRegisterRules: Record<string, number>;
+  registerSaveLocations: Record<string, number>;
+  spillScheduleSlots: Record<string, number>;
+  abiContextCounts: Record<string, number>;
   exceptionHandlerCount: number;
   unwindHandlerCount: number;
   /** Largest P7 mem_stack_f allocation, not reconstructed peak stack usage. */

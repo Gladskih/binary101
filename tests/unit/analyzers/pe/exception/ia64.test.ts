@@ -20,7 +20,10 @@ void test("IA64 decodes three DWORD RVAs and deduplicates shared unwind referenc
   assert.deepEqual(parsed.handlerRvas, []);
   assert.equal(parsed.handlerUnwindInfoCount, 0);
   assert.deepEqual(parsed.ia64Unwind, { versions: [{ version: 3, count: 2 }],
-    descriptorCounts: { "Empty prologues / padding": 16 }, exceptionHandlerCount: 0, unwindHandlerCount: 0 });
+    descriptorCounts: { "Empty prologues / padding": 16 },
+    regionLengths: { prologue: { count: 16, minimumSlots: "0", maximumSlots: "0" }, body: { count: 0 } },
+    savedRegisterRules: {}, registerSaveLocations: {}, spillScheduleSlots: {}, abiContextCounts: {},
+    exceptionHandlerCount: 0, unwindHandlerCount: 0 });
   assert.deepEqual(parsed.issues, []);
 });
 
@@ -149,7 +152,25 @@ void test("IA64 reads each shared block once and combines flags and exact stack 
   assert.deepEqual(parsed.ia64Unwind?.versions, [{ version: 3, count: 3 }]);
   assert.deepEqual(parsed.ia64Unwind?.descriptorCounts, {
     "Prologue regions": 2, "Fixed stack allocations": 2, "Empty prologues / padding": 8 });
+  assert.equal(parsed.ia64Unwind?.regionLengths.prologue.count, 10);
+  assert.equal(parsed.ia64Unwind?.regionLengths.prologue.minimumSlots, "0");
+  assert.equal(parsed.ia64Unwind?.regionLengths.prologue.maximumSlots, "1");
   assert.deepEqual(calls, [0x180, 0x188, 0x190, 0x198, 0x1a0]);
+  assert.deepEqual(parsed.issues, []);
+});
+
+void test("IA64 merges bounded operand summaries from distinct unwind blocks", async () => {
+  const bytes = image.data.slice();
+  bytes.set([1, 0x8f], 0x188);
+  bytes.set([1, 0xb0, 0x80], 0x198);
+  const source = ia64ExceptionRows([[0x1000, 0x1040, 0x1180], [0x1040, 0x1080, 0x1190]]);
+  const parsed = await parseIa64ExceptionTable(new MockFile(bytes), source, source.size, ia64ExceptionMap);
+
+  assert.deepEqual(parsed.ia64Unwind?.savedRegisterRules, {
+    "branch registers in memory": 4,
+    "rp in general register": 1
+  });
+  assert.equal(parsed.ia64Unwind?.regionLengths.prologue.count, 13);
   assert.deepEqual(parsed.issues, []);
 });
 

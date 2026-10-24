@@ -2,11 +2,17 @@ import { DEFAULT_FILE_READ_WINDOW_BYTES, type FileRangeReader } from "../../file
 
 export interface Ia64DescriptorStatistics {
   counts: Record<string, number>;
+  regionLengths: Record<"prologue" | "body", { count: number; minimumSlots?: string; maximumSlots?: string }>;
+  savedRegisterRules: Record<string, number>;
+  registerSaveLocations: Record<string, number>;
+  spillScheduleSlots: Record<string, number>;
+  abiContextCounts: Record<string, number>;
   maximumFixedStackBytes?: number;
   issues: string[];
 }
 
 // Intel 245358-003, chapter 11 and appendix B; libunwind's generic IA64 decoder.
+// https://kib.kiev.ua/x86docs/Intel/Itanium/misc/245358-003.pdf
 // Windows compatibility: https://groups.google.com/g/microsoft.public.windbg/c/iX3KQeqe3_E
 // https://github.com/libunwind/libunwind/blob/v1.8.1/src/ia64/unwind_decoder.h
 // Only aggregate metadata: this does not execute an unwind or rebuild machine state.
@@ -69,12 +75,43 @@ const reserved = (reader: DescriptorReader): string => {
   return "";
 };
 
+const bitCount = (value: number): number => {
+  let remaining = value;
+  let count = 0;
+  while (remaining) {
+    count += remaining & 1;
+    remaining >>>= 1;
+  }
+  return count;
+};
+
+const addCount = (counts: Record<string, number>, name: string, count: number): void => {
+  if (count) counts[name] = (counts[name] ?? 0) + count;
+};
+
+const recordRegionLength = (state: DescriptorState): void => {
+  if (state.reader.error) return;
+  const key = state.body ? "body" : "prologue";
+  const region = state.statistics.regionLengths[key];
+  const slots = state.regionSlots.toString();
+  region.count++;
+  if (region.minimumSlots == null || state.regionSlots < BigInt(region.minimumSlots)) region.minimumSlots = slots;
+  if (region.maximumSlots == null || state.regionSlots > BigInt(region.maximumSlots)) region.maximumSlots = slots;
+};
+
 const parseRegion = async (state: DescriptorState, code: number): Promise<string> => {
   if (code < 0x40) {
     state.body = (code & 0x20) !== 0;
     state.regionSlots = BigInt(code & 31);
   } else if (code >= 0x40 && code <= 0x47) {
-    await state.reader.byte(); // R2 saved-register mask and first GR.
+    const operand = await state.reader.byte(); // R2 saved-register mask and first GR.
+    if (!state.reader.error) {
+      const mask = (code & 0x07) | ((operand >>> 4) & 0x08);
+      for (const [bit, name] of [[0, "psp"], [1, "pfs"], [2, "rp"], [3, "predicates"]] as const) {
+        if (mask & (1 << bit)) addCount(state.statistics.savedRegisterRules,
+          `${name} in general registers`, 1);
+      }
+    }
     state.body = false;
     state.regionSlots = await state.reader.unsigned();
   } else if (code === 0x60 || code === 0x61) {
@@ -82,6 +119,7 @@ const parseRegion = async (state: DescriptorState, code: number): Promise<string
     state.regionSlots = await state.reader.unsigned();
   } else return reserved(state.reader);
   state.hasRegion = true;
+  recordRegionLength(state);
   if (state.body) return "Body regions";
   return state.regionSlots ? "Prologue regions" : "Empty prologues / padding";
 };
@@ -113,7 +151,12 @@ const parseLongPrologueRule = async (state: DescriptorState, code: number): Prom
     return "Register rules";
   }
   if (code === 0xff) {
-    state.reader.skip(2n);
+    const abi = await state.reader.byte();
+    const context = await state.reader.byte();
+    if (state.reader.error) return "";
+    // Intel 245358-003 Appendix B.3 defines ABI 2 as Windows NT; context is ABI-specific.
+    const name = abi === 0 ? "Unix SVR4" : abi === 1 ? "HP-UX" : abi === 2 ? "Windows NT" : `ABI ${abi}`;
+    addCount(state.statistics.abiContextCounts, `${name} context 0x${context.toString(16)}`, 1);
     return "ABI context records";
   }
   return reserved(state.reader);
@@ -122,28 +165,59 @@ const parseLongPrologueRule = async (state: DescriptorState, code: number): Prom
 const parseSpillRule = async (state: DescriptorState, code: number): Promise<string> => {
   if (code === 0xb8) {
     // P4 has one two-bit spill-schedule entry per instruction slot, MSB first.
-    state.reader.skip((state.regionSlots + 3n) / 4n);
+    for (let slot = 0n; slot < state.regionSlots; slot += 4n) {
+      const schedule = await state.reader.byte();
+      if (state.reader.error) break;
+      for (let entry = 0n; entry < 4n && slot + entry < state.regionSlots; entry++) {
+        const kind = (schedule >>> (6 - Number(entry) * 2)) & 3;
+        const name = ["empty spill slots", "floating-point registers from spill schedule",
+          "general registers from spill schedule", "branch registers from spill schedule"][kind]!;
+        state.statistics.spillScheduleSlots[name] = (state.statistics.spillScheduleSlots[name] ?? 0) + 1;
+      }
+    }
     return "Spill schedules";
   }
   if (code === 0xb9) {
-    state.reader.skip(3n);
+    const [first, second, third] = [await state.reader.byte(), await state.reader.byte(), await state.reader.byte()];
+    if (state.reader.error) return "";
+    addCount(state.statistics.savedRegisterRules, "general registers in memory", bitCount(first >> 4));
+    addCount(state.statistics.savedRegisterRules, "floating-point registers in memory",
+      bitCount((first & 0x0f) * 0x10000 + second * 0x100 + third));
     return "Register rules";
   }
   return reserved(state.reader);
 };
 
+const parseSpecialRegisterRule = async (state: DescriptorState, code: number): Promise<string> => {
+  const selector = (code & 7) * 2 + ((await state.reader.byte()) >>> 7);
+  if (state.reader.error) return "";
+  const register = ["psp", "rp", "pfs", "predicates", "unat", "lc", "rp", "rnat",
+    "bsp", "bspstore", "fpsr", "priunat"][selector];
+  if (register == null) return reserved(state.reader);
+  addCount(state.statistics.savedRegisterRules,
+    `${register} in ${selector === 6 ? "branch" : "general"} register`, 1);
+  return "Register rules";
+};
+
 const parsePrologueRule = async (state: DescriptorState, code: number): Promise<string> => {
-  if (code < 0xa0) return "Register rules"; // P1.
+  if (code < 0xa0) {
+    addCount(state.statistics.savedRegisterRules, "branch registers in memory", bitCount(code & 0x1f));
+    return "Register rules"; // P1.
+  }
   if (code < 0xb0) {
-    await state.reader.byte(); // P2 branch-register mask and first GR.
+    const operand = await state.reader.byte(); // P2 branch-register mask and first GR.
+    if (!state.reader.error) addCount(state.statistics.savedRegisterRules,
+      "branch registers in general registers", bitCount(((code & 0x0f) << 1) | (operand >>> 7)));
     return "Register rules";
   }
-  if (code < 0xb8) {
-    const selector = (code & 7) * 2 + ((await state.reader.byte()) >> 7);
-    return selector <= 11 ? "Register rules" : reserved(state.reader);
-  }
+  if (code < 0xb8) return parseSpecialRegisterRule(state, code);
   if (code < 0xc0) return parseSpillRule(state, code);
-  if (code < 0xe0) return "Register rules"; // P6 floating/general register mask.
+  if (code < 0xe0) {
+    const count = bitCount(code & 0x0f);
+    addCount(state.statistics.savedRegisterRules,
+      code & 0x10 ? "general registers in memory" : "floating-point registers in memory", count);
+    return "Register rules"; // P6 floating/general register mask.
+  }
   if (code < 0xf0) return parseStackRule(state, code);
   return parseLongPrologueRule(state, code);
 };
@@ -167,10 +241,24 @@ const parseBodyRule = async (state: DescriptorState, code: number): Promise<stri
 };
 
 const parseGeneralRule = async (state: DescriptorState, code: number): Promise<string> => {
-  // X1/X3 carry time and offset ULEB128s; X2/X4 carry only time.
-  state.reader.skip(code === 0xf9 ? 1n : code === 0xfc ? 3n : 2n);
+  // Intel 245358-003 Appendix B.5: X1/X3 spill to memory; X2/X4 copy or restore registers.
+  const first = await state.reader.byte();
+  if (code === 0xf9 || code === 0xfb) {
+    if (code === 0xfb) await state.reader.byte();
+    await state.reader.unsigned();
+    await state.reader.unsigned();
+    if (!state.reader.error) addCount(state.statistics.registerSaveLocations,
+      first & 0x80 ? "SP-relative memory spill rules" : "PSP-relative memory spill rules", 1);
+    return "Register rules";
+  }
+  const second = await state.reader.byte();
+  const third = code === 0xfc ? await state.reader.byte() : undefined;
   await state.reader.unsigned();
-  if (code === 0xf9 || code === 0xfb) await state.reader.unsigned();
+  if (state.reader.error) return "";
+  const isRestore = code === 0xfc ? (second & 0x80) === 0 && third === 0
+    : (first & 0x80) === 0 && second === 0;
+  addCount(state.statistics.registerSaveLocations,
+    isRestore ? "register restore rules" : "register-to-register spill rules", 1);
   return "Register rules";
 };
 
@@ -185,7 +273,9 @@ const parseDescriptor = async (state: DescriptorState, code: number): Promise<st
 };
 
 export const parseIa64Descriptors = async (source: FileRangeReader): Promise<Ia64DescriptorStatistics> => {
-  const statistics: Ia64DescriptorStatistics = { counts: {}, issues: [] };
+  const statistics: Ia64DescriptorStatistics = { counts: {},
+    regionLengths: { prologue: { count: 0 }, body: { count: 0 } }, savedRegisterRules: {},
+    registerSaveLocations: {}, spillScheduleSlots: {}, abiContextCounts: {}, issues: [] };
   if (!Number.isSafeInteger(source.size) || source.size < 0) {
     statistics.issues.push("IA64 unwind descriptor area size is invalid.");
     return statistics;
