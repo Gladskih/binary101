@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createCodeViewTypeFormatter, indexCodeViewTypes } from "../../../../renderers/pe/codeview-type-names.js";
 
+void test("CodeView anonymous dimensioned arrays preserve element types and distinguish referenced bounds", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1508, index: 0x1000, name: "", shape: { kind: "dimensionedArray",
+      underlyingType: 0x74, dimensionsType: 0x1001 } },
+    { type: 0x120a, index: 0x1001, shape: { kind: "variableDimensions", indexType: 0x74,
+      rank: 3, boundKind: "lowerUpper", bounds: [] } },
+    { type: 0x209, index: 0x1002, shape: { kind: "constantDimensions", indexType: 0x74,
+      rank: 2, boundKind: "lowerUpper", bounds: { kind: "integers", values: [] } } }
+  ]));
+  assert.equal(format(0x1000), "dimensioned array (bounds type #4097) of int32");
+  assert.equal(format(0x1001), "referenced bounds (rank: 3)");
+  assert.equal(format(0x1002), "constant bounds (rank: 2)");
+});
+
 void test("CodeView method lists and vtable slot kinds use summaries instead of numeric descriptor rows", () => {
   const format = createCodeViewTypeFormatter(indexCodeViewTypes([
     { type: 0x1206, index: 0x1000, shape: { kind: "methods", methods: [{ typeIndex: 0x2000, attributes: 3 }] } },

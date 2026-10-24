@@ -61,7 +61,11 @@ const pointerText = (shape: Extract<CodeViewTypeShape, { kind: "pointer" }>,
 
 interface TypeStep { text: string; next?: number }
 
-const arrayStep = (shape: Extract<CodeViewTypeShape, { kind: "array" | "vector" | "matrix" }>): TypeStep => {
+const arrayStep = (shape: Extract<CodeViewTypeShape,
+  { kind: "array" | "vector" | "matrix" | "dimensionedArray" }>): TypeStep => {
+  if (shape.kind === "dimensionedArray") return {
+    text: `dimensioned array (bounds type #${shape.dimensionsType}) of`, next: shape.underlyingType
+  };
   const size = shape.size ?? "unavailable";
   if (shape.kind === "vector") return {
     text: `vector (elements: ${shape.count}, byte size: ${size}) of`, next: shape.elementType
@@ -81,7 +85,7 @@ const referencedStep = (shape: CodeViewTypeShape,
     case "bitfield": return {
       text: `bitfield (bit width: ${shape.length}, bit offset: ${shape.position}) of`, next: shape.typeIndex
     };
-    case "array": case "vector": case "matrix": return arrayStep(shape);
+    case "array": case "vector": case "matrix": case "dimensionedArray": return arrayStep(shape);
     default: return undefined;
   }
 };
@@ -96,6 +100,9 @@ const vtableSummary = (slots: readonly number[]): string => {
 };
 
 const shapeSummary = (shape: CodeViewTypeShape): TypeStep | undefined => {
+  if (shape.kind === "constantDimensions" || shape.kind === "variableDimensions") return {
+    text: `${shape.kind === "constantDimensions" ? "constant" : "referenced"} bounds (rank: ${shape.rank})`
+  };
   if (shape.kind === "derived") return { text: `derived types (entries: ${shape.indices.length})` };
   if (shape.kind === "methods") return { text: `method list (variants: ${shape.methods.length})` };
   return shape.kind === "vtableShape" ? { text: vtableSummary(shape.slots) } : undefined;

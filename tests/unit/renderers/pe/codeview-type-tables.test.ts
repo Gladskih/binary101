@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { codeViewTypeRows } from "../../../../renderers/pe/codeview-type-tables.js";
 
+void test("CodeView dimensioned arrays retain underlying types and bounds without fabricating byte sizes", () => {
+  assert.deepEqual(codeViewTypeRows({ kind: "types", records: [
+    { type: 0x1508, index: 0x1000, name: "Grid", shape: {
+      kind: "dimensionedArray", underlyingType: 0x74, dimensionsType: 0x1001 } },
+    { type: 0x209, index: 0x1001, shape: { kind: "constantDimensions", indexType: 0x74, rank: 2,
+      boundKind: "lowerUpper", bounds: { kind: "integers", values: ["-1", "3", "2", "5"] } } }
+  ] }), [["Dimensioned array", "Grid", "not stored", "—", "none",
+    "underlying type: int32; bounds #4097: constant bounds (rank: 2)"]]);
+});
+
 void test("CodeView extended aggregate counts and unknown properties remain exact and visible", () => {
   const rows = codeViewTypeRows({ kind: "types", records: [
     { type: 0x1609, index: 0x1000, name: "Large", shape: { kind: "aggregate", fieldList: 0x1002,

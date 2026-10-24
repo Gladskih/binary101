@@ -1,5 +1,6 @@
 import type { LegacyCodeViewTypeRecord, LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import type { CodeViewCompositeShape, CodeViewAggregate } from "../../analyzers/pe/debug/legacy-codeview-composite-records.js";
+import type { CodeViewDimensions } from "../../analyzers/pe/debug/legacy-codeview-dimensions.js";
 import { createCodeViewTypeFormatter, indexCodeViewTypes } from "./codeview-type-names.js";
 import { legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
 import { createCodeViewFieldListResolver, type CodeViewFieldListResolution } from "./codeview-field-lists.js";
@@ -12,6 +13,7 @@ const AGGREGATE_FLAGS: readonly [number, string][] = [[0, "packed"], [1, "constr
   [10, "sealed"], [13, "intrinsic"]];
 const OVERLOADED_METHODS = new Set([0x408, 0x1407, 0x150f]);
 interface FieldListStatistics { records: number; members: bigint | undefined }
+type TypeLayout = CodeViewCompositeShape | Extract<CodeViewDimensions, { kind: "dimensionedArray" }>;
 
 const aggregateProperties = (properties: number): string => [
   ...AGGREGATE_FLAGS.filter(([bit]) => properties & 1 << bit).map(([, label]) => label),
@@ -20,15 +22,15 @@ const aggregateProperties = (properties: number): string => [
   properties >>> 16 ? `unknown property bits 0x${((properties & ~0xffff) >>> 0).toString(16)}` : ""
 ].filter(Boolean).join("; ") || "none";
 
-const compositeShape = (record: LegacyCodeViewTypeRecord): CodeViewCompositeShape | undefined => {
+const compositeShape = (record: LegacyCodeViewTypeRecord): TypeLayout | undefined => {
   const shape = record.shape;
   switch (shape?.kind) {
-    case "aggregate": case "array": case "vector": case "matrix": return shape;
+    case "aggregate": case "array": case "vector": case "matrix": case "dimensionedArray": return shape;
     default: return undefined;
   }
 };
 
-const propertiesText = (shape: CodeViewCompositeShape): string => {
+const propertiesText = (shape: TypeLayout): string => {
   if (shape.kind === "aggregate") return aggregateProperties(shape.properties);
   if (shape.kind !== "matrix") return "none";
   return [shape.attributes & 1 ? "row-major" : "column-major",
@@ -70,9 +72,11 @@ const aggregateReferences = (shape: CodeViewAggregate, format: (index: number) =
   shape.underlyingType === undefined ? "" : `underlying type: ${format(shape.underlyingType)}`
 ].filter(Boolean).join("; ") || "none";
 
-const relatedTypes = (shape: CodeViewCompositeShape, format: (index: number) => string,
+const relatedTypes = (shape: TypeLayout, format: (index: number) => string,
   resolve: ReturnType<typeof createCodeViewFieldListResolver>): string => {
   if (shape.kind === "aggregate") return aggregateReferences(shape, format, resolve);
+  if (shape.kind === "dimensionedArray") return `underlying type: ${format(shape.underlyingType)}; ` +
+    `bounds #${shape.dimensionsType}: ${format(shape.dimensionsType)}`;
   const element = `element: ${format(shape.elementType)}`;
   if (shape.kind === "vector") return `${element}; elements: ${shape.count}`;
   if (shape.kind === "matrix") return `${element}; rows: ${shape.rows}; columns: ${shape.columns}; ` +
@@ -81,10 +85,15 @@ const relatedTypes = (shape: CodeViewCompositeShape, format: (index: number) => 
     (shape.stride === undefined ? "" : `; stride: ${shape.stride} bytes`);
 };
 
-const metadata = (shape: CodeViewCompositeShape | undefined,
+const byteSize = (shape: TypeLayout): string => {
+  if (shape.kind === "dimensionedArray") return "not stored";
+  return shape.kind === "aggregate" && shape.underlyingType !== undefined ? "—" : shape.size ?? "unavailable";
+};
+
+const metadata = (shape: TypeLayout | undefined,
   format: (index: number) => string, resolve: ReturnType<typeof createCodeViewFieldListResolver>): string[] => {
   if (!shape) return ["—", "—", "—", "—"];
-  return [shape.kind === "aggregate" && shape.underlyingType !== undefined ? "—" : shape.size ?? "unavailable",
+  return [byteSize(shape),
     shape.kind === "aggregate" ? String(shape.memberCount ?? "unavailable") : "—",
     propertiesText(shape), relatedTypes(shape, format, resolve)];
 };

@@ -6,6 +6,7 @@ import { readLegacyCodeViewEmbeddedSymbol, type LegacyCodeViewSymbol } from "./l
 import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js";
 import { readCodeViewTypeShape, type CodeViewTypeShape } from "./legacy-codeview-type-shapes.js";
 import { validateCodeViewMethodLists } from "./legacy-codeview-method-validation.js";
+import { resolveCodeViewConstantBounds } from "./legacy-codeview-constant-bounds.js";
 
 export interface LegacyCodeViewTypeRecord {
   type: number;
@@ -99,7 +100,7 @@ export const readLegacyCodeViewGlobalTypes = async (
     } catch (error) { reader.warn(`CodeView type ${index}: ${String(error)}`); }
   }
   validateCodeViewMethodLists(records, reader.warn);
-  return { kind: "types", records };
+  return { kind: "types", records: resolveCodeViewConstantBounds(records, reader.warn) };
 };
 
 // Type servers need their external tables. LF_PRECOMP instead declares an exact
@@ -161,5 +162,5 @@ export const readLegacyCodeViewModuleTypes = async (reader: LegacyCodeViewReader
     } catch (error) { reader.warn(String(error)); break; }
   }
   validateCodeViewMethodLists(records, reader.warn);
-  return { kind: "types", records };
+  return { kind: "types", records: resolveCodeViewConstantBounds(records, reader.warn) };
 };

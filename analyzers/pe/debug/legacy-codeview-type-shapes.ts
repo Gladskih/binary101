@@ -3,6 +3,7 @@ import type { CodeViewCompositeShape } from "./legacy-codeview-composite-records
 import { readLegacyCodeViewMethods, type LegacyCodeViewMethod } from "./legacy-codeview-methods.js";
 import { readCodeViewIndexList, readCodeViewTypeLinks, type CodeViewTypeLinks } from "./legacy-codeview-type-links.js";
 import { readCodeViewPrecompiledType, type CodeViewPrecompiledType } from "./legacy-codeview-precompiled.js";
+import { readCodeViewDimensions, type CodeViewDimensions } from "./legacy-codeview-dimensions.js";
 
 interface CodeViewProcedure {
   returnType: number;
@@ -11,7 +12,8 @@ interface CodeViewProcedure {
   parameterCount: number;
   argumentList: number;
 }
-export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks | CodeViewPrecompiledType
+export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks
+  | CodeViewPrecompiledType | CodeViewDimensions
   | (CodeViewProcedure & { kind: "procedure" })
   | (CodeViewProcedure & { kind: "memberFunction"; classType: number;
       thisType: number; thisAdjustment: number })
@@ -125,7 +127,12 @@ const SHAPE_READERS = new Map<number,
   [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip],
   [0x206, readBitfield], [0x1205, readBitfield], [0x207, readMethods], [0x1206, readMethods],
   [10, readVtableShape], [0x13, readCodeViewPrecompiledType], [0x100e, readCodeViewPrecompiledType],
-  [0x1509, readCodeViewPrecompiledType], [0x14, readCodeViewPrecompiledType]
+  [0x1509, readCodeViewPrecompiledType], [0x14, readCodeViewPrecompiledType],
+  [0x11, readCodeViewDimensions], [0x100c, readCodeViewDimensions], [0x1508, readCodeViewDimensions],
+  [0x208, readCodeViewDimensions], [0x209, readCodeViewDimensions],
+  [0x1207, readCodeViewDimensions], [0x1208, readCodeViewDimensions],
+  [0x20a, readCodeViewDimensions], [0x20b, readCodeViewDimensions],
+  [0x1209, readCodeViewDimensions], [0x120a, readCodeViewDimensions]
 ]);
 
 /** Read stored type relationships without resolving external PDB/type-server references. */
