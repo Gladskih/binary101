@@ -13,10 +13,12 @@ void test("CodeView GUIDs retain Windows mixed byte order and the bounded view's
 
 for (const offset of [-1, 1, 0.5, Infinity, NaN]) {
   void test(`CodeView GUID offset ${offset} cannot read outside a 16-byte view`, () => {
-    assert.throws(() => readCodeViewGuid(new DataView(new Uint8Array(32).buffer, 0, 16), offset), /bounds/);
+    assert.throws(() => readCodeViewGuid(new DataView(new Uint8Array(32).buffer, 0, 16), offset),
+      /CodeView GUID bounds exceeded/);
   });
 }
 
 void test("CodeView a short GUID view cannot borrow bytes from the rest of its backing buffer", () => {
-  assert.throws(() => readCodeViewGuid(new DataView(new Uint8Array(32).buffer, 0, 15), 0), /bounds/);
+  assert.throws(() => readCodeViewGuid(new DataView(new Uint8Array(32).buffer, 0, 15), 0),
+    /CodeView GUID bounds exceeded/);
 });
