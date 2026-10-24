@@ -80,3 +80,21 @@ void test("CodeView metadata tables omit empty and incompatible encodings", () =
     { type: 0x125, module: 1, offset: 0, size: 0, data: { kind: "symbols", records: [] } }
   ] }] }), []);
 });
+
+void test("CodeView PDB type server identities retain GUID or classic signature, age and exact file names", () => {
+  const tables = buildCodeViewBuildTables(codeViewInfoWithTypes([
+    { type: 0x1515, strings: ["<types>&amp;.pdb"], shape: { kind: "typeServer", age: 0xffffffff,
+      identity: { kind: "guid", value: "12345678-9abc-def0-1122-334455667788" } } },
+    { type: 0x16, strings: [""], shape: { kind: "typeServer", age: 0,
+      identity: { kind: "signature", value: 0x12345678 } } },
+    { type: 0x1501, shape: { kind: "typeServer", age: 1, identity: { kind: "signature", value: 0 } } }
+  ]));
+  assert.deepEqual(tables.find(table => table.key === "typeServers"), {
+    key: "typeServers", title: "PDB type server identities",
+    columns: ["Directory", "Module", "PDB file", "Identity", "PDB age"], rows: [
+      ["1", "1", "<types>&amp;.pdb", "GUID 12345678-9abc-def0-1122-334455667788", "4294967295"],
+      ["1", "1", "(empty)", "Signature 0x12345678", "0"],
+      ["1", "1", "(file name unavailable)", "Signature 0x00000000", "1"]
+    ]
+  });
+});

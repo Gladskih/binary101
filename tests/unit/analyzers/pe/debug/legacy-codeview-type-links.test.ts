@@ -9,9 +9,17 @@ import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory
 import { buildCodeViewBuildTables } from "../../../../../renderers/pe/codeview-build-tables.js";
 import { createPeWithCodeViewVtables } from "../../../../fixtures/pe-codeview-vtables.js";
 import { buildCodeViewVtableTables } from "../../../../../renderers/pe/codeview-vtable-tables.js";
+import { createPeWithCodeViewTypeServers } from "../../../../fixtures/pe-codeview-type-servers.js";
 
 // Packed lfDerived, lfBuildInfo and lfUdt[Mod]SrcLine from Microsoft's cvinfo.h.
 for (const [leaf, bytes, expected] of [
+  [0x16, [...legacyU32(0x12345678), ...legacyU32(0x87654321)], { kind: "typeServer",
+    identity: { kind: "signature", value: 0x12345678 }, age: 0x87654321 }],
+  [0x1501, [...legacyU32(0x12345678), ...legacyU32(0x87654321)], { kind: "typeServer",
+    identity: { kind: "signature", value: 0x12345678 }, age: 0x87654321 }],
+  [0x1515, [...legacyU32(0x12345678), ...legacyU16(0x9abc), ...legacyU16(0xdef0),
+    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, ...legacyU32(0xffffffff)], { kind: "typeServer",
+    identity: { kind: "guid", value: "12345678-9abc-def0-1122-334455667788" }, age: 0xffffffff }],
   [0x151d, [...legacyU32(0x12345678), ...legacyU32(0x87654321), ...legacyU32(0xfedcba98)],
     { kind: "vtable", ownerType: 0x12345678, baseTable: 0x87654321, pointerOffset: 0xfedcba98 }],
   [0x12, [...legacyU16(2), ...legacyU16(0x1000), ...legacyU16(0x1001)],
@@ -81,4 +89,19 @@ void test("PE integration retains vtable ownership while preserving all stored m
   const records = info.directories.flatMap(directory => directory.subsections)
     .flatMap(section => section.data?.kind === "types" ? section.data.records : []);
   assert.deepEqual(records[3]?.strings, ["<Derived>&amp;::table", "read", "<write>&amp;"]);
+});
+
+void test("PE integration retains GUID and classic PDB identities without inventing local type indices", async () => {
+  const file = createPeWithCodeViewTypeServers();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const info = debug.entries[0]?.legacyCodeView;
+  assert.ok(info);
+  assert.equal(debug.warning, null);
+  assert.deepEqual(buildCodeViewBuildTables(info).find(table => table.key === "typeServers")?.rows, [
+    ["1", "1", "<types>&amp;.pdb", "GUID 12345678-9abc-def0-1122-334455667788", "3"],
+    ["1", "1", "old.pdb", "Signature 0x87654321", "7"],
+    ["1", "1", "utf8.pdb", "Signature 0x12345678", "1"]
+  ]);
 });

@@ -1,4 +1,5 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
+import { readCodeViewGuid } from "./codeview-guid.js";
 
 export type CodeViewTypeLinks =
   | { kind: "derived"; indices: number[] }
@@ -6,6 +7,8 @@ export type CodeViewTypeLinks =
   | { kind: "stringList"; indices: number[] }
   | { kind: "vtablePath"; indices: number[] }
   | { kind: "vtable"; ownerType: number; baseTable: number; pointerOffset: number }
+  | { kind: "typeServer"; age: number;
+      identity: { kind: "signature"; value: number } | { kind: "guid"; value: string } }
   | { kind: "stringId"; substrings: number }
   | { kind: "sourceLine"; typeIndex: number; source: number; line: number; module?: number };
 
@@ -46,12 +49,25 @@ const readVtable = async (reader: LegacyCodeViewReader): Promise<CodeViewTypeLin
     pointerOffset: header.getUint32(8, true) };
 };
 
+// lfTypeServer2 replaces the older DWORD signature with a Windows GUID.
+const readTypeServer = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeLinks> => {
+  if (leaf === 0x1515) {
+    const header = await reader.view(4, 20);
+    return { kind: "typeServer", identity: { kind: "guid", value: readCodeViewGuid(header, 0) },
+      age: header.getUint32(16, true) };
+  }
+  const header = await reader.view(4, 8);
+  return { kind: "typeServer", identity: { kind: "signature", value: header.getUint32(0, true) },
+    age: header.getUint32(4, true) };
+};
+
 /** Retain local type/ID links; module string-table offsets remain explicitly distinct. */
 export const readCodeViewTypeLinks = async (reader: LegacyCodeViewReader,
   leaf: number): Promise<CodeViewTypeLinks | undefined> => {
   const list = INDEX_LISTS.get(leaf);
   if (list) return { kind: list[0], indices: await readCodeViewIndexList(reader, list[1], list[2]) };
   if (leaf === 0x151d) return readVtable(reader);
+  if (leaf === 0x16 || leaf === 0x1501 || leaf === 0x1515) return readTypeServer(reader, leaf);
   if (leaf === 0x1605) return { kind: "stringId", substrings: await reader.uint32(4) };
   return leaf === 0x1606 || leaf === 0x1607 ? readSourceLine(reader, leaf) : undefined;
 };

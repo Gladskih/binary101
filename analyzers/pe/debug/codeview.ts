@@ -1,7 +1,7 @@
 "use strict";
 
 import { readDebugPayload, readDebugPayloadBytes } from "./payload-reader.js";
-import { toHex32 } from "../../../binary-utils.js";
+import { readCodeViewGuid } from "./codeview-guid.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 
@@ -15,11 +15,6 @@ const CODEVIEW_RSDS_MIN_SIZE = 24;
 const CODEVIEW_NB10_MIN_SIZE = 16;
 const CODEVIEW_SIGNATURE_RSDS = 0x53445352;
 const CODEVIEW_SIGNATURE_NB10 = 0x3031424e;
-const CODEVIEW_RSDS_OFF_GUID_DATA1 = 4;
-const CODEVIEW_RSDS_OFF_GUID_DATA2 = 8;
-const CODEVIEW_RSDS_OFF_GUID_DATA3 = 10;
-const CODEVIEW_RSDS_OFF_GUID_DATA4 = 12;
-const CODEVIEW_RSDS_GUID_DATA4_LENGTH = 8;
 const CODEVIEW_RSDS_OFF_AGE = 20;
 const CODEVIEW_NB10_OFF_OFFSET = 4;
 const CODEVIEW_NB10_OFF_TIMESTAMP = 8;
@@ -129,17 +124,6 @@ const readCodeViewHeader = async (
   return header;
 };
 
-const readCodeViewGuid = (header: DataView): string => {
-  const sig0 = header.getUint32(CODEVIEW_RSDS_OFF_GUID_DATA1, true);
-  const sig1 = header.getUint16(CODEVIEW_RSDS_OFF_GUID_DATA2, true);
-  const sig2 = header.getUint16(CODEVIEW_RSDS_OFF_GUID_DATA3, true);
-  const sigTail = new Uint8Array(header.buffer,
-    header.byteOffset + CODEVIEW_RSDS_OFF_GUID_DATA4, CODEVIEW_RSDS_GUID_DATA4_LENGTH);
-  return `${toHex32(sig0, 8).slice(2)}-${sig1.toString(16).padStart(4, "0")}-${sig2.toString(16).padStart(4, "0")}-` +
-    `${[...sigTail.slice(0, 2)].map(b => b.toString(16).padStart(2, "0")).join("")}-` +
-    `${[...sigTail.slice(2)].map(b => b.toString(16).padStart(2, "0")).join("")}`.toLowerCase();
-};
-
 export const parseCodeViewEntry = async (
   reader: FileRangeReader, fileSize: number, rvaToOff: RvaToOffset,
   addressOfRawDataRva: number, pointerToRawDataOff: number, dataSize: number,
@@ -169,7 +153,7 @@ export const parseCodeViewEntry = async (
     age: header.getUint32(CODEVIEW_NB10_OFF_AGE, true),
     path
   } : {
-    signature: "RSDS", guid: readCodeViewGuid(header),
+    signature: "RSDS", guid: readCodeViewGuid(header, 4),
     age: header.getUint32(CODEVIEW_RSDS_OFF_AGE, true), path
   };
 };

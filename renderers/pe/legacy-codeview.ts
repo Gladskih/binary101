@@ -10,7 +10,7 @@ const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Distinct lines or path codes|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets|With source line|First source line|Last source line)$/.test(label)
     || ["Declared parameters", "Value / placement", "Byte size", "Declared members", "Source line", "Build",
       "String list", "Component", "Dimension", "Lower bound", "Upper bound", "Pointer offset",
-      "Stored method names", "Path type index"].includes(label) ? "peNumeric" : "";
+      "Stored method names", "Path type index", "PDB age"].includes(label) ? "peNumeric" : "";
 
 const model = (table: LegacyCodeViewTable, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
@@ -20,7 +20,8 @@ const model = (table: LegacyCodeViewTable, prefix: string): PagedSortableTableMo
   ...(table.key === "types" ? { tableClassName: "peCodeViewTypeTable" } : {}),
   ...(table.key === "functions" ? { tableClassName: "peCodeViewFunctionTable" } : {}),
   ...(table.key === "arrayBounds" ? { tableClassName: "peCodeViewBoundsTable" } : {}),
-  ...(["buildInfo", "typeSources", "stringComponents", "derivedTypes", "virtualTables", "vtablePaths"].includes(table.key)
+  ...(["buildInfo", "typeSources", "stringComponents", "derivedTypes", "virtualTables", "vtablePaths", "typeServers"]
+    .includes(table.key)
     ? { tableClassName: "peCodeViewMetadataTable" } : {}),
   columns: table.columns.map(label => ({ label, className: columnClass(label) })),
   rowAt: index => table.rows[index] ? { cells: table.rows[index]!.map((value, column) =>

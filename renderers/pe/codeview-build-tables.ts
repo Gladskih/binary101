@@ -42,11 +42,20 @@ const sourceRow = (shape: Extract<CodeViewTypeLinks, { kind: "sourceLine" }>,
   shape.module === undefined ? storedString(shape.source, namespace.indexed)
     : `module ${shape.module} string-table offset #${shape.source} (external)`, String(shape.line)];
 
+const typeServerRow = (record: LegacyCodeViewTypeRecord,
+  shape: Extract<CodeViewTypeLinks, { kind: "typeServer" }>): string[] => [
+  record.strings === undefined ? "(file name unavailable)" : record.strings[0] || "(empty)",
+  shape.identity.kind === "guid" ? `GUID ${shape.identity.value}`
+    : `Signature 0x${shape.identity.value.toString(16).padStart(8, "0")}`, String(shape.age)
+];
+
 const metadataRows = (data: LegacyCodeViewTypes): Map<string, string[][]> => {
   const indexed = indexCodeViewTypes(data.records);
   const namespace = metadataNamespace(indexed);
   const external = metadataNamespace(new Map());
-  const rows = new Map<string, string[][]>([["buildInfo", []], ["typeSources", []], ["stringComponents", []]]);
+  const rows = new Map<string, string[][]>([
+    ["buildInfo", []], ["typeSources", []], ["stringComponents", []], ["typeServers", []]
+  ]);
   let build = 0;
   for (const record of data.records) {
     const local = record.index !== undefined && indexed.get(record.index) === record ? namespace : external;
@@ -54,6 +63,7 @@ const metadataRows = (data: LegacyCodeViewTypes): Map<string, string[][]> => {
     switch (shape?.kind) {
       case "buildInfo": rows.get("buildInfo")!.push(...buildRows(shape.indices, ++build, local.indexed)); break;
       case "sourceLine": rows.get("typeSources")!.push(sourceRow(shape, local)); break;
+      case "typeServer": rows.get("typeServers")!.push(typeServerRow(record, shape)); break;
       case "stringList": rows.get("stringComponents")!.push(...shape.indices.map((index, position) =>
         [String(record.index ?? "unresolved"), String(position + 1), storedString(index, local.indexed)])); break;
     }
@@ -67,7 +77,9 @@ export const buildCodeViewBuildTables = (info: PeLegacyCodeViewInfo): LegacyCode
     { key: "typeSources", title: "Type definition sources",
       columns: ["Directory", "Module", "Type", "Source file", "Source line"], rows: [] },
     { key: "stringComponents", title: "String components",
-      columns: ["Directory", "Module", "String list", "Component", "Stored text"], rows: [] }
+      columns: ["Directory", "Module", "String list", "Component", "Stored text"], rows: [] },
+    { key: "typeServers", title: "PDB type server identities",
+      columns: ["Directory", "Module", "PDB file", "Identity", "PDB age"], rows: [] }
   ];
   info.directories.forEach((directory, position) => {
     for (const section of directory.subsections) {
