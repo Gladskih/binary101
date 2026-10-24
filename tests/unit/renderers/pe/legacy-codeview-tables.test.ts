@@ -3,6 +3,19 @@ import { test } from "node:test";
 import { buildLegacyCodeViewTables } from "../../../../renderers/pe/legacy-codeview-tables.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
 
+void test("CodeView vtable descriptor statistics include shapes without named class references", () => {
+  const tables = buildLegacyCodeViewTables({ signature: "NB09", directories: [{ flags: 0,
+    subsections: [{ type: 0x121, module: 1, offset: 0, size: 0, data: { kind: "types", records: [
+      { type: 10, index: 0x1000, shape: { kind: "vtableShape", slots: [5, 5, 6, 15] } },
+      { type: 10, index: 0x1001, shape: { kind: "vtableShape", slots: [5] } }
+    ] } }] }] });
+  assert.deepEqual(tables.find(table => table.key === "records")?.rows.slice(-3), [
+    ["1", "1", "Virtual table slots", "near32", "3"],
+    ["1", "1", "Virtual table slots", "far32", "1"],
+    ["1", "1", "Virtual table slots", "unknown kind 15", "1"]
+  ]);
+});
+
 void test("C6 names and record statistics use C6 categories rather than colliding C7 IDs", () => {
   const tables = buildLegacyCodeViewTables({ signature: "NB02", directories: [{ flags: 0, subsections: [
     { type: 0x104, module: 1, offset: 0, size: 0,
@@ -14,7 +27,8 @@ void test("C6 names and record statistics use C6 categories rather than collidin
 
   assert.deepEqual(tables.find(table => table.key === "symbols")?.rows,
     [["1", "1", "Procedure (16-bit offsets)", "procedure"]]);
-  assert.deepEqual(tables.find(table => table.key === "types")?.rows, [["1", "1", "Type alias", "Alias"]]);
+  assert.deepEqual(tables.find(table => table.key === "types")?.rows,
+    [["1", "1", "Type alias", "Alias", "—", "—", "—", "—"]]);
   assert.deepEqual(tables.find(table => table.key === "typeStrings")?.rows,
     [["1", "1", "Type or member list", "member"]]);
   assert.deepEqual(tables.find(table => table.key === "records")?.rows, [
@@ -64,13 +78,14 @@ void test("CodeView tables retain readable names and summarize symbol, line and 
     [["1", "1", "<module>.obj", "library.lib", "CV", "1", "24"]]);
   assert.deepEqual(tables.find(table => table.key === "symbols")?.rows,
     [["1", "1", "Public symbol", "<public>"], ["1", "1", "Public symbol", "second"]]);
-  assert.deepEqual(tables.find(table => table.key === "types")?.rows, [["1", "1", "Structure", "Structure"],
-    ["1", "1", "Structure (decorated)", ".?AU<Structure>@@"]]);
+  assert.deepEqual(tables.find(table => table.key === "types")?.rows,
+    [["1", "1", "Structure", "Structure", "—", "—", "—", "—"],
+      ["1", "1", "Structure (decorated)", ".?AU<Structure>@@", "—", "—", "—", "—"]]);
   assert.deepEqual(tables.find(table => table.key === "members")?.rows,
-    [["1", "1", "Data member", "<field>", "—", "unavailable", "none"],
-      ["1", "1", "Enumerator", "first", "—", "unavailable", "none"],
-      ["1", "1", "Enumerator", "(unnamed)", "—", "unavailable", "none"],
-      ["1", "1", "Field list continuation", "(unnamed)", "—", "—", "continues field list #4097"]]);
+    [["1", "1", "Data member", "<field>", "—", "unavailable", "none", "unresolved namespace"],
+      ["1", "1", "Enumerator", "first", "—", "unavailable", "none", "unresolved namespace"],
+      ["1", "1", "Enumerator", "(unnamed)", "—", "unavailable", "none", "unresolved namespace"],
+      ["1", "1", "Field list continuation", "(unnamed)", "—", "—", "continues field list #4097", "unresolved namespace"]]);
   assert.ok(tables.find(table => table.key === "records")?.rows.some(row => row[2] === "Type members" && row[4] === "2"));
   assert.deepEqual(tables.find(table => table.key === "source")?.rows, [["1", "1", "source.c", "1", "3", "2"]]);
   assert.deepEqual(tables.find(table => table.key === "frameMap")?.rows, [["1", "1", "3", "2"]]);

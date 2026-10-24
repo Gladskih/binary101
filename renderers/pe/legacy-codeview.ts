@@ -8,16 +8,18 @@ import { humanSize } from "../../binary-utils.js";
 
 const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Distinct lines or path codes|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets|With source line|First source line|Last source line)$/.test(label)
-    || label === "Declared parameters" || label === "Value / placement" ? "peNumeric" : "";
+    || ["Declared parameters", "Value / placement", "Byte size", "Declared members"].includes(label) ? "peNumeric" : "";
 
 const model = (table: LegacyCodeViewTable, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
   ...(table.key === "indexes" ? { tableClassName: "peCodeViewIndexTable" } : {}),
   ...(table.key === "discardedSymbols" ? { tableClassName: "peCodeViewDiscardedTable" } : {}),
   ...(table.key === "members" ? { tableClassName: "peCodeViewMemberTable" } : {}),
+  ...(table.key === "types" ? { tableClassName: "peCodeViewTypeTable" } : {}),
+  ...(table.key === "functions" ? { tableClassName: "peCodeViewFunctionTable" } : {}),
   columns: table.columns.map(label => ({ label, className: columnClass(label) })),
   rowAt: index => table.rows[index] ? { cells: table.rows[index]!.map((value, column) =>
-    ({ html: table.key === "functions" || table.key === "members" ? escapeHtmlText(value) : escapeHtml(value),
+    ({ html: ["functions", "members", "types"].includes(table.key) ? escapeHtmlText(value) : escapeHtml(value),
       className: columnClass(table.columns[column] ?? "") })) } : null,
   sortValueAt: (index, column) => table.rows[index]?.[column] ?? ""
 });

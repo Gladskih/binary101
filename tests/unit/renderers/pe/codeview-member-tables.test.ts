@@ -31,13 +31,44 @@ void test("CodeView members show exact enum values, field types and byte offsets
   ]));
   assert.equal(tables[0]?.key, "members");
   assert.equal(tables[0]?.title, "Member and enumerator names");
-  assert.deepEqual(tables[0]?.columns, ["Directory", "Module", "Member kind", "Name", "Type", "Value / placement", "Properties"]);
+  assert.deepEqual(tables[0]?.columns, ["Directory", "Module", "Member kind", "Name", "Type", "Value / placement", "Properties", "Owner type"]);
   assert.deepEqual(tables[0]?.rows, [
-    ["1", "1", "Enumerator", "largest", "—", "18446744073709551615", "public"],
-    ["1", "1", "Data member", "count", "int32", "offset: 12 bytes", "private"],
-    ["1", "1", "Static data member", "total", "uint32", "—", "protected"],
-    ["1", "1", "Overloaded method", "read", "Methods #4097", "—", "2 overloads"]
+    ["1", "1", "Enumerator", "largest", "—", "18446744073709551615", "public", "unassociated"],
+    ["1", "1", "Data member", "count", "int32", "offset: 12 bytes", "private", "unassociated"],
+    ["1", "1", "Static data member", "total", "uint32", "—", "protected", "unassociated"],
+    ["1", "1", "Overloaded method", "read", "Methods #4097", "—", "2 overloads", "unassociated"]
   ]);
+});
+
+void test("CodeView fields retain all owning classes across continuation lists", () => {
+  const table = buildCodeViewMemberTables(codeViewInfoWithTypes([
+    { type: 0x1505, index: 0x1000, name: "Packet", shape: { kind: "aggregate",
+      memberCount: 2, properties: 0, fieldList: 0x1001 } },
+    { type: 0x1203, index: 0x1001, members: [{ type: 0x150d, name: "first" },
+      { type: 0x1404, continuation: 0x1002 }] },
+    { type: 0x1203, index: 0x1002, members: [{ type: 0x150d, name: "last" }] },
+    { type: 0x1505, index: 0x1003, name: "Alias", shape: { kind: "aggregate",
+      memberCount: 2, properties: 0, fieldList: 0x1001 } },
+    { type: 0x1505, name: "External", shape: { kind: "aggregate",
+      memberCount: 2, properties: 0, fieldList: 0x1001 } },
+    { type: 0x1505, index: 0x1004, name: "Forward", shape: { kind: "aggregate",
+      memberCount: 0, properties: 0x80, fieldList: 0 } }
+  ]))[0]!;
+  assert.deepEqual(table.rows.map(row => row[7]), ["Packet; Alias", "Packet; Alias", "Packet; Alias"]);
+});
+
+void test("CodeView cyclic field-list ownership stays visible and orphan references stay unresolved", () => {
+  const table = buildCodeViewMemberTables(codeViewInfoWithTypes([
+    { type: 0x1505, index: 0x1000, name: "Packet", shape: { kind: "aggregate",
+      memberCount: 1, properties: 0, fieldList: 0x1001 } },
+    { type: 0x1203, index: 0x1001, members: [{ type: 0x1404, continuation: 0x1001 }] },
+    { type: 0x1203, index: 0x1002, members: [{ type: 0x1404, continuation: 0x2000 }] },
+    { type: 0x1203, members: [{ type: 0x150d, name: "external", typeIndex: 0x1000 }] }
+  ]))[0]!;
+  assert.equal(table.rows[0]?.[7], "Packet (cyclic field-list continuation #4097)");
+  assert.equal(table.rows[1]?.[7], "unassociated; missing field list #8192");
+  assert.equal(table.rows[2]?.[7], "unresolved namespace");
+  assert.equal(table.rows[2]?.[4], "unresolved type #4096");
 });
 
 void test("CodeView missing virtual-base numbers remain unavailable without fake zero offsets", () => {

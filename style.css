@@ -657,8 +657,12 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .tableWrap > .peDataDirectoryTable{min-width:640px}
 .tableWrap > .peCodeViewIndexTable,
 .tableWrap > .peCodeViewMemberTable,
+.tableWrap > .peCodeViewTypeTable,
+.tableWrap > .peCodeViewFunctionTable,
 .tableWrap > .peCodeViewDiscardedTable{min-width:64rem}
 .peCodeViewMemberTable .peNumeric{white-space:nowrap}
+.peCodeViewTypeTable .peNumeric{white-space:nowrap}
+.peCodeViewFunctionTable .peNumeric{white-space:nowrap}
 .peMsvcRttiTable th,.peMsvcRttiTable td{white-space:nowrap}
 .peDataDirectoryTable{table-layout:auto}
 .peDataDirectoryTable__status,

@@ -5,6 +5,76 @@ import { readLegacyCodeViewModuleTypes } from "../../../../analyzers/pe/debug/le
 import { codeViewCallableStream, codeViewInfoWithTypes } from "../../../fixtures/pe-codeview-callables.js";
 import { legacyReader } from "../../../fixtures/pe-legacy-codeview.js";
 
+void test("CodeView method names and ID names share a signature without dropping access or vtable placement", () => {
+  const tables = buildCodeViewFunctionTables(codeViewInfoWithTypes([
+    { type: 0x1505, index: 0x1000, name: "Packet" },
+    { type: 0x1203, index: 0x1001, members: [
+      { type: 0x1511, name: "read", attributes: 19, typeIndex: 0x1002, vtableOffset: 0 }
+    ] },
+    { type: 0x1009, index: 0x1002, shape: { kind: "memberFunction", classType: 0x1000, thisType: 0,
+      thisAdjustment: 0, returnType: 0x74, argumentList: 0x1003, parameterCount: 0,
+      attributes: 0, callingConvention: 0 } },
+    { type: 0x1201, index: 0x1003, shape: { kind: "arguments", types: [] } },
+    { type: 0x1602, index: 0x1004, strings: ["read"],
+      shape: { kind: "memberFunctionId", classType: 0x1000, functionType: 0x1002 } }
+  ]));
+  assert.equal(tables[0]?.rows.length, 1);
+  assert.equal(tables[0]?.rows[0]?.[2], "Packet::read");
+  assert.equal(tables[0]?.rows[0]?.[4], "(no parameters)");
+  assert.match(tables[0]?.rows[0]?.[7] ?? "", /public; introducing virtual; vtable offset: 0 bytes/);
+});
+
+void test("CodeView named methods with missing function types stay explicit in the signature table", () => {
+  const tables = buildCodeViewFunctionTables(codeViewInfoWithTypes([
+    { type: 0x1203, index: 0x1000, members: [
+      { type: 0x1511, name: "missing", attributes: 3, typeIndex: 0x2000 }
+    ] }
+  ]));
+  assert.deepEqual(tables[0]?.rows[0], ["1", "1", "missing", "unresolved function type #8192",
+    "unknown", "unknown", "unknown", "Function type is missing, ambiguous, or not callable."]);
+});
+
+void test("CodeView imported function IDs do not name a coincidentally matching local procedure", () => {
+  const tables = buildCodeViewFunctionTables(codeViewInfoWithTypes([
+    { type: 0x1201, index: 0x1000, shape: { kind: "arguments", types: [] } },
+    { type: 0x1008, index: 0x1001, shape: { kind: "procedure", returnType: 0x74,
+      argumentList: 0x1000, parameterCount: 0, callingConvention: 0, attributes: 0 } },
+    { type: 0x1601, strings: ["external"], shape: { kind: "functionId", scopeId: 0, functionType: 0x1001 } }
+  ]));
+  assert.equal(tables[0]?.rows[0]?.[2], "Function type #4097");
+  assert.deepEqual(tables[0]?.rows[1], ["1", "1", "external", "unresolved function type #4097",
+    "unknown", "unknown", "unknown", "External, unresolved, or ambiguous type namespace."]);
+});
+
+void test("CodeView ambiguous function ID identities do not name local procedures", () => {
+  const tables = buildCodeViewFunctionTables(codeViewInfoWithTypes([
+    { type: 0x1008, index: 0x1000, shape: { kind: "procedure", returnType: 3,
+      parameterCount: 0, argumentList: 0x2000, callingConvention: 0, attributes: 0 } },
+    { type: 0x1601, index: 0x1001, strings: ["first"],
+      shape: { kind: "functionId", scopeId: 0, functionType: 0x1000 } },
+    { type: 0x1601, index: 0x1001, strings: ["second"],
+      shape: { kind: "functionId", scopeId: 0, functionType: 0x1000 } }
+  ]));
+  assert.equal(tables[0]?.rows[0]?.[2], "Function type #4096");
+  assert.deepEqual(tables[0]?.rows.slice(1).map(row => [row[2], row[7]]), [
+    ["first", "External, unresolved, or ambiguous type namespace."],
+    ["second", "External, unresolved, or ambiguous type namespace."]
+  ]);
+});
+
+void test("CodeView imported member signatures cannot borrow local return, class or argument types", () => {
+  const tables = buildCodeViewFunctionTables(codeViewInfoWithTypes([
+    { type: 0x1505, index: 0x1000, name: "Local" },
+    { type: 0x1201, index: 0x1001, shape: { kind: "arguments", types: [] } },
+    { type: 0x1009, shape: { kind: "memberFunction", returnType: 0x1000, classType: 0x1000,
+      thisType: 0x1000, thisAdjustment: 0, parameterCount: 0, argumentList: 0x1001,
+      callingConvention: 0, attributes: 0 } }
+  ]));
+  assert.deepEqual(tables[0]?.rows[0]?.slice(2), ["Unresolved function type", "unresolved type #4096",
+    "unresolved argument list #4097", "0", "cdecl (near)",
+    "class unresolved type #4096; this: unresolved type #4096; this adjustment: 0 bytes"]);
+});
+
 void test("CodeView function tables show named signatures and calling conventions without address matrices", async () => {
   const data = await readLegacyCodeViewModuleTypes(legacyReader(codeViewCallableStream()));
   const tables = buildCodeViewFunctionTables({ signature: "NB09", directories: [{ flags: 0,

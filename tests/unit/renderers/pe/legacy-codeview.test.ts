@@ -61,7 +61,9 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   assert.match(out.join(""), /&lt;module>.obj/);
   assert.match(out.join(""), /&lt;public>/);
   assert.match(out.join(""), /&lt;field&gt;/);
-  assert.match(out.join(""), /\.\?AU&lt;Structure>@@/);
+  assert.match(out.join(""), /\.\?AU&lt;Structure&gt;@@/);
+  assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-types")?.tableClassName,
+    "peCodeViewTypeTable");
   assert.match(out.join(""), /Member and enumerator names/);
   assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-members")?.tableClassName,
     "peCodeViewMemberTable");

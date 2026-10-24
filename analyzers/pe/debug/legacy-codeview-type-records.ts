@@ -1,5 +1,5 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
-import { skipLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
+import { readCodeViewCompositeType } from "./legacy-codeview-composite-records.js";
 import { readLegacyCodeViewFields, type LegacyCodeViewField } from "./legacy-codeview-fields.js";
 import { readLegacyCodeViewTypeStrings } from "./legacy-codeview-type-strings.js";
 import { readLegacyCodeViewEmbeddedSymbol, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
@@ -23,31 +23,15 @@ export interface LegacyCodeViewTypes {
   records: LegacyCodeViewTypeRecord[];
 }
 
-// Offsets of size numeric leaves and inline names, including the record length.
+// Inline names for aliases and dimensioned arrays, including the record length.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
-const NUMERIC_OFFSETS = new Map([
-  [3, 8], [4, 14], [5, 14], [6, 10], [0x1003, 12], [0x1004, 20], [0x1005, 20], [0x1006, 12],
-  [0x1503, 12], [0x1504, 20], [0x1505, 20], [0x1506, 12], [0x1519, 20],
-  [0x1516, 16], [0x151b, 12], [0x151c, 21] // MATRIX has a one-byte CV_matrixattr_t.
-]);
-const NAME_OFFSETS = new Map([[7, 12], [0x1007, 16], [0x1010, 8], [0x1507, 16], [0x150a, 8],
+const NAME_OFFSETS = new Map([[0x1010, 8], [0x150a, 8],
   [0x11, 8], [0x100c, 12], [0x1508, 12]]);
 
-const readUtf8TypeName = async (reader: LegacyCodeViewReader, type: number, offset: number) => {
-  const { name, end } = await reader.utf8Name(offset);
-  // CV_prop_t.hasuniquename (bit 9) appends a second string to these UDT leaves.
-  // Same cvinfo.h source as the record offsets above.
-  if (![0x1504, 0x1505, 0x1506, 0x1507, 0x1519].includes(type) ||
-      !(await reader.uint16(6) & 0x200)) return { type, name };
-  try { return { type, name, uniqueName: await reader.utf8(end) }; }
-  catch (error) { reader.warn(`CodeView decorated type name: ${String(error)}`); return { type, name }; }
-};
-
 const readTypeName = async (reader: LegacyCodeViewReader, type: number): Promise<LegacyCodeViewTypeRecord> => {
-  const numeric = NUMERIC_OFFSETS.get(type);
-  const offset = numeric == null ? NAME_OFFSETS.get(type) : await skipLegacyCodeViewNumeric(reader, numeric);
+  const offset = NAME_OFFSETS.get(type);
   if (offset == null) return { type };
-  return type >= 0x1500 ? readUtf8TypeName(reader, type, offset) :
+  return type >= 0x1500 ? { type, name: await reader.utf8(offset) } :
     { type, name: (await reader.pascal(offset)).name };
 };
 
@@ -58,6 +42,8 @@ const readTypeContent = async (reader: LegacyCodeViewReader, type: number): Prom
   // TIS 3.4 LF_REFSYM stores a complete length-prefixed symbol at offset 4.
   // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
   if (type === 0x20c) return { type, symbols: await readLegacyCodeViewEmbeddedSymbol(reader, 4) };
+  const composite = await readCodeViewCompositeType(reader, type);
+  if (composite) return composite;
   const strings = await readLegacyCodeViewTypeStrings(reader, type);
   if (strings !== undefined) return { type, strings };
   return readTypeName(reader, type);

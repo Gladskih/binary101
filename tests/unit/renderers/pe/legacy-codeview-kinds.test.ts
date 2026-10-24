@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName,
-  legacyCodeViewTypeName, legacyCodeViewFieldName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
+  legacyCodeViewTypeName, legacyCodeViewFieldName,
+  legacyCodeViewVtableSlotName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
+
+void test("CodeView vtable slot labels retain the published descriptor kinds", () => {
+  assert.deepEqual(Array.from({ length: 9 }, (_, kind) => legacyCodeViewVtableSlotName(kind)),
+    ["near", "far", "thin", "outer", "meta", "near32", "far32", "unused", "unknown kind 8"]);
+});
 
 void test("C6 kinds use their own namespace, retaining offset widths and unknown values", () => {
   assert.equal(legacyCodeViewSubsectionName(0x101), "Modules (C6)");
@@ -41,6 +47,10 @@ void test("CodeView record categories use published meanings and explicit unknow
   assert.equal(legacyCodeViewSymbolName(0xffff), "Symbol record 0xffff");
   assert.equal(legacyCodeViewTypeName(0x204), "Fields");
   assert.equal(legacyCodeViewTypeName(0x1200), "Skip");
+  assert.equal(legacyCodeViewTypeName(0x1608), "Class (extended)");
+  assert.equal(legacyCodeViewTypeName(0x1609), "Structure (extended)");
+  assert.equal(legacyCodeViewTypeName(0x160a), "Union (extended)");
+  assert.equal(legacyCodeViewTypeName(0x160b), "Interface (extended)");
   assert.equal(legacyCodeViewTypeName(0xffff), "Type record 0xffff");
   assert.equal(legacyCodeViewFieldName(0x406), "Data member");
   assert.equal(legacyCodeViewFieldName(0x1502), "Enumerator");

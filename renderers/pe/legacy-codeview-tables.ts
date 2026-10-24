@@ -2,7 +2,7 @@ import type { PeLegacyCodeViewInfo, LegacyCodeViewData } from "../../analyzers/p
 import type { LegacyCodeViewSource } from "../../analyzers/pe/debug/legacy-codeview-source.js";
 import type { LegacyCodeViewFiles } from "../../analyzers/pe/debug/legacy-codeview-modules.js";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
-import { legacyCodeViewFieldName } from "./legacy-codeview-kinds.js";
+import { legacyCodeViewFieldName, legacyCodeViewVtableSlotName } from "./legacy-codeview-kinds.js";
 import type { LegacyCodeViewTypes } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import { buildLegacyCodeViewIndexTables } from "./legacy-codeview-index-tables.js";
 import { buildLegacyCodeViewSymbolStringTables } from "./legacy-codeview-symbol-tables.js";
@@ -11,6 +11,7 @@ import { buildLegacyCodeViewDiscardedStatistics } from "./legacy-codeview-discar
 import { hllSourceRows } from "./hll-source-rows.js";
 import { buildCodeViewFunctionTables } from "./codeview-function-tables.js";
 import { buildCodeViewMemberTables } from "./codeview-member-tables.js";
+import { codeViewTypeRows } from "./codeview-type-tables.js";
 
 export interface LegacyCodeViewTable { key: string; title: string; columns: string[]; rows: string[][]; }
 interface DirectoryNames { libraries: readonly string[] | null; segments: ReadonlyMap<number, string>; }
@@ -49,10 +50,7 @@ const recordRows = (data: LegacyCodeViewData): string[][] => {
   if (data.kind === "publics") return data.names.map(name => [name]);
   if (data.kind === "symbols") return data.records.flatMap(record => record.name == null ? [] :
     [[legacyCodeViewSymbolName(record.type, data.encoding), record.name]]);
-  if (data.kind === "types") return data.records.flatMap(record => [
-    ...(record.name == null ? [] : [[legacyCodeViewTypeName(record.type, data.encoding), record.name]]),
-    ...(record.uniqueName == null ? [] : [[`${legacyCodeViewTypeName(record.type, data.encoding)} (decorated)`, record.uniqueName]])
-  ]);
+  if (data.kind === "types") return codeViewTypeRows(data);
   return [];
 };
 
@@ -74,7 +72,8 @@ const schemas: Record<LegacyCodeViewData["kind"], [string, string[]]> = {
   source: ["Source mappings", ["File", "Segments", "Line/address pairs", "Distinct source lines"]],
   hllSource: ["HLL source mappings", ["File", "Mapping kind", "Segments", "Records", "Distinct lines or path codes"]],
   files: ["Source file index", ["File", "Referencing modules"]],
-  symbols: ["Named symbols", ["Symbol kind", "Name"]], types: ["Named types", ["Type kind", "Name"]],
+  symbols: ["Named symbols", ["Symbol kind", "Name"]],
+  types: ["Named types", ["Type kind", "Name", "Byte size", "Declared members", "Properties", "Related types"]],
   publics: ["Public symbols", ["Name"]], oldLines: ["Legacy source mappings", ["File", "Line/address pairs", "Distinct source lines"]],
   frameMap: ["Segment-to-frame statistics", ["Mapped segments", "Distinct frames"]]
 };
@@ -101,6 +100,17 @@ const addMemberHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewType
   }
   for (const [type, count] of counts) table.rows.push([String(directory), String(module),
     "Type members", legacyCodeViewFieldName(type), String(count)]);
+};
+
+const addVtableHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewTypes,
+  directory: number, module: number): void => {
+  const counts = new Map<number, number>();
+  for (const record of data.records) {
+    if (record.shape?.kind !== "vtableShape") continue;
+    for (const slot of record.shape.slots) counts.set(slot, (counts.get(slot) ?? 0) + 1);
+  }
+  for (const [kind, count] of counts) table.rows.push([String(directory), String(module),
+    "Virtual table slots", legacyCodeViewVtableSlotName(kind), String(count)]);
 };
 
 const typeStringKind = (type: number, index: number, encoding?: "c6" | "hll"): string => type === 2 || type === 0x1002
@@ -151,6 +161,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
       tables.set(data.kind, table);
       addTypeStrings(tables, data, index + 1, section.module);
       addHistogram(histogram, data, index + 1, section.module);
+      if (data.kind === "types") addVtableHistogram(histogram, data, index + 1, section.module);
     }
     for (const [type, group] of groups) inventory.rows.push([String(index + 1),
       legacyCodeViewSubsectionName(type, info.signature),

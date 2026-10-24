@@ -2,6 +2,30 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createCodeViewTypeFormatter, indexCodeViewTypes } from "../../../../renderers/pe/codeview-type-names.js";
 
+void test("CodeView method lists and vtable slot kinds use summaries instead of numeric descriptor rows", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1206, index: 0x1000, shape: { kind: "methods", methods: [{ typeIndex: 0x2000, attributes: 3 }] } },
+    { type: 10, index: 0x1001, shape: { kind: "vtableShape", slots: [5, 0, 1, 2, 3, 4, 5, 6, 7, 15] } },
+    { type: 10, index: 0x1002, shape: { kind: "vtableShape", slots: [] } }
+  ]));
+  assert.equal(format(0x1000), "method list (variants: 1)");
+  assert.equal(format(0x1001), "vtable (slots: 10; near: 1; far: 1; thin: 1; outer: 1; meta: 1; " +
+    "near32: 2; far32: 1; unused: 1; unknown kind 15: 1)");
+  assert.equal(format(0x1002), "vtable (slots: 0)");
+});
+
+void test("CodeView anonymous array, vector and matrix types expose their element types and dimensions", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1503, index: 0x1000, name: "", shape: { kind: "array", elementType: 0x74, indexType: 0x75, size: "24" } },
+    { type: 0x151b, index: 0x1001, shape: { kind: "vector", elementType: 0x1000, count: 3 } },
+    { type: 0x151c, index: 0x1002, shape: { kind: "matrix", elementType: 0x41,
+      rows: 2, columns: 3, majorStride: 16, attributes: 1, size: "48" } }
+  ]));
+  assert.equal(format(0x1000), "array (byte size: 24) of int32");
+  assert.equal(format(0x1001), "vector (elements: 3, byte size: unavailable) of array (byte size: 24) of int32");
+  assert.equal(format(0x1002), "matrix (2 × 3, byte size: 48) of float64");
+});
+
 void test("CodeView bitfields describe bit width and position without hiding the base type", () => {
   const format = createCodeViewTypeFormatter(indexCodeViewTypes([
     { type: 0x1205, index: 0x1000, shape: { kind: "bitfield", typeIndex: 0x75, length: 3, position: 1 } },

@@ -91,6 +91,10 @@ export const legacyCodeViewSymbolName = (type: number, encoding?: "c6" | "hll"):
   return encoding === "c6" ? c6SymbolName(type) : c7SymbolName(type);
 };
 
+// CV_VTS_desc_e in Microsoft's cvinfo.h.
+export const legacyCodeViewVtableSlotName = (kind: number): string =>
+  ["near", "far", "thin", "outer", "meta", "near32", "far32", "unused"][kind] ?? `unknown kind ${kind}`;
+
 const TYPE_NAMES = new Map<number, string>([
   [1, "Modifier"], [2, "Pointer"], [3, "Array"], [4, "Class"], [5, "Structure"], [6, "Union"], [7, "Enum"],
   [8, "Procedure"], [9, "Member function"], [10, "Virtual table shape"], [0x200, "Skip"], [0x201, "Arguments"],
@@ -102,6 +106,9 @@ const TYPE_NAMES = new Map<number, string>([
   [0x1200, "Skip"], [0x1201, "Arguments"], [0x1203, "Fields"], [0x1205, "Bitfield"], [0x1206, "Methods"],
   [0x1503, "Array"], [0x1504, "Class"], [0x1505, "Structure"], [0x1506, "Union"], [0x1507, "Enum"],
   [0x150a, "Alias"], [0x1519, "Interface"],
+  // LLVM 007ca8ec1bd348000e42ada637c421cf5d28c11a CodeViewTypes.def.
+  [0x1608, "Class (extended)"], [0x1609, "Structure (extended)"],
+  [0x160a, "Union (extended)"], [0x160b, "Interface (extended)"],
   [0x11, "Dimensioned array"], [0x100c, "Dimensioned array"], [0x1508, "Dimensioned array"],
   [0x13, "Precompiled type file"], [0x100e, "Precompiled type file"], [0x1509, "Precompiled type file"],
   [0x16, "Type server PDB path"], [0x1501, "Type server PDB path"], [0x1515, "Type server PDB path"],

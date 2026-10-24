@@ -174,7 +174,9 @@ void test("CodeView type streams retain structural records and names from sized 
   const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(1), ...records], warnings));
 
   assert.deepEqual(parsed, { kind: "types", records: [
-    { type: 5, name: "MyStruct", index: 0x1000 }, { type: 0x7777, index: 0x1001 }] });
+    { type: 5, name: "MyStruct", index: 0x1000, shape: { kind: "aggregate", memberCount: 0,
+      properties: 0, fieldList: 0, derivedTypes: 0, vtableShape: 0, size: "0" } },
+    { type: 0x7777, index: 0x1001 }] });
   assert.deepEqual(warnings, []);
   await assert.rejects(readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(9)])), /signature/);
 });

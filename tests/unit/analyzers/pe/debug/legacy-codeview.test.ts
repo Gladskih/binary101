@@ -8,6 +8,23 @@ import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { codeViewStoredTypeText } from "../../../../fixtures/pe-codeview-type-strings.js";
 import { createPeWithCodeViewMemberValues } from "../../../../fixtures/pe-codeview-numeric-values.js";
+import { createPeWithCodeViewComposites } from "../../../../fixtures/pe-codeview-composites.js";
+
+void test("PE debug integration retains aggregate layouts, array elements and scoped enums", async () => {
+  const file = createPeWithCodeViewComposites();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  const data = debug.entries[0]?.legacyCodeView?.directories[0]?.subsections[0]?.data;
+  assert.ok(data?.kind === "types");
+  assert.deepEqual(data.records[1]!.shape, { kind: "aggregate", memberCount: 4, properties: 0x201,
+    fieldList: 0x1000, derivedTypes: 0, vtableShape: 0, size: "16" });
+  assert.equal(data.records[1]!.name, "<Packet>&amp;");
+  assert.deepEqual(data.records[2]!.shape, { kind: "array", elementType: 0x74, indexType: 0x75, size: "12" });
+  assert.deepEqual(data.records[4]!.shape, { kind: "aggregate", memberCount: 2, properties: 0x300,
+    fieldList: 0x1003, underlyingType: 0x75 });
+  assert.equal(debug.warning, null);
+});
 
 void test("PE debug-directory integration preserves exact enum values and bitfield type references", async () => {
   const file = createPeWithCodeViewMemberValues();

@@ -5,6 +5,44 @@ import { legacyReader, legacyU16, legacyU32 } from "../../../../fixtures/pe-lega
 import { codeViewTextRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
 import { codeViewArguments, codeViewMemberFunction, codeViewProcedure } from "../../../../fixtures/pe-codeview-callables.js";
 
+void test("CodeView vtable shapes decode the high nibble first and ignore an unused odd tail nibble", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4,
+    [...legacyU16(3), 0x51, 0x6f]), warnings), 10), { kind: "vtableShape", slots: [5, 1, 6] });
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4,
+    [...legacyU16(4), 0x51, 0x6f]), warnings), 10), { kind: "vtableShape", slots: [5, 1, 6, 15] });
+  assert.deepEqual(warnings, ["CodeView has unknown vtable slot kinds: 15."]);
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4, legacyU16(0))), 10),
+    { kind: "vtableShape", slots: [] });
+  await assert.rejects(readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4,
+    [...legacyU16(3), 0x51])), 10), /bounds/);
+});
+
+void test("CodeView the last published vtable slot kind remains valid", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4,
+    [...legacyU16(1), 0x70]), warnings), 10), { kind: "vtableShape", slots: [7] });
+  assert.deepEqual(warnings, []);
+});
+
+void test("CodeView vtable shapes honor the entire uint16 descriptor count", async () => {
+  const shape = await readCodeViewTypeShape(legacyReader(codeViewTextRecord(10, 4,
+    [...legacyU16(0xffff), ...new Array<number>(32768).fill(0x56)])), 10);
+  assert.ok(shape?.kind === "vtableShape");
+  assert.equal(shape.slots.length, 65535);
+  assert.deepEqual(shape.slots.slice(0, 3), [5, 6, 5]);
+  assert.equal(shape.slots[65534], 5);
+});
+
+for (const [type, bytes] of [[0x207, [...legacyU16(3), ...legacyU16(0x1234)]],
+  [0x1206, [...legacyU16(3), ...legacyU16(0), ...legacyU32(0x1234)]]] as const) {
+  void test(`CodeView method-list shape ${type} keeps its complete entries`, async () => {
+    assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(type, 4, bytes)), type),
+      { kind: "methods", methods: [{ attributes: 3, typeIndex: 0x1234 }] });
+  });
+}
+
 for (const [leaf, bytes, expected] of [
   [0x206, [3, 5, ...legacyU16(0x75)], { kind: "bitfield", typeIndex: 0x75, length: 3, position: 5 }],
   [0x1205, [...legacyU32(0x12345678), 255, 254],

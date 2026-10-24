@@ -1,6 +1,6 @@
 import type { LegacyCodeViewTypeRecord } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import type { CodeViewTypeShape } from "../../analyzers/pe/debug/legacy-codeview-type-shapes.js";
-import { legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
+import { legacyCodeViewTypeName, legacyCodeViewVtableSlotName } from "./legacy-codeview-kinds.js";
 
 // TYPE_ENUM_e and CV_prmode_e: primitive identity includes width and pointer model.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
@@ -59,19 +59,53 @@ const pointerText = (shape: Extract<CodeViewTypeShape, { kind: "pointer" }>,
   return [...pointerQualifiers(shape.attributes), `${label} (${model}) to`].join(" ");
 };
 
-const typeStep = (record: LegacyCodeViewTypeRecord,
-  indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): { text: string; next?: number } => {
-  if (record.name !== undefined) return { text: record.name || "(unnamed type)" };
-  const shape = record.shape;
-  if (shape) {
-    if (shape.kind === "modifier") return { text: modifierText(shape.attributes), next: shape.typeIndex };
-    if (shape.kind === "pointer") return { text: pointerText(shape, indexed), next: shape.typeIndex };
-    if (shape.kind === "alias") return { text: "", next: shape.typeIndex };
-    if (shape.kind === "bitfield") return {
+interface TypeStep { text: string; next?: number }
+
+const arrayStep = (shape: Extract<CodeViewTypeShape, { kind: "array" | "vector" | "matrix" }>): TypeStep => {
+  const size = shape.size ?? "unavailable";
+  if (shape.kind === "vector") return {
+    text: `vector (elements: ${shape.count}, byte size: ${size}) of`, next: shape.elementType
+  };
+  if (shape.kind === "matrix") return {
+    text: `matrix (${shape.rows} × ${shape.columns}, byte size: ${size}) of`, next: shape.elementType
+  };
+  return { text: `array (byte size: ${size}) of`, next: shape.elementType };
+};
+
+const referencedStep = (shape: CodeViewTypeShape,
+  indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): TypeStep | undefined => {
+  switch (shape.kind) {
+    case "modifier": return { text: modifierText(shape.attributes), next: shape.typeIndex };
+    case "pointer": return { text: pointerText(shape, indexed), next: shape.typeIndex };
+    case "alias": return { text: "", next: shape.typeIndex };
+    case "bitfield": return {
       text: `bitfield (bit width: ${shape.length}, bit offset: ${shape.position}) of`, next: shape.typeIndex
     };
+    case "array": case "vector": case "matrix": return arrayStep(shape);
+    default: return undefined;
   }
-  return { text: `${legacyCodeViewTypeName(record.type)} #${record.index}` };
+};
+
+const vtableSummary = (slots: readonly number[]): string => {
+  const counts = new Map<number, number>();
+  for (const slot of slots) counts.set(slot, (counts.get(slot) ?? 0) + 1);
+  // CV_VTS_desc_e from the same cvinfo.h as primitive and pointer identities.
+  const statistics = [...counts].sort(([left], [right]) => left - right)
+    .map(([slot, count]) => `${legacyCodeViewVtableSlotName(slot)}: ${count}`).join("; ");
+  return `vtable (slots: ${slots.length}${statistics ? `; ${statistics}` : ""})`;
+};
+
+const shapeSummary = (shape: CodeViewTypeShape): TypeStep | undefined => {
+  if (shape.kind === "methods") return { text: `method list (variants: ${shape.methods.length})` };
+  return shape.kind === "vtableShape" ? { text: vtableSummary(shape.slots) } : undefined;
+};
+
+const typeStep = (record: LegacyCodeViewTypeRecord,
+  indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): TypeStep => {
+  if (record.name) return { text: record.name };
+  return (record.shape ? referencedStep(record.shape, indexed) ?? shapeSummary(record.shape) : undefined) ?? {
+    text: record.name === undefined ? `${legacyCodeViewTypeName(record.type)} #${record.index}` : "(unnamed type)"
+  };
 };
 
 const formatType = (initial: number, indexed: ReadonlyMap<number, LegacyCodeViewTypeRecord | null>): string => {
