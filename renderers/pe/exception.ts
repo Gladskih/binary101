@@ -7,7 +7,7 @@ import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 import { renderExceptionV3 } from "./exception-v3.js";
 import { renderExceptionV12 } from "./exception-v12.js";
 import { renderDefinitionRow } from "../../html-utils.js";
-import { renderArmntPackedStatistics } from "./exception-armnt.js";
+import { renderArmntOpcodeStatistics, renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
 import { renderIa64UnwindStatistics } from "./exception-ia64.js";
 import { renderNtRiscStatistics } from "./exception-nt-risc.js";
@@ -84,6 +84,7 @@ const renderArmntSummary = (ex: PeExceptionSection, out: string[]): void => {
 
 const renderArmntDetails = (ex: PeExceptionSection, out: string[]): void => {
   if (ex.armntPacked) out.push(renderArmntPackedStatistics(ex.armntPacked));
+  if (ex.armntOpcodes) out.push(renderArmntOpcodeStatistics(ex.armntOpcodes));
 };
 
 const renderArm64Details = (ex: PeExceptionSection, out: string[]): void => {

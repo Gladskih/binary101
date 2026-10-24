@@ -1,4 +1,5 @@
 import type { ArmntPackedStatistics } from "../../analyzers/pe/exception/armnt-packed-types.js";
+import type { ArmntOpcodeStatistics } from "../../analyzers/pe/exception/armnt-opcode-types.js";
 import { humanSize } from "../../binary-utils.js";
 import { escapeHtmlText, renderDefinitionRow } from "../../html-utils.js";
 
@@ -33,4 +34,22 @@ export const renderArmntPackedStatistics = (statistics: ArmntPackedStatistics): 
       ["POP PC", statistics.returnKinds.popPc], ["16-bit branch", statistics.returnKinds.branch16],
       ["32-bit branch", statistics.returnKinds.branch32], ["No epilog", statistics.returnKinds.noEpilog]
     ]) + renderDistribution("Encoded nonvolatile register groups", "Group", Object.entries(statistics.registerGroups));
+};
+
+export const renderArmntOpcodeStatistics = (statistics: ArmntOpcodeStatistics): string => {
+  if (!Object.keys(statistics.opcodeCounts).length && !statistics.incompleteSequenceCount) return "";
+  const largest = Object.keys(statistics.stackAdjustments)
+    .reduce((maximum, size) => Math.max(maximum, Number(size)), 0);
+  const operations = Object.entries(statistics.opcodeCounts).map(([name, count]) => [name, count] as [string, number]);
+  return `<h3>ARMNT .xdata unwind operations</h3><dl>` +
+    renderDefinitionRow("Unique opcode sequences with incomplete decoding", String(statistics.incompleteSequenceCount)) +
+    renderDefinitionRow("Integer registers restored", String(statistics.integerRegisterPopCount)) +
+    renderDefinitionRow("Floating point registers restored", String(statistics.floatingRegisterPopCount)) +
+    renderDefinitionRow("Frame pointer restores", String(statistics.framePointerRestores)) +
+    renderDefinitionRow("Return address loads", String(statistics.returnAddressLoads)) +
+    (largest > 0 ? renderDefinitionRow("Largest explicit stack adjustment", humanSize(largest)) : "") +
+    `</dl>` + renderDistribution("Unwind operation inventory", "Operation", operations) +
+    renderDistribution("ARMNT special marker operations", "Marker", Object.entries(statistics.specialMarkers)) +
+    renderDistribution("Explicit stack adjustments", "Bytes", Object.entries(statistics.stackAdjustments)
+      .map(([size, count]) => [size, count]));
 };

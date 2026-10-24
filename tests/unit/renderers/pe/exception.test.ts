@@ -111,3 +111,20 @@ void test("ARMNT profile displays packed statistics and fragment counts", () => 
   assert.match(out.join(""), /Packed return modes/);
   assert.match(out.join(""), /r4-r7/);
 });
+
+void test("ARMNT profile renders unpacked unwind operation summaries", () => {
+  const out: string[] = [];
+  renderException({ ...createEmptyExceptionDirectory([], "armnt"), armntOpcodes: {
+    opcodeCounts: { "stack add 16-bit": 2, "VFP pop": 1 }, stackAdjustments: { 16: 2 },
+    integerRegisterPopCount: 3, floatingRegisterPopCount: 2, framePointerRestores: 1,
+    returnAddressLoads: 1, specialMarkers: { end: 2 }, incompleteSequenceCount: 1
+  } }, out);
+  const html = out.join("");
+
+  assert.match(html, /ARMNT .xdata unwind operations/);
+  assert.match(html, /Integer registers restored<\/dt><dd>3<\/dd>/);
+  assert.match(html, /Floating point registers restored<\/dt><dd>2<\/dd>/);
+  assert.match(html, /Unwind operation inventory/);
+  assert.match(html, /Explicit stack adjustments/);
+  assert.match(html, /end/);
+});

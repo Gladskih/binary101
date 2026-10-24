@@ -36,9 +36,13 @@ void test("ARMNT caches shared xdata and keeps its fragment flag", async context
   const info = await read(8, issues);
 
   assert.deepEqual(info, { functionLengthBytes: 4, handlerRva: null,
-    hasHandler: false, fragment: true, version: 0 });
+    hasHandler: false, fragment: true, version: 0, opcodes: {
+      opcodeCounts: {}, instructionCount: 0, complete: true, stackAdjustments: [],
+      integerRegisterPopCount: 0, floatingRegisterPopCount: 0, framePointerRestores: 0,
+      returnAddressLoads: 0, specialMarkers: {}, unknownOpcodeCount: 0
+    } });
   assert.equal(await read(8, issues), info);
-  assert.equal(calls.mock.callCount(), 1);
+  assert.equal(calls.mock.callCount(), 2);
   assert.deepEqual(issues, []);
 });
 
@@ -124,6 +128,7 @@ void test("ARMNT exposes reserved xdata versions as a warning", async () => {
 void test("ARMNT xdata supports a header at physical offset zero", async () => {
   const bytes = new Uint8Array(8);
   new DataView(bytes.buffer).setUint32(0, 2 | (1 << 28), true);
+  bytes.fill(0xff, 4);
   const issues: string[] = [];
   const info = await createArmntUnwindInfoReader(new MockFile(bytes), rva => rva - 8)(8, issues);
 
@@ -168,7 +173,7 @@ void test("ARMNT maximum extended counts remain bounded and use sparse word read
 
   assert.equal(info?.functionLengthBytes, 524286);
   assert.equal(info?.handlerRva, 101);
-  assert.deepEqual(calls.mock.calls.map(call => call.arguments[1]), [4, 4, 4]);
+  assert.deepEqual(calls.mock.calls.map(call => call.arguments[1]), [4, 4, 1020, 262140, 4]);
   assert.deepEqual(issues, []);
 });
 
