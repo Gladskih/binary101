@@ -119,3 +119,15 @@ export const createPeWithV3ExceptionCopy = (): MockFile => {
   bytes.set(new Uint8Array(unwind.buffer), 0x2c0);
   return new MockFile(bytes, "debug-v3-exception-copy.exe");
 };
+
+export const createPeWithV12ExceptionCopy = (): MockFile => {
+  const bytes = createPeWithRawExceptionCopy().data.slice();
+  const view = new DataView(bytes.buffer);
+  [0x1000, 0x1010, 0x10c0, 0x1010, 0x1020, 0x10c0]
+    .forEach((word, index) => view.setUint32(0x400 + index * 4, word, true));
+  // V2 epilog descriptor, SAVE_XMM128 XMM6 at RSP+32, SET_FPREG,
+  // ALLOC_SMALL 32, PUSH_NONVOL RBP. Both copied ranges share one block.
+  // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
+  bytes.set([2, 12, 6, 0x25, 5, 0x16, 12, 0x68, 2, 0, 8, 3, 4, 0x32, 1, 0x50], 0x2c0);
+  return new MockFile(bytes, "debug-v12-exception-copy.exe");
+};

@@ -5,6 +5,7 @@ import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 import { renderExceptionV3 } from "./exception-v3.js";
+import { renderExceptionV12 } from "./exception-v12.js";
 import { renderDefinitionRow } from "../../html-utils.js";
 import { renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
@@ -52,6 +53,7 @@ const renderAmd64UnwindStats = (ex: PeExceptionSection, out: string[]): void => 
 };
 
 const renderAmd64VersionNote = (ex: PeExceptionSection, out: string[]): void => {
+  if (ex.unwindInfoV12) out.push(renderExceptionV12(ex.unwindInfoV12));
   if ((ex.unwindInfoVersion2Count ?? 0) > 0) out.push(
     `<div class="smallNote">` +
       `UNWIND_INFO v2 epilog records mark explicit epilog scopes emitted by newer ` +

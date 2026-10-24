@@ -16,6 +16,10 @@ import {
   regularUnwindSlot
 } from "../../../../../../helpers/pe-amd64-unwind-fixture.js";
 
+const slotSummary = ({ epilogScopeCount, hasEpilogInfo, hasLateEpilogCode, isTruncated }:
+  Awaited<ReturnType<typeof analyzeAmd64UnwindCodeSlots>>) =>
+  ({ epilogScopeCount, hasEpilogInfo, hasLateEpilogCode, isTruncated });
+
 void test("analyzeAmd64UnwindCodeSlots counts leading v2 epilog scopes", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots([
     epilogScopeSlot(),
@@ -28,7 +32,7 @@ void test("analyzeAmd64UnwindCodeSlots counts leading v2 epilog scopes", async (
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 1,
     hasEpilogInfo: true,
     hasLateEpilogCode: false,
@@ -47,7 +51,7 @@ void test("analyzeAmd64UnwindCodeSlots flags v2 epilog codes after regular codes
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 0,
     hasEpilogInfo: false,
     hasLateEpilogCode: true,
@@ -70,7 +74,7 @@ void test("analyzeAmd64UnwindCodeSlots skips regular unwind operand slots", asyn
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 1,
     hasEpilogInfo: true,
     hasLateEpilogCode: false,
@@ -86,7 +90,7 @@ void test("analyzeAmd64UnwindCodeSlots ignores opcode 6 for version 1 blocks", a
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_1
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 0,
     hasEpilogInfo: false,
     hasLateEpilogCode: false,
@@ -102,7 +106,7 @@ void test("analyzeAmd64UnwindCodeSlots reports physically truncated code arrays"
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 0,
     hasEpilogInfo: false,
     hasLateEpilogCode: false,
@@ -172,7 +176,7 @@ void test("v2 preserves epilog scopes when a later operation lacks operands", as
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 1,
     hasEpilogInfo: true,
     hasLateEpilogCode: true,
@@ -180,7 +184,7 @@ void test("v2 preserves epilog scopes when a later operation lacks operands", as
   });
 });
 
-void test("v2 counts epilog scopes with either offset byte nonzero", async () => {
+void test("v2 distinguishes its length header from subsequent explicit epilog offsets", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots([
     epilogScopeSlot(1, 0), epilogScopeSlot(0, 1), epilogPaddingSlot()
   ]);
@@ -190,10 +194,31 @@ void test("v2 counts epilog scopes with either offset byte nonzero", async () =>
     fixture.primaryUnwindCodeCount,
     AMD64_UNWIND_INFO_VERSION_2
   );
-  assert.strictEqual(analysis.epilogScopeCount, 2);
+  assert.strictEqual(analysis.epilogScopeCount, 1);
+  assert.equal(analysis.hasEpilogInfo, true);
 });
 
-for (const offset of [-1, 0, 1]) {
+void test("v2 rejects reserved epilog flags and a zero length without counting padding as a scope", async () => {
+  const fixture = createAmd64ExceptionFixtureWithSlots([[0, 0x26], epilogPaddingSlot()]);
+  const analysis = await analyzeAmd64UnwindCodeSlots(new MockFile(fixture.bytes),
+    fixture.primaryUnwindRva, fixture.primaryUnwindCodeCount, 2);
+
+  assert.equal(analysis.epilogScopeCount, 0);
+  assert.equal(analysis.hasEpilogInfo, true);
+  assert.deepEqual(analysis.issues, ["AMD64 v2 epilog header has reserved flag bits.",
+    "AMD64 v2 epilog length is zero."]);
+});
+
+void test("v2 counts explicit offsets using either byte after its length/AtEnd header", async () => {
+  const fixture = createAmd64ExceptionFixtureWithSlots([[4, 0x16], [12, 6], [0, 0x16], epilogPaddingSlot()]);
+  const analysis = await analyzeAmd64UnwindCodeSlots(new MockFile(fixture.bytes),
+    fixture.primaryUnwindRva, fixture.primaryUnwindCodeCount, 2);
+
+  assert.equal(analysis.epilogScopeCount, 3);
+  assert.deepEqual(analysis.issues, []);
+});
+
+for (const offset of [-1, 0, 1, 0.5, Infinity, NaN]) {
   void test(`rejects an out-of-bounds code array at offset ${offset} before reading`, async () => {
     const analysis = await analyzeAmd64UnwindCodeSlots(
       {
@@ -217,13 +242,25 @@ void test("empty arrays do not read the file or report truncation", async () => 
     },
     0, 0, AMD64_UNWIND_INFO_VERSION_1
   );
-  assert.deepEqual(analysis, {
+  assert.deepEqual(slotSummary(analysis), {
     epilogScopeCount: 0,
     hasEpilogInfo: false,
     hasLateEpilogCode: false,
     isTruncated: false
   });
 });
+
+for (const count of [-1, 0.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1]) {
+  void test(`invalid unwind-code count ${count} is rejected without I/O`, async () => {
+    const analysis = await analyzeAmd64UnwindCodeSlots({ size: 100,
+      read: () => { assert.fail("Invalid counts must not cause I/O"); },
+      readBytes: () => { assert.fail("Invalid counts must not cause I/O"); }
+    }, 0, count, 1);
+
+    assert.equal(analysis.isTruncated, true);
+    assert.deepEqual(analysis.operations, []);
+  });
+}
 
 void test("unknown versions receive physical bounds checks without opcode interpretation", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots([[1, 0x11]], { version: 0 });

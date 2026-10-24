@@ -6,6 +6,8 @@ import type { RvaToOffset } from "../../types.js";
 import type { Amd64UnwindV3Statistics } from "./unwind-v3-types.js";
 import { decodeAmd64UnwindV3 } from "./unwind-v3.js";
 import { createV3Statistics, recordV3Statistics } from "./unwind-v3-statistics.js";
+import { createV12Statistics, recordV12Statistics } from "./unwind-v12-statistics.js";
+import type { Amd64UnwindV12Header, Amd64UnwindV12Statistics } from "./unwind-v12-types.js";
 import {
   AMD64_UNWIND_INFO_VERSION_1,
   AMD64_UNWIND_INFO_VERSION_2,
@@ -36,6 +38,7 @@ export interface Amd64UnwindInfoTable {
   unwindInfoVersion1Count: number;
   unwindInfoVersion2Count: number;
   version3?: Amd64UnwindV3Statistics;
+  version12?: Amd64UnwindV12Statistics;
 }
 
 interface Amd64UnwindScanState extends Amd64UnwindInfoTable {
@@ -45,7 +48,7 @@ interface Amd64UnwindScanState extends Amd64UnwindInfoTable {
   unreadableUnwindCount: number;
 }
 
-interface Amd64UnwindHeader {
+interface Amd64UnwindHeader extends Amd64UnwindV12Header {
   countOfCodes: number;
   flags: number;
   offset: number;
@@ -97,6 +100,9 @@ const readUnwindHeader = async (
   const headerByte0 = headerView.getUint8(0);
   return {
     countOfCodes: headerView.getUint8(2),
+    prologSize: headerView.getUint8(1),
+    frameRegister: headerView.getUint8(3) & 15,
+    frameOffset: (headerView.getUint8(3) >>> 4) * 16,
     flags: headerByte0 >> 3,
     offset,
     version: headerByte0 & 0x07
@@ -131,6 +137,11 @@ const recordUnwindCodeAnalysis = async (
     header.countOfCodes,
     header.version
   );
+  if (header.version === 1 || header.version === 2) {
+    state.version12 ??= createV12Statistics();
+    recordV12Statistics(state.version12, header, analysis);
+    issues.push(...analysis.issues);
+  }
   if (analysis.isTruncated) state.truncatedUnwindCodeArrayCount += 1;
   if (analysis.hasLateEpilogCode) state.lateEpilogCodeCount += 1;
   if (!analysis.hasEpilogInfo) return;
@@ -162,7 +173,8 @@ const toUnwindInfoTable = (state: Amd64UnwindScanState): Amd64UnwindInfoTable =>
   uniqueUnwindInfoCount: state.uniqueUnwindInfoCount,
   unwindInfoVersion1Count: state.unwindInfoVersion1Count,
   unwindInfoVersion2Count: state.unwindInfoVersion2Count,
-  ...(state.version3 ? { version3: state.version3 } : {})
+  ...(state.version3 ? { version3: state.version3 } : {}),
+  ...(state.version12 ? { version12: state.version12 } : {})
 });
 
 const processUnwindInfo = async (

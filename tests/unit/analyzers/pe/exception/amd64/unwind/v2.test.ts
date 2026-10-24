@@ -82,7 +82,10 @@ void test("parseExceptionDirectory does not treat AMD64 UNWIND_INFO v1 opcode 6 
   assert.ok(parsed);
   assert.strictEqual(parsed.unwindInfoVersion1Count, 1);
   assert.strictEqual(parsed.epilogUnwindInfoCount, 0);
-  assert.deepEqual(parsed.issues, []);
+  assert.deepEqual(parsed.issues, [
+    "AMD64 unwind opcode 6 is unknown or reserved; remaining operations are not decoded."
+  ]);
+  assert.equal(parsed.unwindInfoV12?.incompleteBlockCount, 1);
 });
 
 void test("parseExceptionDirectory reports short reads of AMD64 UNWIND_INFO v2 code arrays", async () => {
@@ -115,13 +118,13 @@ void test("parseExceptionDirectory follows chained AMD64 UNWIND_INFO v2 blocks",
   assert.deepEqual(parsed.issues, []);
 });
 
-void test("parseExceptionDirectory ignores leading AMD64 UNWIND_INFO v2 epilog padding slots", async () => {
+void test("parseExceptionDirectory reports a zero-length v2 epilog header instead of accepting it as padding", async () => {
   const parsed = await parseAmd64ExceptionFixture(createAmd64ExceptionFixtureWithSlots([
     epilogPaddingSlot()
   ]));
   assert.ok(parsed);
   assert.strictEqual(parsed.unwindInfoVersion2Count, 1);
-  assert.strictEqual(parsed.epilogUnwindInfoCount, 0);
+  assert.strictEqual(parsed.epilogUnwindInfoCount, 1);
   assert.strictEqual(parsed.epilogScopeCount, 0);
-  assert.deepEqual(parsed.issues, []);
+  assert.deepEqual(parsed.issues, ["AMD64 v2 epilog length is zero."]);
 });

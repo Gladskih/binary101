@@ -1,6 +1,7 @@
 "use strict";
 
 import type { Amd64UnwindV3Statistics } from "./amd64/unwind-v3-types.js";
+import type { Amd64UnwindV12Statistics } from "./amd64/unwind-v12-types.js";
 import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
 
 export interface PeCeExceptionStatistics {
@@ -30,6 +31,7 @@ export interface PeExceptionDirectory {
   unwindInfoVersion1Count?: number;
   unwindInfoVersion2Count?: number;
   unwindInfoV3?: Amd64UnwindV3Statistics;
+  unwindInfoV12?: Amd64UnwindV12Statistics;
   epilogUnwindInfoCount?: number;
   epilogScopeCount?: number;
   handlerUnwindInfoCount: number;
