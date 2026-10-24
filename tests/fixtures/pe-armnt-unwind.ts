@@ -37,6 +37,7 @@ export const createArmntTable = (words: readonly number[]) => {
   });
   bytes.set(table, 16);
   new DataView(bytes.buffer).setUint32(ARMNT_FIXTURE_XDATA_RVA, 2 | (1 << 28), true);
+  bytes.fill(0xff, ARMNT_FIXTURE_XDATA_RVA + 4, ARMNT_FIXTURE_XDATA_RVA + 8);
   return { file: new MockFile(bytes), source: new MockFile(table), code, xdata: ARMNT_FIXTURE_XDATA_RVA,
     directory: { name: "EXCEPTION", rva: 16, size: table.length } };
 };

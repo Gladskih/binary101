@@ -37,7 +37,7 @@ const decodeOne = (codes: Uint8Array, offset: number, summary: ArmntOpcodeSummar
       first <= 0xe7 ? "VFP pop" : first <= 0xeb ? "stack add 32-bit" : first === 0xec || first === 0xed
         ? "register pop 16-bit" : first === 0xee ? "Microsoft-specific" : first === 0xef
           ? "load LR" : first === 0xf5 || first === 0xf6 ? "VFP pop extended" :
-            first <= 0xfa ? "stack add extended" : first === 0xfb || first === 0xfc ? "NOP" :
+              first >= 0xf7 && first <= 0xfa ? "stack add extended" : first === 0xfb || first === 0xfc ? "NOP" :
               first === 0xfd || first === 0xfe ? "end with NOP" : first === 0xff ? "end" : "unknown";
   summary.opcodeCounts[name] = (summary.opcodeCounts[name] ?? 0) + 1;
   if (first <= 0x7f) {
@@ -57,7 +57,8 @@ const decodeOne = (codes: Uint8Array, offset: number, summary: ArmntOpcodeSummar
     return 1;
   }
   if (first <= 0xdf) {
-    summary.integerRegisterPopCount += (first & 3) + 1 + ((first & 4) !== 0 ? 1 : 0);
+    summary.integerRegisterPopCount += (first & 3) + (first <= 0xd7 ? 1 : 5) +
+      ((first & 4) !== 0 ? 1 : 0);
     if ((first & 4) !== 0) summary.returnAddressLoads += 1;
     return 1;
   }
@@ -75,14 +76,20 @@ const decodeOne = (codes: Uint8Array, offset: number, summary: ArmntOpcodeSummar
   }
   if (first === 0xef) {
     if (second == null) return 0;
-    if (second! > 0x0f) return -1;
+    if (second! > 0x0f) {
+      summary.unknownOpcodeCount += 1;
+      return -1;
+    }
     summary.returnAddressLoads += 1;
     marker(summary, "LR post-increment load");
     return 2;
   }
   if (first === 0xee) {
     if (second == null) return 0;
-    if (second! > 0x0f) return -1;
+    if (second! > 0x0f) {
+      summary.unknownOpcodeCount += 1;
+      return -1;
+    }
     marker(summary, "Microsoft-specific operation");
     return 2;
   }
@@ -90,7 +97,10 @@ const decodeOne = (codes: Uint8Array, offset: number, summary: ArmntOpcodeSummar
     if (second == null) return 0;
     const start = (second >>> 4) + (first === 0xf6 ? 16 : 0);
     const end = (second & 15) + (first === 0xf6 ? 16 : 0);
-    if (end < start) return -1;
+    if (end < start) {
+      summary.unknownOpcodeCount += 1;
+      return -1;
+    }
     summary.floatingRegisterPopCount += end - start + 1;
     return 2;
   }
