@@ -9,6 +9,17 @@ const renderPrologs = (ex: PeExceptionDirectory, out: string[]): void => {
   ] as const) out.push(renderDefinitionRow(label, String(count)));
 };
 
+const renderPowerPcCodeSignificance = (ex: PeExceptionDirectory, out: string[]): void => {
+  const counts = ex.powerPcCodeSignificance;
+  if (!counts) return;
+  ["PowerPC register-save millicode markers", "PowerPC register-restore millicode markers",
+    "PowerPC glue-code markers"].forEach((label, index) => {
+    const count = counts[index];
+    if (count) out.push(renderDefinitionRow(label, String(count),
+      "GNU binutils interpretation of handler-less PowerPC code-significance metadata."));
+  });
+};
+
 export const renderNtRiscStatistics = (ex: PeExceptionDirectory, out: string[]): void => {
   if (ex.alphaPrologs) {
     if (ex.alphaPrologs.resolvedSecondaryRanges) out.push(renderDefinitionRow(
@@ -21,6 +32,7 @@ export const renderNtRiscStatistics = (ex: PeExceptionDirectory, out: string[]):
     if (unresolved > 0) out.push(renderDefinitionRow("Ranges with unresolved inline metadata", String(unresolved)));
   }
   renderPrologs(ex, out);
+  renderPowerPcCodeSignificance(ex, out);
   ex.riscExceptionModes?.forEach((count, mode) => {
     if (count) out.push(renderDefinitionRow(`Exception mode ${mode}`, String(count),
       "Compiler-recorded exception-reporting mode. Named meanings are not established for every ABI."));

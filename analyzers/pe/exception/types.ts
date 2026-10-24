@@ -49,6 +49,8 @@ export interface PeExceptionDirectory {
   format?: "amd64" | "arm64" | "armnt" | "ready-to-run-x86" | "native-aot-x86" | "nt-risc32" | "nt-risc64" | "ce" | "ia64";
   riscPrologs?: { count: number; empty: number; minimumBytes: number; maximumBytes: number };
   riscExceptionModes?: number[];
+  /** GNU PowerPC HandlerData markers 1 (save), 2 (restore), 3 (glue), without a handler. */
+  powerPcCodeSignificance?: [number, number, number];
   alphaPrologs?: { resolvedSecondaryRanges: number; unresolvedSecondaryRanges: number };
   ceCompressed?: PeCeExceptionStatistics;
   ia64Unwind?: PeIa64UnwindStatistics;

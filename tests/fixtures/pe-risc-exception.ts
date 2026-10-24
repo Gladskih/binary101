@@ -70,3 +70,22 @@ export const createAlphaRiscPe = (): MockFile => {
   file.data.set(file.data.slice(0x300, 0x328), view.getUint32(0x340 + 24, true));
   return new MockFile(file.data);
 };
+
+// Controlled rows follow GNU's PowerPC code-significance interpretation, not
+// compiler output. The glue row uses dlltool's begin+13 tagged prolog encoding.
+export const createPowerPcCodeSignificancePe = (): MockFile => {
+  const file = createNtRiscPe(0x1f0);
+  const payload = riscExceptionRows([
+    [0x401000n, 0x401018n, 0n, 1n, 0x40100dn],
+    [0x401020n, 0x401038n, 0n, 2n, 0x40102dn],
+    [0x401040n, 0x401058n, 0n, 3n, 0x40104dn]
+  ]);
+  const bytes = new Uint8Array(file.size + payload.size - 20);
+  bytes.set(file.data);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0x58 + 96 + 3 * 8 + 4, payload.size, true);
+  view.setUint32(0x340 + 16, payload.size, true);
+  bytes.set(payload.data, 0x300);
+  bytes.set(payload.data, view.getUint32(0x340 + 24, true));
+  return new MockFile(bytes);
+};

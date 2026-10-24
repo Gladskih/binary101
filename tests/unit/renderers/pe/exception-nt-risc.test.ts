@@ -37,3 +37,23 @@ void test("NT RISC absent statistics add no empty detail", () => {
     alphaPrologs: { resolvedSecondaryRanges: 0, unresolvedSecondaryRanges: 0 } }, out);
   assert.deepEqual(out, []);
 });
+
+void test("PowerPC code significance renders readable counts instead of addresses", () => {
+  const out: string[] = [];
+  renderNtRiscStatistics({ ...createEmptyExceptionDirectory([], "nt-risc32"),
+    powerPcCodeSignificance: [1, 2, 3] }, out);
+
+  assert.match(out.join(""), /PowerPC register-save millicode markers<\/dt><dd>1<\/dd>/);
+  assert.match(out.join(""), /PowerPC register-restore millicode markers<\/dt><dd>2<\/dd>/);
+  assert.match(out.join(""), /PowerPC glue-code markers<\/dt><dd>3<\/dd>/);
+  assert.match(out.join(""), /GNU binutils interpretation/);
+  assert.doesNotMatch(out.join(""), /0x|<table/);
+});
+
+void test("PowerPC zero code-significance counts add no empty rows", () => {
+  const out: string[] = [];
+  renderNtRiscStatistics({ ...createEmptyExceptionDirectory([], "nt-risc32"),
+    powerPcCodeSignificance: [0, 0, 0] }, out);
+
+  assert.deepEqual(out, []);
+});

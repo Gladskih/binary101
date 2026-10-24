@@ -12,6 +12,7 @@ interface NtRiscState {
   handlers: Set<number>;
   issues: Set<string>;
   previousBegin: number | undefined;
+  machine: number | undefined;
   alpha?: AlphaPrologState;
   alphaSecondaryHandlers?: (readonly bigint[])[];
 }
@@ -41,6 +42,19 @@ const recordProlog = (state: NtRiscState, begin: bigint, end: bigint, prolog: bi
   return true;
 };
 
+const recordPowerPcCodeSignificance = (state: NtRiscState, handler: bigint, data: bigint): boolean => {
+  if (state.result.format !== "nt-risc32" || ![0x1f0, 0x1f1].includes(state.machine ?? 0) ||
+      (handler & ~3n) !== 0n || data < 1n || data > 3n) return false;
+  // GNU peXXigen.c interprets these codes only when the untagged handler is null.
+  // dlltool.c emits HandlerData=3 for glue, confirming that this is not a VA.
+  // https://gnu.googlesource.com/binutils-gdb/+/refs/tags/binutils-2_34/bfd/peXXigen.c#1988
+  // https://gnu.googlesource.com/binutils-gdb/+/refs/tags/binutils-2_34/binutils/dlltool.c#2855
+  const counts = state.result.powerPcCodeSignificance ??= [0, 0, 0];
+  const index = Number(data) - 1;
+  counts[index] = counts[index]! + 1;
+  return true;
+};
+
 const recordHandler = (state: NtRiscState, handler: bigint, data: bigint, imageBase: bigint,
   reader: FileRangeReader, rvaToOff: RvaToOffset): void => {
   if (handler & 2n) state.issues.add("Unknown NT RISC handler address tag bit 1 is set.");
@@ -50,6 +64,7 @@ const recordHandler = (state: NtRiscState, handler: bigint, data: bigint, imageB
     if (rva == null) state.issues.add("NT RISC exception handler VA could not be mapped.");
     else state.handlers.add(rva);
   }
+  if (recordPowerPcCodeSignificance(state, handler, data)) return;
   if (data && mappedVa(data, imageBase, reader, rvaToOff) == null) {
     state.issues.add("NT RISC handler data VA could not be mapped.");
   }
@@ -147,7 +162,7 @@ export const parseNtRiscExceptionTable = async (
   }
   if (declaredSize % (width * 5)) result.issues.push("NT RISC exception table size is not a multiple of its entry size.");
   result.rangeLengths = [];
-  const state: NtRiscState = { result, handlers: new Set(), issues: new Set(), previousBegin: undefined };
+  const state: NtRiscState = { result, handlers: new Set(), issues: new Set(), previousBegin: undefined, machine };
   if (machine === 0x184) state.alpha = { primaryBegins: new Set(), secondaryBegins: [] };
   for await (const view of readRuntimeFunctionChunks(source, Math.floor(declaredSize / (width * 5)), width * 5,
     "NT RISC exception table is truncated; some entries are missing.", result.issues)) {
