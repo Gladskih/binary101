@@ -111,6 +111,7 @@ const TYPE_NAMES = new Map<number, string>([
   [0x160a, "Union (extended)"], [0x160b, "Interface (extended)"],
   [0x11, "Dimensioned array"], [0x100c, "Dimensioned array"], [0x1508, "Dimensioned array"],
   [0x13, "Precompiled type file"], [0x100e, "Precompiled type file"], [0x1509, "Precompiled type file"],
+  [0x14, "Precompiled type boundary"],
   [0x16, "Type server PDB path"], [0x1501, "Type server PDB path"], [0x1515, "Type server PDB path"],
   [0x1202, "Default argument"], [0x150b, "Default argument"], [0x1516, "Strided array"],
   [0x151b, "Vector"], [0x151c, "Matrix"], [0x151d, "Virtual table"],

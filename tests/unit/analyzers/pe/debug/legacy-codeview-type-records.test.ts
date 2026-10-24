@@ -8,6 +8,7 @@ import { legacyPascal } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewEntryThis, codeViewPointerBase } from "../../../../fixtures/pe-codeview-embedded-symbols.js";
 import { codeViewArguments, codeViewCallableStream, codeViewProcedure } from "../../../../fixtures/pe-codeview-callables.js";
 import { legacyU16 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { codeViewStoredTextRecord as storedTextRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
 
 void test("CodeView malformed bitfields warn without losing following type records", async () => {
   const warnings: string[] = [];
@@ -55,7 +56,7 @@ for (const [type, offset] of [[0x13, 12], [0x100e, 16], [0x1509, 16], [0x16, 12]
   void test(`CodeView string leaf ${type} retains text without mislabelling it as a type name`, async () => {
     const warnings: string[] = [];
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
-      ...codeViewTextRecord(type, offset, type < 0x1500 ? legacyPascal("stored") : codeViewUtf8("stored"))], warnings));
+      ...storedTextRecord(type, offset, type < 0x1500 ? legacyPascal("stored") : codeViewUtf8("stored"))], warnings));
 
     assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type, strings: ["stored"] }]);
     assert.deepEqual(warnings, []);
@@ -75,7 +76,7 @@ for (const [type, offset, bytes] of [[0x1605, 8, [0xff, 0]], [0x1501, 12, [65]],
   void test(`CodeView malformed string leaf ${type} retains its tag and the following record`, async () => {
     const warnings: string[] = [];
     const parsed = await readLegacyCodeViewModuleTypes(legacyReader([...legacyU32(4),
-      ...codeViewTextRecord(type, offset, bytes), 2, 0, 0x77, 0x77], warnings));
+      ...storedTextRecord(type, offset, bytes), 2, 0, 0x77, 0x77], warnings));
 
     assert.deepEqual(codeViewStoredTypeText(parsed.records), [{ type }, { type: 0x7777 }]);
     assert.equal(warnings.length, 1);

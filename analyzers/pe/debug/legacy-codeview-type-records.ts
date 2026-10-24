@@ -100,21 +100,47 @@ export const readLegacyCodeViewGlobalTypes = async (
   return { kind: "types", records };
 };
 
-// LF_PRECOMP/type servers reference external namespaces. Do not invent local
-// indices for records after such an import without loading its actual type table.
-const EXTERNAL_TYPE_TABLES = new Set([0x13, 0x100e, 0x1509, 0x16, 0x1501, 0x1515, 0x14]);
+// Type servers need their external tables. LF_PRECOMP instead declares an exact
+// imported range; its marker must not occupy a locally resolvable type identity.
+const PRECOMPILED_IMPORTS = new Set([0x13, 0x100e, 0x1509]);
+const EXTERNAL_TYPE_TABLES = new Set([...PRECOMPILED_IMPORTS, 0x16, 0x1501, 0x1515]);
+
+const afterPrecompiledImport = (record: LegacyCodeViewTypeRecord, index: number,
+  warn: (message: string) => void): number | undefined => {
+  // TIS 3.3: after inclusion the type index is start + count. END_PRECOMP
+  // belongs to the creator's own stream and consumes its ordinary index.
+  // https://openwatcom.org/ftp/devel/docs/CodeView.pdf
+  const shape = record.shape;
+  if (shape?.kind !== "precompiled" || shape.start !== index) {
+    warn("CodeView precompiled import has a missing or inconsistent starting type index; later indices are unresolved.");
+    return undefined;
+  }
+  const next = shape.start + shape.count;
+  if (next > 0xffffffff) {
+    warn("CodeView precompiled import exhausts or exceeds the 32-bit type index space; later indices are unresolved.");
+    return undefined;
+  }
+  return next;
+};
+
+const afterSkippedTypes = (record: LegacyCodeViewTypeRecord, index: number,
+  warn: (message: string) => void): number | undefined => {
+  if (record.shape?.kind === "skip" && record.shape.nextIndex > index) return record.shape.nextIndex;
+  warn("CodeView LF_SKIP has no valid forward type index; later indices are unresolved.");
+  return undefined;
+};
 
 const nextTypeIndex = (record: LegacyCodeViewTypeRecord, index: number | undefined,
   warn: (message: string) => void): number | undefined => {
-  if (index === undefined || EXTERNAL_TYPE_TABLES.has(record.type)) return undefined;
+  if (index === undefined) return undefined;
+  if (PRECOMPILED_IMPORTS.has(record.type)) return afterPrecompiledImport(record, index, warn);
+  if (EXTERNAL_TYPE_TABLES.has(record.type)) return undefined;
   if (index === 0xffffffff) {
     warn("CodeView type index space is exhausted; later indices are unresolved.");
     return undefined;
   }
   if (record.type !== 0x200 && record.type !== 0x1200) return index + 1;
-  if (record.shape?.kind === "skip" && record.shape.nextIndex > index) return record.shape.nextIndex;
-  warn("CodeView LF_SKIP has no valid forward type index; later indices are unresolved.");
-  return undefined;
+  return afterSkippedTypes(record, index, warn);
 };
 
 export const readLegacyCodeViewModuleTypes = async (reader: LegacyCodeViewReader): Promise<LegacyCodeViewTypes> => {

@@ -2,6 +2,7 @@ import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import type { CodeViewCompositeShape } from "./legacy-codeview-composite-records.js";
 import { readLegacyCodeViewMethods, type LegacyCodeViewMethod } from "./legacy-codeview-methods.js";
 import { readCodeViewIndexList, readCodeViewTypeLinks, type CodeViewTypeLinks } from "./legacy-codeview-type-links.js";
+import { readCodeViewPrecompiledType, type CodeViewPrecompiledType } from "./legacy-codeview-precompiled.js";
 
 interface CodeViewProcedure {
   returnType: number;
@@ -10,7 +11,7 @@ interface CodeViewProcedure {
   parameterCount: number;
   argumentList: number;
 }
-export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks
+export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks | CodeViewPrecompiledType
   | (CodeViewProcedure & { kind: "procedure" })
   | (CodeViewProcedure & { kind: "memberFunction"; classType: number;
       thisType: number; thisAdjustment: number })
@@ -117,13 +118,14 @@ const readVtableShape = async (reader: LegacyCodeViewReader): Promise<CodeViewTy
 };
 
 const SHAPE_READERS = new Map<number,
-  (reader: LegacyCodeViewReader, leaf: number) => Promise<CodeViewTypeShape>>([
+  (reader: LegacyCodeViewReader, leaf: number) => Promise<CodeViewTypeShape | undefined>>([
   [8, readProcedure], [9, readProcedure], [0x1008, readProcedure], [0x1009, readProcedure],
   [0x201, readArgumentList], [0x1201, readArgumentList], [1, readModifier], [0x1001, readModifier],
   [2, readPointer], [0x1002, readPointer], [0x1010, readAlias], [0x150a, readAlias],
   [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip],
   [0x206, readBitfield], [0x1205, readBitfield], [0x207, readMethods], [0x1206, readMethods],
-  [10, readVtableShape]
+  [10, readVtableShape], [0x13, readCodeViewPrecompiledType], [0x100e, readCodeViewPrecompiledType],
+  [0x1509, readCodeViewPrecompiledType], [0x14, readCodeViewPrecompiledType]
 ]);
 
 /** Read stored type relationships without resolving external PDB/type-server references. */
