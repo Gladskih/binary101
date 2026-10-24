@@ -1,23 +1,25 @@
 # Binary101
 
-Binary101 is a browser-based static web application for inspecting binary files. The app runs entirely in the browser using TypeScript/JavaScript (ES modules) and is built with Vite into a static site. There is still no server-side code.
+Binary101 is a static web application for inspecting binary files, built with TypeScript and Vite.
+File parsing and hashing run in the browser; no analysis server is required.
 
 ## Inspiration and Purpose
-This project draws inspiration from tools like [regex101](https://regex101.com/), the Linux `file` utility, and VirusTotal. It is designed for educational and research purposes, helping users understand binary file structures and formats. By analyzing files locally in the browser, it ensures privacy and security, making it suitable for sensitive files.
+Inspired by [regex101](https://regex101.com/), the `file` utility, and VirusTotal,
+Binary101 helps users understand binary structures for education and research.
 
 ## Features
-- **Deep analyzers**: Detailed views for PE/COFF (PE32/PE32+), MS-DOS MZ,
+- **Structural analyzers**: Format-specific views for PE/COFF (PE32/PE32+), MS-DOS MZ,
   ELF 32/64, Mach-O (32/64/FAT), PNG, BMP, TGA, JPEG, GIF, WebP (RIFF),
   WAV (RIFF), AVI (RIFF), ANI (RIFF), ASF (WMV/WMA), WebM/Matroska,
   MP4/QuickTime/3GP (ISO-BMFF), MPEG Program Stream (MPEG-PS), PCAP, PCAP-NG, gzip, PDF, TAR, ISO-9660, ZIP
   (DOCX/XLSX/PPTX/OpenXML), 7z, RAR v4/v5, MP3, FLAC, FB2, SQLite, LNK.
-- **PE limitations**: CodeView/PDB extraction is currently RSDS-only; `NB10`
-  and other legacy `NBxx` CodeView records are not decoded yet. Missing
-  `.pdata` formats include 32-bit MIPS, Windows CE ARM/PowerPC/SH3/SH4, and
-  Itanium.
-- **Instruction-set detection**: for ELF and PE on x86/x86-64, the app can
-  analyze sampled reachable code and report the instruction-set extensions it
-  uses.
+- **PE debug and exceptions**: RSDS/NB10 PDB references, embedded legacy CodeView,
+  TD32 and HLL records; exception metadata for AMD64, ARM64, ARMNT, legacy NT RISC,
+  Windows CE, and IA64. Support varies by version and record kind; symbol/type
+  semantics and unwind-operation summaries remain incomplete.
+- **Instruction-set analysis**: inspect reachable code in x86/x86-64 and AArch64 ELF/PE
+  files and report observed instruction-set requirements. Results describe analyzed code,
+  not necessarily every instruction in the file.
 - **Detected/labelled**: text/HTML/XML/SVG/JSON/RTF/shebang, TIFF, ICO/CUR,
   bzip2/XZ/LZ4/Zstandard, CAB, OGG/AIFF/MIDI/AMR/AC3/DTS, FLV, MPEG-TS,
   RealMedia, Java class, Android DEX, WebAssembly, Windows Help (HLP), PDB,
@@ -26,13 +28,14 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   APK, VSIX, JAR/WAR/EAR/JMOD, and XPS.
 - **Rendering**: previews for supported audio/video/image types.
 - **Hashing**: SHA-256 and SHA-512 computed in-browser.
-- **Privacy**: No uploads or network calls for analysis.
+- **Privacy**: File contents stay local. The app loads its own metadata and WASM assets.
 
 ## Usage
 - Drag and drop a file onto the page, paste a file, or use the file picker.
 - View detailed analysis of the file structure and computed hashes.
 
 ## Development
+- Use Node.js 26 and install dependencies with `npm ci`.
 - `npm run dev` &mdash; prepare API metadata and Windows certificate lists, then start Vite.
 - `npm run build` &mdash; prepare those assets and create the production build in `dist/`.
 - `npm run preview` &mdash; rebuild and serve the site on `http://127.0.0.1:4173`.
@@ -55,6 +58,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   `samples/pe-disassembly/` with the available C/C++/C#/Rust/Go/Zig/Pascal/D
   and assembly toolchains. Results are written to
   `%TEMP%\binary101-pe-disassembly-samples\`.
+  Both sample builders use the project directory when `TEMP` is unset.
 - `npm run generate:winapi-metadata` &mdash; download the pinned
   `Microsoft.Windows.SDK.Win32Metadata` NuGet package, extract
   `Windows.Win32.winmd`, and generate PE import-enrichment JSON assets.
@@ -62,9 +66,6 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
   packages and generate UCRT PE import-enrichment JSON assets.
 - `npm run validate:api-metadata` &mdash; validate generated WinAPI and UCRT
   metadata manifests and per-DLL chunks.
-- `npm run build:with-api-metadata` &mdash; compatibility alias for `npm run build`.
-- PE import metadata details live in
-  [`docs/pe-import-metadata.md`](docs/pe-import-metadata.md).
 - Microsoft C++ RTTI support and its strict relocation-backed detection contract are documented
   in [`docs/msvc-rtti.md`](docs/msvc-rtti.md).
 - NativeAOT reflection-metadata detection and its strict relocation-backed validation contract are
@@ -76,8 +77,7 @@ This project draws inspiration from tools like [regex101](https://regex101.com/)
 - `analyzers/` &mdash; TypeScript binary format detection and parsers. PE/COFF logic
   lives under `analyzers/pe/` and is split into small modules (headers,
   imports/exports, resources, TLS, CLR, relocations, Authenticode, exception
-  data, etc.); CodeView debug parsing is currently RSDS-only, and some
-  `.pdata` variants are still not implemented.
+  data, debug records, and runtime metadata).
 - `renderers/` &mdash; TypeScript HTML renderers for parsed structures. The PE renderer lives under `renderers/pe/` and is split into headers, directory views, resources, and layout/sanity views.
 - `binary-utils.ts`, `html-utils.ts` &mdash; shared helpers for hashing, byte/hex formatting and safe HTML generation.
 
