@@ -44,7 +44,8 @@ void test("CodeView forward aliases, modifiers and enum index types resolve befo
     encodedDimensions(0x1001, [...codeViewFixedInteger(-7n, 8), ...codeViewFixedInteger(9n, 8)]),
     { type: 0x150a, index: 0x1001, shape: { kind: "alias", typeIndex: 0x1002 } },
     { type: 0x1001, index: 0x1002, shape: { kind: "modifier", typeIndex: 0x1003, attributes: 1 } },
-    { type: 0x1507, index: 0x1003, shape: { kind: "aggregate", underlyingType: 0x76,
+    { type: 0x1518, index: 0x1003, shape: { kind: "extendedModifier", typeIndex: 0x1004, modifiers: [1] } },
+    { type: 0x1507, index: 0x1004, shape: { kind: "aggregate", underlyingType: 0x76,
       properties: 0, fieldList: 0 } }
   ], message => warnings.push(message));
   assert.deepEqual(decoded[0]?.shape, { kind: "constantDimensions", indexType: 0x1001, rank: 1,
@@ -60,6 +61,16 @@ void test("CodeView bound index aliases at the first nonprimitive index still re
   ], () => assert.fail("valid bound alias must not warn"))[1]?.shape,
   { kind: "constantDimensions", indexType: 0x1000, rank: 1, boundKind: "lowerUpper",
     bounds: { kind: "integers", values: ["2", "5"] } });
+});
+
+void test("CodeView basic arrays are not treated as integer bound aliases", () => {
+  const warnings: string[] = [];
+  const record = encodedDimensions(0x1001, [1]);
+  const decoded = resolveCodeViewConstantBounds([record,
+    { type: 0x000d, index: 0x1001, shape: { kind: "basicArray", typeIndex: 0x74 } }
+  ], message => warnings.push(message));
+  assert.deepEqual(decoded[0]?.shape, record.shape);
+  assert.match(warnings.join(" | "), /unresolved or noninteger index type #4097/);
 });
 
 for (const records of [

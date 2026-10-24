@@ -165,3 +165,18 @@ void test("CodeView record histograms count repeated symbols without counting th
     ["1", "1", "Types", "Fields", "1"]
   ]);
 });
+
+void test("CodeView unowned basic arrays, labels and extended modifiers use readable histogram rows", () => {
+  const tables = buildLegacyCodeViewTables({ signature: "NB09", directories: [{ flags: 0,
+    subsections: [{ type: 0x121, module: 1, offset: 0, size: 0, data: { kind: "types", records: [
+      { type: 0x000d, index: 0x1000, shape: { kind: "basicArray", typeIndex: 0x74 } },
+      { type: 0x000e, index: 0x1001, shape: { kind: "label", mode: 4 } },
+      { type: 0x1518, index: 0x1002, shape: { kind: "extendedModifier", typeIndex: 0x74, modifiers: [1] } }
+    ] } }] }] });
+
+  assert.equal(tables.find(table => table.key === "types"), undefined);
+  assert.deepEqual(tables.find(table => table.key === "records")?.rows, [
+    ["1", "1", "Types", "Basic array", "1"], ["1", "1", "Types", "Label", "1"],
+    ["1", "1", "Types", "Extended modifier", "1"]
+  ]);
+});

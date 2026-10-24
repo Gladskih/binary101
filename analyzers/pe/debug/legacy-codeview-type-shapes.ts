@@ -24,12 +24,16 @@ export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks
   | { kind: "pointer"; typeIndex: number; attributes: number;
       classType?: number; representation?: number }
   | { kind: "alias"; typeIndex: number }
+  | { kind: "basicArray"; typeIndex: number }
+  | { kind: "label"; mode: number }
+  | { kind: "extendedModifier"; typeIndex: number; modifiers: number[] }
   | { kind: "bitfield"; typeIndex: number; length: number; position: number }
   | { kind: "functionId"; scopeId: number; functionType: number }
   | { kind: "memberFunctionId"; classType: number; functionType: number }
   | { kind: "skip"; nextIndex: number };
 
-// Packed lfProc[_16t], lfMFunc[_16t], lfArgList[_16t], lfModifier and lfPointer.
+// Packed lfProc[_16t], lfMFunc[_16t], lfArgList[_16t], lfModifier and lfPointer,
+// plus lfBArray[_16t], lfLabel and lfModifierEx.
 // Offsets here include the two-byte record length before each leaf.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
 const typeIndex = (view: DataView, offset: number, width: 2 | 4): number =>
@@ -85,6 +89,36 @@ const readArgumentList = (reader: LegacyCodeViewReader, leaf: number): Promise<C
 const readAlias = async (reader: LegacyCodeViewReader): Promise<CodeViewTypeShape> =>
   ({ kind: "alias", typeIndex: await reader.uint32(4) });
 
+const readBasicArray = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> =>
+  ({ kind: "basicArray", typeIndex: leaf === 0x000d ? await reader.uint16(4) : await reader.uint32(4) });
+
+const readLabel = async (reader: LegacyCodeViewReader): Promise<CodeViewTypeShape> => {
+  const mode = await reader.uint16(4);
+  // CV_LABEL uses near return (0) and far return (4), independent of PE bitness.
+  if (mode !== 0 && mode !== 4) reader.warn(`CodeView label has unknown mode ${mode}.`);
+  return { kind: "label", mode };
+};
+
+// CV_modifier_e is an enum (not a bitmask); values come from cvconst.h.
+// https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvconst.h
+const MODIFIER_ENUMS = new Set([0, 1, 2, 3, ...Array.from({ length: 15 }, (_, index) => 0x200 + index)]);
+
+const readExtendedModifier = async (reader: LegacyCodeViewReader): Promise<CodeViewTypeShape> => {
+  // lfModifierEx has a 32-bit type, 16-bit count, then count 16-bit enum values.
+  const header = await reader.view(4, 6);
+  const typeIndex = header.getUint32(0, true);
+  const count = header.getUint16(4, true);
+  const available = Math.floor((reader.size - 10) / 2);
+  const decoded = Math.min(count, available);
+  const view = await reader.view(10, decoded * 2);
+  const modifiers = Array.from({ length: decoded }, (_, index) => view.getUint16(index * 2, true));
+  if (decoded < count) reader.warn("CodeView extended modifier list is truncated.");
+  const invalid = modifiers.filter(value => !MODIFIER_ENUMS.has(value));
+  if (invalid.length) reader.warn(`CodeView extended modifier has unknown modifier enum values: ${[...new Set(invalid)].join(", ")}.`);
+  if (modifiers.includes(0)) reader.warn("CodeView extended modifier has invalid modifier enum value 0.");
+  return { kind: "extendedModifier", typeIndex, modifiers };
+};
+
 const readFunctionId = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> => {
   const view = await reader.view(4, 8);
   const functionType = view.getUint32(4, true);
@@ -125,6 +159,7 @@ const SHAPE_READERS = new Map<number,
   [0x201, readArgumentList], [0x1201, readArgumentList], [1, readModifier], [0x1001, readModifier],
   [2, readPointer], [0x1002, readPointer], [0x1010, readAlias], [0x150a, readAlias],
   [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip],
+  [0x000d, readBasicArray], [0x100b, readBasicArray], [0x000e, readLabel], [0x1518, readExtendedModifier],
   [0x206, readBitfield], [0x1205, readBitfield], [0x207, readMethods], [0x1206, readMethods],
   [10, readVtableShape], [0x13, readCodeViewPrecompiledType], [0x100e, readCodeViewPrecompiledType],
   [0x1509, readCodeViewPrecompiledType], [0x14, readCodeViewPrecompiledType],

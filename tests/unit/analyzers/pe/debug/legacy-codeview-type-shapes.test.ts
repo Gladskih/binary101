@@ -138,6 +138,51 @@ void test("CodeView reserved modifiers and pointer flags are preserved with warn
   assert.match(warnings.join(" | "), /pointer.*attribute bits/);
 });
 
+void test("CodeView basic arrays decode 16-bit and 32-bit type indices", async () => {
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000d, 4,
+    legacyU16(0x1234))), 0x000d), { kind: "basicArray", typeIndex: 0x1234 });
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x100b, 4,
+    legacyU32(0x12345678))), 0x100b), { kind: "basicArray", typeIndex: 0x12345678 });
+  await assert.rejects(readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000d, 4,
+    legacyU16(0x1234).slice(0, 1))), 0x000d), /bounds/);
+});
+
+void test("CodeView labels retain near and far return modes and warn on reserved values", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000e, 4,
+    legacyU16(0)), warnings), 0x000e), { kind: "label", mode: 0 });
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000e, 4,
+    legacyU16(4)), warnings), 0x000e), { kind: "label", mode: 4 });
+  assert.deepEqual(warnings, []);
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000e, 4,
+    legacyU16(1)), warnings), 0x000e), { kind: "label", mode: 1 });
+  await assert.rejects(readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x000e, 4,
+    legacyU16(0).slice(0, 1))), 0x000e), /bounds/);
+  assert.match(warnings.join(" | "), /label has unknown mode 1/);
+});
+
+void test("CodeView extended modifiers decode enum values and salvage a truncated list", async () => {
+  const warnings: string[] = [];
+  const payload = [...legacyU32(0x1000), ...legacyU16(4), ...legacyU16(1), ...legacyU16(0x200),
+    ...legacyU16(0x020e), ...legacyU16(0x1234)];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1518, 4, payload), warnings),
+    0x1518), { kind: "extendedModifier", typeIndex: 0x1000,
+    modifiers: [1, 0x200, 0x020e, 0x1234] });
+  assert.deepEqual(warnings, ["CodeView extended modifier has unknown modifier enum values: 4660."]);
+  warnings.length = 0;
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1518, 4,
+    [...legacyU32(0x74), ...legacyU16(1), ...legacyU16(0)]), warnings), 0x1518),
+  { kind: "extendedModifier", typeIndex: 0x74, modifiers: [0] });
+  assert.deepEqual(warnings, ["CodeView extended modifier has invalid modifier enum value 0."]);
+  warnings.length = 0;
+  const truncated = [...legacyU32(0x74), ...legacyU16(3), ...legacyU16(1), ...legacyU16(2), 0xff];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1518, 4, truncated), warnings),
+    0x1518), { kind: "extendedModifier", typeIndex: 0x74, modifiers: [1, 2] });
+  assert.match(warnings.join(" | "), /modifier list is truncated/);
+  await assert.rejects(readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1518, 4,
+    legacyU32(0x74))), 0x1518), /bounds/);
+});
+
 void test("CodeView narrow member pointers and old aliases respect their fixed prefixes", async () => {
   assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(2, 4,
     [...legacyU16(0x6a), ...legacyU16(0x74), ...legacyU16(0x1001), ...legacyU16(7)])), 2),

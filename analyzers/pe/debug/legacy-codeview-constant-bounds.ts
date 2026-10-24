@@ -34,7 +34,7 @@ const localTypes = (records: readonly LegacyCodeViewTypeRecord[]) => {
 const linkedIndex = (record: LegacyCodeViewTypeRecord | null | undefined): number | undefined => {
   const shape = record?.shape;
   switch (shape?.kind) {
-    case "alias": case "modifier": return shape.typeIndex;
+    case "alias": case "modifier": case "extendedModifier": return shape.typeIndex;
     case "aggregate": return shape.underlyingType;
     default: return undefined;
   }
