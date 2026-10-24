@@ -5,10 +5,12 @@
 ## Highlights
 
 - **Instruction-set analysis.** Count instructions by x86/x86-64 and AArch64 ISA extension using control-flow-guided disassembly of PE and ELF files. Check what `-march` or a change in compiler flags actually produced, inspect SIMD usage, or compare the instruction mix of different builds and libraries.
-- **Executable internals.** Explore PE and ELF layout, imports, exports, relocations, TLS, resources, debug and unwind records, and code entry points. Deeper analysis covers DWARF, C++ RTTI, CLR/ReadyToRun, NativeAOT and Go runtime metadata, with demangling and WinAPI/UCRT import information where applicable.
+- **Executable internals.** Explore PE and ELF layout, imports, exports, relocations, TLS, debug and unwind records, and code entry points. Deeper analysis covers DWARF, C++ RTTI, CLR/ReadyToRun, NativeAOT and Go runtime metadata, with demangling and WinAPI/UCRT import information where applicable.
+- **Specialized PE files.** Recognize Windows Runtime metadata (WinMD), .NET reference assemblies, CLR native images, .NET apphosts, resource-only MUI images and EFI-stub Linux `bzImage` kernels.
+- **Windows resources.** Decode more than icons and version strings: MSFT/SLTG type libraries, MUI configuration, compiled Windows Event manifests (WEVT), Ribbon BML, dialogs, manifests and managed .NET resources.
 - **Authenticode verification.** Verify PE file digests and CMS signatures, inspect certificate chains and timestamps, and evaluate trust using a Windows CA snapshot exported in CI.
 - **Images and media.** Read JPEG markers, EXIF/JFIF metadata and comments; PNG chunks and metadata; MP4 boxes and tracks; WebM/Matroska tags, attachments and codec details. For VP8 video, compare dimensions declared by the container with those found in keyframes. Preview images, audio and video in formats supported by the browser.
-- **Embedded and unusual content.** Find RAR signatures inside JPEGs, inspect PE overlays and embedded archives, recognize nested PE files in DOS stubs and Valve integrity blocks, and examine UPX, Bun, NSIS and Inno Setup packaging details.
+- **Embedded and unusual content.** Find RAR signatures inside JPEGs, scan PE overlays for embedded formats and archives, and extract validated archive payloads or PE files stored in resources. Recognize nested PE images in DOS stubs (including Intel TXT MLE), Valve integrity blocks, and UPX, Bun, NSIS and Inno Setup packaging.
 - **Archives and other files.** Inspect entries, sizes and compression methods in ZIP/ZIP64, 7z, RAR and TAR. Extract stored/Deflate ZIP entries and supported 7z/LZMA entries. Other analyzers cover packet captures, PDF, SQLite, ISO 9660, Windows shortcuts and more.
 
 ## Formats
