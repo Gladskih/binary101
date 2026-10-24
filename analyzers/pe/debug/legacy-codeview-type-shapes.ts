@@ -4,6 +4,9 @@ import { readLegacyCodeViewMethods, type LegacyCodeViewMethod } from "./legacy-c
 import { readCodeViewIndexList, readCodeViewTypeLinks, type CodeViewTypeLinks } from "./legacy-codeview-type-links.js";
 import { readCodeViewPrecompiledType, type CodeViewPrecompiledType } from "./legacy-codeview-precompiled.js";
 import { readCodeViewDimensions, type CodeViewDimensions } from "./legacy-codeview-dimensions.js";
+import { readLegacyCodeViewNumeric, type LegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
+
+type CodeViewHlslNumeric = Pick<LegacyCodeViewNumeric, "leaf" | "value">;
 
 interface CodeViewProcedure {
   returnType: number;
@@ -27,6 +30,8 @@ export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks
   | { kind: "basicArray"; typeIndex: number }
   | { kind: "label"; mode: number }
   | { kind: "extendedModifier"; typeIndex: number; modifiers: number[] }
+  | { kind: "hlsl"; subtypeIndex: number; builtinKind: number; reservedBits: number;
+      propertyCount: number; properties: CodeViewHlslNumeric[]; byteSize?: CodeViewHlslNumeric }
   | { kind: "bitfield"; typeIndex: number; length: number; position: number }
   | { kind: "functionId"; scopeId: number; functionType: number }
   | { kind: "memberFunctionId"; classType: number; functionType: number }
@@ -119,6 +124,43 @@ const readExtendedModifier = async (reader: LegacyCodeViewReader): Promise<CodeV
   return { kind: "extendedModifier", typeIndex, modifiers };
 };
 
+const HLSL_BUILTIN_KINDS = new Set([0, ...Array.from({ length: 36 }, (_, index) => 0x200 + index)]);
+
+const hlslNumeric = ({ leaf, value }: LegacyCodeViewNumeric): CodeViewHlslNumeric => ({
+  ...(leaf === undefined ? {} : { leaf }), ...(value === undefined ? {} : { value })
+});
+
+const readHlsl = async (reader: LegacyCodeViewReader): Promise<CodeViewTypeShape> => {
+  const header = await reader.view(4, 8);
+  const subtypeIndex = header.getUint32(0, true);
+  const builtinKind = header.getUint16(4, true);
+  const packedCount = header.getUint16(6, true);
+  const count = packedCount & 0x0f;
+  const reservedBits = packedCount >>> 4;
+  if (reservedBits) reader.warn(`CodeView HLSL type has nonzero reserved bits 0x${reservedBits.toString(16)}.`);
+  if (!HLSL_BUILTIN_KINDS.has(builtinKind)) reader.warn(`CodeView HLSL type has unknown built-in kind 0x${builtinKind.toString(16)}.`);
+  const properties: CodeViewHlslNumeric[] = [];
+  let offset = 12;
+  for (let index = 0; index < count; index++) {
+    try {
+      const numeric = await readLegacyCodeViewNumeric(reader, offset);
+      properties.push(hlslNumeric(numeric));
+      offset = numeric.end;
+    } catch (error) {
+      reader.warn(`CodeView HLSL numeric property ${index + 1}: ${String(error)}`);
+      return { kind: "hlsl", subtypeIndex, builtinKind, reservedBits, propertyCount: count, properties };
+    }
+  }
+  try {
+    const numeric = await readLegacyCodeViewNumeric(reader, offset);
+    return { kind: "hlsl", subtypeIndex, builtinKind, reservedBits, propertyCount: count, properties,
+      byteSize: hlslNumeric(numeric) };
+  } catch (error) {
+    reader.warn(`CodeView HLSL byte size: ${String(error)}`);
+    return { kind: "hlsl", subtypeIndex, builtinKind, reservedBits, propertyCount: count, properties };
+  }
+};
+
 const readFunctionId = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> => {
   const view = await reader.view(4, 8);
   const functionType = view.getUint32(4, true);
@@ -160,6 +202,7 @@ const SHAPE_READERS = new Map<number,
   [2, readPointer], [0x1002, readPointer], [0x1010, readAlias], [0x150a, readAlias],
   [0x1601, readFunctionId], [0x1602, readFunctionId], [0x200, readSkip], [0x1200, readSkip],
   [0x000d, readBasicArray], [0x100b, readBasicArray], [0x000e, readLabel], [0x1518, readExtendedModifier],
+  [0x1517, readHlsl],
   [0x206, readBitfield], [0x1205, readBitfield], [0x207, readMethods], [0x1206, readMethods],
   [10, readVtableShape], [0x13, readCodeViewPrecompiledType], [0x100e, readCodeViewPrecompiledType],
   [0x1509, readCodeViewPrecompiledType], [0x14, readCodeViewPrecompiledType],

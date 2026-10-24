@@ -183,6 +183,72 @@ void test("CodeView extended modifiers decode enum values and salvage a truncate
     legacyU32(0x74))), 0x1518), /bounds/);
 });
 
+void test("CodeView HLSL types decode subtype, built-in kind, numeric properties and byte size", async () => {
+  const warnings: string[] = [];
+  const payload = [...legacyU32(0x1001), ...legacyU16(0x0203), ...legacyU16(2),
+    ...legacyU16(4), ...legacyU16(0x800a), ...new Array<number>(8).fill(0xff), ...legacyU16(16)];
+  assert.deepEqual(await readCodeViewTypeShape(
+    legacyReader(codeViewTextRecord(0x1517, 4, payload), warnings), 0x1517), {
+    kind: "hlsl", subtypeIndex: 0x1001, builtinKind: 0x0203, reservedBits: 0, propertyCount: 2,
+    properties: [{ value: "4" }, { leaf: 0x800a, value: "18446744073709551615" }],
+    byteSize: { value: "16" }
+  });
+  assert.deepEqual(warnings, []);
+});
+
+void test("CodeView HLSL types preserve noninteger numeric property leaves", async () => {
+  const payload = [...legacyU32(0), ...legacyU16(0x0200), ...legacyU16(1),
+    ...legacyU16(0x8010), ...legacyU16(1), 0x41, ...legacyU16(8)];
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewTypeShape(
+    legacyReader(codeViewTextRecord(0x1517, 4, payload), warnings), 0x1517), {
+    kind: "hlsl", subtypeIndex: 0, builtinKind: 0x0200, reservedBits: 0, propertyCount: 1,
+    properties: [{ leaf: 0x8010 }], byteSize: { value: "8" }
+  });
+  assert.deepEqual(warnings, []);
+});
+
+void test("CodeView HLSL types retain all fifteen numeric properties and require the fixed header", async () => {
+  const payload = [...legacyU32(0), ...legacyU16(0), ...legacyU16(15),
+    ...Array.from({ length: 15 }, (_, index) => index).flatMap(legacyU16), ...legacyU16(4)];
+  const shape = await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1517, 4, payload)), 0x1517);
+  assert.equal(shape?.kind, "hlsl");
+  if (shape?.kind !== "hlsl") return;
+  assert.deepEqual(shape.properties.map(property => property.value),
+    Array.from({ length: 15 }, (_, index) => String(index)));
+  assert.deepEqual(shape.byteSize, { value: "4" });
+  await assert.rejects(readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1517, 4,
+    legacyU32(0))), 0x1517), /bounds/);
+});
+
+void test("CodeView HLSL types preserve empty values and warn on unknown kinds and reserved bits", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1517, 4,
+    [...legacyU32(0), ...legacyU16(0x7777), ...legacyU16(0xfff0), ...legacyU16(0)]), warnings), 0x1517), {
+    kind: "hlsl", subtypeIndex: 0, builtinKind: 0x7777, reservedBits: 0x0fff, propertyCount: 0,
+    properties: [], byteSize: { value: "0" }
+  });
+  assert.deepEqual(warnings, ["CodeView HLSL type has nonzero reserved bits 0xfff.",
+    "CodeView HLSL type has unknown built-in kind 0x7777."]);
+});
+
+void test("CodeView HLSL types retain complete properties and warn when properties or size are truncated", async () => {
+  const warnings: string[] = [];
+  const truncatedProperty = [...legacyU32(0x74), ...legacyU16(0x0201), ...legacyU16(2), ...legacyU16(3),
+    ...legacyU16(0x800a), 0xff];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1517, 4,
+    truncatedProperty), warnings), 0x1517), { kind: "hlsl", subtypeIndex: 0x74, builtinKind: 0x0201,
+    reservedBits: 0, propertyCount: 2, properties: [{ value: "3" }] });
+  assert.match(warnings.join(" | "), /numeric property 2.*bounds/);
+  warnings.length = 0;
+  const missingSize = [...legacyU32(0), ...legacyU16(0x0200), ...legacyU16(1), ...legacyU16(0x800a),
+    ...new Array<number>(8).fill(1)];
+  assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(0x1517, 4,
+    missingSize), warnings), 0x1517), { kind: "hlsl", subtypeIndex: 0, builtinKind: 0x0200,
+    reservedBits: 0, propertyCount: 1, properties: [{ leaf: 0x800a, value: "72340172838076673" }] });
+  assert.match(warnings.join(" | "), /HLSL byte size.*bounds/);
+});
+
 void test("CodeView narrow member pointers and old aliases respect their fixed prefixes", async () => {
   assert.deepEqual(await readCodeViewTypeShape(legacyReader(codeViewTextRecord(2, 4,
     [...legacyU16(0x6a), ...legacyU16(0x74), ...legacyU16(0x1001), ...legacyU16(7)])), 2),

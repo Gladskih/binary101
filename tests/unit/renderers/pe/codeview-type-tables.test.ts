@@ -58,6 +58,23 @@ void test("CodeView anonymous arrays retain their element and indexing types and
   ]);
 });
 
+void test("CodeView HLSL types name the built-in, retain numeric property ordinals and resolve local subtypes", () => {
+  assert.deepEqual(codeViewTypeRows({ kind: "types", records: [
+    { type: 0x1505, index: 0x1001, name: "TexturePayload" },
+    { type: 0x1517, index: 0x1000, shape: { kind: "hlsl", subtypeIndex: 0x1001,
+      builtinKind: 0x203, reservedBits: 0, propertyCount: 2, properties: [{ value: "3" }, { leaf: 0x800a,
+        value: "18446744073709551615" }], byteSize: { value: "24" } } },
+    { type: 0x1517, shape: { kind: "hlsl", subtypeIndex: 0x1001, builtinKind: 0x0201,
+      reservedBits: 1, propertyCount: 2, properties: [{ leaf: 0x8006 }], byteSize: { leaf: 0x8006 } } }
+  ] }), [
+    ["Structure", "TexturePayload", "—", "—", "—", "—"],
+    ["HLSL Texture2D", "(unnamed built-in type)", "24", "—",
+      "property 1: 3; property 2: 18446744073709551615", "subtype: TexturePayload; numeric properties decoded: 2 / 2"],
+    ["HLSL Texture1D", "(unnamed built-in type)", "unavailable", "—",
+      "property 1: numeric leaf 0x8006", "subtype: unresolved type #4097; numeric properties decoded: 1 / 2; reserved bits: 0x1"]
+  ]);
+});
+
 void test("CodeView legacy names and malformed composite metadata stay visible", () => {
   assert.deepEqual(codeViewTypeRows({ kind: "types", encoding: "c6", records: [
     { type: 93, name: "Alias" }, { type: 255 },

@@ -1,6 +1,7 @@
 import type { LegacyCodeViewTypeRecord } from "../../analyzers/pe/debug/legacy-codeview-type-records.js";
 import type { CodeViewTypeShape } from "../../analyzers/pe/debug/legacy-codeview-type-shapes.js";
-import { legacyCodeViewTypeName, legacyCodeViewVtableSlotName } from "./legacy-codeview-kinds.js";
+import { legacyCodeViewHlslKindName, legacyCodeViewTypeName,
+  legacyCodeViewVtableSlotName } from "./legacy-codeview-kinds.js";
 
 // TYPE_ENUM_e and CV_prmode_e: primitive identity includes width and pointer model.
 // https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvinfo.h
@@ -91,6 +92,10 @@ const specialReferenceStep = (shape: CodeViewTypeShape): TypeStep | undefined =>
   if (shape.kind === "basicArray") return { text: "basic array of", next: shape.typeIndex };
   if (shape.kind === "label") return { text: shape.mode === 0 ? "label (near return)" : shape.mode === 4
     ? "label (far return)" : `label (unknown mode ${shape.mode})` };
+  if (shape.kind === "hlsl") return { text: `${legacyCodeViewHlslKindName(shape.builtinKind)} ` +
+    `(numeric properties: ${shape.properties.length}/${shape.propertyCount}; ` +
+    `byte size: ${shape.byteSize?.value ?? "unavailable"})` +
+    (shape.subtypeIndex === 0 ? "" : " of"), ...(shape.subtypeIndex === 0 ? {} : { next: shape.subtypeIndex }) };
   return undefined;
 };
 

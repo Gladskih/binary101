@@ -95,6 +95,26 @@ export const legacyCodeViewSymbolName = (type: number, encoding?: "c6" | "hll"):
 export const legacyCodeViewVtableSlotName = (kind: number): string =>
   ["near", "far", "thin", "outer", "meta", "near32", "far32", "unused"][kind] ?? `unknown kind ${kind}`;
 
+// CV_builtin_e names in Microsoft's pinned cvconst.h.
+// https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvconst.h
+const HLSL_BUILTIN_NAMES = new Map<number, string>([[0, "Invalid HLSL built-in"],
+  [0x200, "HLSL interface pointer"], [0x201, "HLSL Texture1D"], [0x202, "HLSL Texture1D array"],
+  [0x203, "HLSL Texture2D"], [0x204, "HLSL Texture2D array"], [0x205, "HLSL Texture3D"],
+  [0x206, "HLSL TextureCube"], [0x207, "HLSL TextureCube array"], [0x208, "HLSL Texture2DMS"],
+  [0x209, "HLSL Texture2DMS array"], [0x20a, "HLSL sampler"], [0x20b, "HLSL sampler comparison"],
+  [0x20c, "HLSL buffer"], [0x20d, "HLSL point stream"], [0x20e, "HLSL line stream"],
+  [0x20f, "HLSL triangle stream"], [0x210, "HLSL input patch"], [0x211, "HLSL output patch"],
+  [0x212, "HLSL RWTexture1D"], [0x213, "HLSL RWTexture1D array"], [0x214, "HLSL RWTexture2D"],
+  [0x215, "HLSL RWTexture2D array"], [0x216, "HLSL RWTexture3D"], [0x217, "HLSL RWBuffer"],
+  [0x218, "HLSL ByteAddressBuffer"], [0x219, "HLSL RWByteAddressBuffer"],
+  [0x21a, "HLSL StructuredBuffer"], [0x21b, "HLSL RWStructuredBuffer"],
+  [0x21c, "HLSL AppendStructuredBuffer"], [0x21d, "HLSL ConsumeStructuredBuffer"],
+  [0x21e, "HLSL min8float"], [0x21f, "HLSL min10float"], [0x220, "HLSL min16float"],
+  [0x221, "HLSL min12int"], [0x222, "HLSL min16int"], [0x223, "HLSL min16uint"]]);
+
+export const legacyCodeViewHlslKindName = (kind: number): string =>
+  HLSL_BUILTIN_NAMES.get(kind) ?? `Unknown HLSL built-in kind 0x${kind.toString(16)}`;
+
 const TYPE_NAMES = new Map<number, string>([
   [1, "Modifier"], [2, "Pointer"], [3, "Array"], [4, "Class"], [5, "Structure"], [6, "Union"], [7, "Enum"],
   [8, "Procedure"], [9, "Member function"], [10, "Virtual table shape"], [0x0d, "Basic array"],
@@ -110,7 +130,7 @@ const TYPE_NAMES = new Map<number, string>([
   [0x100b, "Basic array"], [0x1200, "Skip"], [0x1201, "Arguments"], [0x1203, "Fields"],
   [0x1205, "Bitfield"], [0x1206, "Methods"],
   [0x1503, "Array"], [0x1504, "Class"], [0x1505, "Structure"], [0x1506, "Union"], [0x1507, "Enum"],
-  [0x150a, "Alias"], [0x1518, "Extended modifier"], [0x1519, "Interface"],
+  [0x150a, "Alias"], [0x1517, "HLSL type"], [0x1518, "Extended modifier"], [0x1519, "Interface"],
   // LLVM 007ca8ec1bd348000e42ada637c421cf5d28c11a CodeViewTypes.def.
   [0x1608, "Class (extended)"], [0x1609, "Structure (extended)"],
   [0x160a, "Union (extended)"], [0x160b, "Interface (extended)"],

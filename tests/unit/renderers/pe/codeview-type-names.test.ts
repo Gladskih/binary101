@@ -162,6 +162,20 @@ void test("CodeView extended modifiers name enum values and preserve their base 
     "unknown modifier enum 0x1234 int32");
 });
 
+void test("CodeView HLSL summaries name built-ins and follow only their stored subtype link", () => {
+  const format = createCodeViewTypeFormatter(indexCodeViewTypes([
+    { type: 0x1505, index: 0x1001, name: "TextureData" },
+    { type: 0x1517, index: 0x1000, shape: { kind: "hlsl", subtypeIndex: 0x1001,
+      builtinKind: 0x203, reservedBits: 0, propertyCount: 1, properties: [{ value: "4" }],
+      byteSize: { value: "16" } } },
+    { type: 0x1517, index: 0x1002, shape: { kind: "hlsl", subtypeIndex: 0,
+      builtinKind: 0x7777, reservedBits: 0, propertyCount: 0, properties: [] } }
+  ]));
+  assert.equal(format(0x1000), "HLSL Texture2D (numeric properties: 1/1; byte size: 16) of TextureData");
+  assert.equal(format(0x1002), "Unknown HLSL built-in kind 0x7777 " +
+    "(numeric properties: 0/0; byte size: unavailable)");
+});
+
 void test("CodeView pointer qualifiers, unsupported modes and unnamed types stay readable", () => {
   const format = createCodeViewTypeFormatter(indexCodeViewTypes([
     { type: 0x1002, index: 0x1000, shape: { kind: "pointer", typeIndex: 0x40, attributes: 0x1e00 } },

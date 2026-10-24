@@ -2,7 +2,7 @@ import type { LegacyCodeViewTypeRecord, LegacyCodeViewTypes } from "../../analyz
 import type { CodeViewCompositeShape, CodeViewAggregate } from "../../analyzers/pe/debug/legacy-codeview-composite-records.js";
 import type { CodeViewDimensions } from "../../analyzers/pe/debug/legacy-codeview-dimensions.js";
 import { createCodeViewTypeFormatter, indexCodeViewTypes } from "./codeview-type-names.js";
-import { legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
+import { legacyCodeViewHlslKindName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
 import { createCodeViewFieldListResolver, type CodeViewFieldListResolution } from "./codeview-field-lists.js";
 
 // CV_prop_t, CV_HFA_e and CV_MOCOM_UDT_e in Microsoft's cvinfo.h.
@@ -108,7 +108,17 @@ export const codeViewTypeRows = (data: LegacyCodeViewTypes): string[][] => {
   return data.records.flatMap(record => {
     const shape = compositeShape(record);
     const kind = legacyCodeViewTypeName(record.type, data.encoding);
-    const rows: string[][] = record.name === undefined && !shape ? [] : [[kind,
+    const hlsl = record.shape?.kind === "hlsl" ? record.shape : undefined;
+    const properties = hlsl?.properties.map((property, index) =>
+      `property ${index + 1}: ${property.value ?? `numeric leaf 0x${property.leaf?.toString(16) ?? "unknown"}`}`).join("; ");
+    const hlslRelated = hlsl ? [hlsl.subtypeIndex === 0 ? "no subtype" :
+      `subtype: ${(record.index === undefined ? externalFormat : format)(hlsl.subtypeIndex)}`,
+      `numeric properties decoded: ${hlsl.properties.length} / ${hlsl.propertyCount}`,
+    hlsl.reservedBits ? `reserved bits: 0x${hlsl.reservedBits.toString(16)}` : ""]
+      .filter(Boolean).join("; ") : undefined;
+    const rows: string[][] = hlsl ? [[legacyCodeViewHlslKindName(hlsl.builtinKind),
+      record.name || "(unnamed built-in type)", hlsl.byteSize?.value ?? "unavailable", "—",
+      properties || "none", hlslRelated ?? "none"]] : record.name === undefined && !shape ? [] : [[kind,
       record.name === undefined ? "(name unavailable)" : record.name || "(unnamed)",
       ...metadata(shape, record.index === undefined ? externalFormat : format,
         record.index === undefined ? externalResolve : resolve)]];
