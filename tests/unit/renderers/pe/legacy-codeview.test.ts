@@ -15,6 +15,15 @@ const subject = () => {
   return { pe, entry };
 };
 
+void test("CodeView stored type strings preserve literal entity spellings", () => {
+  const { pe, entry } = subject();
+  entry.legacyCodeView = codeViewInfoWithTypes([
+    { type: 0x1605, index: 0x1000, strings: ["<path>&amp;.cpp"], shape: { kind: "stringId", substrings: 0 } }
+  ]);
+  const model = getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-typeStrings")!;
+  assert.equal(model.rowAt(0)?.cells[3]?.html, "&lt;path&gt;&amp;amp;.cpp");
+});
+
 void test("CodeView function signatures retain literal entities and remain pageable", () => {
   const pe = createBasePe();
   const entry = { ...createDebugViewEntry(2, 0, 128), legacyCodeView: codeViewInfoWithTypes([
@@ -45,8 +54,8 @@ for (const kind of ["overlay", "section", "directory"] as const) {
     renderCodeViewSources(pe, out);
     const model = getLegacyCodeViewTableModel(pe, "pe-debug-codeviewSource-0-legacy-module")!;
     assert.match(out.join(""), /CodeView source #1:/);
-    assert.match(out.join(""), /&lt;module>.obj/);
-    assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module>.obj");
+    assert.match(out.join(""), /&lt;module&gt;.obj/);
+    assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module&gt;.obj");
     assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-codeviewSource-1-legacy-module"), null);
   });
 }
@@ -58,8 +67,8 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
   const model = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-module")!;
 
   assert.match(out.join(""), /Embedded CodeView format/);
-  assert.match(out.join(""), /&lt;module>.obj/);
-  assert.match(out.join(""), /&lt;public>/);
+  assert.match(out.join(""), /&lt;module&gt;.obj/);
+  assert.match(out.join(""), /&lt;public&gt;/);
   assert.match(out.join(""), /&lt;field&gt;/);
   assert.match(out.join(""), /\.\?AU&lt;Structure&gt;@@/);
   assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-types")?.tableClassName,
@@ -69,7 +78,7 @@ void test("legacy CodeView renders escaped readable tables and statistical summa
     "peCodeViewMemberTable");
   assert.match(out.join(""), /Line\/address pairs/);
   assert.doesNotMatch(out.join(""), /<public>|RVA<\/th>|0x00000010/);
-  assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module>.obj");
+  assert.equal(model.rowAt(0)?.cells[2]?.html, "&lt;module&gt;.obj");
   assert.equal(model.sortValueAt(0, 2), "<module>.obj");
   assert.equal(model.rowAt(1), null);
   assert.equal(model.sortValueAt(1, 2), "");
@@ -86,12 +95,12 @@ void test("CodeView symbol strings remain escaped and available beyond the first
   const model = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-symbolStrings")!;
 
   assert.match(out.join(""), /Stored symbol strings/);
-  assert.match(out.join(""), /&lt;annotation_0>/);
+  assert.match(out.join(""), /&lt;annotation_0&gt;/);
   assert.doesNotMatch(out.join(""), /<annotation_0>/);
   assert.equal(model.rowCount, 101);
   assert.equal(model.pageSize, 100);
   assert.equal(model.rowAt(100)?.cells[3]?.html, "String 101");
-  assert.equal(model.rowAt(100)?.cells[4]?.html, "&lt;annotation_100>");
+  assert.equal(model.rowAt(100)?.cells[4]?.html, "&lt;annotation_100&gt;");
   assert.equal(model.sortValueAt(100, 4), "<annotation_100>");
 });
 
@@ -110,7 +119,7 @@ void test("CodeView index statistics retain escaped section names and right-alig
 
   assert.match(out.join(""), /Symbol index statistics \(declared counts\)/);
   assert.doesNotMatch(out.join(""), /<section>|RVA<\/th>|Chain offset/);
-  assert.equal(sections.rowAt(0)?.cells[3]?.html, "&lt;section>");
+  assert.equal(sections.rowAt(0)?.cells[3]?.html, "&lt;section&gt;");
   assert.equal(sections.columns[4]?.className, "peNumeric");
   assert.equal(sections.rowAt(0)?.cells[4]?.className, "peNumeric");
   assert.equal(summary.columns[3]?.className, "");
@@ -136,12 +145,12 @@ void test("CodeView embedded names are paginated, escaped and accompanied by num
 
   assert.match(out.join(""), /Embedded symbol names|Embedded symbol statistics/);
   assert.match(out.join(""), /Pointer base type/);
-  assert.match(out.join(""), /&lt;removed_0>/);
+  assert.match(out.join(""), /&lt;removed_0&gt;/);
   assert.doesNotMatch(out.join(""), /<removed_0>/);
   assert.equal(names.rowCount, 101);
   assert.equal(names.id, "pe-debug-entry-0-legacy-embeddedSymbols");
   assert.equal(statistics.id, "pe-debug-entry-0-legacy-discardedSymbols");
-  assert.equal(names.rowAt(100)?.cells[4]?.html, "&lt;removed_100>");
+  assert.equal(names.rowAt(100)?.cells[4]?.html, "&lt;removed_100&gt;");
   assert.equal(names.sortValueAt(100, 4), "<removed_100>");
   assert.equal(statistics.tableClassName, "peCodeViewDiscardedTable");
   assert.deepEqual(statistics.columns.slice(3).map(column => column.className),
@@ -161,11 +170,11 @@ void test("CodeView stored strings are escaped, paginated and available through 
   const model = getPePagedTableModel(pe, "pe-debug-entry-0-legacy-typeStrings")!;
 
   assert.match(out.join(""), /Stored type and ID strings/);
-  assert.match(out.join(""), /&lt;string_0>/);
+  assert.match(out.join(""), /&lt;string_0&gt;/);
   assert.doesNotMatch(out.join(""), /<string_0>/);
   assert.equal(model.rowCount, 101);
   assert.equal(model.pageSize, 100);
-  assert.equal(model.rowAt(100)?.cells[3]?.html, "&lt;string_100>");
+  assert.equal(model.rowAt(100)?.cells[3]?.html, "&lt;string_100&gt;");
   assert.equal(model.sortValueAt(100, 3), "<string_100>");
 });
 

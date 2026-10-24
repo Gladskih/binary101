@@ -96,6 +96,7 @@ const vtableSummary = (slots: readonly number[]): string => {
 };
 
 const shapeSummary = (shape: CodeViewTypeShape): TypeStep | undefined => {
+  if (shape.kind === "derived") return { text: `derived types (entries: ${shape.indices.length})` };
   if (shape.kind === "methods") return { text: `method list (variants: ${shape.methods.length})` };
   return shape.kind === "vtableShape" ? { text: vtableSummary(shape.slots) } : undefined;
 };

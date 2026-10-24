@@ -114,7 +114,9 @@ const TYPE_NAMES = new Map<number, string>([
   [0x16, "Type server PDB path"], [0x1501, "Type server PDB path"], [0x1515, "Type server PDB path"],
   [0x1202, "Default argument"], [0x150b, "Default argument"], [0x1516, "Strided array"],
   [0x151b, "Vector"], [0x151c, "Matrix"], [0x151d, "Virtual table"],
-  [0x1601, "Function ID"], [0x1602, "Member function ID"], [0x1605, "String ID"]
+  [0x1601, "Function ID"], [0x1602, "Member function ID"], [0x1605, "String ID"],
+  [0x1204, "Derived types"], [0x1603, "Build information"], [0x1604, "Substring list"],
+  [0x1606, "Type source line"], [0x1607, "Type module source line"]
 ]);
 
 export const legacyCodeViewTypeName = (type: number, encoding?: "c6" | "hll"): string => encoding === "hll"

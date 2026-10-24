@@ -1,6 +1,7 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import type { CodeViewCompositeShape } from "./legacy-codeview-composite-records.js";
 import { readLegacyCodeViewMethods, type LegacyCodeViewMethod } from "./legacy-codeview-methods.js";
+import { readCodeViewIndexList, readCodeViewTypeLinks, type CodeViewTypeLinks } from "./legacy-codeview-type-links.js";
 
 interface CodeViewProcedure {
   returnType: number;
@@ -9,7 +10,7 @@ interface CodeViewProcedure {
   parameterCount: number;
   argumentList: number;
 }
-export type CodeViewTypeShape = CodeViewCompositeShape
+export type CodeViewTypeShape = CodeViewCompositeShape | CodeViewTypeLinks
   | (CodeViewProcedure & { kind: "procedure" })
   | (CodeViewProcedure & { kind: "memberFunction"; classType: number;
       thisType: number; thisAdjustment: number })
@@ -50,13 +51,8 @@ const readProcedure = async (reader: LegacyCodeViewReader, leaf: number): Promis
     thisAdjustment: view.getInt32(callOffset + 4 + width, true) } : { kind: "procedure", ...procedure };
 };
 
-const readArguments = async (reader: LegacyCodeViewReader, width: 2 | 4): Promise<CodeViewTypeShape> => {
-  const count = typeIndex(await reader.view(4, width), 0, width);
-  const view = await reader.view(4 + width, count * width);
-  const types: number[] = [];
-  for (let index = 0; index < count; index++) types.push(typeIndex(view, index * width, width));
-  return { kind: "arguments", types };
-};
+const readArguments = async (reader: LegacyCodeViewReader, width: 2 | 4): Promise<CodeViewTypeShape> =>
+  ({ kind: "arguments", types: await readCodeViewIndexList(reader, width, width) });
 
 const readModifier = async (reader: LegacyCodeViewReader, leaf: number): Promise<CodeViewTypeShape> => {
   const view = await reader.view(0, leaf === 1 ? 8 : 10);
@@ -133,4 +129,5 @@ const SHAPE_READERS = new Map<number,
 /** Read stored type relationships without resolving external PDB/type-server references. */
 export const readCodeViewTypeShape = async (
   reader: LegacyCodeViewReader, leaf: number
-): Promise<CodeViewTypeShape | undefined> => SHAPE_READERS.get(leaf)?.(reader, leaf);
+): Promise<CodeViewTypeShape | undefined> =>
+  SHAPE_READERS.get(leaf)?.(reader, leaf) ?? readCodeViewTypeLinks(reader, leaf);
