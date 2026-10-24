@@ -9,15 +9,15 @@ export const codeViewInlineTypeName = (type: number, name: string): number[] =>
 export const codeViewCompositeText = (type: number, name: string): number[] => type < 0x1500
   ? legacyPascal(name) : [...codeViewUtf8(name), ...codeViewUtf8(`${type === 0x1507 ? ".?AW4" : ".?AU"}${name}@@`)];
 
-export const createPeWithCodeViewComposites = () => createPeWithDebugPayloads([{ type: 2,
+export const createPeWithCodeViewComposites = (declaredMethods = 2) => createPeWithDebugPayloads([{ type: 2,
   data: createLegacyCodeView([{ type: 0x121, module: 1, data: Uint8Array.from([
     ...legacyU32(4),
     ...codeViewFieldList([
       ...codeViewField(0x150d, [...legacyU16(3), ...legacyU32(0x74), ...legacyU16(0)], "count"),
       ...codeViewField(0x150d, [...legacyU16(3), ...legacyU32(0x1002), ...legacyU16(4)], "values"),
-      ...codeViewField(0x150f, [...legacyU16(2), ...legacyU32(0x100a)], "read")
+      ...codeViewField(0x150f, [...legacyU16(declaredMethods), ...legacyU32(0x100a)], "read")
     ], 0x1203),
-    ...codeViewTextRecord(0x1505, 4, [...legacyU16(4), ...legacyU16(0x201), ...legacyU32(0x1000),
+    ...codeViewTextRecord(0x1505, 4, [...legacyU16(2 + declaredMethods), ...legacyU16(0x201), ...legacyU32(0x1000),
       ...legacyU32(0), ...legacyU32(0), ...legacyU16(16), ...codeViewCompositeText(0x1505, "<Packet>&amp;")]),
     ...codeViewTextRecord(0x1503, 4, [...legacyU32(0x74), ...legacyU32(0x75), ...legacyU16(12), 0]),
     ...codeViewFieldList([

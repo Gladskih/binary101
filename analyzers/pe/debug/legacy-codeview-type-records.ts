@@ -5,6 +5,7 @@ import { readLegacyCodeViewTypeStrings } from "./legacy-codeview-type-strings.js
 import { readLegacyCodeViewEmbeddedSymbol, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
 import { readLegacyCodeViewPointerBase } from "./legacy-codeview-pointer-base.js";
 import { readCodeViewTypeShape, type CodeViewTypeShape } from "./legacy-codeview-type-shapes.js";
+import { validateCodeViewMethodLists } from "./legacy-codeview-method-validation.js";
 
 export interface LegacyCodeViewTypeRecord {
   type: number;
@@ -97,6 +98,7 @@ export const readLegacyCodeViewGlobalTypes = async (
       if (record) records.push({ ...record, index: 0x1000 + index });
     } catch (error) { reader.warn(`CodeView type ${index}: ${String(error)}`); }
   }
+  validateCodeViewMethodLists(records, reader.warn);
   return { kind: "types", records };
 };
 
@@ -158,5 +160,6 @@ export const readLegacyCodeViewModuleTypes = async (reader: LegacyCodeViewReader
       offset = value.end;
     } catch (error) { reader.warn(String(error)); break; }
   }
+  validateCodeViewMethodLists(records, reader.warn);
   return { kind: "types", records };
 };

@@ -48,3 +48,19 @@ void test("CodeView imported and ambiguous field-list namespaces never bind meth
   const indexed = indexCodeViewTypes(records);
   assert.equal(codeViewMethodNames(records, indexed, createCodeViewTypeFormatter(indexed)).size, 0);
 });
+
+void test("CodeView overload bindings respect the declaring field's repeat count", () => {
+  const records: LegacyCodeViewTypeRecord[] = [
+    { type: 0x1203, index: 0x1000, members: [
+      { type: 0x150f, name: "first", typeIndex: 0x1001, methodCount: 1 },
+      { type: 0x150f, name: "none", typeIndex: 0x1001, methodCount: 0 }
+    ] },
+    { type: 0x1206, index: 0x1001, shape: { kind: "methods", methods: [
+      { typeIndex: 0x1002, attributes: 3 }, { typeIndex: 0x1003, attributes: 3 }
+    ] } }
+  ];
+  const indexed = indexCodeViewTypes(records);
+  const names = codeViewMethodNames(records, indexed, createCodeViewTypeFormatter(indexed));
+  assert.deepEqual(names.get(0x1002), [{ name: "first", attributes: 3, vtableOffset: undefined }]);
+  assert.equal(names.has(0x1003), false);
+});

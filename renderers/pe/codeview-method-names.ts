@@ -20,7 +20,9 @@ const methodReferences = (member: LegacyCodeViewField,
     attributes: member.attributes, vtableOffset: member.vtableOffset }];
   if (!OVERLOADED_METHODS.has(member.type)) return [];
   const list = indexed.get(member.typeIndex)?.shape;
-  return list?.kind === "methods" ? list.methods.map(method => ({ ...method, name })) : [];
+  // LF_METHOD's count determines the claimed prefix, even when lists are shared.
+  return list?.kind === "methods" ? list.methods.slice(0, member.methodCount ?? list.methods.length)
+    .map(method => ({ ...method, name })) : [];
 };
 
 const sameName = (left: CodeViewFunctionName, right: CodeViewFunctionName): boolean =>

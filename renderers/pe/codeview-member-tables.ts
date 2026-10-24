@@ -13,7 +13,7 @@ import { codeViewMemberAttributes } from "./codeview-member-attributes.js";
 // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/DebugInfo/CodeView/TypeRecord.h
 const memberProperties = (member: LegacyCodeViewField, format: (index: number) => string): string => [
   ...codeViewMemberAttributes(member.attributes ?? 0),
-  member.methodCount === undefined ? "" : `${member.methodCount} overloads`,
+  member.methodCount === undefined ? "" : `${member.methodCount} declared overloads`,
   member.virtualBasePointer === undefined ? "" : `virtual base pointer: ${format(member.virtualBasePointer)}`,
   member.continuation === undefined ? "" : `continues field list #${member.continuation}`
 ].filter(Boolean).join("; ") || "none";

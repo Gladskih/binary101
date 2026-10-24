@@ -36,7 +36,7 @@ void test("CodeView members show exact enum values, field types and byte offsets
     ["1", "1", "Enumerator", "largest", "—", "18446744073709551615", "public", "unassociated"],
     ["1", "1", "Data member", "count", "int32", "offset: 12 bytes", "private", "unassociated"],
     ["1", "1", "Static data member", "total", "uint32", "—", "protected", "unassociated"],
-    ["1", "1", "Overloaded method", "read", "Methods #4097", "—", "2 overloads", "unassociated"]
+    ["1", "1", "Overloaded method", "read", "Methods #4097", "—", "2 declared overloads", "unassociated"]
   ]);
 });
 

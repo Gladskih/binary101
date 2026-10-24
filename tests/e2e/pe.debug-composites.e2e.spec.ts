@@ -31,3 +31,17 @@ for (const width of [390, 1280]) {
     await page.screenshot({ path: testInfo.outputPath("codeview-composites.png"), fullPage: true });
   });
 }
+
+test("CodeView incomplete overload lists retain recovered signatures and display their declared deficit", async ({ page }) => {
+  const file = createPeWithCodeViewComposites(3);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="debug"]');
+  await panel.locator(":scope > details > summary").click();
+  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await expect(panel).toContainText("read: declared variants 3; recovered variants 2");
+  const members = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-members"]');
+  await expect(members.getByRole("cell", { name: "3 declared overloads", exact: true })).toBeVisible();
+  const functions = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-functions"]');
+  await expect(functions.getByRole("cell", { name: "<Packet>&amp;::read", exact: true })).toHaveCount(2);
+});

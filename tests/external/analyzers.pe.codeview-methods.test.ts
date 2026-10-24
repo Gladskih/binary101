@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { parseCoffObject } from "../../analyzers/coff/index.js";
@@ -11,6 +11,11 @@ import { buildCodeViewFunctionTables } from "../../renderers/pe/codeview-functio
 import { codeViewInfoWithTypes } from "../fixtures/pe-codeview-callables.js";
 import { legacyReader } from "../fixtures/pe-legacy-codeview.js";
 import { MockFile } from "../helpers/mock-file.js";
+import { buildCodeViewMemberTables } from "../../renderers/pe/codeview-member-tables.js";
+
+const writeOverloadedClass = (path: string, count: number) => writeFile(path, "struct LargeOverloads {\n" +
+  Array.from({ length: count }, (_, index) => `void read(int (&values)[${index + 1}]);`).join("\n") +
+  "\n};\nLargeOverloads sample;\n");
 
 const llvmMethod = (block: string) => {
   const access = /^ {6}AccessSpecifier:.*\(0x([0-9A-F]+)\)/mi.exec(block);
@@ -69,4 +74,35 @@ void test("embedded DMD virtual table descriptors agree with unchanged Microsoft
     blocks.map(block => ({ kind: "vtableShape", slots:
       [...block.matchAll(/^\s*\[\d+\]: (\w+)/gm)].map(match => names.indexOf(match[1]!)) })));
   assert.ok(oracle.includes("Number of entries : 6"));
+});
+
+void test("real MSVC oversized overload exports retain all available methods and diagnose the declared deficit", async () => {
+  const source = resolve("scan-results/pe-debug-native/LargeOverloads.cpp");
+  const object = resolve("scan-results/pe-debug-native/LargeOverloads.obj");
+  await writeOverloadedClass(source, 9000); // 9000 eight-byte entries exceed the uint16 record length.
+  execFileSync("C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe",
+    ["/nologo", "/TP", "/Z7", "/Od", "/c", source, `/Fo${object}`]);
+  const oracle = execFileSync(resolve("scan-results/pe-debug-native/cvdump.exe"), ["-t", object],
+    { maxBuffer: 16 * 1024 * 1024 }).toString("utf8");
+  const bytes = await readFile(object);
+  const coff = await parseCoffObject(new MockFile(bytes));
+  const section = coff?.sections.find(value => value.name.value === ".debug$T");
+  assert.ok(section);
+  const warnings: string[] = [];
+  const types = await readLegacyCodeViewModuleTypes(legacyReader(bytes.subarray(section.pointerToRawData,
+    section.pointerToRawData + section.sizeOfRawData), warnings));
+  const methodLists = oracle.split(/(?=^0x[0-9a-f]+ :)/m).filter(block => /^0x[^\r\n]*LF_METHODLIST/.test(block));
+  assert.equal(methodLists.length, 1);
+  const available = [...methodLists[0]!.matchAll(/^\s*list\[\d+\]/gm)].length;
+  assert.equal(available, 808); // MSVC 14.51 exports 9000 mod 8192 entries; unchanged cvdump agrees.
+  assert.match(oracle, /LF_METHOD, count = 9000,/);
+  assert.equal(types.records.flatMap(record => record.shape?.kind === "methods" ? record.shape.methods : []).length,
+    available);
+  assert.deepEqual(warnings, ["CodeView overloaded method read: declared variants 9000; " +
+    "recovered variants 808. Some method declarations are unavailable."]);
+  const info = codeViewInfoWithTypes(types.records);
+  assert.equal(buildCodeViewFunctionTables(info)[0]?.rows.filter(row => row[2] === "LargeOverloads::read").length,
+    available);
+  assert.ok(buildCodeViewMemberTables(info)[0]?.rows.some(row => row[3] === "read"
+    && row[6] === "9000 declared overloads"));
 });
