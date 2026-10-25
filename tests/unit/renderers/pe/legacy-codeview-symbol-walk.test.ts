@@ -11,7 +11,8 @@ void test("CodeView symbol traversal retains physical ordering and immediate con
   ] })], [
     { record: { type: 0xe, children: [named] } }, { record: named, container: "This pointer" },
     { record: { type: 0x113b, children: [named, { type: 6 }] } },
-    { record: named, container: "Discarded symbols" }, { record: { type: 6 }, container: "Discarded symbols" },
+    { record: named, container: "Discarded symbols", addressContext: "discarded" },
+    { record: { type: 6 }, container: "Discarded symbols", addressContext: "discarded" },
     { record: named }
   ]);
 });
@@ -30,9 +31,9 @@ void test("CodeView symbol traversal includes symbols embedded in type leaves", 
     { type: 0x20c, symbols: [{ type: 0xe, children: [{ type: 0x110e, name: "value" }] }] },
     { type: 2, symbols: [{ type: 0x110d, name: "base" }] }, { type: 3, name: "array" }
   ] })], [
-    { record: { type: 0xe, children: [{ type: 0x110e, name: "value" }] }, container: "Referenced symbol" },
-    { record: { type: 0x110e, name: "value" }, container: "This pointer" },
-    { record: { type: 0x110d, name: "base" }, container: "Pointer" }
+    { record: { type: 0xe, children: [{ type: 0x110e, name: "value" }] }, container: "Referenced symbol", addressContext: "type" },
+    { record: { type: 0x110e, name: "value" }, container: "This pointer", addressContext: "type" },
+    { record: { type: 0x110d, name: "base" }, container: "Pointer", addressContext: "type" }
   ]);
   assert.deepEqual([...iterateLegacyCodeViewSymbols({ kind: "libraries", names: ["library"] })], []);
   assert.deepEqual([...iterateLegacyCodeViewSymbols({ kind: "symbols", records: [] })], []);

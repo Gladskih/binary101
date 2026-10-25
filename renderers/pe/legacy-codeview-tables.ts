@@ -1,4 +1,5 @@
 import type { PeLegacyCodeViewInfo, LegacyCodeViewData } from "../../analyzers/pe/debug/legacy-codeview.js";
+import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { LegacyCodeViewSource } from "../../analyzers/pe/debug/legacy-codeview-source.js";
 import type { LegacyCodeViewFiles } from "../../analyzers/pe/debug/legacy-codeview-modules.js";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
@@ -147,7 +148,8 @@ const addHistogram = (table: LegacyCodeViewTable, data: LegacyCodeViewData,
   if (data.kind === "types") addMemberHistogram(table, data, directory, module);
 };
 
-export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCodeViewTable[] => {
+export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo,
+  pe?: PeWindowsParseResult): LegacyCodeViewTable[] => {
   const tables = new Map<string, LegacyCodeViewTable>();
   const inventory: LegacyCodeViewTable = { key: "inventory", title: "Subsection inventory",
     columns: ["Directory", "Subsection", "Records", "Payload bytes", "Decoded"], rows: [] };
@@ -179,7 +181,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo): LegacyCod
     ...buildLegacyCodeViewSymbolStringTables(info), ...buildLegacyCodeViewConstantTables(info),
     ...buildLegacyCodeViewEmbeddedSymbolTables(info),
     ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
-    ...buildLegacyCodeViewProcedureTables(info),
+    ...buildLegacyCodeViewProcedureTables(info, pe),
     ...buildLegacyCodeViewDataSymbolTables(info),
     ...buildCodeViewMemberTables(info), ...buildCodeViewBuildTables(info), ...buildCodeViewDerivedTables(info),
     ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info), ...buildCodeViewC6TypeTables(info)]

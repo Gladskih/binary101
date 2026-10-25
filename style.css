@@ -662,6 +662,11 @@ dd{margin:0;word-break:normal;overflow-wrap:anywhere}
 .tableWrap > .peCodeViewDiscardedTable{min-width:64rem}
 .tableWrap > .peCodeViewBoundsTable{min-width:44rem}
 .tableWrap > .peCodeViewMetadataTable{min-width:40rem}
+.tableWrap > .peCodeViewProcedureTable{min-width:90rem;table-layout:auto}
+.peCodeViewProcedureTable th{white-space:nowrap}
+.peCodeViewProcedureTable td:first-child{min-width:14rem}
+.peCodeViewProcedureTable td:nth-child(5){min-width:18rem}
+.peCodeViewProcedureTable .peNumeric{white-space:nowrap}
 .peCodeViewMemberTable .peNumeric{white-space:nowrap}
 .peCodeViewTypeTable .peNumeric{white-space:nowrap}
 .peCodeViewFunctionTable .peNumeric{white-space:nowrap}

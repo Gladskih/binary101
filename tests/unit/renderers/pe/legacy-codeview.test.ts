@@ -7,6 +7,9 @@ import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
 import { createDebugViewEntry } from "../../../fixtures/pe-debug-view-subject.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
 import { codeViewInfoWithTypes } from "../../../fixtures/pe-codeview-callables.js";
+import { createPeWithProcedureRvas } from "../../../fixtures/pe-codeview-procedure-rva-file.js";
+import { parsePeHeaders } from "../../../../analyzers/pe/core/index.js";
+import { parseDebugDirectory } from "../../../../analyzers/pe/debug/directory.js";
 
 const subject = () => {
   const pe = createBasePe();
@@ -14,6 +17,32 @@ const subject = () => {
   pe.debug = { entry: null, entries: [entry] };
   return { pe, entry };
 };
+
+void test("Procedure RVA resolution agrees between rendered PE details, paging and appended CodeView sources", async () => {
+  const file = createPeWithProcedureRvas();
+  const core = await parsePeHeaders(file);
+  assert.ok(core);
+  const pe = createBasePe();
+  pe.sections = core.sections;
+  const debug = await parseDebugDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
+  pe.debug = { entry: debug.entry, entries: debug.entries };
+  const entry = pe.debug.entries![0]!;
+  const out: string[] = [];
+  renderLegacyCodeView(entry, 0, out, pe);
+  const model = getLegacyCodeViewTableModel(pe, "pe-debug-entry-0-legacy-procedureSymbols")!;
+
+  assert.equal(model.rowAt(0)?.cells[0]?.html, "&lt;mapped&gt;&amp;amp;");
+  assert.equal(model.rowAt(0)?.cells[1]?.html, "0x1030");
+  assert.equal(model.rowAt(0)?.cells[2]?.html, "#1 .text");
+  assert.match(out.join(""), /Procedure address resolution/);
+  assert.match(out.join(""), /0x1030/);
+  pe.debug.codeViewSources = [{ kind: "section", offset: 0, size: file.size, legacyCodeView: entry.legacyCodeView! }];
+  const sources: string[] = [];
+  renderCodeViewSources(pe, sources);
+  assert.match(sources.join(""), /0x1030/);
+  assert.equal(getLegacyCodeViewTableModel(pe, "pe-debug-codeviewSource-0-legacy-procedureSymbols")!
+    .rowAt(1)?.cells[4]?.html, "Procedure exceeds logical segment bounds.");
+});
 
 void test("CodeView stored type strings preserve literal entity spellings", () => {
   const { pe, entry } = subject();

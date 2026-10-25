@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildLegacyCodeViewProcedureTables } from "../../../../renderers/pe/legacy-codeview-procedure-tables.js";
 import { createLegacyCodeViewInfo } from "../../../fixtures/pe-legacy-codeview-view.js";
+import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
+import { codeViewAddressInfo, codeViewAddressSections } from "../../../fixtures/pe-codeview-procedure-addresses.js";
 
 void test("CodeView procedure rows preserve names, stored spans, references, flags, and raw scope offsets", () => {
   const info = createLegacyCodeViewInfo();
@@ -36,4 +38,60 @@ void test("CodeView procedure rows preserve names, stored spans, references, fla
 
 void test("CodeView procedure table omits directories without procedure symbols", () => {
   assert.deepEqual(buildLegacyCodeViewProcedureTables(createLegacyCodeViewInfo()), []);
+});
+
+void test("CodeView procedure image addresses retain names and summarize unresolved ranges", () => {
+  const info = codeViewAddressInfo();
+  const pe = createBasePe();
+  pe.sections = codeViewAddressSections();
+  info.directories[0]!.subsections.push({ type: 0x125, module: 1, offset: 32, size: 128,
+    data: { kind: "symbols", records: [
+      { type: 0x1110, name: "<mapped>&amp;", procedure: { referenceKind: "typeIndex", codeLength: 32,
+        storedLocation: { segment: 1, offset: 16 } } },
+      { type: 0x110f, name: "too_long", procedure: { referenceKind: "typeIndex", codeLength: 64,
+        storedLocation: { segment: 1, offset: 16 } } },
+      { type: 0x110f, name: "<second>", procedure: { referenceKind: "typeIndex", codeLength: 32,
+        storedLocation: { segment: 1, offset: 16 } } }
+    ] } });
+  const tables = buildLegacyCodeViewProcedureTables(info, pe);
+
+  assert.deepEqual(tables[0], { key: "procedureAddresses", title: "Procedure address resolution",
+    columns: ["Result", "Records"], rows: [["Resolved in #2 .code", "2"],
+      ["Unresolved: Procedure exceeds logical segment bounds.", "1"]] });
+  assert.deepEqual(tables[1]?.columns.slice(0, 5), ["Name", "Image RVA", "PE section", "Code length", "Address resolution"]);
+  assert.deepEqual(tables[1]?.rows[0]?.slice(0, 5), ["<mapped>&amp;", "0x3030", "#2 .code", "32",
+    "Full stored range fits the image section"]);
+  assert.deepEqual(tables[1]?.rows[1]?.slice(0, 5), ["too_long", "unresolved", "unavailable", "64",
+    "Procedure exceeds logical segment bounds."]);
+  assert.deepEqual(buildLegacyCodeViewProcedureTables(createLegacyCodeViewInfo(), pe), []);
+});
+
+void test("Discarded procedures never acquire an RVA even through nested symbol containers", () => {
+  const info = codeViewAddressInfo();
+  const pe = createBasePe();
+  pe.sections = codeViewAddressSections();
+  info.directories[0]!.subsections.push({ type: 0x125, module: 1, offset: 32, size: 128,
+    data: { kind: "symbols", records: [{ type: 0x113b, children: [{ type: 0xe, children: [
+      { type: 0x1110, name: "removed_function", procedure: { referenceKind: "typeIndex", codeLength: 32,
+        storedLocation: { segment: 1, offset: 16 } } }
+    ] }] }] } });
+  const tables = buildLegacyCodeViewProcedureTables(info, pe);
+
+  assert.deepEqual(tables[1]?.rows[0]?.slice(0, 5), ["removed_function", "unresolved", "unavailable", "32",
+    "Discarded symbol does not identify current image code."]);
+});
+
+void test("Type-embedded procedures keep their names without assuming an image address context", () => {
+  const info = codeViewAddressInfo();
+  const pe = createBasePe();
+  pe.sections = codeViewAddressSections();
+  info.directories[0]!.subsections.push({ type: 0x121, module: 1, offset: 32, size: 128,
+    data: { kind: "types", records: [{ type: 0x20c, symbols: [
+      { type: 0x1110, name: "type_function", procedure: { referenceKind: "typeIndex", codeLength: 32,
+        storedLocation: { segment: 1, offset: 16 } } }
+    ] }] } });
+  const tables = buildLegacyCodeViewProcedureTables(info, pe);
+
+  assert.deepEqual(tables[1]?.rows[0]?.slice(0, 5), ["type_function", "unresolved", "unavailable", "32",
+    "Type-embedded symbol address context is not established."]);
 });

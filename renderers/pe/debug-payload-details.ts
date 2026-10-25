@@ -218,7 +218,7 @@ export const renderDecodedEntryDetails = (
     renderEntryCommonFields(pe, entry, out);
     renderCoffFields(entry, entryIndex, out);
     renderCodeViewFields(entry, out);
-    renderLegacyCodeView(entry, entryIndex, out);
+    renderLegacyCodeView(entry, entryIndex, out, pe);
     renderTd32(entry, entryIndex, out);
     renderFpoStatistics(entry, out);
     renderFixupStatistics(pe, entry, entryIndex, out);
