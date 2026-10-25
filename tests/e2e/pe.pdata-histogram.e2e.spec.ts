@@ -52,12 +52,12 @@ void test("pdata histogram scrolls within its panel on a narrow screen", async (
   expect(widths.plot).toBeGreaterThan(widths.panel);
   expect(widths.page).toBe(widths.viewport);
   const statistics = page.locator('[data-pe-lazy-section="exception"] .peSectionBody > dl');
-  const bounds = await statistics.evaluate(element => ({
+  const bounds = await statistics.evaluateAll(elements => elements.map(element => ({
     right: element.getBoundingClientRect().right,
     cellRight: Math.max(...Array.from(element.children,
       child => child.getBoundingClientRect().right))
-  }));
-  expect(bounds.cellRight).toBeLessThanOrEqual(bounds.right);
+  })));
+  for (const bound of bounds) expect(bound.cellRight).toBeLessThanOrEqual(bound.right);
   await histogram.scrollIntoViewIfNeeded();
   await histogram.evaluate(element => { element.scrollLeft = element.scrollWidth; });
   await expect(histogram.locator("svg text").filter({ hasText: /^16$/ })).toBeInViewport();

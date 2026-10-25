@@ -30,5 +30,6 @@ void test("v1/v2 view omits empty inventories and unavailable extrema", () => {
   assert.equal(renderExceptionV12(createV12Statistics()), "");
   const html = renderExceptionV12({ ...createV12Statistics(), blockCount: 1 });
   assert.doesNotMatch(html, /<table|Largest|Blocks with incomplete/);
+  assert.match(html, /<dl class="peExceptionStats"><dt>UNWIND_INFO v1\/v2/);
   assert.match(html, /v1\/v2 blocks summarized<\/dt><dd>1/);
 });
