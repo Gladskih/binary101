@@ -45,6 +45,47 @@ void test("separates kernel privilege from IOPL restrictions and ordinary timing
   ]);
 });
 
+// Intel SDM Vol. 1, section 8.1.5: the x87 control word selects 24/53/64-bit
+// significand precision; MXCSR controls SSE rounding/denormals, not precision.
+for (const [name, bytes] of [
+  ["FLDCW", [0xd9, 0x28]],
+  ["FLDENV", [0xd9, 0x20]],
+  ["FRSTOR", [0xdd, 0x20]],
+  ["FNINIT", [0xdb, 0xe3]],
+  ["FNSAVE", [0xdd, 0x30]],
+  ["FXRSTOR", [0x0f, 0xae, 0x08]],
+  ["FXRSTOR64", [0x48, 0x0f, 0xae, 0x08]],
+  ["LDMXCSR", [0x0f, 0xae, 0x10]]
+] as const) {
+  void test(`recognizes ${name} as floating-point environment control`, () => {
+    assert.deepEqual(collect([...bytes]), [
+      { categories: ["fp-control"], instruction: name, count: 1, sampleAddresses: [0] }
+    ]);
+  });
+}
+
+void test("recognizes waiting x87 initialization and save after a separate FWAIT", () => {
+  // iced decodes the 9Bh FWAIT prefix as its own instruction.
+  assert.deepEqual(collect([0x9b, 0xdb, 0xe3, 0x9b, 0xdd, 0x30]), [
+    { categories: ["fp-control"], instruction: "FNINIT", count: 1, sampleAddresses: [1] },
+    { categories: ["fp-control"], instruction: "FNSAVE", count: 1, sampleAddresses: [4] }
+  ]);
+});
+
+void test("detects x87 precision control in 32-bit code such as legacy games", () => {
+  assert.deepEqual(collect([0xd9, 0x28, 0x0f, 0xae, 0x10], 32), [
+    { categories: ["fp-control"], instruction: "FLDCW", count: 1, sampleAddresses: [0] },
+    { categories: ["fp-control"], instruction: "LDMXCSR", count: 1, sampleAddresses: [2] }
+  ]);
+});
+
+void test("does not confuse storing FP controls or arithmetic with changing the environment", () => {
+  assert.deepEqual(collect([
+    0xd9, 0x38, // FNSTCW [RAX]: stores x87 control word, no precision change
+    0x0f, 0xae, 0x18, // STMXCSR [RAX]: stores MXCSR, no state change
+    0xd8, 0xc1 // FADD ST(0), ST(1): ordinary floating-point arithmetic
+  ]), []);
+});
 
 void test("ignores empty, truncated and invalid instructions", () => {
   assert.deepEqual(collect([]), []);

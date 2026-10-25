@@ -10,6 +10,7 @@ export const SPECIAL_INSTRUCTION_CATEGORIES = {
   virtualization: ["Virtualization", "Controls virtual machines or their state; CPU mode and hypervisor configuration govern execution."],
   hypercall: ["Hypervisor call", "Can transfer control to a hypervisor; the operation and calling convention require context."],
   "cpu-query": ["CPU capabilities", "Queries processor features or enabled extended state; often used to select compatible code paths."],
+  "fp-control": ["Floating-point environment", "Loads, restores or resets floating-point controls; the x87 control word selects 24, 53 or 64-bit precision, while SSE MXCSR controls rounding and denormals."],
   timing: ["Timing / counters", "Reads timestamps or performance counters; useful for profiling, but alone does not prove anti-debugging."],
   "system-state": ["System state", "Accesses processor control, debug registers or descriptor tables; exposes low-level OS interaction."],
   "cache-tlb": ["Cache / address translation", "Manages cached data or address translations; relevant to coherency, persistence and memory management."],
@@ -64,6 +65,17 @@ export const SPECIAL_INSTRUCTION_CATALOG: Readonly<Record<
   VMMCALL: ["hypercall", "AMD's instruction for requesting a VMM service; the intercept configuration and register arguments determine behavior."],
   CPUID: ["cpu-query", "Reads a selected processor-information leaf; can query features, topology or a hypervisor interface."],
   XGETBV: ["cpu-query", "Reads an extended control register; commonly checks which vector register state the OS enables."],
+  // Intel SDM Vol. 1, section 8.1.5 (x87 control word), and Vol. 2
+  // (FLDENV/FRSTOR/FXRSTOR/LDMXCSR). A decoded site alone does not reveal
+  // the control word loaded or whether a precision change occurs at runtime.
+  FLDCW: ["fp-control", "Loads the x87 control word from memory. Its precision field selects 24, 53 or 64 bits; a change depends on the actual value loaded."],
+  FLDENV: ["fp-control", "Restores the x87 environment, including the control word; it may change precision, rounding and exception masks depending on saved state."],
+  FRSTOR: ["fp-control", "Restores saved x87 registers and environment, including the control word that selects arithmetic precision and rounding."],
+  FNINIT: ["fp-control", "Initializes the x87 state without first checking pending exceptions; resets the control word to 037Fh with 64-bit precision."],
+  FNSAVE: ["fp-control", "Saves the x87 state without first checking pending exceptions, then initializes it; the control word returns to default 64-bit precision."],
+  FXRSTOR: ["fp-control", "Restores x87 and SIMD state, including the x87 control word and MXCSR; their saved values can alter precision and rounding behavior."],
+  FXRSTOR64: ["fp-control", "Restores x87 and SIMD state using 64-bit addressing, including the x87 control word and MXCSR configuration."],
+  LDMXCSR: ["fp-control", "Loads the MXCSR register from memory; can change SSE rounding and denormal handling, but does not select x87 arithmetic precision."],
   RDTSC: ["timing", "Reads the timestamp counter without full serialization; timing interpretation depends on surrounding instructions."],
   RDTSCP: ["timing", "Reads the timestamp counter and TSC_AUX with partial ordering; useful for timing and processor-context identification."],
   RDPMC: ["timing", "Reads a selected performance counter; counter configuration and OS permissions determine its meaning and availability."],
