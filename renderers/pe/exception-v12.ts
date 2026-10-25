@@ -14,7 +14,8 @@ export const renderExceptionV12 = (statistics: Amd64UnwindV12Statistics): string
   return `<p class="smallNote">AMD64 UNWIND_INFO v1/v2 inventories count each unique referenced block once. ` +
     `Allocation sizes are explicit operations, not reconstructed function-frame sizes. ` +
     `Shared and chained blocks are not counted as independent function frames; ` +
-    `decoded prefixes of incomplete blocks contribute to the inventories.</p><dl>` +
+    `decoded prefixes of incomplete blocks contribute to the inventories.</p>` +
+    `<dl class="peExceptionStats">` +
     renderDefinitionRow("UNWIND_INFO v1/v2 blocks summarized", String(statistics.blockCount)) +
     (statistics.incompleteBlockCount ? renderDefinitionRow("Blocks with incomplete operation decoding",
       String(statistics.incompleteBlockCount)) : "") +
