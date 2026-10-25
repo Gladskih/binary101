@@ -1,10 +1,29 @@
 # PE special instructions: implementation and disk validation
 
-Validated on 2026-09-06 using the same control-flow ISA analyzer and seed collector as the browser. All 12 categories were found in installed Windows PE files. Each instruction found in this scan has its own glossary explanation.
+Validated on 2026-09-06 using the same control-flow ISA analyzer and seed collector as the browser. All 12 categories present at that time were found in installed Windows PE files. Each instruction found in this scan has its own glossary explanation.
 
 Purpose and CPU-privilege tags can coexist on one row. Counts are decoded sites; up to three RVA examples are retained per mnemonic. Selecting an example opens disassembly at that address. Category and instruction explanations use native details/summary controls, available to keyboard and touch users.
 
 This is a static sample of reachable code, not execution evidence. It can miss indirect or generated code and can encounter invalid decodes. CPUID/timestamp instructions do not establish anti-debugging intent, and security instructions do not establish that a protection is enabled.
+
+## Floating-point environment category
+
+The x86 ISA analyzer now also highlights floating-point environment changes in both PE and
+ELF files. In particular, `FLDCW` loads the x87 control word: bits 8–9 select 24-bit,
+53-bit or 64-bit significand precision (`00`, `10`, `11`, respectively). This is the
+kind of setting that can matter to legacy games and numerical code such as Pinball.
+
+Other flagged instructions are `FLDENV`, `FRSTOR`, `FNINIT`, `FNSAVE`, `FXRSTOR`,
+`FXRSTOR64` and `LDMXCSR`. Loading/restoring x87 state may also alter precision;
+initialization resets it to 64-bit precision. `LDMXCSR` affects SSE rounding and
+denormal-number handling but **does not** select x87 arithmetic precision. iced-x86
+decodes the waiting `FINIT`/`FSAVE` forms as `FWAIT` followed by `FNINIT`/`FNSAVE`,
+so the reported site is the latter instruction.
+
+Detection records instructions and addresses, **not** the control-word contents or
+execution history. A `FLDCW` site alone cannot prove whether precision was actually
+changed or which of the three precision modes was loaded. The new category is
+covered by instruction-byte unit tests, not by the historical disk scan below.
 
 ## Real-file evidence
 

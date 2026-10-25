@@ -57,3 +57,15 @@ void test("escapes unrecognized instruction text and explains the privilege fall
   assert.doesNotMatch(html, /<HLT>/);
   assert.match(html, /A privileged processor operation/);
 });
+
+void test("explains x87 precision switching without claiming a proven precision change", () => {
+  const html = renderSpecialInstructions([
+    { categories: ["fp-control"], instruction: "FLDCW", count: 2, sampleRvas: [0x1234] },
+    { categories: ["fp-control"], instruction: "LDMXCSR", count: 1, sampleRvas: [] }
+  ]);
+  assert.match(html, /Floating-point environment/);
+  assert.match(html, /24, 53 or 64 bits/);
+  assert.match(html, /actual value loaded/);
+  assert.match(html, /SSE rounding and denormal/);
+  assert.match(html, /data-pe-special-rva="4660"/);
+});
