@@ -56,7 +56,9 @@ const parseLzma2Props = (bytes: Uint8Array | null | undefined): { dictSize: numb
   if (prop === undefined) return null;
   if (prop > 40) return { dictSize: null };
   const base = (prop & 1) + 2;
-  const dictSize = base << (Math.floor(prop / 2) + 11);
+  // C/Lzma2Dec.c: property 40 denotes UINT32_MAX, others scale by powers of two.
+  // https://github.com/ip7z/7zip/blob/b88c6bc09339de32f7d18bbab900686b244f42ba/C/Lzma2Dec.c
+  const dictSize = prop === 40 ? 0xffff_ffff : base * 2 ** (Math.floor(prop / 2) + 11);
   return { dictSize };
 };
 

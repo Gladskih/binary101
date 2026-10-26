@@ -6,9 +6,9 @@ import type {
 } from "./types.js";
 import { parseHeader } from "./header-sections.js";
 import { toSafeNumber } from "./readers.js";
-import { decompressLzmaWithProperties } from "../lzma/decoder.js";
+import { decodeLzmaCoder, isLzmaMethod } from "./lzma-coder.js";
 import { SEVENZIP_HEADER_MARKER, SEVENZIP_SIGNATURE_HEADER_SIZE } from "./layout.js";
-import { SEVENZIP_LZMA_METHOD_ID } from "./method-ids.js";
+import { crc32 } from "../crc32.js";
 
 const SINGLE_STREAM_COUNT = 1;
 
@@ -19,12 +19,45 @@ const getSingleLzmaFolder = (
   if (folders.length !== SINGLE_STREAM_COUNT) return null;
   const folder = folders[0];
   if (!folder || folder.coders.length !== SINGLE_STREAM_COUNT) return null;
+  if (folder.numPackedStreams !== 1 || folder.numBindPairs !== 0) return null;
   const coder = folder.coders[0];
-  return coder?.methodId === SEVENZIP_LZMA_METHOD_ID ? folder : null;
+  return coder?.inStreams === 1 && coder.outStreams === 1 && isLzmaMethod(coder.methodId)
+    ? folder : null;
 };
 
 const getSingleValue = <T>(values: T[] | undefined): T | null =>
   values?.length === SINGLE_STREAM_COUNT && values[0] != null ? values[0] : null;
+
+const readPackedHeader = async (
+  file: File, packPos: bigint, packSize: bigint
+): Promise<Uint8Array> => {
+  const packedOffset = SEVENZIP_SIGNATURE_HEADER_SIZE + packPos;
+  const offset = toSafeNumber(packedOffset);
+  const size = toSafeNumber(packSize);
+  if (offset == null || size == null) {
+    throw new Error("Encoded 7z header packed stream exceeds supported range.");
+  }
+  if (packPos < 0n || packSize < 0n || packedOffset + packSize > BigInt(file.size)) {
+    throw new Error("Encoded 7z header packed stream lies outside the file bounds.");
+  }
+  return new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
+};
+
+const checkHeaderCrc = (bytes: Uint8Array, expected: number | undefined, label: string): void => {
+  if (expected !== undefined && crc32(bytes) !== expected) throw new Error(`${label} CRC mismatch.`);
+};
+
+const parseDecodedHeader = (
+  decoded: Uint8Array, issues: string[]
+): SevenZipParsedNextHeader | null => {
+  if (decoded[0] !== SEVENZIP_HEADER_MARKER) {
+    issues.push("Decoded 7z header did not start with a Header marker.");
+    return null;
+  }
+  return { kind: "header", sections: parseHeader({
+    dv: new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength), offset: 1, issues
+  }) };
+};
 
 export const decodeEncodedHeader = async (
   file: File,
@@ -45,36 +78,19 @@ export const decodeEncodedHeader = async (
     issues.push("Encoded 7z header uses an unsupported stream layout.");
     return null;
   }
-  const packedOffset = SEVENZIP_SIGNATURE_HEADER_SIZE + packPos;
-  const offsetNumber = toSafeNumber(packedOffset);
-  const sizeNumber = toSafeNumber(packSize);
-  if (offsetNumber == null || sizeNumber == null) {
-    issues.push("Encoded 7z header packed stream exceeds supported range.");
-    return null;
-  }
-  if (packedOffset + packSize > BigInt(file.size || 0)) {
-    issues.push("Encoded 7z header packed stream lies outside the file bounds.");
-    return null;
-  }
-  const propertyBytes = coder.propertyBytes || [];
-  const packedBytes = new Uint8Array(
-    await file.slice(offsetNumber, offsetNumber + sizeNumber).arrayBuffer()
-  );
   try {
-    const decoded = await decompressLzmaWithProperties(propertyBytes, packedBytes, unpackSize);
-    const ctx = {
-      dv: new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength),
-      offset: Uint8Array.BYTES_PER_ELEMENT,
-      issues
-    };
-    if (decoded[0] !== SEVENZIP_HEADER_MARKER) {
-      issues.push("Decoded 7z header did not start with a Header marker.");
-      return null;
-    }
-    return { kind: "header", sections: parseHeader(ctx) };
+    const packed = await readPackedHeader(file, packPos, packSize);
+    checkHeaderCrc(packed, packInfo?.packCrcs.find(digest => digest.index === 0)?.crc,
+      "Encoded 7z packed header");
+    const decoded = await decodeLzmaCoder(coder.methodId, coder.propertyBytes || [], packed, unpackSize);
+    checkHeaderCrc(decoded,
+      parsed.headerStreams.unpackInfo?.folderCrcs?.digests.find(digest => digest.index === 0)?.crc,
+      "Decoded 7z header");
+    return parseDecodedHeader(decoded, issues);
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : String(error);
-    issues.push(`Encoded 7z header decode failed: ${message}`);
+    issues.push(message.startsWith("Encoded 7z header packed stream")
+      ? message : `Encoded 7z header decode failed: ${message}`);
     return null;
   }
 };

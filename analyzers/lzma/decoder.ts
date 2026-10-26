@@ -6,6 +6,13 @@ export interface TrackedLzmaResult {
   consumedPackedBytes: number;
 }
 
+const validateUnpackSize = (unpackSize: bigint): void => {
+  // The decoder exposes wasm32 addresses; its allocator checks the complete working range.
+  if (unpackSize < 0n || unpackSize > 0xffff_ffffn) {
+    throw new Error("LZMA unpack size exceeds supported range.");
+  }
+};
+
 const validateProperties = (properties: number[], unpackSize: bigint): void => {
   // LZMA_PROPS_SIZE in the pinned SDK's C/LzmaDec.h is five bytes.
   // https://github.com/ip7z/7zip/blob/b88c6bc09339de32f7d18bbab900686b244f42ba/C/LzmaDec.h
@@ -15,10 +22,7 @@ const validateProperties = (properties: number[], unpackSize: bigint): void => {
       throw new Error("LZMA coder properties must contain byte values.");
     }
   }
-  // The decoder exposes wasm32 addresses; its allocator checks the complete working range.
-  if (unpackSize < 0n || unpackSize > 0xffff_ffffn) {
-    throw new Error("LZMA unpack size exceeds supported range.");
-  }
+  validateUnpackSize(unpackSize);
 };
 
 const checkedResult = (result: DecodeResult, size: number): TrackedLzmaResult => {
@@ -32,31 +36,64 @@ const checkedResult = (result: DecodeResult, size: number): TrackedLzmaResult =>
   return { bytes: result.data, consumedPackedBytes: result.bytesRead };
 };
 
-export const createLzmaDecompressor = (load: () => Promise<Decoder> = loadLzmaDecoder) => {
+const createRuntime = (load: () => Promise<Decoder>) => {
   let decoder: Promise<Decoder> | undefined;
-  return async (properties: number[], packed: Uint8Array, size: bigint): Promise<TrackedLzmaResult> => {
-    validateProperties(properties, size);
-    let result: DecodeResult;
+  return async (decode: (native: Decoder) => DecodeResult): Promise<DecodeResult> => {
     try {
       decoder ??= load();
-      result = (await decoder).decodeLzma(packed, Uint8Array.from(properties), Number(size));
+      return decode(await decoder);
     } catch (error) {
       // Retry initialization on the next file; a trapped SDK instance is quarantined.
       decoder = undefined;
       throw error;
     }
-    return checkedResult(result, Number(size));
   };
 };
 
-export const decompressLzmaWithPropertiesTracked = createLzmaDecompressor();
+const createLzmaDecode = (run: ReturnType<typeof createRuntime>) =>
+  async (properties: number[], packed: Uint8Array, size: bigint): Promise<TrackedLzmaResult> => {
+    validateProperties(properties, size);
+    return checkedResult(await run(native =>
+      native.decodeLzma(packed, Uint8Array.from(properties), Number(size))), Number(size));
+  };
+
+const createLzma2Decode = (run: ReturnType<typeof createRuntime>) =>
+  async (property: number, packed: Uint8Array, size: bigint): Promise<TrackedLzmaResult> => {
+    // Lzma2Dec_GetOldProps accepts one dictionary property in the range 0..40.
+    // https://github.com/ip7z/7zip/blob/b88c6bc09339de32f7d18bbab900686b244f42ba/C/Lzma2Dec.c
+    if (!Number.isInteger(property) || property < 0 || property > 40) {
+      throw new Error("LZMA2 dictionary property is invalid.");
+    }
+    validateUnpackSize(size);
+    const result = await run(native => native.decodeLzma2(packed, property, Number(size)));
+    const decoded = checkedResult(result, Number(size));
+    if (result.status !== 1) throw new Error("LZMA2 stream has no end marker.");
+    return decoded;
+  };
+
+export const createLzmaDecompressor = (load: () => Promise<Decoder> = loadLzmaDecoder) =>
+  createLzmaDecode(createRuntime(load));
+
+export const createLzma2Decompressor = (load: () => Promise<Decoder> = loadLzmaDecoder) =>
+  createLzma2Decode(createRuntime(load));
+
+const runtime = createRuntime(loadLzmaDecoder);
+export const decompressLzmaWithPropertiesTracked = createLzmaDecode(runtime);
+const decompressLzma2Tracked = createLzma2Decode(runtime);
+
+const completeInput = (result: TrackedLzmaResult, size: number): Uint8Array => {
+  if (result.consumedPackedBytes !== size) throw new Error("LZMA stream has unconsumed input.");
+  return result.bytes;
+};
 
 export const decompressLzmaWithProperties = async (
   properties: number[], packed: Uint8Array, size: bigint
 ): Promise<Uint8Array> => {
-  const result = await decompressLzmaWithPropertiesTracked(properties, packed, size);
-  if (result.consumedPackedBytes !== packed.byteLength) {
-    throw new Error("LZMA stream has unconsumed input.");
-  }
-  return result.bytes;
+  return completeInput(await decompressLzmaWithPropertiesTracked(properties, packed, size),
+    packed.byteLength);
 };
+
+export const decompressLzma2WithProperty = async (
+  property: number, packed: Uint8Array, size: bigint
+): Promise<Uint8Array> =>
+  completeInput(await decompressLzma2Tracked(property, packed, size), packed.byteLength);

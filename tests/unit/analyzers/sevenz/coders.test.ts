@@ -45,3 +45,13 @@ void test("parseCoderProperties decodes LZMA, LZMA2, Delta and BCJ props", () =>
 void test("parseCoderProperties returns null for unsupported methods", () => {
   assert.equal(parseCoderProperties("ff", Uint8Array.from([0x01])), null);
 });
+
+for (const [property, dictSize] of [
+  [0, 4096], [1, 6144], [37, 1_610_612_736], [38, 2_147_483_648],
+  [39, 3_221_225_472], [40, 4_294_967_295], [41, null]
+] as const) {
+  void test(`LZMA2 dictionary property ${property} matches the SDK`, () => {
+    // C/Lzma2Dec.c: property 40 is UINT32_MAX; no signed JS shifts are valid here.
+    assert.deepEqual(parseCoderProperties("21", Uint8Array.of(property)), { dictSize });
+  });
+}

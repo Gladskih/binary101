@@ -5,8 +5,30 @@ import { test } from "node:test";
 import { hasSevenZipSignature, parseSevenZip } from "../../../../analyzers/sevenz/index.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
+import { lzma2SevenZipEncoded, lzma2SevenZipPlain } from "../../../fixtures/lzma2-sevenzip-file.js";
 
 const SIGNATURE = [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c];
+
+for (const [name, fixture] of [["plain", lzma2SevenZipPlain],
+  ["encoded", lzma2SevenZipEncoded]] as const) {
+  void test(`7z with ${name} header exposes an extractable real LZMA2 file`, async () => {
+    const parsed = await parseSevenZip(new MockFile(fixture(), "lzma2.7z"));
+
+    assert.deepEqual(parsed.issues, []);
+    assert.equal(parsed.structure?.files[0]?.name, "payload.bin");
+    assert.equal(parsed.structure?.files[0]?.uncompressedSize, 8192n);
+    assert.equal(parsed.structure?.files[0]?.extractError, undefined);
+    assert.equal(parsed.structure?.folders[0]?.coders[0]?.methodId, "21");
+  });
+}
+
+void test("LZMA2 encoded header is decoded rather than merely recognized", async () => {
+  const parsed = await parseSevenZip(new MockFile(lzma2SevenZipEncoded(), "lzma2.7z"));
+
+  assert.equal(parsed.nextHeader?.parsed?.kind, "encoded");
+  assert.equal(parsed.headerEncoding?.coders[0]?.coders[0]?.methodId, "21");
+  assert.equal(parsed.decodedHeader?.kind, "header");
+});
 
 const buildStartHeader = (nextHeaderLength: number | bigint, nextHeaderOffset = 0n): Uint8Array => {
   const header = new Uint8Array(32).fill(0);

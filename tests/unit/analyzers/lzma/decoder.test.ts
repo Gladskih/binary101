@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { DecodeResult, Decoder } from "lzma-sdk-decode";
 import {
-  createLzmaDecompressor, decompressLzmaWithProperties, decompressLzmaWithPropertiesTracked
+  createLzmaDecompressor, decompressLzmaWithProperties, decompressLzmaWithPropertiesTracked,
+  createLzma2Decompressor, decompressLzma2WithProperty
 } from "../../../../analyzers/lzma/decoder.js";
-import { lzmaBinary, lzmaData, lzmaProperties } from "../../../fixtures/lzma.js";
+import {
+  lzmaBinary, lzmaData, lzmaProperties, lzma2Compressed, lzma2Data
+} from "../../../fixtures/lzma.js";
 
 const complete = (changes: Partial<DecodeResult> = {}): DecodeResult => ({
   data: new TextEncoder().encode("DATA"), bytesRead: lzmaData.length,
@@ -12,6 +15,73 @@ const complete = (changes: Partial<DecodeResult> = {}): DecodeResult => ({
 });
 const sdk = (decodeLzma: Decoder["decodeLzma"]): Decoder => ({
   decodeLzma, decodeLzma2: () => { throw new Error("Unexpected LZMA2 call"); }
+});
+
+void test("LZMA2 decodes independent liblzma compressed and uncompressed chunks", async () => {
+  assert.deepEqual(await decompressLzma2WithProperty(0, lzma2Compressed, 4096n),
+    new TextEncoder().encode("DATA".repeat(1024)));
+  assert.deepEqual(await decompressLzma2WithProperty(40, lzma2Data, 4n),
+    new TextEncoder().encode("DATA"));
+  assert.deepEqual(await decompressLzma2WithProperty(0, Uint8Array.of(0), 0n), new Uint8Array());
+});
+
+for (const property of [-1, 0.5, NaN, 41, 256]) {
+  void test(`LZMA2 rejects invalid dictionary property ${property}`, async () => {
+    const decode = createLzma2Decompressor(() => { throw new Error("Must not initialize"); });
+
+    await assert.rejects(decode(property, lzma2Data, 4n), /LZMA2.*property/);
+  });
+}
+
+for (const size of [-1n, 0x1_0000_0000n]) {
+  void test(`LZMA2 rejects unsupported capacity ${size}`, async () => {
+    await assert.rejects(decompressLzma2WithProperty(0, lzma2Data, size), /unpack size/);
+  });
+}
+
+void test("LZMA2 rejects a missing end marker, truncation, invalid controls and trailing bytes", async () => {
+  await assert.rejects(decompressLzma2WithProperty(0, lzma2Data.subarray(0, 7), 4n), /SDK error/);
+  await assert.rejects(decompressLzma2WithProperty(0, lzma2Compressed.subarray(0, 10), 4096n), /SDK error/);
+  await assert.rejects(decompressLzma2WithProperty(0, Uint8Array.of(3), 4n), /SDK error/);
+  await assert.rejects(decompressLzma2WithProperty(0, Uint8Array.from([...lzma2Data, 42]), 4n),
+    /unconsumed input/);
+  await assert.rejects(decompressLzma2WithProperty(0, lzma2Data, 3n), /SDK error/);
+  await assert.rejects(decompressLzma2WithProperty(0, lzma2Data, 5n), /output size/);
+  assert.equal((await decompressLzma2WithProperty(0, lzma2Data, 4n)).length, 4);
+});
+
+void test("LZMA2 requires its end control even if the SDK reports markerless completion", async () => {
+  const decode = createLzma2Decompressor(async () => ({
+    decodeLzma: () => { throw new Error("Must use LZMA2"); },
+    decodeLzma2: (input, property, size) => {
+      assert.strictEqual(input, lzma2Data);
+      assert.equal(property, 0);
+      assert.equal(size, 4);
+      return complete({ status: 4, bytesRead: input.length });
+    }
+  }));
+
+  await assert.rejects(decode(0, lzma2Data, 4n), /LZMA2.*end marker/);
+});
+
+void test("LZMA decompressor factories can use the installed SDK by default", async () => {
+  assert.equal((await createLzmaDecompressor()(lzmaProperties, lzmaData, 4n)).bytes.length, 4);
+  assert.equal((await createLzma2Decompressor()(0, lzma2Data, 4n)).consumedPackedBytes, 8);
+});
+
+void test("LZMA2 factories preserve consumed bytes and recover after initialization failure", async () => {
+  let loads = 0;
+  const decode = createLzma2Decompressor(async () => {
+    loads += 1;
+    if (loads === 1) throw new Error("WASM unavailable");
+    return { decodeLzma: () => { throw new Error("Must use LZMA2"); },
+      decodeLzma2: () => complete({ bytesRead: 8 }) };
+  });
+
+  await assert.rejects(decode(0, lzma2Data, 4n), /WASM unavailable/);
+  assert.deepEqual(await decode(0, lzma2Data, 4n),
+    { bytes: new TextEncoder().encode("DATA"), consumedPackedBytes: 8 });
+  assert.equal(loads, 2);
 });
 
 void test("raw decoding preserves binary output and accepts marked streams", async () => {

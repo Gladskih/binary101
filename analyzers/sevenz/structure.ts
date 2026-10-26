@@ -3,7 +3,7 @@
 import { CODER_ARCH_HINTS, describeCoderId, normalizeMethodId } from "./coders.js";
 import { toSafeNumber } from "./readers.js";
 import { SEVENZIP_SIGNATURE_HEADER_SIZE } from "./layout.js";
-import { SEVENZIP_LZMA_METHOD_ID, SEVENZIP_LZMA_PROPERTY_BYTES } from "./method-ids.js";
+import { getLzmaCoderError } from "./lzma-coder.js";
 import type {
   SevenZipCoder,
   SevenZipFolderCoderRecord,
@@ -159,12 +159,15 @@ const getExtractError = (
   if (folder.packedOffset == null || folder.packedSize == null) {
     return "7z packed stream bounds are not available for extraction.";
   }
-  if (folder.coders.length !== 1 || folder.coders[0]?.methodId !== SEVENZIP_LZMA_METHOD_ID) {
-    return "7z extraction currently supports only single LZMA folders.";
+  if (folder.coders.length !== 1) {
+    return "7z extraction supports single LZMA or LZMA2 folders.";
   }
-  if (folder.coders[0].propertyBytes?.length !== SEVENZIP_LZMA_PROPERTY_BYTES) {
-    return "LZMA coder properties are invalid.";
+  const coder = folder.coders[0]!;
+  if (coder.numInStreams !== 1 || coder.numOutStreams !== 1) {
+    return "7z extraction requires a single input/output stream.";
   }
+  const error = getLzmaCoderError(coder.methodId, coder.propertyBytes);
+  if (error) return error;
   if (file.folderStreamIndex == null) return "7z file stream index is not available.";
   if (file.uncompressedSize == null) return "7z file size is not available for extraction.";
   return undefined;

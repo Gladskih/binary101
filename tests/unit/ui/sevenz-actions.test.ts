@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createSevenZipEntryClickHandler } from "../../../ui/sevenz-actions.js";
 import type { ParseForUiResult } from "../../../analyzers/index.js";
+import { parseSevenZip } from "../../../analyzers/sevenz/index.js";
+import {
+  lzma2SevenZipEncoded, lzma2SevenZipPlain, lzma2SevenZipPayload
+} from "../../fixtures/lzma2-sevenzip-file.js";
 
 type AnchorStub = {
   href: string;
@@ -11,6 +15,49 @@ type AnchorStub = {
   clicked: number;
   click: () => void;
 };
+
+for (const [name, fixture] of [["plain", lzma2SevenZipPlain],
+  ["encoded", lzma2SevenZipEncoded]] as const) {
+  void test(`extracts real LZMA2 payload through the UI with ${name} headers`, async () => {
+    const dom = installSevenZipDom();
+    const messages: Array<string | null | undefined> = [];
+    const file = new File([fixture() as Uint8Array<ArrayBuffer>], "lzma2.7z");
+    const parsed = await parseSevenZip(file);
+    const handler = createSevenZipEntryClickHandler({
+      getParseResult: () => ({ analyzer: "sevenZip", parsed }), getFile: () => file,
+      setStatusMessage: message => messages.push(message)
+    });
+    try {
+      await handler({ target: dom.button } as unknown as Event);
+
+      assert.equal(dom.anchor()?.download, "payload.bin");
+      assert.deepEqual(new Uint8Array(await dom.blob()!.arrayBuffer()), lzma2SevenZipPayload());
+      assert.deepEqual(messages, [null]);
+    } finally {
+      dom.restore();
+    }
+  });
+}
+
+void test("LZMA2 extraction checks the entry CRC before creating a download", async () => {
+  const dom = installSevenZipDom();
+  const messages: Array<string | null | undefined> = [];
+  const file = new File([lzma2SevenZipPlain() as Uint8Array<ArrayBuffer>], "lzma2.7z");
+  const parsed = await parseSevenZip(file);
+  parsed.structure!.files[0]!.crc32 = 0;
+  const handler = createSevenZipEntryClickHandler({
+    getParseResult: () => ({ analyzer: "sevenZip", parsed }), getFile: () => file,
+    setStatusMessage: message => messages.push(message)
+  });
+  try {
+    await handler({ target: dom.button } as unknown as Event);
+
+    assert.equal(dom.anchor(), null);
+    assert.match(messages[0]!, /CRC/);
+  } finally {
+    dom.restore();
+  }
+});
 
 const installSevenZipDom = () => {
   const globals = globalThis as unknown as Record<string, unknown>;

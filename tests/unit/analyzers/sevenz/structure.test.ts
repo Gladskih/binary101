@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildFolderDetails, buildFileDetails } from "../../../../analyzers/sevenz/structure.js";
 import type {
+  SevenZipCoder,
   SevenZipFolderSummary,
   SevenZipHeaderSections,
   SevenZipPackInfo,
@@ -11,6 +12,9 @@ import type {
   SevenZipUnpackInfo,
   SevenZipFolderParseResult
 } from "../../../../analyzers/sevenz/types.js";
+import { parseSevenZip } from "../../../../analyzers/sevenz/index.js";
+import { lzma2SevenZipPlain } from "../../../fixtures/lzma2-sevenzip-file.js";
+import { MockFile } from "../../../helpers/mock-file.js";
 
 type SectionOverrides = Omit<SevenZipHeaderSections, "mainStreamsInfo" | "filesInfo"> & {
   mainStreamsInfo?: {
@@ -88,3 +92,31 @@ void test("buildFileDetails warns when streams are not matched to folders", () =
   assert.ok(file);
   assert.equal(file.folderIndex, null);
 });
+
+for (const [name, coders, error] of [
+  ["valid LZMA2", [{ id: "LZMA2", methodId: "21", numInStreams: 1, numOutStreams: 1,
+    propertyBytes: [0], properties: null, isEncryption: false }], undefined],
+  ["invalid dictionary", [{ id: "LZMA2", methodId: "21", numInStreams: 1, numOutStreams: 1,
+    propertyBytes: [41], properties: null, isEncryption: false }], "LZMA2 coder properties are invalid."],
+  ["missing dictionary", [{ id: "LZMA2", methodId: "21", numInStreams: 1, numOutStreams: 1,
+    properties: null, isEncryption: false }], "LZMA2 coder properties are invalid."],
+  ["multiple inputs", [{ id: "LZMA2", methodId: "21", numInStreams: 2, numOutStreams: 1,
+    propertyBytes: [0], properties: null, isEncryption: false }],
+  "7z extraction requires a single input/output stream."],
+  ["multiple outputs", [{ id: "LZMA2", methodId: "21", numInStreams: 1, numOutStreams: 2,
+    propertyBytes: [0], properties: null, isEncryption: false }],
+  "7z extraction requires a single input/output stream."],
+  ["no coder", [], "7z extraction supports single LZMA or LZMA2 folders."]
+] satisfies Array<[string, SevenZipCoder[], string | undefined]>) {
+  void test(`7z extraction eligibility validates ${name}`, async () => {
+    const parsed = await parseSevenZip(new MockFile(lzma2SevenZipPlain(), "lzma2.7z"));
+    assert.equal(parsed.nextHeader!.parsed!.kind, "header");
+    const sections = (parsed.nextHeader!.parsed as
+      { kind: "header"; sections: SevenZipHeaderSections }).sections;
+    parsed.structure!.folders[0]!.coders = coders;
+
+    const result = buildFileDetails(sections, parsed.structure!.folders, []);
+
+    assert.equal(result.files[0]!.extractError, error);
+  });
+}

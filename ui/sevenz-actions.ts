@@ -2,8 +2,9 @@
 
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { SevenZipFileSummary, SevenZipFolderSummary } from "../analyzers/sevenz/index.js";
-import { decompressLzmaWithProperties } from "../analyzers/lzma/decoder.js";
+import { decodeLzmaCoder } from "../analyzers/sevenz/lzma-coder.js";
 import { toSafeNumber } from "../analyzers/sevenz/readers.js";
+import { crc32 } from "../analyzers/crc32.js";
 
 type SevenZipDeps = {
   getParseResult: () => ParseForUiResult;
@@ -74,17 +75,20 @@ const extractEntry = async (
   const offset = toSafeNumber(folder.packedOffset);
   const packedSize = toSafeNumber(folder.packedSize);
   const unpackSize = typeof folder.unpackSize === "bigint" ? folder.unpackSize : null;
-  const propertyBytes = folder.coders[0]?.propertyBytes || [];
-  if (offset == null || packedSize == null || unpackSize == null) {
+  const coder = folder.coders[0];
+  if (offset == null || packedSize == null || unpackSize == null || !coder) {
     throw new Error("7z folder bounds are not available.");
   }
   if (offset + packedSize > archive.size) throw new Error("7z folder extends beyond file bounds.");
   const packedBytes = new Uint8Array(await archive.slice(offset, offset + packedSize).arrayBuffer());
   const entryBytes = sliceDecodedEntry(
-    await decompressLzmaWithProperties(propertyBytes, packedBytes, unpackSize),
+    await decodeLzmaCoder(coder.methodId, coder.propertyBytes || [], packedBytes, unpackSize),
     folder,
     entry
   );
+  if (entry.crc32 != null && crc32(entryBytes) !== entry.crc32) {
+    throw new Error("7z entry CRC mismatch.");
+  }
   const buffer = new ArrayBuffer(entryBytes.byteLength);
   new Uint8Array(buffer).set(entryBytes);
   return new Blob([buffer]);
