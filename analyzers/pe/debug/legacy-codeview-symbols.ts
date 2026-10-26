@@ -1,5 +1,5 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
-import { readLegacyCodeViewSymbolRecords, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
+import { readLegacyCodeViewSymbolStream, type LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
 import { readLegacyCodeViewNameIndex, readLegacyCodeViewAddressIndex,
   type LegacyCodeViewIndex } from "./legacy-codeview-index.js";
 
@@ -7,14 +7,19 @@ export interface LegacyCodeViewSymbols {
   kind: "symbols";
   encoding?: "c6" | "hll";
   records: LegacyCodeViewSymbol[];
+  /** Physical offsets in this subsection, retained for lexical scope links. */
+  recordOffsets?: number[];
   nameIndex?: LegacyCodeViewIndex;
   addressIndex?: LegacyCodeViewIndex;
 }
 
 export const readLegacyCodeViewSymbols = async (
   reader: LegacyCodeViewReader, start: number, end: number
-): Promise<LegacyCodeViewSymbols> => ({ kind: "symbols",
-  records: await readLegacyCodeViewSymbolRecords(reader, start, end) });
+): Promise<LegacyCodeViewSymbols> => {
+  const { records, offsets } = await readLegacyCodeViewSymbolStream(reader, start, end);
+  return { kind: "symbols", records,
+    ...(records.some(record => record.local || record.frame || record.localRange) ? { recordOffsets: offsets } : {}) };
+};
 
 // Packed global/public/static symbols start after OMFSymHash; the hash tables
 // are indexes over these same records, not additional symbol definitions.

@@ -1,5 +1,6 @@
 import type { PeLegacyCodeViewInfo, LegacyCodeViewData } from "../../analyzers/pe/debug/legacy-codeview.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
+import { buildCodeViewLocalTables } from "./codeview-local-tables.js";
 import type { LegacyCodeViewSource } from "../../analyzers/pe/debug/legacy-codeview-source.js";
 import type { LegacyCodeViewFiles } from "../../analyzers/pe/debug/legacy-codeview-modules.js";
 import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName, legacyCodeViewTypeName } from "./legacy-codeview-kinds.js";
@@ -183,6 +184,7 @@ export const buildLegacyCodeViewTables = (info: PeLegacyCodeViewInfo,
     ...buildLegacyCodeViewDiscardedStatistics(info), ...buildCodeViewFunctionTables(info),
     ...buildLegacyCodeViewProcedureTables(info, pe),
     ...buildLegacyCodeViewDataSymbolTables(info),
+    ...buildCodeViewLocalTables(info, pe?.coff.Machine),
     ...buildCodeViewMemberTables(info), ...buildCodeViewBuildTables(info), ...buildCodeViewDerivedTables(info),
     ...buildCodeViewArrayBounds(info), ...buildCodeViewVtableTables(info), ...buildCodeViewC6TypeTables(info)]
     .filter(table => table.rows.length > 0);

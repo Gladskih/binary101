@@ -10,17 +10,20 @@ const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Distinct lines or path codes|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets|With source line|First source line|Last source line)$/.test(label)
     || ["Declared parameters", "Value / placement", "Byte size", "Declared members", "Source line", "Build",
       "String list", "Component", "Dimension", "Lower bound", "Upper bound", "Pointer offset", "Image RVA", "Code length",
+      "Frame bytes", "Padding bytes", "Saved register bytes", "Range records", "Declared range bytes (sum)", "Gap bytes (sum)",
       "Stored method names", "Path type index", "PDB age", "Bit size"].includes(label) ? "peNumeric" : "";
+
+const TABLE_CLASSES = new Map([
+  ["indexes", "peCodeViewIndexTable"], ["discardedSymbols", "peCodeViewDiscardedTable"],
+  ["members", "peCodeViewMemberTable"], ["types", "peCodeViewTypeTable"],
+  ["functions", "peCodeViewFunctionTable"], ["procedureSymbols", "peCodeViewProcedureTable"],
+  ["compilerFrames", "peCodeViewLocalTable"], ["localVariables", "peCodeViewLocalTable"],
+  ["arrayBounds", "peCodeViewBoundsTable"]
+]);
 
 const model = (table: LegacyCodeViewTable, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
-  ...(table.key === "indexes" ? { tableClassName: "peCodeViewIndexTable" } : {}),
-  ...(table.key === "discardedSymbols" ? { tableClassName: "peCodeViewDiscardedTable" } : {}),
-  ...(table.key === "members" ? { tableClassName: "peCodeViewMemberTable" } : {}),
-  ...(table.key === "types" ? { tableClassName: "peCodeViewTypeTable" } : {}),
-  ...(table.key === "functions" ? { tableClassName: "peCodeViewFunctionTable" } : {}),
-  ...(table.key === "procedureSymbols" ? { tableClassName: "peCodeViewProcedureTable" } : {}),
-  ...(table.key === "arrayBounds" ? { tableClassName: "peCodeViewBoundsTable" } : {}),
+  ...(TABLE_CLASSES.has(table.key) ? { tableClassName: TABLE_CLASSES.get(table.key)! } : {}),
   ...(["buildInfo", "typeSources", "stringComponents", "derivedTypes", "virtualTables", "vtablePaths", "typeServers",
     "legacyTypeDetails"]
     .includes(table.key)

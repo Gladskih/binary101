@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { codeViewFrameBase, codeViewFrameFlags, codeViewLocalFlags,
+  codeViewLocalPlacement, codeViewLocalRegister } from "../../../../renderers/pe/codeview-local-properties.js";
+
+void test("CodeView local/frame flags retain known meanings and unknown bits", () => {
+  assert.equal(codeViewLocalFlags(undefined), "not stored");
+  assert.equal(codeViewLocalFlags(0), "none");
+  assert.equal(codeViewLocalFlags(0x101), "parameter, optimized out");
+  assert.equal(codeViewLocalFlags(0x8000), "unknown bits 0x8000");
+  assert.equal(codeViewFrameFlags(0x154000), "PGO, optimized for speed");
+  assert.equal(codeViewFrameFlags(0x80000000), "unknown bits 0x80000000");
+});
+
+void test("CodeView frame bases depend on the PE CPU rather than generic register numbers", () => {
+  assert.equal(codeViewFrameBase(1, 0x8664), "RSP");
+  assert.equal(codeViewFrameBase(2, 0x14c), "EBP");
+  assert.equal(codeViewFrameBase(3, 0x1c4), "reserved");
+  assert.equal(codeViewFrameBase(2, 0x1c4), "R7");
+  assert.match(codeViewFrameBase(1, 0xaa64), /architecture mapping unavailable/);
+  assert.match(codeViewFrameBase(4, 0x8664), /encoded base 4/);
+});
+
+void test("CodeView register names never cross CPU namespaces", () => {
+  assert.equal(codeViewLocalRegister(328, 0x8664), "RAX");
+  assert.equal(codeViewLocalRegister(343, 0x8664), "R15");
+  assert.equal(codeViewLocalRegister(22, 0x14c), "EBP");
+  assert.equal(codeViewLocalRegister(17, 0x14c), "EAX");
+  assert.equal(codeViewLocalRegister(17, 0x1c4), "R7");
+  assert.equal(codeViewLocalRegister(23, 0x1c4), "SP");
+  assert.equal(codeViewLocalRegister(25, 0x1c4), "PC");
+  assert.equal(codeViewLocalRegister(9, 0x1c4), "CodeView register #9");
+  assert.equal(codeViewLocalRegister(328, undefined), "CodeView register #328");
+});
+
+void test("CodeView location descriptions keep signed displacements and unevaluated programs explicit", () => {
+  assert.equal(codeViewLocalPlacement({ kind: "frameRelative", offset: -8 }, 0x8664), "frame base - 8");
+  assert.equal(codeViewLocalPlacement({ kind: "registerRelative", offset: 16, register: 335 }, 0x8664), "RSP + 16");
+  assert.equal(codeViewLocalPlacement({ kind: "register", register: 330 }, 0x8664), "RCX");
+  assert.equal(codeViewLocalPlacement({ kind: "program", program: 42 }, undefined), "DIA program #42 (not evaluated)");
+  assert.equal(codeViewLocalPlacement({ kind: "registerOffset", register: 334, offset: 4294967288 }, 0x8664),
+    "RBP + stored unsigned offset 4294967288");
+});

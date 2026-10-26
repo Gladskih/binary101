@@ -11,6 +11,7 @@ interface LegacyCodeViewSymbolStream {
   start: number;
   end: number;
   records: LegacyCodeViewSymbol[];
+  offsets?: number[];
 }
 
 const discardedInfo = (reader: LegacyCodeViewReader, fields: DataView) => {
@@ -42,6 +43,7 @@ const appendRecord = async (reader: LegacyCodeViewReader, stream: LegacyCodeView
   if (length < 2 || length + 2 > stream.end - offset) throw new Error("Invalid CodeView symbol record length.");
   const type = await reader.uint16(offset + 2);
   const record: LegacyCodeViewSymbol = { type };
+  stream.offsets?.push(offset);
   stream.records.push(record);
   try {
     Object.assign(record, await readLegacyCodeViewSymbolText(reader.subsection(offset, length + 2), type));
@@ -64,17 +66,22 @@ const drainStreams = async (reader: LegacyCodeViewReader, pending: LegacyCodeVie
 };
 
 /** Iterative traversal keeps nesting bounded by actual record bytes, without a depth heuristic. */
-export const readLegacyCodeViewSymbolRecords = async (
+export const readLegacyCodeViewSymbolStream = async (
   reader: LegacyCodeViewReader, start: number, end: number
-): Promise<LegacyCodeViewSymbol[]> => {
+): Promise<{ records: LegacyCodeViewSymbol[]; offsets: number[] }> => {
   const records: LegacyCodeViewSymbol[] = [];
+  const offsets: number[] = [];
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > reader.size) {
     reader.warn("CodeView symbol stream bounds exceeded.");
-    return records;
+    return { records, offsets };
   }
-  await drainStreams(reader, [{ kind: "symbols", start, end, records }]);
-  return records;
+  await drainStreams(reader, [{ kind: "symbols", start, end, records, offsets }]);
+  return { records, offsets };
 };
+
+export const readLegacyCodeViewSymbolRecords = async (
+  reader: LegacyCodeViewReader, start: number, end: number
+): Promise<LegacyCodeViewSymbol[]> => (await readLegacyCodeViewSymbolStream(reader, start, end)).records;
 
 /** A type leaf holds exactly one length-delimited symbol, followed by possible type padding. */
 export const readLegacyCodeViewEmbeddedSymbol = async (

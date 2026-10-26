@@ -1,12 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readLegacyCodeViewSymbolRecords,
-  readLegacyCodeViewEmbeddedSymbol } from "../../../../../analyzers/pe/debug/legacy-codeview-symbol-records.js";
+  readLegacyCodeViewEmbeddedSymbol, readLegacyCodeViewSymbolStream
+} from "../../../../../analyzers/pe/debug/legacy-codeview-symbol-records.js";
 import { legacyReader, legacySymbol, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { codeViewTextRecord } from "../../../../fixtures/pe-codeview-type-strings.js";
 import { LegacyCodeViewReader } from "../../../../../analyzers/pe/debug/legacy-codeview-reader.js";
 import { codeViewEntryThis, codeViewDiscarded, codeViewDeepThis,
   codeViewSymbolChain } from "../../../../fixtures/pe-codeview-embedded-symbols.js";
+
+void test("CodeView source offsets describe root stream records without mixing embedded child offsets", async () => {
+  const first = codeViewEntryThis(legacySymbol());
+  const second = codeViewDiscarded(legacySymbol());
+  const bytes = [...legacyU32(1), ...first, ...second];
+  const stream = await readLegacyCodeViewSymbolStream(legacyReader(bytes), 4, bytes.length);
+
+  assert.deepEqual(stream.offsets, [4, 4 + first.length]);
+  assert.equal(stream.records.length, 2);
+  assert.equal(stream.records[0]?.children?.length, 1);
+});
 
 void test("CodeView symbol records preserve nested entry-this and discarded symbol identity", async () => {
   const warnings: string[] = [];

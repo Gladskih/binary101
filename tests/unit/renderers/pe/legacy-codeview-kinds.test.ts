@@ -4,6 +4,16 @@ import { legacyCodeViewSubsectionName, legacyCodeViewSymbolName,
   legacyCodeViewTypeName, legacyCodeViewFieldName,
   legacyCodeViewVtableSlotName } from "../../../../renderers/pe/legacy-codeview-kinds.js";
 
+void test("CodeView decoded location records have readable categories", () => {
+  assert.equal(legacyCodeViewSymbolName(0x113f), "Local program range");
+  assert.equal(legacyCodeViewSymbolName(0x1140), "Local subfield program range");
+  assert.equal(legacyCodeViewSymbolName(0x1141), "Local register range");
+  assert.equal(legacyCodeViewSymbolName(0x1142), "Local frame-relative range");
+  assert.equal(legacyCodeViewSymbolName(0x1143), "Local subfield register range");
+  assert.equal(legacyCodeViewSymbolName(0x1144), "Local frame-relative full scope");
+  assert.equal(legacyCodeViewSymbolName(0x1145), "Local register-relative range");
+});
+
 void test("CodeView vtable slot labels retain the published descriptor kinds", () => {
   assert.deepEqual(Array.from({ length: 9 }, (_, kind) => legacyCodeViewVtableSlotName(kind)),
     ["near", "far", "thin", "outer", "meta", "near32", "far32", "unused", "unknown kind 8"]);

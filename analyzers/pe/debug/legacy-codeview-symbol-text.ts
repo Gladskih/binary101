@@ -3,6 +3,10 @@ import { readLegacyCodeViewSymbolName } from "./legacy-codeview-symbol-names.js"
 import { readLegacyCodeViewConstantSymbol, type LegacyCodeViewConstant } from "./legacy-codeview-constant-symbols.js";
 import { readLegacyCodeViewProcedureSymbol, type LegacyCodeViewProcedure } from "./legacy-codeview-procedure-symbols.js";
 import { readLegacyCodeViewDataSymbol, type LegacyCodeViewDataSymbol } from "./legacy-codeview-data-symbols.js";
+import { readCodeViewFrame } from "./codeview-frame-symbol.js";
+import { readCodeViewLocal } from "./codeview-local-symbols.js";
+import { readCodeViewLocalRange } from "./codeview-local-ranges.js";
+import type { CodeViewFrame, CodeViewLocalVariable, CodeViewLocalRange } from "./codeview-local-types.js";
 
 export interface LegacyCodeViewSymbolText {
   name?: string;
@@ -10,8 +14,24 @@ export interface LegacyCodeViewSymbolText {
   constant?: LegacyCodeViewConstant;
   procedure?: LegacyCodeViewProcedure;
   data?: LegacyCodeViewDataSymbol;
+  frame?: CodeViewFrame;
+  local?: CodeViewLocalVariable;
+  localRange?: CodeViewLocalRange;
 }
 type ReadCodeViewString = (offset: number) => Promise<{ name: string; end: number }>;
+
+const readLocalMetadata = async (reader: LegacyCodeViewReader,
+  type: number): Promise<LegacyCodeViewSymbolText | null> => {
+  try {
+    return await readCodeViewFrame(reader, type) ?? await readCodeViewLocal(reader, type)
+      ?? await readCodeViewLocalRange(reader, type);
+  } catch (error) { reader.warn(`CodeView local/frame metadata: ${String(error)}`); return {}; }
+};
+
+const readSymbolMetadata = async (reader: LegacyCodeViewReader,
+  type: number): Promise<LegacyCodeViewSymbolText | null> =>
+  await readLegacyCodeViewConstantSymbol(reader, type) ?? await readLegacyCodeViewProcedureSymbol(reader, type)
+    ?? await readLegacyCodeViewDataSymbol(reader, type) ?? await readLocalMetadata(reader, type);
 
 const readCountedStrings = async (reader: LegacyCodeViewReader, start: number,
   count: number, readName: ReadCodeViewString): Promise<string[]> => {
@@ -62,12 +82,8 @@ const readCompilerText = async (reader: LegacyCodeViewReader, type: number): Pro
 export const readLegacyCodeViewSymbolText = async (
   reader: LegacyCodeViewReader, type: number
 ): Promise<LegacyCodeViewSymbolText> => {
-  const constant = await readLegacyCodeViewConstantSymbol(reader, type);
-  if (constant) return constant;
-  const procedure = await readLegacyCodeViewProcedureSymbol(reader, type);
-  if (procedure) return procedure;
-  const data = await readLegacyCodeViewDataSymbol(reader, type);
-  if (data) return data;
+  const metadata = await readSymbolMetadata(reader, type);
+  if (metadata) return metadata;
   if (type === 0x1013 || type === 0x1116) return readCompilerText(reader, type);
   // ANNOTATIONSYM has a WORD count; PDBMAP has exactly two UTF-16 paths.
   // ENVBLOCKSYM is one flags byte followed by a stringZ-vectorZ.

@@ -9,11 +9,14 @@ const C6_SUBSECTIONS = new Map([[0x101, "Modules (C6)"], [0x102, "Public symbols
   [0x103, "Module types (C6)"], [0x104, "Symbols (C6)"], [0x105, "Source lines (C6)"],
   [0x106, "Libraries (C6)"], [0x108, "Compacted types (C6)"], [0x109, "Source lines with segments (C6)"]]);
 
-export const legacyCodeViewSubsectionName = (type: number, signature?: string): string => {
-  if (signature === "NB00") return C6_SUBSECTIONS.get(type)?.replace(" (C6)", " (CV3)")
+const c6SubsectionName = (type: number, suffix: string): string =>
+  C6_SUBSECTIONS.get(type)?.replace(" (C6)", suffix)
     ?? `Unknown subsection 0x${type.toString(16)}`;
+
+export const legacyCodeViewSubsectionName = (type: number, signature?: string): string => {
+  if (signature === "NB00") return c6SubsectionName(type, " (CV3)");
   if (signature === "NB04") return type === 0x10b ? "HLL source mappings"
-    : C6_SUBSECTIONS.get(type)?.replace(" (C6)", "") ?? `Unknown subsection 0x${type.toString(16)}`;
+    : c6SubsectionName(type, "");
   return SUBSECTIONS[type - 0x120] ?? C6_SUBSECTIONS.get(type) ?? `Unknown subsection 0x${type.toString(16)}`;
 };
 
@@ -38,6 +41,10 @@ const SYMBOL_NAMES = new Map<number, string>([
   [0x400, "Procedure reference"], [0x401, "Data reference"], [0x402, "Alignment"],
   [0x403, "Local procedure reference"], [0x404, "Vendor symbol"],
   [0x113b, "Discarded symbols"],
+  [0x113f, "Local program range"], [0x1140, "Local subfield program range"],
+  [0x1141, "Local register range"], [0x1142, "Local frame-relative range"],
+  [0x1143, "Local subfield register range"], [0x1144, "Local frame-relative full scope"],
+  [0x1145, "Local register-relative range"],
   [0x1012, "Frame metadata"], [0x1013, "Compiler"], [0x1029, "Namespace"],
   [0x1101, "Object file"], [0x1102, "Thunk"], [0x1103, "Block"], [0x1104, "With expression"],
   [0x1105, "Label"], [0x1106, "Register variable"], [0x1107, "Constant"], [0x1108, "User-defined type"],
