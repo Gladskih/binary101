@@ -8,6 +8,10 @@ export default defineConfig({
     name: "disassembler-notices",
     generateBundle() {
       for (const [packageName, names] of Object.entries({
+        "lzma-sdk-decode": [
+          "LICENSE", "THIRD_PARTY_NOTICES.md", "upstream.json", "licenses/LZMA-SDK.txt",
+          "licenses/emscripten-LICENSE.txt", "licenses/compiler-rt.txt", "licenses/musl.txt"
+        ],
         "llvm-itanium-demangle": [
           "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/LLVM.txt",
           "licenses/emscripten-AUTHORS.txt", "licenses/emscripten-LICENSE.txt",
@@ -55,6 +59,9 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
+      "#lzma-decoder-loader": fileURLToPath(
+        new URL("./analyzers/lzma/load.browser.ts", import.meta.url)
+      ),
       "./windows-trust-store.generated.json": fileURLToPath(
         new URL("./generated/windows-trust-store.generated.json", import.meta.url)
       ),

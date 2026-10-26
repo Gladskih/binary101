@@ -16,7 +16,7 @@ const NO_BIND_PAIRS = 0;
 // https://www.7-zip.org/sdk.html
 const LZMA_PROPERTIES = [0x5d, 0x00, 0x00, 0x01, 0x00];
 // Raw LZMA stream fixture that decodes to a minimal Header payload [0x01, 0x00].
-// The enclosing lzma_alone header is built by lzma.ts from separate 7z properties.
+// The raw decoder receives the 7z properties separately, with no LZMA-alone wrapper.
 const PACKED_EMPTY_HEADER = Uint8Array.from([
   0x00, 0x00, 0x80, 0x25, 0xa5, 0xef, 0xff, 0xff, 0xec, 0xc7, 0x00, 0x00
 ]);

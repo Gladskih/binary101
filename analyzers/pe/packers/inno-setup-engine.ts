@@ -2,7 +2,7 @@
 
 import { crc32 } from "../../crc32.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { decompressLzmaWithProperties } from "../../sevenz/lzma.js";
+import { decompressLzmaWithProperties } from "../../lzma/decoder.js";
 import { SEVENZIP_LZMA_PROPERTY_BYTES } from "../../sevenz/method-ids.js";
 import type { PeInnoSetupFinding } from "./types.js";
 

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "imports": {
+    "#lzma-decoder-loader": "./analyzers/lzma/load.node.ts",
     "#itanium-demangler-loader": "./analyzers/itanium-demangle/load.node.ts",
     "#rust-dlang-demangler-loader": "./analyzers/symbol-demangle/load.node.ts",
     "#msvc-demangler-loader": "./analyzers/pe/msvc-demangle/load.node.ts",
@@ -86,7 +87,7 @@
     "llvm-itanium-demangle": "0.1.0",
     "llvm-msvc-demangle": "0.2.0",
     "llvm-rust-demangle": "0.1.0",
-    "lzma-web": "^4.0.0-rc.5",
+    "lzma-sdk-decode": "0.1.1",
     "pkijs": "^3.4.0",
     "zstddec": "0.3.1"
   }

@@ -18,6 +18,8 @@ void test("Vite emits local Rust/D loader bindings, upstream pins and license no
 
   assert.match(configuration.default.resolve.alias["#rust-dlang-demangler-loader"]!,
     /analyzers[/\\]symbol-demangle[/\\]load\.browser\.ts$/);
+  assert.match(configuration.default.resolve.alias["#lzma-decoder-loader"]!,
+    /analyzers[/\\]lzma[/\\]load\.browser\.ts$/);
   assert.ok(notices);
   notices.generateBundle.call({ emitFile(asset) {
     assert.equal(asset.type, "asset");
@@ -26,6 +28,11 @@ void test("Vite emits local Rust/D loader bindings, upstream pins and license no
   } });
 
   assert.match(assets.get("vendor/llvm-rust-demangle/licenses/LLVM.txt")!, /Apache License/);
+  assert.match(assets.get("vendor/lzma-sdk-decode/licenses/LZMA-SDK.txt")!, /ANSI-C LZMA Decoder/);
+  assert.match(assets.get("vendor/lzma-sdk-decode/LICENSE")!, /MIT/);
+  assert.match(assets.get("vendor/lzma-sdk-decode/THIRD_PARTY_NOTICES.md")!, /Igor Pavlov/);
+  assert.equal((JSON.parse(assets.get("vendor/lzma-sdk-decode/upstream.json")!) as
+    { commit: string }).commit, "b88c6bc09339de32f7d18bbab900686b244f42ba");
   assert.match(assets.get("vendor/llvm-dlang-demangle/licenses/LLVM.txt")!, /Apache License/);
   assert.match(assets.get("vendor/llvm-rust-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);
   assert.match(assets.get("vendor/llvm-dlang-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);

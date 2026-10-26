@@ -6,7 +6,7 @@ import type {
 } from "./types.js";
 import { parseHeader } from "./header-sections.js";
 import { toSafeNumber } from "./readers.js";
-import { decompressLzmaWithProperties } from "./lzma.js";
+import { decompressLzmaWithProperties } from "../lzma/decoder.js";
 import { SEVENZIP_HEADER_MARKER, SEVENZIP_SIGNATURE_HEADER_SIZE } from "./layout.js";
 import { SEVENZIP_LZMA_METHOD_ID } from "./method-ids.js";
 

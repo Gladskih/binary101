@@ -2,7 +2,7 @@
 
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { SevenZipFileSummary, SevenZipFolderSummary } from "../analyzers/sevenz/index.js";
-import { decompressLzmaWithProperties } from "../analyzers/sevenz/lzma.js";
+import { decompressLzmaWithProperties } from "../analyzers/lzma/decoder.js";
 import { toSafeNumber } from "../analyzers/sevenz/readers.js";
 
 type SevenZipDeps = {
