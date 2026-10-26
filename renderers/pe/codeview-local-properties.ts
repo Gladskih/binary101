@@ -80,6 +80,16 @@ const offsetPlacement = (location: Extract<CodeViewVariableLocation,
   return `${base}${location.offset < 0 ? " - " : " + "}${Math.abs(location.offset)}`;
 };
 
+const indirectPlacement = (location: Extract<CodeViewVariableLocation,
+  { kind: "registerIndirectOffset" | "registerIndirectRelative" }>, machine: number | undefined): string => {
+  const register = codeViewLocalRegister(location.register, machine);
+  if (location.kind === "registerIndirectOffset") {
+    return `dereference(${register} + stored unsigned offset ${location.offset}) + stored unsigned member offset ${location.memberOffset} (not evaluated)`;
+  }
+  const base = `${register}${location.offset < 0 ? " - " : " + "}${Math.abs(location.offset)}`;
+  return `dereference(${base})${location.memberOffset < 0 ? " - " : " + "}${Math.abs(location.memberOffset)} (not evaluated)`;
+};
+
 export const codeViewLocalPlacement = (location: CodeViewVariableLocation, machine: number | undefined): string => {
   switch (location.kind) {
     case "program": return `DIA program #${location.program} (not evaluated)`;
@@ -90,6 +100,6 @@ export const codeViewLocalPlacement = (location: CodeViewVariableLocation, machi
     case "slot": return `IL slot #${location.slot}`;
     case "groupShared": return `DPC groupshared slot #${location.slot} + byte offset ${location.offset}`;
     case "shaderRegister": return shaderPlacement(location);
-    default: return offsetPlacement(location, machine);
+    default: return "memberOffset" in location ? indirectPlacement(location, machine) : offsetPlacement(location, machine);
   }
 };

@@ -60,3 +60,13 @@ void test("Shader locations expose raw register types, memory spaces and incompl
   assert.equal(codeViewLocalPlacement({ kind: "shaderRegister", registerType: 0, attributes: 0,
     registerOffsets: [] }, undefined), "HLSL temporary register type #0; memory space #0; register offsets []");
 });
+
+void test("Indirect locations describe dereferencing and retain stored displacement signedness", () => {
+  assert.equal(codeViewLocalPlacement({ kind: "registerIndirectOffset", register: 334,
+    offset: 0xffffffff, memberOffset: 0x80000000 }, 0x8664),
+  "dereference(RBP + stored unsigned offset 4294967295) + stored unsigned member offset 2147483648 (not evaluated)");
+  assert.equal(codeViewLocalPlacement({ kind: "registerIndirectRelative", register: 334,
+    offset: -8, memberOffset: -16 }, 0x8664), "dereference(RBP - 8) - 16 (not evaluated)");
+  assert.equal(codeViewLocalPlacement({ kind: "registerIndirectRelative", register: 334,
+    offset: 0, memberOffset: 16 }, undefined), "dereference(CodeView register #334 + 0) + 16 (not evaluated)");
+});

@@ -44,3 +44,11 @@ void test("CodeView 2005 local and range enums do not imply an invented body lay
   assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1133, [])), 0x1133), {});
   assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1134, [])), 0x1134), {});
 });
+
+void test("CodeView dispatch contains incomplete indirect register metadata", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1171, []), warnings), 0x1171), {});
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1177, []), warnings), 0x1177), {});
+  assert.equal(warnings.length, 2);
+  assert.match(warnings.join(" | "), /metadata.*bounds/);
+});

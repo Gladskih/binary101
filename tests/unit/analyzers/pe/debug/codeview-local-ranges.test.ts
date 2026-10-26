@@ -105,3 +105,35 @@ void test("Shader ranges diagnose an incomplete gap without reading it as a regi
   assert.match(warnings.join(" | "), /truncated gap/);
   assert.equal(await readCodeViewLocalRange(legacyReader([]), 0x1134), null);
 });
+
+// LLVM DefRangeRegisterRelIndirHeader uses signed BasePointerOffset/OffsetInUdt.
+// https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/DebugInfo/CodeView/SymbolRecord.h#L593
+void test("Indirect register ranges retain signed offsets, spilled-member flags and complete gaps", async () => {
+  const warnings: string[] = [];
+  assert.deepEqual(await readCodeViewLocalRange(legacyReader(localRecord(0x1177,
+    [...legacyU16(334), ...legacyU16(0xfff1), ...legacyU32(0xfffffff8), ...legacyU32(0x80000000),
+      ...localRangeBytes(), ...legacyU16(4), ...legacyU16(8)]), warnings), 0x1177),
+  { localRange: { location: { kind: "registerIndirectRelative", register: 334, offset: -8, memberOffset: -2147483648 },
+    attributes: 0xfff1, range: { offset: 32, section: 1, length: 32 }, gaps: [{ offset: 4, length: 8 }] } });
+  assert.deepEqual(warnings, []);
+});
+
+void test("Indirect register ranges retain positive offsets and warn about reserved flags", async () => {
+  const warnings: string[] = [];
+  const parsed = await readCodeViewLocalRange(legacyReader(localRecord(0x1177,
+    [...legacyU16(334), ...legacyU16(0x000e), ...legacyU32(7), ...legacyU32(9), ...localRangeBytes()]), warnings),
+  0x1177);
+  assert.deepEqual(parsed?.localRange.location,
+    { kind: "registerIndirectRelative", register: 334, offset: 7, memberOffset: 9 });
+  assert.match(warnings.join(" | "), /attributes.*reserved/);
+});
+
+void test("Indirect register ranges preserve fixed placement when range bytes are missing", async () => {
+  const warnings: string[] = [];
+  const bytes = localRecord(0x1177, [...legacyU16(334), ...legacyU16(0), ...legacyU32(0), ...legacyU32(0)]);
+  assert.deepEqual(await readCodeViewLocalRange(legacyReader(bytes, warnings), 0x1177),
+    { localRange: { location: { kind: "registerIndirectRelative", register: 334, offset: 0, memberOffset: 0 },
+      attributes: 0, gaps: [] } });
+  assert.match(warnings.join(" | "), /range.*bounds/);
+  await assert.rejects(readCodeViewLocalRange(legacyReader(bytes.slice(0, -1)), 0x1177), /bounds/);
+});

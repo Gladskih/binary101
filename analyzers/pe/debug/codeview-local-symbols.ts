@@ -11,7 +11,7 @@ interface LocalLayout {
   flagsOffset?: number;
   moduleOffset?: number;
   attributeOffset?: number;
-  placement?: "slot" | "groupShared";
+  placement?: "slot" | "groupShared" | "registerIndirectOffset";
 }
 
 // REGSYM, BPRELSYM and REGREL layouts, followed by LOCALSYM/FILESTATICSYM.
@@ -42,13 +42,24 @@ const LAYOUTS = new Map<number, LocalLayout>([
     { nameOffset: 20, typeOffset: 8, typeBytes: 4, attributeOffset: 12, placement: "slot" }] as const),
   ...[0x1026, 0x1122, 0x1130].map(type => [type,
     { nameOffset: 22, typeOffset: 8, typeBytes: 4, offsetBytes: 4, registerOffset: 12, attributeOffset: 14 }] as const),
-  [0x1154, { nameOffset: 14, typeOffset: 4, typeBytes: 4, flagsOffset: 8, placement: "groupShared" }]
+  [0x1154, { nameOffset: 14, typeOffset: 4, typeBytes: 4, flagsOffset: 8, placement: "groupShared" }],
+  // LLVM RegRelativeIndirSym: unsigned offsets before/after dereferencing the register base.
+  // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/include/llvm/DebugInfo/CodeView/SymbolRecord.h#L931
+  [0x1171, { nameOffset: 18, typeOffset: 8, typeBytes: 4, placement: "registerIndirectOffset" }]
 ]);
 
-const location = (fields: DataView, layout: LocalLayout): CodeViewVariableLocation | undefined => {
+const specializedPlacement = (fields: DataView, layout: LocalLayout): CodeViewVariableLocation | undefined => {
   if (layout.placement === "slot") return { kind: "slot", slot: fields.getUint32(0, true) };
   if (layout.placement === "groupShared") return {
     kind: "groupShared", slot: fields.getUint16(6, true), offset: fields.getUint16(8, true) };
+  if (layout.placement === "registerIndirectOffset") return { kind: "registerIndirectOffset",
+    register: fields.getUint16(12, true), offset: fields.getUint32(0, true), memberOffset: fields.getUint32(8, true) };
+  return undefined;
+};
+
+const location = (fields: DataView, layout: LocalLayout): CodeViewVariableLocation | undefined => {
+  const placement = specializedPlacement(fields, layout);
+  if (placement) return placement;
   const register = layout.registerOffset === undefined ? undefined : fields.getUint16(layout.registerOffset - 4, true);
   if (layout.offsetBytes === undefined) return register === undefined ? undefined : { kind: "register", register };
   if (register !== undefined) return { kind: "registerOffset", register,

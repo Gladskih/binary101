@@ -96,3 +96,21 @@ void test("Multi-register names use the record version and diagnose reserved loc
   assert.match(warnings.join(" | "), /reserved bits/);
   assert.equal(await readCodeViewLocal(legacyReader([]), 0x1133), null);
 });
+
+// LLVM RegRelativeIndirSym serializes unsigned Offset/OffsetInUdt, then a u16 register.
+// https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/lib/DebugInfo/CodeView/SymbolRecordMapping.cpp#L425
+void test("Indirect register locals retain both unsigned offsets and their type", async () => {
+  assert.deepEqual(await readCodeViewLocal(legacyReader(localRecord(0x1171, [...legacyU32(0xffffffff),
+    ...legacyU32(0x12345678), ...legacyU32(0x80000000), ...legacyU16(334), ...localName("member")])), 0x1171),
+  { name: "member", local: { typeIndex: 0x12345678,
+    location: { kind: "registerIndirectOffset", register: 334, offset: 0xffffffff, memberOffset: 0x80000000 } } });
+});
+
+void test("Indirect register locals contain truncated names and reject incomplete fixed fields", async () => {
+  const warnings: string[] = [];
+  const bytes = localRecord(0x1171, [...legacyU32(0), ...legacyU32(1), ...legacyU32(0), ...legacyU16(334)]);
+  assert.deepEqual(await readCodeViewLocal(legacyReader(bytes, warnings), 0x1171),
+    { local: { typeIndex: 1, location: { kind: "registerIndirectOffset", register: 334, offset: 0, memberOffset: 0 } } });
+  assert.match(warnings.join(" | "), /local name/);
+  await assert.rejects(readCodeViewLocal(legacyReader(bytes.slice(0, -1)), 0x1171), /bounds/);
+});

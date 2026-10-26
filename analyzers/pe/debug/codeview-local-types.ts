@@ -7,6 +7,8 @@ export type CodeViewVariableLocation =
   | { kind: "frameRelative"; offset: number }
   | { kind: "registerRelative"; register: number; offset: number }
   | { kind: "registerOffset"; register: number; offset: number }
+  | { kind: "registerIndirectOffset"; register: number; offset: number; memberOffset: number }
+  | { kind: "registerIndirectRelative"; register: number; offset: number; memberOffset: number }
   | { kind: "program"; program: number };
 
 export interface CodeViewLocalVariable {
