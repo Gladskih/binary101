@@ -88,7 +88,7 @@
     "llvm-msvc-demangle": "0.2.0",
     "llvm-rust-demangle": "0.1.0",
     "lzma-sdk-decode": "0.1.1",
-    "pkijs": "^3.4.0",
+    "pkijs": "^4.0.0",
     "zstddec": "0.3.1"
   }
 }
