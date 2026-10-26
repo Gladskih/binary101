@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readLegacyCodeViewSymbolText } from "../../../../../analyzers/pe/debug/legacy-codeview-symbol-text.js";
-import { legacyReader, legacyU16 } from "../../../../fixtures/pe-legacy-codeview.js";
-import { frameRecord, localVariableRecord, localRecord, localRangeBytes } from "../../../../fixtures/pe-codeview-locals.js";
+import { legacyReader, legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { frameRecord, localVariableRecord, localRecord, localRangeBytes,
+  localName } from "../../../../fixtures/pe-codeview-locals.js";
 
 void test("CodeView symbol dispatch retains frame metadata instead of just its record kind", async () => {
   const result = await readLegacyCodeViewSymbolText(legacyReader(frameRecord()), 0x1012);
@@ -24,4 +25,22 @@ void test("CodeView symbol dispatch retains register ranges and gaps", async () 
 
   assert.deepEqual(result, { localRange: { location: { kind: "register", register: 328 }, attributes: 1,
     range: { offset: 32, section: 1, length: 32 }, gaps: [{ offset: 4, length: 8 }] } });
+});
+
+void test("CodeView symbol dispatch retains attributed register lists and contains truncated arrays", async () => {
+  const result = await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1131, [...legacyU32(0x1234),
+    ...legacyU32(32), ...legacyU16(1), ...legacyU16(3), ...legacyU16(2), ...legacyU16(328),
+    ...legacyU16(329), ...localName("pair")])), 0x1131);
+  assert.deepEqual(result, { name: "pair", local: { typeIndex: 0x1234, firstLiveAddress: { offset: 32, section: 1 },
+    flags: 3, location: { kind: "registers", registers: [328, 329] } } });
+  const warnings: string[] = [];
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1131,
+    [...legacyU32(1), ...legacyU32(0), ...legacyU16(1), ...legacyU16(0), ...legacyU16(0xffff)]), warnings),
+  0x1131), {});
+  assert.match(warnings.join(" | "), /metadata.*bounds/);
+});
+
+void test("CodeView 2005 local and range enums do not imply an invented body layout", async () => {
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1133, [])), 0x1133), {});
+  assert.deepEqual(await readLegacyCodeViewSymbolText(legacyReader(localRecord(0x1134, [])), 0x1134), {});
 });

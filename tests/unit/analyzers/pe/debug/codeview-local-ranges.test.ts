@@ -81,3 +81,27 @@ void test("Local gaps may be adjacent and end exactly at the live-range boundary
   assert.deepEqual(result?.localRange.gaps, [{ offset: 0, length: 0 }, { offset: 0, length: 1 }]);
   assert.deepEqual(warnings, []);
 });
+
+for (const type of [0x1150, 0x1157]) {
+  void test(`Shader local range ${type} separates gap records from trailing register offsets`, async () => {
+    const warnings: string[] = [];
+    const parsed = await readCodeViewLocalRange(legacyReader(localRecord(type, [...legacyU16(3), ...legacyU16(1),
+      ...legacyU16(8), ...legacyU16(4), ...localRangeBytes(), ...legacyU16(4), ...legacyU16(8),
+      ...legacyU32(0xffffffff)]), warnings), type);
+    assert.deepEqual(parsed, { localRange: { location: { kind: "shaderRegister", registerType: 3, attributes: 1,
+      registerOffsets: [0xffffffff] }, parentOffset: 8, sizeInParent: 4,
+    range: { offset: 32, section: 1, length: 32 }, gaps: [{ offset: 4, length: 8 }] } });
+    assert.deepEqual(warnings, []);
+  });
+}
+
+void test("Shader ranges diagnose an incomplete gap without reading it as a register offset", async () => {
+  const warnings: string[] = [];
+  const result = await readCodeViewLocalRange(legacyReader(localRecord(0x1150, [...legacyU16(3), ...legacyU16(1),
+    ...legacyU16(8), ...legacyU16(4), ...localRangeBytes(), 0, ...legacyU32(0xffffffff)]), warnings), 0x1150);
+  assert.deepEqual(result?.localRange.location, { kind: "shaderRegister", registerType: 3, attributes: 1,
+    registerOffsets: [0xffffffff] });
+  assert.deepEqual(result?.localRange.gaps, []);
+  assert.match(warnings.join(" | "), /truncated gap/);
+  assert.equal(await readCodeViewLocalRange(legacyReader([]), 0x1134), null);
+});

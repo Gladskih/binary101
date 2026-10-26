@@ -1,5 +1,6 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import type { CodeViewLocalRange } from "./codeview-local-types.js";
+import { readCodeViewShaderRange } from "./codeview-shader-ranges.js";
 
 // DEFRANGESYM through DEFRANGESYMREGISTERREL; all fixed fields and gap arrays
 // are naturally four-byte sized, so a partial gap is not alignment padding.
@@ -29,9 +30,10 @@ const validateAttributes = (reader: LegacyCodeViewReader, type: number, info: Co
   if (type === 0x1143 && info.parentOffset! > 0xfff) reader.warn("CodeView subfield offset contains reserved bits.");
 };
 
-const readGaps = async (reader: LegacyCodeViewReader, start: number, info: CodeViewLocalRange): Promise<void> => {
+const readGaps = async (reader: LegacyCodeViewReader, start: number, end: number,
+  info: CodeViewLocalRange): Promise<void> => {
   let previousEnd = 0;
-  for (let offset = start; offset + 4 <= reader.size; offset += 4) {
+  for (let offset = start; offset + 4 <= end; offset += 4) {
     const fields = await reader.view(offset, 4);
     const gap = { offset: fields.getUint16(0, true), length: fields.getUint16(2, true) };
     info.gaps.push(gap);
@@ -39,14 +41,15 @@ const readGaps = async (reader: LegacyCodeViewReader, start: number, info: CodeV
     if (gap.offset < previousEnd) reader.warn("CodeView local gaps overlap or are not ordered.");
     previousEnd = gap.offset + gap.length;
   }
-  if ((reader.size - start) % 4) reader.warn("CodeView local range ends with a truncated gap.");
+  if ((end - start) % 4) reader.warn("CodeView local range ends with a truncated gap.");
 };
 
 export const readCodeViewLocalRange = async (reader: LegacyCodeViewReader, type: number
 ): Promise<{ localRange: CodeViewLocalRange } | null> => {
-  const prefix = prefixes.get(type);
+  const shader = await readCodeViewShaderRange(reader, type);
+  const prefix = shader?.prefix ?? prefixes.get(type);
   if (prefix === undefined) return null;
-  const localRange = readLocation(await reader.view(4, prefix - 4), type);
+  const localRange = shader?.localRange ?? readLocation(await reader.view(4, prefix - 4), type);
   validateAttributes(reader, type, localRange);
   if (type === 0x1144) {
     if (reader.size !== prefix) reader.warn("CodeView full-scope local range has unexpected trailing bytes.");
@@ -61,7 +64,7 @@ export const readCodeViewLocalRange = async (reader: LegacyCodeViewReader, type:
     }
     // CV_LEXICAL_RANGE_MAX reserves cbRange >= 0xf000 for other encodings.
     if (localRange.range.length >= 0xf000) reader.warn("CodeView local range uses a reserved length encoding.");
-    await readGaps(reader, prefix + 8, localRange);
+    await readGaps(reader, prefix + 8, shader?.gapEnd ?? reader.size, localRange);
   } catch (error) { reader.warn(`CodeView local range: ${String(error)}`); }
   return { localRange };
 };

@@ -41,3 +41,22 @@ void test("CodeView location descriptions keep signed displacements and unevalua
   assert.equal(codeViewLocalPlacement({ kind: "registerOffset", register: 334, offset: 4294967288 }, 0x8664),
     "RBP + stored unsigned offset 4294967288");
 });
+
+void test("Multi-register, IL slot and DPC groupshared placements retain distinct storage semantics", () => {
+  assert.equal(codeViewLocalPlacement({ kind: "registers", registers: [328, 329] }, 0x8664),
+    "RAX, RBX (most significant first)");
+  assert.equal(codeViewLocalPlacement({ kind: "registers", registers: [] }, undefined), "empty register list");
+  assert.equal(codeViewLocalPlacement({ kind: "slot", slot: 7 }, undefined), "IL slot #7");
+  assert.equal(codeViewLocalPlacement({ kind: "groupShared", slot: 7, offset: 0xffff }, undefined),
+    "DPC groupshared slot #7 + byte offset 65535");
+});
+
+void test("Shader locations expose raw register types, memory spaces and incomplete offsets", () => {
+  assert.equal(codeViewLocalPlacement({ kind: "shaderRegister", registerType: 3, attributes: 0x16,
+    registerOffsets: [0xffffffff, 9] }, undefined),
+  "HLSL indexable temporary register type #3; memory space #2; register offsets [4294967295, 9]; spilled member");
+  assert.equal(codeViewLocalPlacement({ kind: "shaderRegister", registerType: 0xffff, attributes: 0x83 }, undefined),
+    "HLSL unknown register type #65535; memory space #0; register offsets unavailable (3 dimensions); unknown attributes 0x80");
+  assert.equal(codeViewLocalPlacement({ kind: "shaderRegister", registerType: 0, attributes: 0,
+    registerOffsets: [] }, undefined), "HLSL temporary register type #0; memory space #0; register offsets []");
+});

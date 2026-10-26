@@ -49,12 +49,47 @@ const armRegister = (register: number, machine: number | undefined): string | un
 export const codeViewLocalRegister = (register: number, machine: number | undefined): string =>
   intelRegister(register, machine) ?? armRegister(register, machine) ?? `CodeView register #${register}`;
 
-export const codeViewLocalPlacement = (location: CodeViewVariableLocation, machine: number | undefined): string => {
-  if (location.kind === "program") return `DIA program #${location.program} (not evaluated)`;
-  if (location.kind === "register") return codeViewLocalRegister(location.register, machine);
+// CV_HLSLREG_e is a separate namespace from architecture-specific CV_HREG_e.
+// https://github.com/microsoft/microsoft-pdb/blob/805655a28bd8198004be2ac27e6e0290121a5e89/include/cvconst.h#L3663
+const SHADER_REGISTERS = ["temporary", "input", "output", "indexable temporary", "32-bit immediate",
+  "64-bit immediate", "sampler", "resource", "constant buffer", "immediate constant buffer", "label",
+  "input primitive ID", "output depth", "null", "rasterizer", "output coverage mask", "stream", "function body",
+  "function table", "interface", "function input", "function output", "output control point ID",
+  "input fork instance ID", "input join instance ID", "input control point", "output control point",
+  "input patch constant", "input domain point", "this pointer", "unordered access view", "thread group shared memory",
+  "input thread ID", "input thread group ID", "input thread ID in group", "input coverage mask",
+  "flattened input thread ID in group", "input geometry shader instance ID", "output depth greater or equal",
+  "output depth less or equal", "cycle counter"];
+
+const shaderPlacement = (location: Extract<CodeViewVariableLocation, { kind: "shaderRegister" }>): string => {
+  const properties = [`HLSL ${SHADER_REGISTERS[location.registerType] ?? "unknown"} register type #${location.registerType}`,
+    `memory space #${(location.attributes >>> 3) & 0xf}`,
+    location.registerOffsets === undefined ? `register offsets unavailable (${location.attributes & 3} dimensions)`
+      : `register offsets [${location.registerOffsets.join(", ")}]`];
+  if (location.attributes & 4) properties.push("spilled member");
+  if (location.attributes & 0xff80) properties.push(`unknown attributes 0x${(location.attributes & 0xff80).toString(16)}`);
+  return properties.join("; ");
+};
+
+const offsetPlacement = (location: Extract<CodeViewVariableLocation,
+  { kind: "registerOffset" | "registerRelative" | "frameRelative" }>, machine: number | undefined): string => {
   if (location.kind === "registerOffset") {
     return `${codeViewLocalRegister(location.register, machine)} + stored unsigned offset ${location.offset}`;
   }
   const base = location.kind === "frameRelative" ? "frame base" : codeViewLocalRegister(location.register, machine);
   return `${base}${location.offset < 0 ? " - " : " + "}${Math.abs(location.offset)}`;
+};
+
+export const codeViewLocalPlacement = (location: CodeViewVariableLocation, machine: number | undefined): string => {
+  switch (location.kind) {
+    case "program": return `DIA program #${location.program} (not evaluated)`;
+    case "register": return codeViewLocalRegister(location.register, machine);
+    case "registers": return location.registers.length
+      ? `${location.registers.map(register => codeViewLocalRegister(register, machine)).join(", ")} (most significant first)`
+      : "empty register list";
+    case "slot": return `IL slot #${location.slot}`;
+    case "groupShared": return `DPC groupshared slot #${location.slot} + byte offset ${location.offset}`;
+    case "shaderRegister": return shaderPlacement(location);
+    default: return offsetPlacement(location, machine);
+  }
 };
