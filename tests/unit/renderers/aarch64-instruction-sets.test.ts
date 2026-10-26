@@ -80,6 +80,10 @@ void test("NEON predicate variants retain separate counts and streaming informat
 });
 
 void test("conditional streaming compatibility and unclassified gates remain explicit", () => {
+  // LLVM 23.1.4 AArch64InstrInfo.td: streaming conversion requires +fprcvt.
+  // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.4/llvm/lib/Target/AArch64/AArch64InstrInfo.td#L329
+  assert.ok(renderPredicates([{ name: "HasNEONandIsFPRCVTStreamingSafe",
+    expression: { feature: "FeatureNEON" } }]).includes("Requires FPRCVT in streaming mode"));
   assert.ok(renderPredicates([{ name: "HasNEONandIsSME2p2StreamingSafe",
     expression: { feature: "FeatureNEON" } }]).includes("Requires SME2.2 in streaming mode"));
   assert.ok(renderPredicates([{ name: "UnrecognizedStreamingSafe",

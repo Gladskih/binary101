@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { llvmVersion } from "llvm-aarch64-disasm";
 import { analyzeElfInstructionSets } from "../../../../analyzers/elf/disassembly-analyze.js";
 import { aarch64Code, aarch64Options } from "../../../fixtures/aarch64-code.js";
 import { MockFile } from "../../../helpers/mock-file.js";
@@ -26,7 +27,7 @@ void test("AArch64 follows branches and preserves SVE or SME requirements", asyn
   assert.equal(report.invalidInstructionCount, 0);
   assert.ok(report.instructionSets.some(set => /FEAT_SVE or FEAT_SME/.test(set.label)));
   assert.equal(report.seedSummary?.uniqueEntrypoints, 1);
-  assert.equal(report.decoderVersion, "LLVM 21.1.8");
+  assert.equal(report.decoderVersion, `LLVM ${llvmVersion}`);
 });
 
 void test("AArch64 instructions remain little endian in big endian ELF and ELF32", async () => {
