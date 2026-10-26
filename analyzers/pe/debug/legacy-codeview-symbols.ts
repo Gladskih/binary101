@@ -18,7 +18,8 @@ export const readLegacyCodeViewSymbols = async (
 ): Promise<LegacyCodeViewSymbols> => {
   const { records, offsets } = await readLegacyCodeViewSymbolStream(reader, start, end);
   return { kind: "symbols", records,
-    ...(records.some(record => record.local || record.frame || record.localRange) ? { recordOffsets: offsets } : {}) };
+    ...(records.some(record => record.local || record.frame || record.localRange || record.scope)
+      ? { recordOffsets: offsets } : {}) };
 };
 
 // Packed global/public/static symbols start after OMFSymHash; the hash tables

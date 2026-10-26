@@ -87,3 +87,13 @@ for (const [types, name] of [
     assert.equal(legacyCodeViewSymbolName(type), name);
   });
 }
+
+for (const [type, name] of [[0x114d, "Inline site"], [0x115d, "Inline site with invocation count"],
+  [0x114e, "Inline site end"], [0x114f, "Procedure ID end"], [0x1150, "Local HLSL range"],
+  [0x1157, "Local DPC pointer-tag range"], [0x1177, "Local indirect register-relative range"],
+  [0x1017, "Local slot variable"], [0x111a, "Local slot variable"],
+  [0x1018, "Parameter slot variable"], [0x111b, "Parameter slot variable"]] as const) {
+  void test(`Decoded CodeView context/location ${type} has a readable category`, () => {
+    assert.equal(legacyCodeViewSymbolName(type), name);
+  });
+}

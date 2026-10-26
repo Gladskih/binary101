@@ -10,7 +10,7 @@ const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Segments|Contributed bytes|Line\/address pairs|Distinct source lines|Distinct lines or path codes|Referencing modules|Segment|Bytes|Mapped segments|Distinct frames|Records|Payload bytes|Groups|Nonempty groups|References|Largest group|References per bucket|Buckets|With source line|First source line|Last source line)$/.test(label)
     || ["Declared parameters", "Value / placement", "Byte size", "Declared members", "Source line", "Build",
       "String list", "Component", "Dimension", "Lower bound", "Upper bound", "Pointer offset", "Image RVA", "Code length",
-      "Frame bytes", "Padding bytes", "Saved register bytes", "Range records", "Declared range bytes (sum)", "Gap bytes (sum)",
+      "Frame bytes", "Padding bytes", "Saved register bytes", "Range records", "Declared range bytes (sum)", "Gap bytes (sum)", "Code bytes",
       "Stored method names", "Path type index", "PDB age", "Bit size"].includes(label) ? "peNumeric" : "";
 
 const TABLE_CLASSES = new Map([
@@ -18,6 +18,7 @@ const TABLE_CLASSES = new Map([
   ["members", "peCodeViewMemberTable"], ["types", "peCodeViewTypeTable"],
   ["functions", "peCodeViewFunctionTable"], ["procedureSymbols", "peCodeViewProcedureTable"],
   ["compilerFrames", "peCodeViewLocalTable"], ["localVariables", "peCodeViewLocalTable"],
+  ["lexicalScopes", "peCodeViewLocalTable"],
   ["arrayBounds", "peCodeViewBoundsTable"]
 ]);
 

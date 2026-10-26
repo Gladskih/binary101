@@ -122,14 +122,14 @@ void test("Child scopes inherit uncertainty from an unlinked parent", () => {
 });
 
 for (const [type, end] of [[0x114d, 0x114e], [0x1102, 6]]) {
-  void test(`Unsupported scope kind ${type} blocks attribution until its own end`, () => {
+  void test(`Scope kind ${type} with missing fields blocks attribution until its own end`, () => {
     const data = scopeData();
     data.records.splice(2, 0, { type: type! }, { type: 0x113e, name: "inner", local: { typeIndex: 1 } }, { type: end! });
     data.recordOffsets!.splice(2, 0, 60, 68, 76);
     const result = analyzeCodeViewLocalScopes(data);
 
     assert.equal(result.bindings[1]?.procedure, undefined);
-    assert.match(result.bindings[1]!.issues.join(" | "), /Unsupported enclosing scope/);
+    assert.match(result.bindings[1]!.issues.join(" | "), /Scope links are not populated/);
     assert.equal(result.bindings[2]?.procedure, data.records[0]);
   });
 }
@@ -204,6 +204,7 @@ void test("A valid nested block inherits the containing procedure until its own 
 void test("A next link may name another procedure but cannot point to itself", () => {
   const data = scopeData();
   data.records.push({ type: 0x1110, name: "second", procedure: { referenceKind: "typeIndex",
+    storedLocation: { segment: 1, offset: 96 },
     scopeOffsets: { parent: 0, end: 240, next: 0 } } }, { ...data.records[1]! }, { type: 6 });
   data.recordOffsets!.push(160, 200, 240);
   data.records[0]!.procedure!.scopeOffsets!.next = 160;

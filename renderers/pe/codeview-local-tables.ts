@@ -4,10 +4,12 @@ import { analyzeCodeViewLocalScopes, type CodeViewLocalBinding } from "../../ana
 import type { CodeViewLocalRange } from "../../analyzers/pe/debug/codeview-local-types.js";
 import type { LegacyCodeViewTable } from "./legacy-codeview-tables.js";
 import { codeViewFrameBase, codeViewFrameFlags, codeViewLocalFlags, codeViewLocalPlacement } from "./codeview-local-properties.js";
+import { codeViewScopeName, codeViewScopeProperties } from "./codeview-scope-properties.js";
 
 interface LocalTableState {
   frames: LegacyCodeViewTable;
   locals: LegacyCodeViewTable;
+  scopes: LegacyCodeViewTable;
   counts: Map<string, number>;
   directory: number;
   module: number;
@@ -16,7 +18,10 @@ interface LocalTableState {
 const increment = (state: LocalTableState, name: string): void => {
   state.counts.set(name, (state.counts.get(name) ?? 0) + 1);
 };
-const procedureName = (binding: CodeViewLocalBinding): string => binding.procedure?.name ?? "(scope unresolved)";
+const procedureName = (binding: CodeViewLocalBinding): string => binding.procedure?.name
+  ?? (binding.issues.length ? "(scope unresolved)" : "(no enclosing procedure)");
+const scopeStatus = (binding: CodeViewLocalBinding): string => binding.issues.join("; ")
+  || (binding.procedure ? "validated procedure scope" : "validated thunk scope");
 
 const gapBytes = (binding: CodeViewLocalBinding): bigint | undefined => {
   const range = binding.record.localRange!;
@@ -56,7 +61,7 @@ const rangeSummary = (ranges: readonly CodeViewLocalBinding[]): string[] => {
 const rangeAttributes = (range: CodeViewLocalRange): string[] => {
   const attributes = range.attributes ?? 0;
   const result: string[] = [];
-  const relative = range.location.kind === "registerRelative";
+  const relative = ["registerRelative", "registerIndirectRelative"].includes(range.location.kind);
   if (attributes & 1) result.push(relative ? "spilled member" : "may have no name");
   if (relative && attributes >>> 4) result.push(`parent offset ${attributes >>> 4}`);
   const unknown = attributes & (relative ? 0xe : 0xfffe);
@@ -68,8 +73,21 @@ const rangePlacement = (binding: CodeViewLocalBinding, machine: number | undefin
   const range = binding.record.localRange!;
   const attributes = rangeAttributes(range);
   if (range.parentOffset !== undefined) attributes.push(`parent offset ${range.parentOffset}`);
+  if (range.sizeInParent !== undefined) attributes.push(`size in parent ${range.sizeInParent} bytes`);
   return [codeViewLocalPlacement(range.location, machine), ...attributes].join("; ");
 };
+
+const localProperties = (record: LegacyCodeViewSymbol): string => {
+  const local = record.local!;
+  const properties = [codeViewLocalFlags(local.flags)];
+  if ([0x1018, 0x111b].includes(record.type)) properties.push("parameter slot");
+  if (local.firstLiveAddress) properties.push(`first live address (stored section:offset) `
+    + `${local.firstLiveAddress.section}:${local.firstLiveAddress.offset}`);
+  return properties.join("; ");
+};
+
+const isParameter = (record: LegacyCodeViewSymbol): boolean =>
+  Boolean((record.local!.flags ?? 0) & 1) || [0x1018, 0x111b].includes(record.type);
 
 const addLocal = (state: LocalTableState, binding: CodeViewLocalBinding, ranges: readonly CodeViewLocalBinding[],
   machine: number | undefined): void => {
@@ -77,11 +95,12 @@ const addLocal = (state: LocalTableState, binding: CodeViewLocalBinding, ranges:
   const placements = local.location ? [codeViewLocalPlacement(local.location, machine)]
     : ranges.map(range => rangePlacement(range, machine));
   const issues = [...new Set([...binding.issues, ...ranges.flatMap(range => range.issues)])];
-  state.locals.rows.push([binding.record.name ?? "(name unavailable)", procedureName(binding), `#${local.typeIndex}`,
-    [...new Set(placements)].join("; ") || "not stored", codeViewLocalFlags(local.flags), ...rangeSummary(ranges),
-    issues.join("; ") || "validated procedure scope", String(state.directory), String(state.module)]);
+  state.locals.rows.push([binding.record.name ?? "(name unavailable)", procedureName(binding),
+    codeViewScopeName(binding.context), `#${local.typeIndex}`,
+    [...new Set(placements)].join("; ") || "not stored", localProperties(binding.record), ...rangeSummary(ranges),
+    issues.join("; ") || scopeStatus(binding), String(state.directory), String(state.module)]);
   increment(state, "Local variable descriptions");
-  if ((local.flags ?? 0) & 1) increment(state, "Parameters");
+  if (isParameter(binding.record)) increment(state, "Parameters");
   if ((local.flags ?? 0) & 0x100) increment(state, "Optimized-out variables");
 };
 
@@ -93,8 +112,16 @@ const addFrame = (state: LocalTableState, binding: CodeViewLocalBinding, machine
   state.frames.rows.push([procedureName(binding), String(frame.frameBytes), String(frame.paddingBytes),
     String(frame.savedRegisterBytes), codeViewFrameBase((frame.flags >>> 14) & 3, machine),
     codeViewFrameBase((frame.flags >>> 16) & 3, machine), properties.join("; "),
-    binding.issues.join("; ") || "validated procedure scope", String(state.directory), String(state.module)]);
+    scopeStatus(binding), String(state.directory), String(state.module)]);
   increment(state, "Compiler frame descriptions");
+};
+
+const addScope = (state: LocalTableState, binding: CodeViewLocalBinding): void => {
+  const scope = binding.record.scope!;
+  state.scopes.rows.push([codeViewScopeName(binding.record), procedureName(binding), scope.kind,
+    scope.codeLength === undefined ? "not stored" : String(scope.codeLength), codeViewScopeProperties(binding.record),
+    scopeStatus(binding), String(state.directory), String(state.module)]);
+  increment(state, `${scope.kind} scope descriptions`);
 };
 
 const groupRange = (state: LocalTableState, ranges: Map<LegacyCodeViewSymbol, CodeViewLocalBinding[]>,
@@ -115,6 +142,7 @@ const addBindings = (state: LocalTableState, bindings: readonly CodeViewLocalBin
     groupRange(state, ranges, binding);
     if (binding.issues.length) increment(state, "Metadata records with unresolved or invalid scopes");
     if (binding.record.frame) addFrame(state, binding, machine);
+    if (binding.record.scope) addScope(state, binding);
   }
   for (const binding of bindings) {
     if (binding.record.local) addLocal(state, binding, ranges.get(binding.record) ?? [], machine);
@@ -127,9 +155,11 @@ export const buildCodeViewLocalTables = (info: PeLegacyCodeViewInfo, machine?: n
     frames: { key: "compilerFrames", title: "Compiler frame descriptions", columns: ["Procedure", "Frame bytes",
       "Padding bytes", "Saved register bytes", "Local base", "Parameter base", "Properties", "Scope status",
       "Directory", "Module"], rows: [] },
-    locals: { key: "localVariables", title: "Local variables and parameters", columns: ["Name", "Procedure", "Type reference",
+    locals: { key: "localVariables", title: "Local variables and parameters", columns: ["Name", "Procedure", "Lexical context", "Type reference",
       "Placement", "Properties", "Range records", "Declared range bytes (sum)", "Gap bytes (sum)", "Scope status",
       "Directory", "Module"], rows: [] },
+    scopes: { key: "lexicalScopes", title: "Inline sites, thunks and lexical scopes", columns: ["Name / expression",
+      "Procedure", "Scope kind", "Code bytes", "Properties", "Scope status", "Directory", "Module"], rows: [] },
     counts: new Map(), directory: 0, module: 0
   };
   for (const [index, directory] of info.directories.entries()) for (const section of directory.subsections) {
@@ -142,6 +172,6 @@ export const buildCodeViewLocalTables = (info: PeLegacyCodeViewInfo, machine?: n
     if (analysis.bindings.length) for (const issue of analysis.issues) increment(state, `Scope diagnostic: ${issue}`);
   }
   return [{ key: "localStatistics", title: "Frame and local metadata statistics", columns: ["Metadata", "Records"],
-    rows: [...state.counts].map(([label, count]) => [label, String(count)]) }, state.frames, state.locals]
+    rows: [...state.counts].map(([label, count]) => [label, String(count)]) }, state.frames, state.locals, state.scopes]
     .filter(table => table.rows.length);
 };

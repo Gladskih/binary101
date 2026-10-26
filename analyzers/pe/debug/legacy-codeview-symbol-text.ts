@@ -7,6 +7,8 @@ import { readCodeViewFrame } from "./codeview-frame-symbol.js";
 import { readCodeViewLocal } from "./codeview-local-symbols.js";
 import { readCodeViewLocalRange } from "./codeview-local-ranges.js";
 import type { CodeViewFrame, CodeViewLocalVariable, CodeViewLocalRange } from "./codeview-local-types.js";
+import type { CodeViewScopeSymbol } from "./codeview-scope-types.js";
+import { readCodeViewScopeSymbol } from "./codeview-scope-symbols.js";
 
 export interface LegacyCodeViewSymbolText {
   name?: string;
@@ -17,6 +19,7 @@ export interface LegacyCodeViewSymbolText {
   frame?: CodeViewFrame;
   local?: CodeViewLocalVariable;
   localRange?: CodeViewLocalRange;
+  scope?: CodeViewScopeSymbol;
 }
 type ReadCodeViewString = (offset: number) => Promise<{ name: string; end: number }>;
 
@@ -31,7 +34,8 @@ const readLocalMetadata = async (reader: LegacyCodeViewReader,
 const readSymbolMetadata = async (reader: LegacyCodeViewReader,
   type: number): Promise<LegacyCodeViewSymbolText | null> =>
   await readLegacyCodeViewConstantSymbol(reader, type) ?? await readLegacyCodeViewProcedureSymbol(reader, type)
-    ?? await readLegacyCodeViewDataSymbol(reader, type) ?? await readLocalMetadata(reader, type);
+    ?? await readLegacyCodeViewDataSymbol(reader, type) ?? await readCodeViewScopeSymbol(reader, type)
+    ?? await readLocalMetadata(reader, type);
 
 const readCountedStrings = async (reader: LegacyCodeViewReader, start: number,
   count: number, readName: ReadCodeViewString): Promise<string[]> => {

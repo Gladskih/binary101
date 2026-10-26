@@ -1,12 +1,14 @@
 import type { LegacyCodeViewSymbols } from "./legacy-codeview-symbols.js";
 import type { LegacyCodeViewSymbol } from "./legacy-codeview-symbol-records.js";
 import type { CodeViewLocalRange } from "./codeview-local-types.js";
-import type { LegacyCodeViewProcedure } from "./legacy-codeview-procedure-symbols.js";
+import { analyzeCodeViewScopeChains, codeViewScopeLinks as links, codeViewScopeEndType as scopeEndType,
+  codeViewScopeLength, codeViewScopeLocation, isCodeViewCallable } from "./codeview-scope-links.js";
 
 export interface CodeViewLocalBinding {
   record: LegacyCodeViewSymbol;
   procedure?: LegacyCodeViewSymbol;
   local?: LegacyCodeViewSymbol;
+  context?: LegacyCodeViewSymbol;
   issues: string[];
 }
 export interface CodeViewLocalScopeAnalysis { bindings: CodeViewLocalBinding[]; issues: string[]; }
@@ -14,22 +16,25 @@ interface ActiveScope {
   offset: number;
   end?: number;
   procedure?: LegacyCodeViewSymbol;
+  callable?: LegacyCodeViewSymbol;
+  context?: LegacyCodeViewSymbol;
   issue?: string;
   closingType: number;
 }
 interface ScopeState {
   index: Map<number, LegacyCodeViewSymbol>;
+  chainIssues: Map<LegacyCodeViewSymbol, string>;
   active: ActiveScope[];
   local?: LegacyCodeViewSymbol;
   result: CodeViewLocalScopeAnalysis;
 }
 
-const links = (record: LegacyCodeViewSymbol) => record.procedure?.scopeOffsets ?? record.data?.scopeOffsets;
-const isScope = (record: LegacyCodeViewSymbol): boolean => record.procedure !== undefined || record.data?.kind === "block";
-const metadata = (record: LegacyCodeViewSymbol): boolean => Boolean(record.frame || record.local || record.localRange);
+const SCOPE_TYPES = new Set([0x114d, 0x115d, 0x1102, 0x0206, 0x0106, 0x1104, 0x0208, 0x0108, 0x0107]);
+const isScope = (record: LegacyCodeViewSymbol): boolean =>
+  record.procedure !== undefined || record.data?.kind === "block" || SCOPE_TYPES.has(record.type);
+const metadata = (record: LegacyCodeViewSymbol): boolean =>
+  Boolean(record.frame || record.local || record.localRange || record.scope);
 type ScopeLinks = NonNullable<ReturnType<typeof links>>;
-const scopeEndType = (record: LegacyCodeViewSymbol): number =>
-  record.procedure?.referenceKind === "procedureId" ? 0x114f : 6;
 
 // TIS 1.2: offsets are relative to this module's symbol table. Compiler output
 // may legitimately leave links zero; CVPACK fills them. Never borrow another module.
@@ -49,20 +54,19 @@ const scopeParentIssue = (state: ScopeState, scope: ScopeLinks): string | undefi
   return undefined;
 };
 
-const scopeNextIssue = (state: ScopeState, record: LegacyCodeViewSymbol): string | undefined => {
-  const scope = record.procedure?.scopeOffsets;
-  const next = scope?.next;
-  if (next && (state.index.get(next) === record || !state.index.get(next)?.procedure)) {
-    return "Scope next link does not identify another procedure.";
-  }
-  return undefined;
-};
-
 const scopeLinkIssue = (state: ScopeState, offset: number, record: LegacyCodeViewSymbol): string | undefined => {
   const scope = links(record);
   if (!scope) return "Scope links are not populated; lexical association is unresolved.";
   return scopeEndIssue(state, offset, scope, scopeEndType(record))
-    ?? scopeParentIssue(state, scope) ?? scopeNextIssue(state, record);
+    ?? scopeParentIssue(state, scope) ?? state.chainIssues.get(record);
+};
+
+const inheritCallable = (state: ScopeState, record: LegacyCodeViewSymbol, active: ActiveScope): void => {
+  const parent = state.active.at(-1);
+  if (record.procedure) active.procedure = record;
+  else if (record.scope?.kind !== "thunk" && parent?.procedure) active.procedure = parent.procedure;
+  const callable = isCodeViewCallable(record) ? record : parent?.callable;
+  if (callable) active.callable = callable;
 };
 
 const createActiveScope = (state: ScopeState, offset: number, record: LegacyCodeViewSymbol,
@@ -70,16 +74,15 @@ const createActiveScope = (state: ScopeState, offset: number, record: LegacyCode
   const active: ActiveScope = { offset, closingType: scopeEndType(record) };
   const end = links(record)?.end;
   if (end) active.end = end;
+  const context = record.scope ? record : state.active.at(-1)?.context;
+  if (context) active.context = context;
   if (issue) active.issue = issue;
-  else {
-    const procedure = record.procedure ? record : state.active.at(-1)?.procedure;
-    if (procedure) active.procedure = procedure;
-  }
+  else inheritCallable(state, record, active);
   return active;
 };
 
 const openScope = (state: ScopeState, offset: number, record: LegacyCodeViewSymbol): void => {
-  if (record.procedure && links(record)?.parent === 0 && state.active.length) {
+  if (isCodeViewCallable(record) && links(record)?.parent === 0 && state.active.length) {
     state.result.issues.push("A new root procedure starts before the preceding scope closes.");
     state.active.length = 0;
   }
@@ -90,7 +93,7 @@ const openScope = (state: ScopeState, offset: number, record: LegacyCodeViewSymb
 };
 
 const rangeBoundsIssue = (range: NonNullable<CodeViewLocalRange["range"]>,
-  location: NonNullable<LegacyCodeViewProcedure["storedLocation"]>, length: number): string | undefined => {
+  location: { segment: number; offset: number }, length: number): string | undefined => {
   if (range.section !== location.segment) return "Local range segment differs from the containing procedure.";
   if (range.offset < location.offset || range.length > length - (range.offset - location.offset)) {
     return "Local live range lies outside the containing procedure.";
@@ -99,18 +102,18 @@ const rangeBoundsIssue = (range: NonNullable<CodeViewLocalRange["range"]>,
 };
 
 const rangeIssue = (range: CodeViewLocalRange["range"],
-  procedure: LegacyCodeViewProcedure | undefined): string | undefined => {
+  callable: LegacyCodeViewSymbol | undefined): string | undefined => {
   if (!range) return undefined;
   if (range.length >= 0xf000) return "Reserved local-range length encoding is not interpreted.";
-  const location = procedure?.storedLocation;
-  const length = procedure?.codeLength;
+  const location = callable && codeViewScopeLocation(callable);
+  const length = callable && codeViewScopeLength(callable);
   if (!location) return "Procedure address fields are unavailable for range validation.";
   if (length === undefined) return "Procedure address fields are unavailable for range validation.";
   return rangeBoundsIssue(range, location, length);
 };
 
 const bindingScopeIssue = (scope: ActiveScope | undefined): string | undefined =>
-  scope?.issue ?? (scope?.procedure ? undefined : "No validated containing procedure.");
+  scope?.issue ?? (scope?.callable ? undefined : "No validated containing procedure or thunk.");
 
 const associateRange = (binding: CodeViewLocalBinding, local: LegacyCodeViewSymbol | undefined): void => {
   if (!binding.record.localRange) return;
@@ -119,17 +122,21 @@ const associateRange = (binding: CodeViewLocalBinding, local: LegacyCodeViewSymb
   if ((local?.local?.flags ?? 0) & 0x100) binding.issues.push("A location range follows an optimized-out local.");
 };
 
+const validateRangeBinding = (binding: CodeViewLocalBinding, callable: LegacyCodeViewSymbol | undefined): void => {
+  if (!callable) return;
+  const issue = rangeIssue(binding.record.localRange?.range, callable);
+  if (issue) binding.issues.push(issue);
+};
+
 const bindMetadata = (state: ScopeState, record: LegacyCodeViewSymbol): void => {
   const scope = state.active.at(-1);
   const issues: string[] = [];
   const scopeIssue = bindingScopeIssue(scope);
   if (scopeIssue) issues.push(scopeIssue);
   const binding: CodeViewLocalBinding = { record, issues };
-  if (scope?.procedure) {
-    binding.procedure = scope.procedure;
-    const issue = rangeIssue(record.localRange?.range, scope.procedure.procedure);
-    if (issue) issues.push(issue);
-  }
+  if (scope?.context) binding.context = scope.context;
+  if (scope?.procedure) binding.procedure = scope.procedure;
+  validateRangeBinding(binding, scope?.callable);
   associateRange(binding, state.local);
   state.result.bindings.push(binding);
 };
@@ -143,13 +150,9 @@ const closeScope = (state: ScopeState, offset: number, type: number): void => {
 };
 
 const processRecord = (state: ScopeState, offset: number, record: LegacyCodeViewSymbol): void => {
-  if (isScope(record)) { openScope(state, offset, record); return; }
-  // Inline sites, thunks and WITH scopes need their own body/link decoders.
-  // Keep their metadata visible without attributing it to the outer procedure.
-  if ([0x114d, 0x115d, 0x1102, 0x0206, 0x0106, 0x1104, 0x0208, 0x0108].includes(record.type)) {
-    state.active.push({ offset, issue: "Unsupported enclosing scope kind.",
-      closingType: [0x114d, 0x115d].includes(record.type) ? 0x114e : 6 });
-    delete state.local;
+  if (isScope(record)) {
+    openScope(state, offset, record);
+    if (record.scope) bindMetadata(state, record);
     return;
   }
   if ([6, 0x114e, 0x114f].includes(record.type)) { closeScope(state, offset, record.type); return; }
@@ -172,8 +175,8 @@ export const analyzeCodeViewLocalScopes = (data: LegacyCodeViewSymbols): CodeVie
     return { bindings: data.records.filter(metadata).map(record => ({ record, issues: [issue] })), issues: [issue] };
   }
   const offsets = data.recordOffsets!;
-  const state: ScopeState = { index: new Map(), active: [], result };
-  data.records.forEach((record, index) => state.index.set(offsets[index]!, record));
+  const index = new Map(data.records.map((record, position) => [offsets[position]!, record]));
+  const state: ScopeState = { index, chainIssues: analyzeCodeViewScopeChains(index), active: [], result };
   data.records.forEach((record, index) => processRecord(state, offsets[index]!, record));
   if (state.active.length) result.issues.push("Symbol stream ends with unclosed lexical scopes.");
   return result;
