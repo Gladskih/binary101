@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { llvmVersion } from "llvm-aarch64-disasm";
 import { createPePlusWithSection } from "../fixtures/sample-files-pe.js";
 import { aarch64Code } from "../fixtures/aarch64-code.js";
 
@@ -30,7 +31,7 @@ test("PE ARM64 analyzes with local WASM and displays architecture requirements",
     .toHaveText("Re-analyze instruction sets");
   await expect(panel).toContainText("6 instruction(s)");
   await expect(panel).toContainText("FEAT_SVE or FEAT_SME");
-  await expect(panel).toContainText("LLVM 21.1.8");
+  await expect(panel).toContainText(`LLVM ${llvmVersion}`);
   await expect(panel).not.toContainText("SSE2");
   const row = panel.getByRole("row").filter({ hasText: "MRS SCTLR_EL1" });
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");

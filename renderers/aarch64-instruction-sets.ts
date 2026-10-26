@@ -6,11 +6,13 @@ const escapeAarch64Text = (value: string): string => escapeHtml(value.replaceAll
 // All names and descriptions come from the package's pinned LLVM feature metadata.
 // https://github.com/Gladskih/llvm-aarch64-disasm/blob/main/docs/metadata.md
 
-// Exact predicates reviewed against LLVM 21.1.8; never infer semantics from name substrings.
+// Exact predicates reviewed against LLVM 23.1.4, retaining the LLVM 21.1.8 SME2.2 gate.
+// https://github.com/llvm/llvm-project/blob/llvmorg-23.1.4/llvm/lib/Target/AArch64/AArch64InstrInfo.td#L326
 // https://github.com/llvm/llvm-project/blob/llvmorg-21.1.8/llvm/lib/Target/AArch64/AArch64InstrInfo.td#L303
 const STREAMING_NOTES: Readonly<Record<string, string>> = {
   HasNEON: "Not guaranteed",
   HasNEONandIsStreamingSafe: "Allowed in either mode",
+  HasNEONandIsFPRCVTStreamingSafe: "Requires FPRCVT in streaming mode",
   HasNEONandIsSME2p2StreamingSafe: "Requires SME2.2 in streaming mode"
 };
 

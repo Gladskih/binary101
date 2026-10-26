@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { llvmVersion } from "llvm-aarch64-disasm";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 import { aarch64Code } from "../fixtures/aarch64-code.js";
 
@@ -36,7 +37,7 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   const panel = page.locator("#elfInstructionSetsPanel");
   await expect(panel).toContainText("6 instruction(s)");
   await expect(panel).toContainText("FEAT_SVE or FEAT_SME");
-  await expect(panel).toContainText("LLVM 21.1.8");
+  await expect(panel).toContainText(`LLVM ${llvmVersion}`);
   await expect(panel).not.toContainText("SSE2");
   const row = panel.getByRole("row").filter({ hasText: "MRS SCTLR_EL1" });
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");

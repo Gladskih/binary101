@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { llvmVersion } from "llvm-aarch64-disasm";
 import { analyzePeInstructionSets } from "../../../../../analyzers/pe/disassembly/analyze.js";
 import type { AnalyzePeInstructionSetOptions } from "../../../../../analyzers/pe/disassembly/types.js";
 import { createFileRangeReader } from "../../../../../analyzers/file-range-reader.js";
@@ -101,7 +102,7 @@ void test("PE ARM64 follows branches and preserves alternative feature requireme
   assert.equal(report.bytesDecoded, 12);
   assert.equal(report.bytesSampled, file.size);
   assert.equal(report.invalidInstructionCount, 0);
-  assert.equal(report.decoderVersion, "LLVM 21.1.8");
+  assert.equal(report.decoderVersion, `LLVM ${llvmVersion}`);
   assert.ok(report.instructionSets.some(set => /FEAT_SVE or FEAT_SME/.test(set.label)));
   assert.deepEqual(report.issues, []);
 });
