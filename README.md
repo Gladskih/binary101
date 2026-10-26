@@ -11,7 +11,7 @@
 - **Authenticode verification.** Verify PE file digests and CMS signatures, inspect certificate chains and timestamps, and evaluate trust using a Windows CA snapshot exported in CI.
 - **Images and media.** Read JPEG markers, EXIF/JFIF metadata and comments; PNG chunks and metadata; MP4 boxes and tracks; WebM/Matroska tags, attachments and codec details. For VP8 video, compare dimensions declared by the container with those found in keyframes. Preview images, audio and video in formats supported by the browser.
 - **Embedded and unusual content.** Find RAR signatures inside JPEGs, scan PE overlays for embedded formats and archives, and extract validated archive payloads or PE files stored in resources. Recognize nested PE images in DOS stubs (including Intel TXT MLE), Valve integrity blocks, and UPX, Bun, NSIS and Inno Setup packaging.
-- **Archives and other files.** Inspect entries, sizes and compression methods in ZIP/ZIP64, 7z, RAR and TAR. Extract stored/Deflate ZIP entries and supported 7z/LZMA entries. Other analyzers cover packet captures, PDF, SQLite, ISO 9660, Windows shortcuts and more.
+- **Archives and other files.** Inspect entries, sizes and compression methods in ZIP/ZIP64, 7z, RAR and TAR. Extract stored/Deflate ZIP entries and supported LZMA/LZMA2 7z entries, including solid folders. Other analyzers cover packet captures, PDF, SQLite, ISO 9660, Windows shortcuts and more.
 
 ## Formats
 
