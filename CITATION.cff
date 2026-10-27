@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use binary101 in your work, please cite it using these metadata."
+type: software
+title: "binary101"
+abstract: >-
+  binary101 is a browser-based binary file analysis and inspection tool. It
+  identifies and decodes a wide range of executable, archive, image, media, and
+  other file formats, presenting parsed structures, offsets, decoded values,
+  explanations, statistics, and previews. Executable analysis covers PE/COFF, ELF,
+  and Mach-O structures, with additional support for debug and runtime metadata,
+  signatures, resources, and embedded content where applicable. For PE and ELF
+  files, it provides control-flow-guided x86/x86-64 and AArch64 instruction-set
+  analysis. All processing is performed locally in the browser without uploading
+  files.
+authors:
+  - family-names: "Gladskikh"
+    given-names: "Sergei"
+    orcid: "https://orcid.org/0009-0008-0586-8200"
+repository-code: "https://github.com/Gladskih/binary101"
+url: "https://gladskih.github.io/binary101/"
+license: "MIT"
+keywords:
+  - "binary analysis"
+  - "file format analysis"
+  - "executable analysis"
+  - "PE"
+  - "ELF"
+  - "Mach-O"
+  - "disassembly"
+  - "instruction set analysis"
+  - "x86-64"
+  - "AArch64"
+  - "reverse engineering"
+  - "digital forensics"
+  - "static analysis"
