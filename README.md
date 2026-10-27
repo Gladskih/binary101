@@ -1,5 +1,8 @@
 # binary101
 
+[![CI & Deploy][ci-badge]][ci-runs]
+[![Unit coverage (lines)][coverage-badge]][coverage-report]
+
 [binary101](https://gladskih.github.io/binary101/) is a browser-based binary file analyzer inspired by [regex101](https://regex101.com/), the Unix `file` utility, and VirusTotal. It began as a general-purpose format inspector and has grown especially deep support for executables. It presents structures, offsets and decoded values alongside explanations, statistics and previews. Files are processed locally, without uploads.
 
 ## Highlights
@@ -20,3 +23,8 @@
 **Additional recognition:** TIFF, ICO/CUR, bzip2, XZ, LZ4, Zstandard, CAB, Ogg, AIFF, MIDI, FLV, MPEG-TS, WebAssembly, Java class, Android DEX, PDB, Office/OpenXML, EPUB, APK, VSIX and other container-based formats.
 
 Analysis depth and available actions vary by format.
+
+[ci-badge]: https://github.com/Gladskih/binary101/actions/workflows/ci.yml/badge.svg?branch=main&event=push
+[ci-runs]: https://github.com/Gladskih/binary101/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush
+[coverage-badge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgladskih.github.io%2Fbinary101%2Fcoverage%2Fcoverage-summary.json&query=%24.total.lines.pct&label=unit%20coverage%20(lines)&suffix=%25&color=blue
+[coverage-report]: https://gladskih.github.io/binary101/coverage/
