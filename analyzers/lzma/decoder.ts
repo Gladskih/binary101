@@ -4,6 +4,7 @@ import { loadLzmaDecoder } from "#lzma-decoder-loader";
 export interface TrackedLzmaResult {
   bytes: Uint8Array;
   consumedPackedBytes: number;
+  status: number;
 }
 
 const validateUnpackSize = (unpackSize: bigint): void => {
@@ -33,7 +34,7 @@ const checkedResult = (result: DecodeResult, size: number): TrackedLzmaResult =>
     throw new Error(`LZMA completion status ${result.status} is incomplete.`);
   }
   if (result.data.byteLength !== size) throw new Error("LZMA output size does not match declared size.");
-  return { bytes: result.data, consumedPackedBytes: result.bytesRead };
+  return { bytes: result.data, consumedPackedBytes: result.bytesRead, status: result.status };
 };
 
 const createRuntime = (load: () => Promise<Decoder>) => {

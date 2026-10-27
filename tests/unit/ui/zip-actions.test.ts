@@ -3,12 +3,66 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createZipEntryClickHandler } from "../../../ui/zip-actions.js";
+import { parseZip } from "../../../analyzers/zip/index.js";
+import { lzmaZipFile } from "../../fixtures/lzma-zip-file.js";
 import {
   createDeflatedZipEntry,
   createZipEntry,
   createZipParseResult,
   installZipEnvironment
 } from "../../fixtures/ui-zip-actions-fixtures.js";
+
+void test("zip entry click handler extracts LZMA without browser Deflate support", async () => {
+  const environment = installZipEnvironment();
+  const file = new File([lzmaZipFile()], "lzma.zip");
+  const parsed = await parseZip(file);
+  assert.ok(parsed);
+  const messages: Array<string | null | undefined> = [];
+  (globalThis as unknown as Record<string, unknown>)["DecompressionStream"] = undefined;
+  const handler = createZipEntryClickHandler({ getFile: () => file,
+    getParseResult: () => ({ analyzer: "zip", parsed }),
+    setStatusMessage: message => messages.push(message) });
+
+  try {
+    await handler({ target: environment.button } as unknown as Event);
+
+    assert.equal(await environment.createdBlobRef()?.text(), "DATA");
+    assert.equal(environment.anchorRef()?.download, "payload.bin");
+    assert.deepEqual(messages, [null]);
+    assert.equal(environment.button.disabled, false);
+    assert.equal(environment.button.textContent, "Extract");
+  } finally {
+    environment.restore();
+  }
+});
+
+for (const [compressionMethod, error] of [
+  [12, "Unsupported ZIP compression method."],
+  [14, "ZIP LZMA properties header is truncated."]
+] as const) {
+  void test(`zip entry click handler reports extraction failure for method ${compressionMethod}`,
+    async () => {
+      const environment = installZipEnvironment();
+      const messages: Array<string | null | undefined> = [];
+      const entry = createZipEntry({ compressionMethod, dataOffset: 0, dataLength: 0 });
+      const handler = createZipEntryClickHandler({
+        getFile: () => new File([], "broken.zip"),
+        getParseResult: () => createZipParseResult([entry]),
+        setStatusMessage: message => messages.push(message)
+      });
+
+      try {
+        await handler({ target: environment.button } as unknown as Event);
+
+        assert.deepEqual(messages, [`Extract failed: ${error}`]);
+        assert.equal(environment.createdBlobRef(), null);
+        assert.equal(environment.button.disabled, false);
+        assert.equal(environment.button.textContent, "Extract");
+      } finally {
+        environment.restore();
+      }
+    });
+}
 
 const createStatusSink = (): {
   messages: Array<string | null | undefined>;

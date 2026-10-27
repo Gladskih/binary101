@@ -80,7 +80,7 @@ void test("LZMA2 factories preserve consumed bytes and recover after initializat
 
   await assert.rejects(decode(0, lzma2Data, 4n), /WASM unavailable/);
   assert.deepEqual(await decode(0, lzma2Data, 4n),
-    { bytes: new TextEncoder().encode("DATA"), consumedPackedBytes: 8 });
+    { bytes: new TextEncoder().encode("DATA"), consumedPackedBytes: 8, status: 1 });
   assert.equal(loads, 2);
 });
 
@@ -207,7 +207,7 @@ void test("zero output capacity is valid", async () => {
   }));
 
   assert.deepEqual(await decode(lzmaProperties, new Uint8Array(), 0n),
-    { bytes: new Uint8Array(), consumedPackedBytes: 0 });
+    { bytes: new Uint8Array(), consumedPackedBytes: 0, status: 4 });
 });
 
 void test("wasm32's last output capacity reaches the SDK without an arbitrary cap", async () => {

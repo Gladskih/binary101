@@ -2,6 +2,7 @@
 
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { ZipCentralDirectoryEntry } from "../analyzers/zip/index.js";
+import { decompressZipLzma } from "../analyzers/zip/lzma.js";
 
 type ZipDeps = {
   getParseResult: () => ParseForUiResult;
@@ -38,6 +39,11 @@ const decompressZipEntry = async (
   compressedBlob: Blob
 ): Promise<Blob> => {
   if (entry.compressionMethod === 0) return compressedBlob;
+  if (entry.compressionMethod === 14) {
+    return new Blob([Uint8Array.from(await decompressZipLzma(
+      new Uint8Array(await compressedBlob.arrayBuffer()), entry))]);
+  }
+  if (entry.compressionMethod !== 8) throw new Error("Unsupported ZIP compression method.");
   if (typeof DecompressionStream !== "function") {
     throw new Error("Browser does not support DecompressionStream for deflated entries.");
   }
@@ -87,7 +93,7 @@ const createZipEntryClickHandler = ({ getParseResult, getFile, setStatusMessage 
     const originalText = target.textContent;
     if (buttonTarget) {
       buttonTarget.disabled = true;
-      buttonTarget.textContent = entry.compressionMethod === 8 ? "Decompressing..." : "Preparing...";
+      buttonTarget.textContent = entry.compressionMethod === 0 ? "Preparing..." : "Decompressing...";
     }
     try {
       const compressedBlob = await sliceZipEntryBlob(file, entry);

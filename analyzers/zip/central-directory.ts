@@ -183,7 +183,7 @@ const annotateEntryDataOffsets = async (
       setExtractError("Encrypted entries are not supported for extraction.");
       continue;
     }
-    const isSupportedMethod = entry.compressionMethod === 0 || entry.compressionMethod === 8;
+    const isSupportedMethod = [0, 8, 14].includes(entry.compressionMethod);
     if (!isSupportedMethod) {
       setExtractError("Compression method is not supported for extraction.");
     }

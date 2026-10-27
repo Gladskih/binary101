@@ -5,8 +5,19 @@ import { test } from "node:test";
 import { parseZip } from "../../../../analyzers/zip/index.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
+import { lzmaZipFile } from "../../../fixtures/lzma-zip-file.js";
 
 const encoder = new TextEncoder();
+
+void test("parseZip allows extraction of independent LZMA ZIP entries", async () => {
+  const parsed = expectDefined(await parseZip(new MockFile(lzmaZipFile(), "lzma.zip")));
+  const entries = expectDefined(parsed.centralDirectory).entries;
+
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0]?.compressionMethod, 14);
+  assert.equal(entries[0]?.extractError, undefined);
+  assert.equal(entries[1]?.extractError, undefined);
+});
 
 type SingleEntryOptions = {
   name?: string;
@@ -127,6 +138,14 @@ void test("parseZip marks unsupported compression methods", async () => {
   assert.strictEqual(entry.dataLength, "payload".length);
   const extractError = expectDefined(entry.extractError);
   assert.match(extractError, /not supported/i);
+});
+
+void test("parseZip keeps encrypted LZMA entries unavailable for extraction", async () => {
+  const { file } = buildSingleEntryZip({ method: 14, flags: 3 });
+  const result = expectDefined(await parseZip(file));
+  const entry = expectDefined(expectDefined(result.centralDirectory).entries[0]);
+
+  assert.equal(entry.extractError, "Encrypted entries are not supported for extraction.");
 });
 
 void test("parseZip flags entries whose compressed data runs past the file size", async () => {
