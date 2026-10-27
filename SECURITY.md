@@ -8,9 +8,8 @@ Binary101 is an experimental, research-focused project. There is no formal secur
 
 If you believe you have found a security issue:
 
-- Prefer private disclosure when possible.
-- If GitHub security advisories are enabled for this repository, use them to report the issue.
-- If private channels are not available, open a GitHub issue with a high-level description and avoid sharing exploit details or sensitive data.
+- [Report the vulnerability privately through GitHub Security Advisories](https://github.com/Gladskih/binary101/security/advisories/new).
+- Do not disclose vulnerability details, exploits, or sensitive data in public issues.
 
 Please include:
 
