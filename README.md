@@ -2,6 +2,7 @@
 
 [![CI & Deploy][ci-badge]][ci-runs]
 [![Unit coverage (lines)][coverage-badge]][coverage-report]
+[![OpenSSF Scorecard][scorecard-badge]][scorecard-report]
 
 [binary101](https://gladskih.github.io/binary101/) is a browser-based binary file analyzer inspired by [regex101](https://regex101.com/), the Unix `file` utility, and VirusTotal. It began as a general-purpose format inspector and has grown especially deep support for executables. It presents structures, offsets and decoded values alongside explanations, statistics and previews. Files are processed locally, without uploads.
 
@@ -28,3 +29,5 @@ Analysis depth and available actions vary by format.
 [ci-runs]: https://github.com/Gladskih/binary101/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush
 [coverage-badge]: https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgladskih.github.io%2Fbinary101%2Fcoverage%2Fcoverage-summary.json&query=%24.total.lines.pct&label=unit%20coverage%20(lines)&suffix=%25&color=blue
 [coverage-report]: https://gladskih.github.io/binary101/coverage/
+[scorecard-badge]: https://api.scorecard.dev/projects/github.com/Gladskih/binary101/badge
+[scorecard-report]: https://scorecard.dev/viewer/?uri=github.com/Gladskih/binary101
