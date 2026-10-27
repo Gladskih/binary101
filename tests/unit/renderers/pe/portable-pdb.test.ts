@@ -28,8 +28,10 @@ void test("Portable PDB presents source and metadata statistics without hexadeci
 
 void test("Portable PDB connects decoded custom records and escapes constant strings", async () => {
   const pdb = await parsePortablePdb(new MockFile(createPortablePdbRoot(createPortablePdbStreams())), []);
+  // Exercise tag case and attributes.
+  // https://codeql.github.com/codeql-query-help/javascript/js-bad-tag-filter/
   pdb!.locals = [{ kind: "constant", name: "text", signatureSize: 17,
-    constant: { typeCode: 14, value: "<script>" } }];
+    constant: { typeCode: 14, value: "<script><SCRIPT><ScRiPt src=x>" } }];
   pdb!.customRecords = [
     { kind: "ed9fdf71-8879-4747-8ed3-fe5ede3ce710", size: 5, parent: { tableId: 0x33, row: 1 },
       data: { type: "tupleNames", names: ["element"] } },
@@ -41,8 +43,8 @@ void test("Portable PDB connects decoded custom records and escapes constant str
 
   assert.match(out.join(""), /Tuple element names/);
   assert.match(out.join(""), /12 source bytes; 2 lines/);
-  assert.match(out.join(""), /&lt;script>/);
-  assert.doesNotMatch(out.join(""), /<script>/);
+  assert.match(out.join(""), /&lt;script>&lt;SCRIPT>&lt;ScRiPt src=x>/);
+  assert.doesNotMatch(out.join(""), /<script\b/i);
 });
 
 void test("Portable PDB distinguishes unknown custom records and escapes table names", async () => {
@@ -50,14 +52,14 @@ void test("Portable PDB distinguishes unknown custom records and escapes table n
   pdb!.customRecords = [{ kind: null, size: null, parent: { tableId: 0, row: 1 } },
     { kind: "unknown", size: 8, parent: { tableId: 0, row: 1 } }];
   pdb!.documents[0]!.language = "unknown";
-  pdb!.tables[0]!.name = "<script>";
+  pdb!.tables[0]!.name = "<script><SCRIPT><ScRiPt src=x>";
   const out: string[] = [];
   renderPortablePdb(pdb!, out);
 
   assert.match(out.join(""), /Other custom debug information/);
   assert.match(out.join(""), /Other or unspecified language/);
-  assert.match(out.join(""), /&lt;script>/);
-  assert.doesNotMatch(out.join(""), /<script>/);
+  assert.match(out.join(""), /&lt;script>&lt;SCRIPT>&lt;ScRiPt src=x>/);
+  assert.doesNotMatch(out.join(""), /<script\b/i);
 });
 
 void test("Portable PDB omits empty language and custom-record summaries", async () => {
