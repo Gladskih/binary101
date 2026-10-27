@@ -1,3 +1,4 @@
+import { X86_INDIRECT_JUMP } from "../code-thunks/x86-encoding.js";
 import type { PeClrReadyToRunThunk } from "./ready-to-run-types.js";
 import { isRvaRange } from "../rva-mapping.js";
 
@@ -29,7 +30,7 @@ const x86Patterns: readonly ThunkPattern[] = [...commonPatterns,
 const matches = (view: DataView, pattern: ThunkPattern): boolean => {
   if (view.byteLength < pattern.jump + 6) return false;
   if (!pattern.prefix.every((byte, index) => view.getUint8(index) === byte)) return false;
-  if (view.getUint16(pattern.jump, true) !== 0x25ff) return false;
+  if (view.getUint16(pattern.jump, true) !== X86_INDIRECT_JUMP.opcode) return false;
   return pattern.module === undefined || pattern.kind === "lazy" ||
     view.getUint16(pattern.module, true) === 0x35ff;
 };

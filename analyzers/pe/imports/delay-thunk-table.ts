@@ -7,9 +7,8 @@ import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.j
 import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
+import { IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE } from "./thunk-layout.js";
 
-const IMAGE_THUNK_DATA32_SIZE = Uint32Array.BYTES_PER_ELEMENT;
-const IMAGE_THUNK_DATA64_SIZE = BigUint64Array.BYTES_PER_ELEMENT; // PE32+ uses 64-bit thunks.
 const IMAGE_IMPORT_BY_NAME_HINT_SIZE = Uint16Array.BYTES_PER_ELEMENT; // PE format, Hint/Name Table.
 const IMAGE_ORDINAL_FLAG32 = 0x80000000; // PE32 import-by-ordinal flag.
 const IMAGE_ORDINAL_FLAG64 = 0x8000000000000000n; // PE32+ import-by-ordinal flag.

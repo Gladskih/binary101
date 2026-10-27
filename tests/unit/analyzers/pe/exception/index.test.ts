@@ -40,6 +40,9 @@ void test("parseExceptionDirectory parses pdata entries and unwind info stats", 
   bytes[0x2000] = 0x09;
   dv.setUint32(0x2000 + 4, 0x1500, true);
   bytes[0x2010] = 0x21;
+  // CHAININFO must include the complete primary RUNTIME_FUNCTION, not a zero-filled tail.
+  // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#chained-unwind-info-structures
+  writeRuntimeFunction(dv, 0x2014, 0x1000, 0x1010, 0x2000);
   const parsed = await parseExceptionFixture(bytes, "exception.bin", exOff, 24);
   assert.ok(parsed);
   assert.strictEqual(parsed.functionCount, 2);

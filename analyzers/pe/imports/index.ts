@@ -8,12 +8,11 @@ import type { PeImportMetadataEntry } from "../../../pe-import-metadata-schema.j
 import type { WinapiMetadataEntry } from "../../../winapi-metadata-schema.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import {
-  IMAGE_THUNK_DATA32_SIZE,
-  IMAGE_THUNK_DATA64_SIZE,
   type ReadImportThunkFunctions,
   readImportThunkFunctions32,
   readImportThunkFunctions64
 } from "./import-thunk-table.js";
+import { IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE } from "./thunk-layout.js";
 
 // Microsoft PE format, Import Directory Table: IMAGE_IMPORT_DESCRIPTOR is five DWORDs.
 const IMAGE_IMPORT_DESCRIPTOR_SIZE = 20;

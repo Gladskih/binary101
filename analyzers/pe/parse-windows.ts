@@ -37,6 +37,7 @@ import { addSecurityTailWarning } from "./security/tail-warning.js";
 import type { PeDataDirectory, PeWindowsCore } from "./types.js";
 import { buildWindowsPeResult, withWindowsPeLayoutWarnings } from "./parse-windows-result.js";
 import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.js";
+import { withPeMsvcEh } from "./msvc-eh/pe.js";
 import { analyzePeMsvcRtti } from "./msvc-rtti/index.js";
 import { analyzePeItaniumRtti } from "./itanium-rtti.js";
 import { parsePeImageArtifacts } from "./image-artifacts.js";
@@ -130,7 +131,8 @@ export const parseWindowsPe = async (
     core.sections
   );
   applyLoadConfigChecks(context, directories, importLinking);
-  const result = buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking);
+  const result = await withPeMsvcEh(reader, core,
+    buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking));
   await decodeReadyToRunThunks(reader, result);
   return withWindowsPeLayoutWarnings(result, file.size);
 };

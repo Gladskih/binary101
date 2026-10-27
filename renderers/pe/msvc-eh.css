@@ -1,0 +1,10 @@
+/* Keep RVA columns and headers intact; the existing tableWrap supplies horizontal scrolling. */
+[data-pe-lazy-section="msvc-eh"] .tableWrap > .table {
+  min-width: 70rem;
+  table-layout: auto;
+}
+
+[data-pe-lazy-section="msvc-eh"] th,
+[data-pe-lazy-section="msvc-eh"] .peNumeric {
+  white-space: nowrap;
+}

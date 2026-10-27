@@ -37,6 +37,7 @@ export const PE_LAZY_SECTION_KEYS = {
   linuxBoot: "linux-boot",
   loadConfig: "load-config",
   msvcRtti: "msvc-rtti",
+  msvcEh: "msvc-eh",
   itaniumRtti: "itanium-rtti",
   nativeAot: "native-aot",
   nsisInstaller: PE_PACKER_SECTIONS["nsis-installer"].key,
@@ -212,6 +213,9 @@ const addWindowsDirectoryDescriptors = (
     summary: plural(pe.reloc.totalEntries, "entry", "entries"),
     title: "Base relocations"
   });
+  if (pe.msvcEh) descriptors.push({ key: PE_LAZY_SECTION_KEYS.msvcEh,
+    title: "Microsoft-compatible exception handling",
+    summary: `${pe.msvcEh.records.length} verified record(s)` });
   if (pe.msvcRtti) descriptors.push(getMsvcRttiSectionDescriptor(pe.msvcRtti));
   if (pe.itaniumRtti) descriptors.push({ key: PE_LAZY_SECTION_KEYS.itaniumRtti,
     title: "Itanium C++ RTTI", summary: `${pe.itaniumRtti.types.length} types`

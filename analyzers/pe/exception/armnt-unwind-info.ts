@@ -1,3 +1,4 @@
+import type { PeLanguageHandler } from "./types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { mappedRvaSize } from "../rva-mapping.js";
@@ -10,11 +11,16 @@ import { summarizeArmntOpcodeSequences, type ArmntOpcodeSummary } from "./armnt-
 export interface ArmntUnwindInfo {
   functionLengthBytes: number;
   handlerRva: number | null;
+  languageHandler?: PeLanguageHandler;
   hasHandler: boolean;
   fragment: boolean;
   version: number | null;
   opcodes?: ArmntOpcodeSummary;
 }
+
+const languageHandler = (rva: number, size: number, handlerRva: number | null) => handlerRva ? {
+  languageHandler: { unwindInfoRva: rva, handlerRva: handlerRva - (handlerRva & 1), dataRva: rva + size }
+} : {};
 
 const readWord = async (reader: FileRangeReader, rvaToOff: RvaToOffset, rva: number): Promise<number | null> => {
   const view = await readMappedRvaPrefix(reader, rva, 4, rvaToOff);
@@ -117,6 +123,7 @@ const readXdata = async (reader: FileRangeReader, rvaToOff: RvaToOffset,
   const version = (header.word >>> 18) & 3;
   if (version !== 0) issues.push(`ARMNT .xdata has reserved version ${version}.`);
   return { functionLengthBytes: (header.word & 0x3ffff) * 2, handlerRva, hasHandler,
+    ...(opcodes?.complete && issues.length === 0 ? languageHandler(rva, header.size, handlerRva) : {}),
     fragment: (header.word & (1 << 22)) !== 0, version, ...(opcodes ? { opcodes } : {}) };
 };
 

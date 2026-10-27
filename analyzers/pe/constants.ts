@@ -8,6 +8,9 @@ import {
   IMAGE_FILE_MACHINE_I386
 } from "../coff/machine.js";
 
+import { IMAGE_DLL_CHARACTERISTICS_NO_SEH } from "./optional-header/dll-characteristics.js";
+import { IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT } from "./load-config/guard-flags.js";
+
 type OptionEntry = [number, string, string?];
 
 // Microsoft Learn, "Application manifests":
@@ -76,7 +79,7 @@ export const DLL_FLAGS: OptionEntry[] = [
   [0x0080, "FORCE_INTEGRITY", "Code integrity checks are enforced"],
   [0x0100, "NX_COMPAT", "Image is compatible with DEP (no-execute)"],
   [0x0200, "NO_ISOLATION", "Isolation disabled (no SxS)"],
-  [0x0400, "NO_SEH", "No structured exception handling"],
+  [IMAGE_DLL_CHARACTERISTICS_NO_SEH, "NO_SEH", "No structured exception handling"],
   [0x0800, "NO_BIND", "Do not bind to import addresses"],
   [0x1000, "APPCONTAINER", "Must execute in AppContainer"],
   [0x2000, "WDM_DRIVER", "WDM driver"],
@@ -209,7 +212,7 @@ export const GUARD_FLAGS: OptionEntry[] = [
   [0x00040000, "RF_ENABLE", "Module requests OS return-flow protection"],
   [0x00080000, "RF_STRICT", "Module requests strict return-flow protection"],
   [0x00100000, "RETPOLINE_PRESENT", "Module was built with retpoline support"],
-  [0x00400000, "EH_CONTINUATION_TABLE_PRESENT", "EH continuation target table is present"],
+  [IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT, "EH_CONTINUATION_TABLE_PRESENT", "EH continuation target table is present"],
   [0x00800000, "XFG_ENABLED", "Module was built with XFG (deprecated)"],
   [0x01000000, "CASTGUARD_PRESENT", "CastGuard instrumentation is present"],
   [0x02000000, "MEMCPY_PRESENT", "Guarded memcpy instrumentation is present"]

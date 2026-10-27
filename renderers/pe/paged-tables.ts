@@ -16,6 +16,7 @@ import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
 import { getManagedResourceTableModel } from "./managed-resources.js";
+import { getMsvcEhTableModel } from "./msvc-eh.js";
 import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
 import { getItaniumRttiTableModel } from "./itanium-rtti.js";
 import { getLoadConfigReferenceTableModel } from "./load-config-reference-tables.js";
@@ -142,6 +143,7 @@ const windowsTableResolvers: TableResolver[] = [
   (pe, id) => pe.loadcfg?.references
     ? getLoadConfigReferenceTableModel(pe.loadcfg.references, id) : null,
   getMsvcRttiPagedTableModel,
+  getMsvcEhTableModel,
   (pe, id) => getItaniumRttiTableModel(pe.itaniumRtti, id),
   getImportFunctionTableModel, getNativeAotTableModel,
   (pe, id) => getPeResourceTableModel(pe.resources, id),

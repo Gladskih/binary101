@@ -54,6 +54,10 @@ const processArm64RuntimeFunction = async (
     issues.push("ARM64 .pdata entries are not sorted by function start RVA.");
     state.reportedUnsortedEntries = true;
   }
+  if (unwindInfo.languageHandler && !unwindInfo.chained) state.languageHandlers.push({
+    ...unwindInfo.languageHandler,
+    functionRanges: [{ begin: beginRva, end: beginRva + unwindInfo.functionLengthBytes }]
+  });
   state.previousBegin = beginRva;
   state.beginRvas.push(beginRva);
   // Chained entries validate only the start; their target's length is not this range's length.
@@ -134,6 +138,7 @@ const summarizeArm64Table = (state: Arm64ExceptionState, issues: string[]): PeEx
     beginRvas: state.beginRvas,
     rangeLengths: state.rangeLengths,
     handlerRvas: state.handlerRvas,
+    ...(state.languageHandlers.length ? { languageHandlers: state.languageHandlers } : {}),
     uniqueUnwindInfoCount: state.uniqueUnwindInfos.size,
     handlerUnwindInfoCount: state.handlerUnwindInfoCount,
     chainedUnwindInfoCount: state.chainedUnwindInfoCount,

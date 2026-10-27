@@ -1,11 +1,13 @@
 "use strict";
 
+import type { PeLanguageHandler } from "./types.js";
 import type { Arm64PackedStatistics } from "./arm64-packed-types.js";
 import { createArm64PackedStatistics } from "./arm64-packed-statistics.js";
 import type { Arm64DecodedUnwind, Arm64UnwindStatistics } from "./arm64-unwind-types.js";
 import { createArm64UnwindStatistics } from "./arm64-unwind-statistics.js";
 
 export type Arm64ExceptionState = {
+  languageHandlers: PeLanguageHandler[];
   packed: Arm64PackedStatistics;
   unwind: Arm64UnwindStatistics;
   seenXdata: WeakSet<Arm64DecodedUnwind>;
@@ -24,6 +26,7 @@ export type Arm64ExceptionState = {
 };
 
 export const createArm64ExceptionState = (): Arm64ExceptionState => ({
+  languageHandlers: [],
   packed: createArm64PackedStatistics(),
   unwind: createArm64UnwindStatistics(),
   seenXdata: new WeakSet(),

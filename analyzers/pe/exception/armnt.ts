@@ -7,13 +7,14 @@ import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
 import type { ArmntOpcodeStatistics } from "./armnt-opcode-types.js";
 import { createArmntPackedStatistics, recordArmntPackedStatistics } from "./armnt-packed-statistics.js";
 import { readRuntimeFunctionChunks } from "./runtime-function-chunks.js";
-import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "./types.js";
+import { createEmptyExceptionDirectory, type PeExceptionDirectory, type PeLanguageHandler } from "./types.js";
 
 // ARM .pdata records are two DWORDs. A Thumb address has its low bit set.
 // https://learn.microsoft.com/en-us/cpp/build/arm-exception-handling#pdata-records
 const ARMNT_RUNTIME_FUNCTION_ENTRY_SIZE = 8;
 
 interface ArmntExceptionState {
+  languageHandlers: PeLanguageHandler[];
   functionCount: number;
   beginRvas: number[];
   rangeLengths: number[];
@@ -29,6 +30,7 @@ interface ArmntExceptionState {
 }
 
 const createState = (): ArmntExceptionState => ({
+  languageHandlers: [],
   functionCount: 0, beginRvas: [], rangeLengths: [], handlerRvas: new Set(),
   uniqueUnwindWords: new Set(), handlerUnwindInfoCount: 0, invalidEntryCount: 0,
   packed: null, fragmentEntryCount: 0, previousBegin: null, reportedUnsortedEntries: false,
@@ -83,6 +85,8 @@ const processEntry = async (reader: FileRangeReader, rvaToOff: RvaToOffset,
     issues.push("ARMNT .pdata entries are not sorted by function start RVA.");
     state.reportedUnsortedEntries = true;
   }
+  if (info.languageHandler) state.languageHandlers.push({ ...info.languageHandler,
+    functionRanges: [{ begin: beginRva, end: beginRva + info.functionLengthBytes }] });
   state.previousBegin = beginRva;
   state.beginRvas.push(beginRva);
   state.rangeLengths.push(info.functionLengthBytes);
@@ -126,6 +130,7 @@ export const parseArmntExceptionTable = async (reader: FileRangeReader, source: 
     return createEmptyExceptionDirectory(issues, "armnt");
   }
   return { functionCount: state.functionCount, beginRvas: state.beginRvas, rangeLengths: state.rangeLengths,
+    ...(state.languageHandlers.length ? { languageHandlers: state.languageHandlers } : {}),
     handlerRvas: [...state.handlerRvas], uniqueUnwindInfoCount: state.uniqueUnwindWords.size,
     handlerUnwindInfoCount: state.handlerUnwindInfoCount, chainedUnwindInfoCount: 0,
     ...(state.packed ? { armntPacked: state.packed } : {}), fragmentEntryCount: state.fragmentEntryCount,

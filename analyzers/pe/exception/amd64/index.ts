@@ -7,6 +7,7 @@ import { resolveAmd64ExceptionDirectory } from "./directory.js";
 import { readAmd64RuntimeFunctionTable } from "./runtime-function-table.js";
 import { scanAmd64UnwindInfos } from "./unwind-info.js";
 import { createRvaRangeReader } from "../../rva-range-reader.js";
+import { resolveAmd64HandlerOwners } from "./handler-owners.js";
 
 export const parseAmd64ExceptionDirectory = async (
   reader: FileRangeReader,
@@ -37,11 +38,16 @@ export const parseAmd64ExceptionTable = async (
     runtimeFunctions.unwindRvas,
     issues
   );
+  const handlerOwners = resolveAmd64HandlerOwners(runtimeFunctions.functionsByUnwindRva,
+    unwindInfo.chainedUnwindRvas ?? new Map<number, number>(), issues);
   return {
     functionCount: runtimeFunctions.functionCount,
     beginRvas: runtimeFunctions.beginRvas,
     rangeLengths: runtimeFunctions.rangeLengths,
     handlerRvas: unwindInfo.handlerRvas,
+    ...(unwindInfo.languageHandlers ? { languageHandlers: unwindInfo.languageHandlers.map(handler => ({
+      ...handler, functionRanges: handlerOwners.get(handler.unwindInfoRva) ?? []
+    })) } : {}),
     uniqueUnwindInfoCount: unwindInfo.uniqueUnwindInfoCount,
     unwindInfoVersion1Count: unwindInfo.unwindInfoVersion1Count,
     unwindInfoVersion2Count: unwindInfo.unwindInfoVersion2Count,

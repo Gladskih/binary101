@@ -2,6 +2,7 @@ import type { PeSection } from "../types.js";
 import type { PeLegacyCodeViewInfo } from "./legacy-codeview.js";
 import type { LegacyCodeViewSegmentMap } from "./legacy-codeview-modules.js";
 import type { LegacyCodeViewProcedure } from "./legacy-codeview-procedure-symbols.js";
+import { IMAGE_DEBUG_TYPE_OMAP_FROM_SRC, IMAGE_DEBUG_TYPE_OMAP_TO_SRC } from "./types.js";
 
 export type CodeViewProcedureAddress = { rva: number; section: number; reason?: never }
   | { reason: string; rva?: never; section?: never };
@@ -114,7 +115,8 @@ export const createCodeViewProcedureResolver = (info: PeLegacyCodeViewInfo, sect
   // OMAP may require original section headers and may split/delete code ranges.
   // Current image sections alone cannot establish a valid source-to-image mapping.
   // https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/ns-dbghelp-omap
-  const transformed = debugEntries.some(entry => entry.type === 7 || entry.type === 8);
+  const transformed = debugEntries.some(entry => entry.type === IMAGE_DEBUG_TYPE_OMAP_TO_SRC ||
+    entry.type === IMAGE_DEBUG_TYPE_OMAP_FROM_SRC);
   return (directory, procedure) => {
     if (!/^NB0[5-9]$|^NB11$/.test(info.signature)) return { reason: "Address resolution requires PE C7 CodeView records." };
     if (transformed) return { reason: "OMAP requires validated original section headers and range translation." };

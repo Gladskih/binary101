@@ -1,0 +1,4 @@
+LIBRARY vcruntime140.dll
+EXPORTS
+__CxxFrameHandler3
+__C_specific_handler

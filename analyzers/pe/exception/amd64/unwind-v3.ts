@@ -1,3 +1,4 @@
+import { UNW_FLAG_LARGE } from "./unwind-flags.js";
 import type { Amd64UnwindV3, Amd64UnwindV3Epilog } from "./unwind-v3-types.js";
 import { createV3WindingReader } from "./unwind-v3-winding.js";
 
@@ -120,9 +121,9 @@ export const decodeAmd64UnwindV3 = (data: DataView, issues: string[]): Amd64Unwi
   if (!header) return null;
   const { flags } = header;
   const cursor = createPayloadCursor(header.payload, issues);
-  const highPrologSize = (flags & 8) !== 0 ? cursor.read(1, "large prolog extension") : 0;
+  const highPrologSize = (flags & UNW_FLAG_LARGE) !== 0 ? cursor.read(1, "large prolog extension") : 0;
   if (highPrologSize == null) return null;
-  const prologIpOffsets = readIpOffsets(cursor, header.operationCount, (flags & 8) !== 0 ? 2 : 1);
+  const prologIpOffsets = readIpOffsets(cursor, header.operationCount, (flags & UNW_FLAG_LARGE) !== 0 ? 2 : 1);
   if (!prologIpOffsets) return null;
   const epilogs = readEpilogs(cursor, header.epilogCount, issues);
   if (!epilogs) return null;

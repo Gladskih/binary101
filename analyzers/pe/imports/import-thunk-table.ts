@@ -6,11 +6,7 @@ import type { FileRangeReader } from "../../file-range-reader.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { RvaToOffset } from "../types.js";
 import type { PeImportFunction } from "./index.js";
-
-// Microsoft PE format, Import Lookup Table / Import Address Table:
-// PE32 uses 32-bit thunks and PE32+ uses 64-bit thunks.
-export const IMAGE_THUNK_DATA32_SIZE = Uint32Array.BYTES_PER_ELEMENT;
-export const IMAGE_THUNK_DATA64_SIZE = BigUint64Array.BYTES_PER_ELEMENT;
+import { IMAGE_THUNK_DATA32_SIZE, IMAGE_THUNK_DATA64_SIZE } from "./thunk-layout.js";
 
 const IMAGE_IMPORT_BY_NAME_HINT_SIZE = Uint16Array.BYTES_PER_ELEMENT; // PE format, Hint/Name Table.
 const IMAGE_ORDINAL_FLAG32 = 0x80000000; // PE32 import-by-ordinal flag.

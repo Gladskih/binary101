@@ -1,5 +1,6 @@
 "use strict";
 
+import { EH_CONTINUATION_LAYOUT } from "./eh-continuation-layout.js";
 import type { PeLoadConfig, PeLoadConfigCodeIntegrity } from "./index.js";
 
 export type LoadConfigFieldReader = {
@@ -67,8 +68,8 @@ export const buildLoadConfig32 = (reader: LoadConfigFieldReader): PeLoadConfig =
   Reserved3: reader.readU32(0x98),
   EnclaveConfigurationPointer: reader.readU32AsBigInt(0x9c),
   VolatileMetadataPointer: reader.readU32AsBigInt(0xa0),
-  GuardEHContinuationTable: reader.readU32AsBigInt(0xa4),
-  GuardEHContinuationCount: reader.readU32(0xa8),
+  GuardEHContinuationTable: reader.readU32AsBigInt(EH_CONTINUATION_LAYOUT[4].table),
+  GuardEHContinuationCount: reader.readU32(EH_CONTINUATION_LAYOUT[4].count),
   GuardXFGCheckFunctionPointer: reader.readU32AsBigInt(0xac),
   GuardXFGDispatchFunctionPointer: reader.readU32AsBigInt(0xb0),
   GuardXFGTableDispatchFunctionPointer: reader.readU32AsBigInt(0xb4),
@@ -120,8 +121,8 @@ export const buildLoadConfig64 = (reader: LoadConfigFieldReader): PeLoadConfig =
   Reserved3: reader.readU32(0xf4),
   EnclaveConfigurationPointer: reader.readU64(0xf8),
   VolatileMetadataPointer: reader.readU64(0x100),
-  GuardEHContinuationTable: reader.readU64(0x108),
-  GuardEHContinuationCount: reader.readU64Count(0x110, "GuardEHContinuationCount"),
+  GuardEHContinuationTable: reader.readU64(EH_CONTINUATION_LAYOUT[8].table),
+  GuardEHContinuationCount: reader.readU64Count(EH_CONTINUATION_LAYOUT[8].count, "GuardEHContinuationCount"),
   GuardXFGCheckFunctionPointer: reader.readU64(0x118),
   GuardXFGDispatchFunctionPointer: reader.readU64(0x120),
   GuardXFGTableDispatchFunctionPointer: reader.readU64(0x128),

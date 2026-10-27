@@ -1,3 +1,4 @@
+import { readThumbMovePair } from "../code-thunks/thumb-move.js";
 import type { PeClrReadyToRunThunk } from "./ready-to-run-types.js";
 import { isRvaRange } from "../rva-mapping.js";
 
@@ -36,22 +37,13 @@ const patterns: readonly ArmThunkPattern[] = [
       [18, 0x6824], [20, 0xf84d], [22, 0x4d04], [32, 0x6824], [34, 0x4720]] }
 ];
 
-const matchMovePair = (view: DataView, offset: number, register: number): boolean =>
-  [[0, 0xf240, 0xfbf0], [2, register << 8, 0x8f00],
-    [4, 0xf2c0, 0xfbf0], [6, register << 8, 0x8f00]]
-    .every(([position, word, mask]) => (view.getUint16(offset + position!, true) & mask!) === word);
-
-const readImmediate = (view: DataView, offset: number): number =>
-  ((view.getUint16(offset, true) & 0xf) << 12) |
-  ((view.getUint16(offset, true) & 0x400) << 1) |
-  ((view.getUint16(offset + 2, true) & 0x7000) >>> 4) | (view.getUint16(offset + 2, true) & 0xff);
-
 const readCell = (view: DataView, offset: number, rva: number, register: number,
   encoding: ArmThunkPattern["cellEncoding"], imageBase: bigint): number | null | undefined => {
-  if (!matchMovePair(view, offset, register)) return undefined;
+  const address = readThumbMovePair(view, offset, register);
+  if (address == null) return undefined;
   // RelocationHelper: targetRVA - (sourceRVA + 12); the MOVW/MOVT immediate is signed int32.
   // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/tools/aot/ILCompiler.ReadyToRun/ObjectWriter/RelocationHelper.cs
-  const immediate = readImmediate(view, offset) | (readImmediate(view, offset + 4) << 16);
+  const immediate = address | 0;
   if (encoding === "absolute") {
     const cell = BigInt(immediate >>> 0) - imageBase;
     return cell >= 0n && cell < 0x100000000n ? Number(cell) : null;

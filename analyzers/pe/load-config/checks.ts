@@ -1,13 +1,14 @@
 "use strict";
 
 import { readLoadConfigPointerRva, type PeLoadConfig, type PeLoadConfigCheck } from "./index.js";
+import { IMAGE_DLL_CHARACTERISTICS_NO_SEH } from "../optional-header/dll-characteristics.js";
+import { IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT } from "./guard-flags.js";
 import type { PeImportLinkingResult } from "../imports/linking.js";
 import { IMAGE_FILE_MACHINE_I386 } from "../../coff/machine.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import type { PeSection, PeWindowsOptionalHeader } from "../types.js";
 
 const IMAGE_DLL_CHARACTERISTICS_DYNAMIC_BASE = 0x0040;
-const IMAGE_DLL_CHARACTERISTICS_NO_SEH = 0x0400;
 const IMAGE_DLL_CHARACTERISTICS_GUARD_CF = 0x4000;
 const IMAGE_GUARD_CF_INSTRUMENTED = 0x00000100;
 const IMAGE_GUARD_CF_FUNCTION_TABLE_PRESENT = 0x00000400;
@@ -16,7 +17,6 @@ const IMAGE_GUARD_DELAYLOAD_IAT_IN_ITS_OWN_SECTION = 0x00002000;
 const IMAGE_GUARD_CF_LONGJUMP_TABLE_PRESENT = 0x00010000;
 const IMAGE_GUARD_CF_EXPORT_SUPPRESSION_INFO_PRESENT = 0x00004000;
 const IMAGE_GUARD_CF_ENABLE_EXPORT_SUPPRESSION = 0x00008000;
-const IMAGE_GUARD_EH_CONTINUATION_TABLE_PRESENT = 0x00400000;
 const IMAGE_SCN_MEM_WRITE = 0x80000000;
 
 const addCheck = (

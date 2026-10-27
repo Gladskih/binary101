@@ -4,7 +4,7 @@ import type { MsvcRttiImage } from "./image.js";
 import {
   MAX_TYPE_DESCRIPTOR_NAME_BYTES,
   TYPE_DESCRIPTOR_FIXED_SIZE
-} from "./layout.js";
+} from "../msvc/type-descriptor-layout.js";
 import type { MsvcRttiTypeDescriptor } from "./types.js";
 import { decodeMsvcRttiTypeName } from "./type-name.js";
 

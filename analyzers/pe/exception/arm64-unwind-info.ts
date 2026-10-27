@@ -2,6 +2,7 @@
 
 import { mappedRvaSize } from "../rva-mapping.js";
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
+import type { PeLanguageHandler } from "./types.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { RvaToOffset } from "../types.js";
 import { readArm64XdataCodes } from "./arm64-xdata-codes.js";
@@ -26,6 +27,7 @@ export type Arm64UnwindInfo = {
   chained: boolean;
   functionLengthBytes: number;
   handlerRva: number | null;
+  languageHandler?: PeLanguageHandler;
   hasHandler: boolean;
   key: string;
   version: number | null;
@@ -37,6 +39,11 @@ interface Arm64XdataHeader extends Arm64XdataCodeLayout {
   version: number;
   handlerSlotRva: number | null;
 }
+
+const languageHandler = (header: Arm64XdataHeader, xdataRva: number, handlerRva: number | null) => {
+  if (!handlerRva || header.handlerSlotRva == null) return {};
+  return { languageHandler: { unwindInfoRva: xdataRva, handlerRva, dataRva: header.handlerSlotRva + 4 } };
+};
 
 const readUint32 = async (reader: FileRangeReader, rvaToOff: RvaToOffset, offset: number): Promise<number | null> => {
   const view = await readMappedRvaPrefix(reader, offset, Uint32Array.BYTES_PER_ELEMENT, rvaToOff);
@@ -134,6 +141,8 @@ const readXdataUnwindInfo = async (
   return {
     functionLengthBytes: header.functionLengthBytes,
     handlerRva,
+    ...(unwind && !unwind.hasDecodeGaps && issues.length === 0
+      ? languageHandler(header, xdataRva, handlerRva) : {}),
     hasHandler,
     key: `xdata:${xdataRva >>> 0}`,
     chained: false,

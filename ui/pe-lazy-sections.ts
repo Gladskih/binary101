@@ -17,6 +17,7 @@ import { analyzeTypeLibraryExports } from
 import { analyzeTypeLibraryRegistrations } from
   "../analyzers/pe/resources/type-library-registry-links.js";
 import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
+import { renderMsvcEh } from "../renderers/pe/msvc-eh.js";
 import { renderException } from "../renderers/pe/exception.js";
 import { renderNativeAotCandidate } from "../renderers/pe/native-aot.js";
 import { renderCompositeReadyToRun } from "../renderers/pe/clr-advanced.js";
@@ -127,6 +128,7 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
     pe.tls ? renderToString(out => renderTls(pe.tls!, out)) : "",
   [PE_LAZY_SECTION_KEYS.reloc]: (pe: PeWindowsParseResult) =>
     pe.reloc ? renderToString(out => renderReloc(pe.reloc!, out)) : "",
+  [PE_LAZY_SECTION_KEYS.msvcEh]: pe => pe.msvcEh ? renderToString(out => renderMsvcEh(pe.msvcEh!, out)) : "",
   [PE_LAZY_SECTION_KEYS.msvcRtti]: (pe: PeWindowsParseResult) =>
     pe.msvcRtti ? renderToString(out => renderMsvcRtti(pe, out)) : "",
   [PE_LAZY_SECTION_KEYS.itaniumRtti]: (pe: PeWindowsParseResult) =>

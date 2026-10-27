@@ -15,6 +15,7 @@ export interface Amd64RuntimeFunctionTable {
   functionCount: number;
   invalidEntryCount: number;
   unwindRvas: Set<number>;
+  functionsByUnwindRva: Map<number, { begin: number; end: number; sourceUnwindInfoRva: number }[]>;
 }
 
 const addInvalidEntryIssue = (
@@ -50,6 +51,14 @@ const recordValidBeginRva = (
   return { previousBeginRva: beginRva, reportedUnsortedEntries: false };
 };
 
+const recordFunctionOwner = (
+  owners: Amd64RuntimeFunctionTable["functionsByUnwindRva"], rva: number, begin: number, end: number
+): void => {
+  const ranges = owners.get(rva) ?? [];
+  ranges.push({ begin, end, sourceUnwindInfoRva: rva });
+  owners.set(rva, ranges);
+};
+
 export const readAmd64RuntimeFunctionTable = async (
   reader: FileRangeReader,
   source: FileRangeReader,
@@ -61,6 +70,8 @@ export const readAmd64RuntimeFunctionTable = async (
   const beginRvas: number[] = [];
   const rangeLengths: number[] = [];
   const unwindRvas = new Set<number>();
+  const functionsByUnwindRva = new Map<number,
+    { begin: number; end: number; sourceUnwindInfoRva: number }[]>();
   let functionCount = 0;
   let invalidEntryCount = 0;
   let previousBeginRva: number | null = null;
@@ -83,6 +94,7 @@ export const readAmd64RuntimeFunctionTable = async (
         continue;
       }
       if (validation.unwindInfoRva) unwindRvas.add(validation.unwindInfoRva);
+      recordFunctionOwner(functionsByUnwindRva, validation.unwindInfoRva!, beginRva, endRva);
       rangeLengths.push(endRva - beginRva);
       if (reportedUnsortedEntries) {
         beginRvas.push(beginRva);
@@ -95,6 +107,6 @@ export const readAmd64RuntimeFunctionTable = async (
     }
   }
   reportInvalidEntryIssues(invalidEntryIssues, issues);
-  return { beginRvas, rangeLengths, functionCount, invalidEntryCount, unwindRvas };
+  return { beginRvas, rangeLengths, functionCount, invalidEntryCount, unwindRvas, functionsByUnwindRva };
 };
 

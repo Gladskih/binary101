@@ -6,7 +6,6 @@
 export const MSVC_RTTI_LAYOUT = "microsoft-cxx-amd64-image-relative-rtti-rev1" as const;
 
 export const COMPLETE_OBJECT_LOCATOR_SIZE = 24;
-export const TYPE_DESCRIPTOR_FIXED_SIZE = 16;
 export const CLASS_HIERARCHY_DESCRIPTOR_SIZE = 16;
 export const BASE_CLASS_DESCRIPTOR_SIZE = 28;
 export const IMAGE_RELATIVE_POINTER_SIZE = 4;
@@ -14,7 +13,6 @@ export const IMAGE_POINTER_SIZE = 8;
 
 export const COMPLETE_OBJECT_LOCATOR_REVISION_1 = 1;
 export const CLASS_HIERARCHY_DESCRIPTOR_REVISION = 0;
-export const MAX_TYPE_DESCRIPTOR_NAME_BYTES = 1024;
 export const MAX_BASE_CLASS_DESCRIPTORS = 4096;
 export const MAX_HIERARCHY_DEPTH = 64;
 export const MAX_VFTABLE_SLOTS = 4096;

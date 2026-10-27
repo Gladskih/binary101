@@ -4,6 +4,14 @@ import { scanAmd64UnwindInfos } from "../../../../../../analyzers/pe/exception/a
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { createV3Unwind } from "../../../../../fixtures/pe-unwind-v3.js";
 
+void test("validated V3 handler tails retain the exact language-data RVA", async () => {
+  const bytes = new Uint8Array(64);
+  bytes.set(new Uint8Array(createV3Unwind([0, 4], 1, 1, 1).buffer), 8);
+  new DataView(bytes.buffer).setUint32(16, 40, true);
+  const parsed = await scanAmd64UnwindInfos(new MockFile(bytes), rva => rva, new Set([8]), []);
+  assert.deepEqual(parsed.languageHandlers, [{ unwindInfoRva: 8, handlerRva: 40, dataRva: 20 }]);
+});
+
 for (const [flags, handlerCount, chainedCount, version1Count, payloadBytes] of [
   [1, 1, 0, 0, [0, 4]], [4, 0, 1, 1, [0, 4]], [8, 0, 0, 0, [0, 0, 0, 4]]
 ] as const) {
@@ -13,6 +21,7 @@ for (const [flags, handlerCount, chainedCount, version1Count, payloadBytes] of [
     const payload = createV3Unwind(payloadBytes, 1, flags, 1);
     bytes.set(new Uint8Array(payload.buffer), 8);
     view.setUint32(16, 40, true);
+    view.setUint32(20, 44, true); // CHAININFO EndAddress; ignored in handler-only fixtures.
     view.setUint32(24, 32, true);
     bytes[32] = 1;
     const issues: string[] = [];

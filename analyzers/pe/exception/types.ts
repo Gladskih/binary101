@@ -29,7 +29,16 @@ export interface PeIa64UnwindStatistics {
   maximumFixedStackBytes?: number;
 }
 
+export interface PeLanguageHandler {
+  unwindInfoRva: number;
+  handlerRva: number;
+  dataRva: number;
+  /** UnwindData is retained when the range reaches this handler through CHAININFO. */
+  functionRanges?: { begin: number; end: number; sourceUnwindInfoRva?: number }[];
+}
+
 export interface PeExceptionDirectory {
+  languageHandlers?: PeLanguageHandler[];
   functionCount: number;
   beginRvas: number[];
   /** Byte lengths of validated ranges; absent when the format has no known end. */
