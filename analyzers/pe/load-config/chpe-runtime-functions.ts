@@ -39,7 +39,9 @@ const decodeEntry = (view: DataView, offset: number): PeArm64RuntimeFunctionEntr
   if (flag === 0) return { beginRva, unwindKind: "exception", exceptionInformationRva: unwindData };
   // Microsoft reserves Flag=3, while current MSVC dumpbin labels emitted values as chained pdata.
   // Preserve that established project interpretation and expose the referenced entry RVA.
-  if (flag === 3) return { beginRva, unwindKind: "chained", targetPdataRva: unwindData & ~3 };
+  if (flag === 3) return {
+    beginRva, unwindKind: "chained", targetPdataRva: (unwindData & ~3) >>> 0
+  };
   return {
     beginRva,
     unwindKind: flag === 1 ? "packed" : "packed-fragment",

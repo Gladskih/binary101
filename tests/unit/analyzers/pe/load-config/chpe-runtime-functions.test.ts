@@ -73,6 +73,26 @@ void test("parseChpeRuntimeFunctions decodes every ARM64 pdata form", async () =
   assert.deepEqual(warnings, []);
 });
 
+// RVAs are DWORDs: 0x80000000 sets the sign bit, and 0xfffffffc is the largest
+// DWORD-aligned RVA. The two low bits of each input retain the chained-record tag.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
+// https://tc39.es/ecma262/multipage/ecmascript-data-types-and-values.html#sec-numberbitwiseop
+for (const [unwindWord, targetPdataRva] of [
+  [0x80000003, 0x80000000],
+  [0xffffffff, 0xfffffffc]
+] as const) {
+  void test(`parseChpeRuntimeFunctions preserves unsigned chained RVA 0x${targetPdataRva.toString(16)}`, async () => {
+    const bytes = new Uint8Array(TABLE_RVA + 8); // One 8-byte ARM64 .pdata record.
+    writeRuntimeFunctionFixture(new DataView(bytes.buffer), [unwindWord]);
+
+    const { entries, warnings, notes } = await parseTable(bytes);
+
+    assert.deepEqual(entries, [{ beginRva: 0x1000, unwindKind: "chained", targetPdataRva }]);
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(notes, []);
+  });
+}
+
 void test("parseChpeRuntimeFunctions handles empty, misaligned, missing, and truncated tables", async () => {
   const bytes = new Uint8Array(0x50).fill(0);
   const empty = await parseTable(bytes, 0, 0);
