@@ -21,11 +21,19 @@ import {
   type ResourcePathCollections
 } from "./tree-path-collections.js";
 
+// Frames share linked prefixes instead of retaining an array copy at every depth.
+// Profiling the generated deep resource tree showed quadratic heap growth with copies.
+type ResourceTraversalPath = {
+  node: ResourcePathNode;
+  parent: ResourceTraversalPath | null;
+  depth: number;
+};
+
 type ResourceDirectoryTraversalFrame = {
   entries?: ResourceDirectoryEntry[];
   index: number;
   localDirectoryEnd?: number;
-  nodes: ResourcePathNode[];
+  path: ResourceTraversalPath | null;
   rel: number;
 };
 
@@ -37,6 +45,21 @@ export type ReadResourceLeafPath = (
 export type ReadResourcePathNode = (
   entry: ResourceDirectoryEntry
 ) => Promise<ResourcePathNodeReadResult>;
+
+const appendTraversalPath = (
+  parent: ResourceTraversalPath | null,
+  node: ResourcePathNode
+): ResourceTraversalPath => ({ node, parent, depth: (parent?.depth ?? 0) + 1 });
+
+const materializeTraversalPath = (path: ResourceTraversalPath): ResourcePathNode[] => {
+  const nodes: ResourcePathNode[] = [];
+  // Only an emitted leaf needs its own array. Fill it locally rather than copying
+  // all retained path prefixes during descent.
+  for (let current: ResourceTraversalPath | null = path; current; current = current.parent) {
+    nodes.push(current.node);
+  }
+  return nodes.reverse();
+};
 
 const readDirectoryForFrame = async (
   frame: ResourceDirectoryTraversalFrame,
@@ -69,13 +92,13 @@ const readDirectoryForFrame = async (
 
 const readLeafEntry = async (
   entry: ResourceDirectoryEntry,
-  nodes: ResourcePathNode[],
+  path: ResourceTraversalPath,
   typeName: string,
   frameDepth: number,
   readLeafPath: ReadResourceLeafPath,
   collections: ResourcePathCollections
 ): Promise<ResourcePathCollections> => {
-  const leafResult = await readLeafPath(entry.target, nodes);
+  const leafResult = await readLeafPath(entry.target, materializeTraversalPath(path));
   const nextCollections = mergeLeafReadResult(collections, leafResult);
   if (!leafResult.leaf) return nextCollections;
   if (frameDepth === 1) {
@@ -99,12 +122,12 @@ const readNextFrameEntry = (
 
 const pushSubdirectoryFrame = (
   frames: ResourceDirectoryTraversalFrame[],
-  nextNodes: ResourcePathNode[],
+  path: ResourceTraversalPath,
   target: number
 ): void => {
   frames.push({
     index: 0,
-    nodes: nextNodes,
+    path,
     rel: target
   });
 };
@@ -120,7 +143,7 @@ const handleFrameEntry = async (
 ): Promise<ResourcePathCollections> => {
   const node = await readPathNode(entry);
   const nextCollections = mergePathNodeReadResult(collections, node);
-  const nextNodes = [...frame.nodes, node.node];
+  const nextPath = appendTraversalPath(frame.path, node.node);
   const localDirectoryEnd = frame.localDirectoryEnd!;
   if (entry.target < localDirectoryEnd) {
     return appendResourcePathIssue(
@@ -131,14 +154,14 @@ const handleFrameEntry = async (
     );
   }
   if (entry.subdir) {
-    pushSubdirectoryFrame(frames, nextNodes, entry.target);
+    pushSubdirectoryFrame(frames, nextPath, entry.target);
     return nextCollections;
   }
   return await readLeafEntry(
     entry,
-    nextNodes,
+    nextPath,
     typeName,
-    frame.nodes.length,
+    frame.path?.depth ?? 0,
     readLeafPath,
     nextCollections
   );
@@ -192,7 +215,7 @@ export const collectResourceLeafPaths = async (
   let collections = createEmptyResourcePathCollections();
   const frames: ResourceDirectoryTraversalFrame[] = [{
     index: 0,
-    nodes,
+    path: nodes.reduce<ResourceTraversalPath | null>(appendTraversalPath, null),
     rel
   }];
   while (frames.length) {
