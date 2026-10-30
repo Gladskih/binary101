@@ -4,7 +4,7 @@ import { readTd32Types } from "../../../../../analyzers/pe/debug/td32-type-recor
 import { legacyReader, legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 
 const namedType = (type: number, name: number, offset: number): number[] => {
-  const bytes = new Uint8Array(offset + 4);
+  const bytes = new Uint8Array(offset + 6);
   bytes.set(legacyU16(bytes.length - 2));
   bytes.set(legacyU16(type), 2);
   bytes.set(legacyU32(name), offset);
@@ -20,11 +20,17 @@ const types = (records: number[][]): Uint8Array => {
 void test("TD32 type offsets are relative to the subsection and retain shared class/enum name indices", async () => {
   const warnings: string[] = [];
   const parsed = await readTd32Types(legacyReader(types([
-    namedType(4, 7, 24), namedType(5, 8, 24), namedType(7, 9, 18), [2, 0, 2, 0]
+    namedType(4, 7, 24), namedType(5, 8, 24), namedType(7, 9, 18),
+    [8, 0, 2, 0, ...legacyU16(10), ...legacyU32(0x1000)]
   ]), warnings));
 
-  assert.deepEqual(parsed.records, [{ index: 0, type: 4, nameIndex: 7 },
-    { index: 1, type: 5, nameIndex: 8 }, { index: 2, type: 7, nameIndex: 9 }, { index: 3, type: 2 }]);
+  assert.deepEqual(parsed.records, [{ index: 0, type: 4, nameIndex: 7,
+    body: { count: 0, fieldList: 0, attributes: 0, relation12: 0, relation16: 0,
+      relation20: 0, byteSize: { value: "0" } } },
+  { index: 1, type: 5, nameIndex: 8, body: { count: 0, fieldList: 0, attributes: 0,
+    relation12: 0, relation16: 0, relation20: 0, byteSize: { value: "0" } } },
+  { index: 2, type: 7, nameIndex: 9, body: { count: 0, underlyingType: 0, fieldList: 0, relation14: 0 } },
+  { index: 3, type: 2, body: { attributes: 10, targetType: 0x1000 } }]);
   assert.deepEqual(warnings, []);
 });
 
@@ -63,7 +69,7 @@ void test("TD32 caches repeated type offsets, including malformed records", asyn
   const parsed = await readTd32Types(legacyReader(bytes, warnings));
 
   assert.deepEqual(parsed.records, [{ index: 0, type: 2 }, { index: 1, type: 2 }]);
-  assert.equal(warnings.length, 1);
+  assert.equal(warnings.length, 2);
 });
 
 void test("TD32 accepts empty type tables but rejects even small offset-table truncations", async () => {
@@ -89,4 +95,29 @@ void test("TD32 rejects offsets into the offset table and modest record overflow
   assert.equal(tableWarnings.length, 2);
   assert.match(tableWarnings.join(" | "), /offset overlaps/);
   assert.deepEqual(lengthWarnings, ["Error: TD32 type length exceeds subsection bounds."]);
+});
+
+void test("TD32 type table attaches bounded semantic bodies and retains framing after bad bodies", async () => {
+  const warnings: string[] = [];
+  const parsed = await readTd32Types(legacyReader(types([
+    [8, 0, 1, 0, ...legacyU16(3), ...legacyU32(0x1001)], [2, 0, 1, 0]
+  ]), warnings));
+
+  assert.deepEqual(parsed.records, [
+    { index: 0, type: 1, body: { attributes: 3, targetType: 0x1001 } },
+    { index: 1, type: 1 }
+  ]);
+  assert.match(warnings.join(" | "), /type body.*bounds/);
+});
+
+void test("TD32 table warns once per ambiguous array or union layout", async () => {
+  const warnings: string[] = [];
+  const parsed = await readTd32Types(legacyReader(types([
+    [2, 0, 3, 0], [2, 0, 3, 0], [2, 0, 6, 0]
+  ]), warnings));
+
+  assert.equal(parsed.records.length, 3);
+  assert.equal(warnings.length, 2);
+  assert.match(warnings[0]!, /array.*ambiguous/);
+  assert.match(warnings[1]!, /union.*ambiguous/);
 });

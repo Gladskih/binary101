@@ -1,9 +1,11 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
+import { readTd32TypeBody } from "./td32-type-body.js";
+import type { Td32TypeBody } from "./td32-type-body-types.js";
 
 export interface Td32Types {
   kind: "types";
   version: number;
-  records: { index: number; type: number; nameIndex?: number }[];
+  records: { index: number; type: number; nameIndex?: number; body?: Td32TypeBody }[];
 }
 type TypeRecord = Omit<Td32Types["records"][number], "index">;
 
@@ -23,7 +25,14 @@ const readType = async (reader: LegacyCodeViewReader, offset: number, tableEnd: 
     const nameOffset = type === 4 || type === 5 ? 24 : type === 7 ? 18 : null;
     if (nameOffset !== null) record.nameIndex = await reader.subsection(offset, size).uint32(nameOffset);
   } catch (error) { reader.warn(`TD32 type name: ${String(error)}`); }
-  return record;
+  const body = await readTd32TypeBody(reader.subsection(offset + 4, size - 4), type);
+  return body ? { ...record, body } : record;
+};
+
+const warnAmbiguousLayout = (reader: LegacyCodeViewReader, type: number, warned: Set<number>): void => {
+  if (type !== 3 && type !== 6 || warned.has(type)) return;
+  warned.add(type);
+  reader.warn(`TD32 ${type === 3 ? "array" : "union"} type body layout is ambiguous between published decoders; only its record kind is decoded.`);
 };
 
 export const readTd32Types = async (reader: LegacyCodeViewReader): Promise<Td32Types> => {
@@ -34,6 +43,7 @@ export const readTd32Types = async (reader: LegacyCodeViewReader): Promise<Td32T
   if (version !== 1) { reader.warn(`Unsupported TD32 type table version ${version}.`); return result; }
   if (count * 4 > reader.size - 8) { reader.warn("TD32 type offset table is truncated."); return result; }
   const decoded = new Map<number, TypeRecord | undefined>();
+  const warnedLayouts = new Set<number>();
   for (let index = 0; index < count; index++) {
     const offset = await reader.uint32(8 + index * 4);
     if (!decoded.has(offset)) {
@@ -42,7 +52,10 @@ export const readTd32Types = async (reader: LegacyCodeViewReader): Promise<Td32T
       catch (error) { reader.warn(String(error)); }
     }
     const record = decoded.get(offset);
-    if (record) result.records.push({ index, ...record });
+    if (record) {
+      result.records.push({ index, ...record });
+      warnAmbiguousLayout(reader, record.type, warnedLayouts);
+    }
   }
   return result;
 };
