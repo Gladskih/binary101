@@ -93,3 +93,27 @@ void test("TD32 partial bodies report unavailable characteristics instead of inv
   assert.ok(tables[0]!.rows.some(row => row.join("|") === "Bit-field length|Not decoded|1"));
   assert.ok(!tables[0]!.rows.some(row => row[0] === "Arguments"));
 });
+
+void test("TD32 type summary integrates named children and summarizes extended anonymous families",()=>{
+  const info=infoWithTypes([
+    {index:0,type:4,nameIndex:2,body:{fieldList:0x1001}},
+    {index:1,type:0x204,body:{fields:[{type:0x406,nameIndex:1,targetType:0x74}]}},
+    {index:2,type:0x207,body:{methods:[]}},
+    {index:3,type:10,body:{descriptors:[5,5]}},
+    {index:4,type:0x34,body:{closureTail:[0,0]}},
+    {index:5,type:0x35,body:{attributes:1}},
+    {index:6,type:0x35,body:{attributes:0}},
+    {index:7,type:0x35,body:{}},
+    {index:8,type:0x34,body:{}},
+    {index:9,type:0x204,body:{}},
+    {index:10,type:0x207,body:{}},
+    {index:11,type:10,body:{}}
+  ]);
+  info.directories.push(info.directories[0]!);
+  const tables=buildTd32TypeSemanticsTables(info);
+  assert.equal(tables.find(table=>table.key==="typemembers")!.rows.length,2);
+  assert.ok(tables.find(table=>table.key==="typestatistics")!.rows.some(row=>
+    row.join("|")==="Pascal properties|Default|2"));
+  assert.ok(tables.find(table=>table.key==="typestatistics")!.rows.some(row=>
+    row.join("|")==="Vtable descriptors|Total|4"));
+});

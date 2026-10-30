@@ -61,8 +61,9 @@ const nameIndices = (data: Td32Data | undefined): number[] => {
   if (data?.kind === "symbols") return data.records.flatMap(record => [
     ...(record.nameIndex === undefined ? [] : [record.nameIndex]), ...(record.metadata?.nameIndices ?? []),
     ...(record.metadata?.targetNameIndex === undefined ? [] : [record.metadata.targetNameIndex])]);
-  if (data?.kind === "types") return data.records.flatMap(record =>
-    record.nameIndex === undefined ? [] : [record.nameIndex]);
+  if (data?.kind === "types") return data.records.flatMap(record => [
+    ...(record.nameIndex === undefined ? [] : [record.nameIndex]),
+    ...(record.body?.fields ?? []).flatMap(field => field.nameIndex === undefined ? [] : [field.nameIndex])]);
   return [];
 };
 

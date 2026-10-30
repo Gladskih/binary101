@@ -2,6 +2,7 @@ import type { PeTd32Info } from "../../analyzers/pe/debug/td32.js";
 import type { Td32Types } from "../../analyzers/pe/debug/td32-type-records.js";
 import type { Td32TypeBody } from "../../analyzers/pe/debug/td32-type-body-types.js";
 import type { Td32Table } from "./td32-tables.js";
+import { buildTd32MemberTables } from "./td32-type-member-tables.js";
 
 type TypeRecord = Td32Types["records"][number];
 type FlagNames = readonly (readonly [number, string])[];
@@ -73,7 +74,13 @@ const bitFieldStatistics = (body: Td32TypeBody): Statistic[] => [
 const BODY_STATISTICS: Readonly<Partial<Record<number, (body: Td32TypeBody) => Statistic[]>>> = {
   1: body => [["Modifier qualifiers", flagsText(body.attributes, MODIFIER_FLAGS), 1]],
   2: pointerStatistics, 8: procedureStatistics, 9: procedureStatistics,
-  0x201: argumentStatistics, 0x206: bitFieldStatistics
+  0x201: argumentStatistics, 0x206: bitFieldStatistics,
+  0x204: body => [["Field-list members", "Total", body.fields?.length ?? 0]],
+  0x207: body => [["Method-list overloads", "Total", body.methods?.length ?? 0]],
+  10: body => [["Vtable descriptors", "Total", body.descriptors?.length ?? 0]],
+  0x34: body => [["Pascal closures", "Tail interpretation unresolved", body.closureTail ? 1 : 0]],
+  0x35: body => [["Pascal properties", body.attributes === undefined ? "Not decoded"
+    : body.attributes & 1 ? "Default" : "Non-default", 1]]
 };
 
 const addStatistic = (statistics: Map<string, Statistic>, [measure, value, count]: Statistic): void => {
@@ -112,14 +119,25 @@ const appendAggregate = (record: TypeRecord, names: readonly string[], table: Td
     String(generation), String(module)]);
 };
 
+const mergeMemberTables = (members: Map<string, Td32Table>, tables: Td32Table[]): void => {
+  for (const table of tables) {
+    const existing = members.get(table.key);
+    if (existing) for (const row of table.rows) existing.rows.push(row);
+    else members.set(table.key, table);
+  }
+};
+
 export const buildTd32TypeSemanticsTables = (td32: PeTd32Info): Td32Table[] => {
   const aggregates: Td32Table = { key: "typeaggregates", title: "TD32 named classes, structures and enums",
     columns: ["Name", "Kind", "Bytes", "Members/values", "Attributes", "Directory", "Module"], rows: [] };
   const statistics = new Map<string, Statistic>();
+  const members = new Map<string, Td32Table>();
   for (const [generation, directory] of td32.directories.entries()) {
     const shared = directory.subsections.flatMap(section => section.data?.kind === "names" ? [section.data.names] : []);
     for (const section of directory.subsections) {
       if (section.data?.kind !== "types") continue;
+      mergeMemberTables(members, buildTd32MemberTables(section.data, shared.length === 1 ? shared[0]! : [],
+        generation + 1, section.module));
       for (const record of section.data.records) {
         appendAggregate(record, shared.length === 1 ? shared[0]! : [], aggregates,
           statistics, generation + 1, section.module);
@@ -127,7 +145,7 @@ export const buildTd32TypeSemanticsTables = (td32: PeTd32Info): Td32Table[] => {
       }
     }
   }
-  return [aggregates, { key: "typestatistics", title: "TD32 type characteristics",
+  return [aggregates, ...members.values(), { key: "typestatistics", title: "TD32 type characteristics",
     columns: ["Measure", "Value", "Count"], rows: [...statistics.values()].map(([measure, value, count]) =>
       [measure, value, String(count)]) }].filter(table => table.rows.length);
 };

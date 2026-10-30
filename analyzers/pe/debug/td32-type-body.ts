@@ -1,6 +1,7 @@
 import type { LegacyCodeViewReader } from "./legacy-codeview-reader.js";
 import { readLegacyCodeViewNumeric } from "./legacy-codeview-numeric.js";
 import type { Td32TypeBody } from "./td32-type-body-types.js";
+import { readTd32ExtendedTypeBody } from "./td32-extended-type-body.js";
 
 // Borland bodies use 32-bit type references but often retain 16-bit attributes/counts.
 // Offsets below are payload-relative, excluding the length/leaf words.
@@ -80,6 +81,6 @@ const BODY_DECODERS: Readonly<Partial<Record<number, BodyDecoder>>> = {
 export const readTd32TypeBody = async (
   reader: LegacyCodeViewReader, type: number
 ): Promise<Td32TypeBody | undefined> => {
-  try { return await BODY_DECODERS[type]?.(reader); }
+  try { return await (BODY_DECODERS[type]?.(reader) ?? readTd32ExtendedTypeBody(reader, type)); }
   catch (error) { reader.warn(`TD32 type body ${type}: ${String(error)}`); return undefined; }
 };

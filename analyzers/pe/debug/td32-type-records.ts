@@ -8,6 +8,7 @@ export interface Td32Types {
   records: { index: number; type: number; nameIndex?: number; body?: Td32TypeBody }[];
 }
 type TypeRecord = Omit<Td32Types["records"][number], "index">;
+const NAME_OFFSETS: Readonly<Partial<Record<number, number>>> = { 4: 24, 5: 24, 7: 18 };
 
 // Both implementations agree on version 1, subsection-relative offsets and
 // class/structure/enum name indices. Array/union layouts differ; keep their
@@ -22,14 +23,18 @@ const readType = async (reader: LegacyCodeViewReader, offset: number, tableEnd: 
   const type = header.getUint16(2, true);
   const record: TypeRecord = { type };
   try {
-    const nameOffset = type === 4 || type === 5 ? 24 : type === 7 ? 18 : null;
-    if (nameOffset !== null) record.nameIndex = await reader.subsection(offset, size).uint32(nameOffset);
+    const nameOffset = NAME_OFFSETS[type];
+    if (nameOffset !== undefined) record.nameIndex = await reader.subsection(offset, size).uint32(nameOffset);
   } catch (error) { reader.warn(`TD32 type name: ${String(error)}`); }
   const body = await readTd32TypeBody(reader.subsection(offset + 4, size - 4), type);
   return body ? { ...record, body } : record;
 };
 
 const warnAmbiguousLayout = (reader: LegacyCodeViewReader, type: number, warned: Set<number>): void => {
+  if (type === 0x34 && !warned.has(type)) {
+    warned.add(type);
+    reader.warn("TD32 Pascal closure tails are retained as uninterpreted bytes; the published decoder's parameter-count handling is inconsistent.");
+  }
   if (type !== 3 && type !== 6 || warned.has(type)) return;
   warned.add(type);
   reader.warn(`TD32 ${type === 3 ? "array" : "union"} type body layout is ambiguous between published decoders; only its record kind is decoded.`);

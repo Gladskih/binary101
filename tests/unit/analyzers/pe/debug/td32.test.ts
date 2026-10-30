@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseTd32 } from "../../../../../analyzers/pe/debug/td32.js";
 import { createTd32, td32Module, td32Names, td32Symbol } from "../../../../fixtures/pe-td32.js";
-import { legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
+import { legacyU16, legacyU32 } from "../../../../fixtures/pe-legacy-codeview.js";
 import { parseDebugDirectory } from "../../../../../analyzers/pe/debug/directory.js";
 import { createPeWithDebugPayloads } from "../../../../fixtures/pe-debug-file.js";
 import { parsePeHeaders } from "../../../../../analyzers/pe/core/index.js";
@@ -225,3 +225,15 @@ for (const type of [0, 9]) {
     assert.equal(result.warning, null);
   });
 }
+
+void test("TD32 field member names participate in shared-name bounds checks", async () => {
+  const field = [...legacyU16(0x406), ...legacyU32(0x74), ...legacyU16(3),
+    ...legacyU32(2), ...legacyU32(0), ...legacyU16(0)];
+  const record = [...legacyU16(field.length + 2), ...legacyU16(0x204), ...field];
+  const result = await parse(createTd32([
+    { type: 0x130, module: 0, data: td32Names(["one"]) },
+    { type: 0x12b, module: 0, data: Uint8Array.from([
+      ...legacyU32(1), ...legacyU32(1), ...legacyU32(12), ...record]) }
+  ]));
+  assert.deepEqual(result.warnings, ["TD32 name reference is outside the shared name table."]);
+});

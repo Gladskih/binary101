@@ -1,3 +1,5 @@
+import type { Td32TypeField, Td32TypeMethod } from "./td32-type-member-types.js";
+
 /** Stored TD32 body fields; type/name/index remain on the enclosing record. */
 export interface Td32TypeBody {
   attributes?: number;
@@ -23,4 +25,12 @@ export interface Td32TypeBody {
   argumentTypes?: number[];
   bitLength?: number;
   bitPosition?: number;
+  fields?: Td32TypeField[];
+  methods?: Td32TypeMethod[];
+  descriptors?: number[];
+  indexType?: number;
+  propertyIndex?: number;
+  readerValue?: number;
+  writerValue?: number;
+  closureTail?: number[];
 }

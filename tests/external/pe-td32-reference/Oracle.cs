@@ -49,7 +49,8 @@ class Oracle
                     System.Globalization.CultureInfo.InvariantCulture));
             else if (item is IEnumerable)
                 result.Add(field.Name, Items(item).Select(entry => entry.GetType().GetField("Index") != null
-                    ? Field(entry, "Index") : entry).ToArray());
+                    ? Field(entry, "Index") : entry.GetType().IsValueType || entry is string
+                        ? entry : Fields(entry)).ToArray());
             else if (type.IsValueType) result.Add(field.Name, Fields(item));
         }
         return result;
@@ -148,6 +149,82 @@ class Oracle
         return names.Select(name => translate.Invoke(null, new object[] { name })).ToArray();
     }
 
+    static object[] AdditionalTypes(Type program, string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        int directory = BitConverter.ToInt32(bytes, 4);
+        int count = BitConverter.ToInt32(bytes, directory + 4);
+        var result = new List<object>();
+        for (int entry = 0; entry < count; entry++)
+        {
+            int current = directory + 16 + entry * 12;
+            if (BitConverter.ToUInt16(bytes, current) != 0x12b) continue;
+            int start = BitConverter.ToInt32(bytes, current + 4);
+            int records = BitConverter.ToInt32(bytes, start + 4);
+            for (int index = 0; index < records; index++)
+            {
+                int offset = start + BitConverter.ToInt32(bytes, start + 8 + index * 4);
+                int kind = BitConverter.ToUInt16(bytes, offset + 2);
+                int size = BitConverter.ToUInt16(bytes, offset) + 2;
+                using (var stream = new MemoryStream(bytes, offset + 4, size - 4))
+                using (var reader = new BinaryReader(stream))
+                {
+                    if (kind == 0x204)
+                        result.Add(new { index = index, kind = kind, fields = FieldList(program, reader) });
+                    else if (kind == 0x207 || kind == 0x35)
+                    {
+                        var read = program.Assembly.GetType("tds2pdbproto." +
+                            (kind == 0x207 ? "TypMList" : "TypPasProperty")).GetMethod("Read",
+                            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                        var value = read.Invoke(null, kind == 0x207
+                            // Upstream passes typeStart + len (two bytes before
+                            // the record end); use that same relative endpoint.
+                            ? new object[] { reader, size - 6 } : new object[] { reader });
+                        result.Add(new { index = index, kind = kind, fields = (object)Fields(value) });
+                    }
+                }
+            }
+        }
+        return result.ToArray();
+    }
+
+    // Only the four Mem*.Read methods and NumericLeaf.Read decode contents here.
+    // Other inline leaves are skipped using Program.cs framing; those prefixes
+    // are not independently decoded by this oracle and are not claimed as such.
+    static object[] FieldList(Type program, BinaryReader reader)
+    {
+        var result = new List<object>();
+        var readers = new Dictionary<int, string> { {0x400, "MemRealBaseClass"},
+            {0x406, "MemInstanceData"}, {0x408, "MemMethods"}, {0x409, "MemNestedType"} };
+        while (reader.BaseStream.Position < reader.BaseStream.Length)
+        {
+            int marker = reader.ReadByte();
+            if (marker >= 0xf0) { reader.BaseStream.Position += (marker & 15) - 1; continue; }
+            reader.BaseStream.Position--;
+            int kind = reader.ReadUInt16();
+            if (readers.ContainsKey(kind))
+            {
+                var read = program.Assembly.GetType("tds2pdbproto." + readers[kind]).GetMethod("Read",
+                    BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                result.Add(new { kind = kind, fields = Fields(read.Invoke(null, new object[] { reader })) });
+            }
+            else SkipInlineField(program, reader, kind);
+        }
+        return result.ToArray();
+    }
+
+    static void SkipInlineField(Type program, BinaryReader reader, int kind)
+    {
+        var numeric = program.Assembly.GetType("tds2pdbproto.NumericLeaf").GetMethod("Read");
+        switch (kind)
+        {
+            case 0x403: reader.BaseStream.Position += 10; numeric.Invoke(null, new object[] { reader }); break;
+            case 0x405: reader.BaseStream.Position += 4; break;
+            case 0x40a: reader.BaseStream.Position += 4; numeric.Invoke(null, new object[] { reader }); break;
+            default: throw new InvalidDataException("No independent reader for field kind " + kind);
+        }
+    }
+
     static void Main(string[] args)
     {
         var stdout = Console.Out;
@@ -165,9 +242,11 @@ class Oracle
             globals = Items(program.GetField("globalSymbols", flags).GetValue(null)).Select(Symbol).ToArray(),
             classTypes = ClassTypes(program, args[1]),
             typeBodies = TypeBodies(program, args[1]),
+            additionalTypes = AdditionalTypes(program, args[1]),
             translatedNames = TranslatedNames(program)
         };
         stdout.WriteLine(serializer.Serialize(new { result.names, result.modules, result.globals,
-            result.classTypes, result.typeBodies, result.translatedNames, diagnostics = diagnostics.ToString() }));
+            result.classTypes, result.typeBodies, result.additionalTypes, result.translatedNames,
+            diagnostics = diagnostics.ToString() }));
     }
 }

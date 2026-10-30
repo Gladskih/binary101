@@ -60,6 +60,7 @@ void test("real TD32 agrees with unchanged tds2pdb on every shared name, module 
   assert.deepEqual(classes.map(record => ({ index: record.index,
     name: oracle.translatedNames[record.nameIndex! - 1] })),
   oracle.classTypes.map(({ index, name }) => ({ index, name })));
-  assert.equal(warnings.length, 2);
-  assert.ok(warnings.every(warning => /layout is ambiguous/.test(warning)));
+  assert.equal(warnings.length, 3);
+  assert.equal(warnings.filter(warning => /layout is ambiguous/.test(warning)).length, 2);
+  assert.ok(warnings.some(warning => /Pascal closure tails/.test(warning)));
 });
