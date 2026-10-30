@@ -7,6 +7,7 @@ import type { ElfParseResult } from "../analyzers/elf/types.js";
 import { getCoffPagedTableModel } from "../renderers/coff/paged-tables.js";
 import { getPePagedTableModel } from "../renderers/pe/paged-tables.js";
 import { getElfPagedTableModel } from "../renderers/elf/paged-tables.js";
+import { getWasmPagedTableModel } from "../renderers/wasm/paged-tables.js";
 import {
   enhancePagedSortableTables,
   type PagedSortableTableSnapshot
@@ -60,5 +61,7 @@ export const enhanceAnalysisPagedTables = (
     enhanceCoffPagedTables(root, result.parsed, snapshots);
   } else if (result.analyzer === "elf") {
     enhanceElfPagedTables(root, result.parsed, snapshots);
+  } else if (result.analyzer === "wasm") {
+    enhancePagedSortableTables(root, tableId => getWasmPagedTableModel(result.parsed, tableId), snapshots);
   }
 };
