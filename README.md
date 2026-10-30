@@ -19,9 +19,9 @@
 
 ## Formats
 
-**Structured analysis:** PE/COFF, MZ, ELF, Mach-O; PNG, BMP, TGA, JPEG, GIF, WebP; WAV, AVI, ANI, ASF (WMV/WMA), WebM/Matroska, MP4/QuickTime/3GP, MPEG-PS, MP3, FLAC; PCAP, PCAP-NG, gzip, PDF, TAR, ISO 9660, ZIP, 7z, RAR 4/5, FB2, SQLite and LNK.
+**Structured analysis:** PE/COFF, MZ, ELF, Mach-O, WebAssembly; PNG, BMP, TGA, JPEG, GIF, WebP; WAV, AVI, ANI, ASF (WMV/WMA), WebM/Matroska, MP4/QuickTime/3GP, MPEG-PS, MP3, FLAC; PCAP, PCAP-NG, gzip, PDF, TAR, ISO 9660, ZIP, 7z, RAR 4/5, FB2, SQLite and LNK.
 
-**Additional recognition:** TIFF, ICO/CUR, bzip2, XZ, LZ4, Zstandard, CAB, Ogg, AIFF, MIDI, FLV, MPEG-TS, WebAssembly, Java class, Android DEX, PDB, Office/OpenXML, EPUB, APK, VSIX and other container-based formats.
+**Additional recognition:** TIFF, ICO/CUR, bzip2, XZ, LZ4, Zstandard, CAB, Ogg, AIFF, MIDI, FLV, MPEG-TS, Java class, Android DEX, PDB, Office/OpenXML, EPUB, APK, VSIX and other container-based formats.
 
 Analysis depth and available actions vary by format.
 
