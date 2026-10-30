@@ -6,67 +6,90 @@ import type { Td32Types } from "../../../../analyzers/pe/debug/td32-type-records
 
 const infoWithTypes = (records: Td32Types["records"]) => {
   const info = createTd32Info();
+  info.directories[0]!.subsections = info.directories[0]!.subsections.filter(section => section.data?.kind !== "types");
   info.directories[0]!.subsections.push({ type: 0x121, module: 2, offset: 0, size: 0,
     data: { kind: "types", version: 1, records } });
   return info;
 };
 
-void test("TD32 type semantics resolve zero-based references in the current type table", () => {
-  const info = infoWithTypes([
-    { index: 0, type: 1, body: { attributes: 5, targetType: 0x1001 } },
-    { index: 1, type: 4, nameIndex: 2, body: { count: 3, fieldList: 0x1002, attributes: 0x81,
-      relation12: 0, relation16: 0x1002, relation20: 0, byteSize: { value: "56" } } },
-    { index: 2, type: 0x204 }
-  ]);
-  const tables = buildTd32TypeSemanticsTables(info);
-  assert.deepEqual(tables.find(table => table.key === "typequalifiers")!.rows,
-    [["1", "2", "0", "Modifier", "0x0005", "#1 Worker", "", ""]]);
-  assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.rows,
-    [["1", "2", "1", "Class", "3", "#2", "", "0x0081", "56",
-      "+12=0x0000; +16=0x1002; +20=0x0000"]]);
-});
-
-void test("TD32 procedures, argument lists and bit fields expose meaningful bounded body fields", () => {
+void test("TD32 named aggregates lead with shared names, size, counts and documented flags", () => {
   const tables = buildTd32TypeSemanticsTables(infoWithTypes([
-    { index: 0, type: 8, body: { returnType: 0x74, callingConvention: 0x47, functionAttributes: 0,
-      parameterCount: 2, argumentList: 0x1001 } },
-    { index: 1, type: 0x201, body: { argumentTypes: [0, 0x1005] } },
-    { index: 2, type: 9, body: { returnType: 0, callingConvention: 0xff, functionAttributes: 1,
-      parameterCount: 0, argumentList: 0x1004, classType: 0x1003, thisType: 0x1003, thisAdjustment: -4 } },
-    { index: 3, type: 5, nameIndex: 99, body: { count: 0, byteSize: { leaf: 0x8005 } } },
-    { index: 4, type: 0x201, body: { argumentTypes: [] } },
-    { index: 5, type: 0x206, body: { underlyingType: 0x75, bitLength: 7, bitPosition: 3 } },
-    { index: 6, type: 2, body: { targetType: 0, attributes: 10, memberAttributes: 2, classType: 0x1003 } }
+    { index: 0, type: 4, nameIndex: 2, body: { count: 3, attributes: 0x183,
+      relation12: 0, relation16: 0x1002, relation20: 0, byteSize: { value: "56" } } },
+    { index: 1, type: 5, nameIndex: 1, body: { count: 0, attributes: 0 } },
+    { index: 2, type: 7, nameIndex: 4, body: { count: 4, relation14: 0x1000 } },
+    { index: 3, type: 5, body: { count: 1, attributes: 0 } },
+    { index: 4, type: 4, nameIndex: 99, body: { count: 1, attributes: 0 } }
   ]));
-  assert.deepEqual(tables.find(table => table.key === "typeprocedures")!.rows,
-    [["1", "2", "0", "Primitive 0x0074", "0x0047", "0x0000", "2", "#1", "", "", ""],
-      ["1", "2", "2", "(none)", "0x00ff", "0x0001", "0", "#4",
-        "#3 (unresolved name #99)", "#3 (unresolved name #99)", "-4"]]);
-  assert.deepEqual(tables.find(table => table.key === "typearguments")!.rows,
-    [["1", "2", "1", "0", "(none)"], ["1", "2", "1", "1", "#5"],
-      ["1", "2", "4", "", "(empty list)"]]);
-  assert.deepEqual(tables.find(table => table.key === "typebitfields")!.rows,
-    [["1", "2", "5", "Primitive 0x0075", "7", "3"]]);
-  assert.equal(tables.find(table => table.key === "typeaggregates")!.rows[0]![8], "Uninterpreted numeric leaf 0x8005");
-  assert.deepEqual(tables.find(table => table.key === "typequalifiers")!.rows,
-    [["1", "2", "6", "Pointer", "0x000a", "(none)", "0x0002", "#3 (unresolved name #99)"]]);
+  assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.columns,
+    ["Name", "Kind", "Bytes", "Members/values", "Attributes"]);
+  assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.rows,
+    [["Worker", "Class", "56", "3", "Packed, Has constructor, Forward reference, Has destructor"],
+      ["<unit>.pas", "Structure", "Not decoded", "0", "None"],
+      ["unused type name", "Enum", "Not recorded", "4", "Not recorded"]]);
+  assert.ok(tables.find(table => table.key === "typestatistics")!.rows.some(row =>
+    row.join("|") === "Unresolved relation slots|Nonzero|2"));
+  assert.ok(!JSON.stringify(tables).includes("0x1002"));
 });
 
-void test("TD32 type details preserve directory context, missing targets and enum raw slots", () => {
+void test("TD32 anonymous types produce grouped semantic statistics instead of identifier matrices", () => {
+  const tables = buildTd32TypeSemanticsTables(infoWithTypes([
+    { index: 0, type: 1, body: { attributes: 5, targetType: 0x1005 } },
+    { index: 1, type: 1, body: { attributes: 5, targetType: 0x1006 } },
+    { index: 2, type: 2, body: { attributes: 0x24a, targetType: 0x1005 } },
+    { index: 3, type: 8, body: { callingConvention: 0x47, parameterCount: 2, functionAttributes: 0 } },
+    { index: 4, type: 9, body: { callingConvention: 0x47, parameterCount: 2, functionAttributes: 1 } },
+    { index: 5, type: 0x201, body: { argumentTypes: [0x74, 0x1002] } },
+    { index: 6, type: 0x201, body: { argumentTypes: [] } },
+    { index: 7, type: 0x206, body: { bitLength: 7, bitPosition: 3, underlyingType: 0x75 } }
+  ]));
+  assert.deepEqual(tables.map(table => table.key), ["typestatistics"]);
+  const rows = tables[0]!.rows;
+  assert.ok(rows.some(row => row.join("|") === "Modifier qualifiers|Const, Unaligned|2"));
+  assert.ok(rows.some(row => row.join("|") === "Pointer mode|Pointer to data member|1"));
+  assert.ok(rows.some(row => row.join("|") === "Pointer representation|Near 32-bit|1"));
+  assert.ok(rows.some(row => row.join("|") === "Pointer qualifiers|Const|1"));
+  assert.ok(rows.some(row => row.join("|") === "Calling convention|Near stdcall, Variable arguments|2"));
+  assert.ok(rows.some(row => row.join("|") === "Procedure parameter count|2|2"));
+  assert.ok(rows.some(row => row.join("|") === "Argument-list length|0|1"));
+  assert.ok(rows.some(row => row.join("|") === "Arguments|Total|2"));
+  assert.ok(rows.some(row => row.join("|") === "Bit-field length|7 bits|1"));
+  assert.ok(rows.some(row => row.join("|") === "Bit-field position|3 bits|1"));
+  assert.ok(!JSON.stringify(tables).includes("0x1005"));
+});
+
+void test("TD32 type summaries expose unknown mappings and missing names without guesses", () => {
   const info = infoWithTypes([
-    { index: 0, type: 7, body: { count: 0, fieldList: 0, underlyingType: 0x74, relation14: 7 } },
-    { index: 1, type: 1, body: { attributes: 0, targetType: 0x1002 } },
-    { index: 2, type: 7, nameIndex: 0 },
-    { index: 3, type: 2, body: { attributes: 0, targetType: 0x1004 } },
-    { index: 5, type: 0xffff, body: {} }
+    { index: 0, type: 1, body: { attributes: 0x8000 } },
+    { index: 1, type: 2, body: { attributes: 0xffff } },
+    { index: 2, type: 8, body: { callingConvention: 0xff, parameterCount: 0 } },
+    { index: 3, type: 4, nameIndex: 2, body: { attributes: 0x8000, byteSize: { leaf: 0x8005 } } },
+    { index: 4, type: 5, nameIndex: 4 },
+    { index: 5, type: 7, nameIndex: 0 },
+    { index: 6, type: 0x7777 }
   ]);
-  info.directories[0]!.subsections.shift();
-  info.directories.push(info.directories[0]!);
   const tables = buildTd32TypeSemanticsTables(info);
-  assert.equal(tables.find(table => table.key === "typequalifiers")!.rows[0]![5], "#2");
-  assert.equal(tables.find(table => table.key === "typequalifiers")!.rows[1]![5], "(unresolved type #4)");
-  assert.equal(tables.find(table => table.key === "typequalifiers")!.rows[2]![0], "2");
-  assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.rows[0],
-    ["1", "2", "0", "Enum", "0", "(none)", "Primitive 0x0074", "", "", "+14=0x0007"]);
+  assert.deepEqual(tables[0]!.rows, [["Worker", "Class", "Numeric size not interpreted", "Not decoded", "Unknown bits"],
+    ["unused type name", "Structure", "Not decoded", "Not decoded", "Not decoded"]]);
+  assert.ok(JSON.stringify(tables).includes("Unknown pointer mode"));
+  assert.ok(JSON.stringify(tables).includes("Unknown pointer representation"));
+  assert.ok(JSON.stringify(tables).includes("Unknown calling convention"));
+  info.directories[0]!.subsections.shift();
+  assert.ok(buildTd32TypeSemanticsTables(info).every(table => table.key === "typestatistics"));
   assert.deepEqual(buildTd32TypeSemanticsTables({ signature: "FB09", directories: [] }), []);
+});
+
+void test("TD32 partial bodies report unavailable characteristics instead of inventing defaults", () => {
+  const tables = buildTd32TypeSemanticsTables(infoWithTypes([
+    { index: 0, type: 1, body: {} }, { index: 1, type: 2, body: {} },
+    { index: 2, type: 8, body: {} }, { index: 3, type: 9, body: {} },
+    { index: 4, type: 0x201, body: {} }, { index: 5, type: 0x206, body: {} },
+    { index: 6, type: 0x7777, body: {} }
+  ]));
+  assert.deepEqual(tables.map(table => table.key), ["typestatistics"]);
+  assert.ok(tables[0]!.rows.some(row => row.join("|") === "Pointer mode|Not decoded|1"));
+  assert.ok(tables[0]!.rows.some(row => row.join("|") === "Calling convention|Not decoded|2"));
+  assert.ok(tables[0]!.rows.some(row => row.join("|") === "Argument lists|Not decoded|1"));
+  assert.ok(tables[0]!.rows.some(row => row.join("|") === "Bit-field length|Not decoded|1"));
+  assert.ok(!tables[0]!.rows.some(row => row[0] === "Arguments"));
 });

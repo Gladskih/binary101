@@ -4,112 +4,128 @@ import type { Td32TypeBody } from "../../analyzers/pe/debug/td32-type-body-types
 import type { Td32Table } from "./td32-tables.js";
 
 type TypeRecord = Td32Types["records"][number];
-type ResolveType = (index: number | undefined) => string;
-const hex = (value: number | undefined): string => value === undefined ? "" : `0x${value.toString(16).padStart(4, "0")}`;
-const decimal = (value: number | undefined): string => value === undefined ? "" : String(value);
+type FlagNames = readonly (readonly [number, string])[];
+type Statistic = readonly [measure: string, value: string, count: number];
 
-// Type IDs reserve values below 0x1000 for primitives; table indices are zero-based.
-// Zero is a null reference. Keep primitive IDs without guessing Delphi type names.
+// Borland enums, not modern CodeView property/calling-convention interpretations:
+// ModifierAttributes, PointerType/Mode/Attributes, TdsStructFlags and TdsCallConv.
 // https://github.com/andremussche/map2dbg/blob/70cd89ff693cd622215309b0acb4326e530e7884/tds2pdb/tds2pdb/Program.cs
-const resolveType = (records: ReadonlyMap<number, TypeRecord>, names: readonly string[],
-  reference: number | undefined): string => {
-  if (reference === undefined) return "";
-  if (reference === 0) return "(none)";
-  if (reference < 0x1000) return `Primitive ${hex(reference)}`;
-  const index = reference - 0x1000;
-  const record = records.get(index);
-  if (!record) return `(unresolved type #${index})`;
-  if (!record.nameIndex) return `#${index}`;
-  return `#${index} ${names[record.nameIndex - 1] ?? `(unresolved name #${record.nameIndex})`}`;
+const MODIFIER_FLAGS: FlagNames = [[1, "Const"], [2, "Volatile"], [4, "Unaligned"]];
+const POINTER_FLAGS: FlagNames = [[0x100, "Flat 32-bit"], [0x200, "Const"],
+  [0x400, "Volatile"], [0x800, "Unaligned"]];
+const STRUCTURE_FLAGS: FlagNames = [[1, "Packed"], [2, "Has constructor"],
+  [4, "Overloaded operators"], [8, "Nested"], [0x10, "Contains nested types"],
+  [0x20, "Assignment operator"], [0x40, "Cast operator"], [0x80, "Forward reference"],
+  [0x100, "Has destructor"]];
+const POINTER_MODES = ["Pointer", "Reference", "Pointer to data member", "Pointer to method"];
+const POINTER_KINDS = ["Near", "Far", "Huge", "Based on segment", "Based on value",
+  "Based on segment of value", "Based on address of symbol", "Based on segment of symbol",
+  "Based on type", "Based on self", "Near 32-bit", "Far 32-bit"];
+const CALLING_CONVENTIONS: Readonly<Partial<Record<number, string>>> = {
+  0: "Near C", 1: "Far C", 2: "Near Pascal", 3: "Far Pascal", 4: "Near fastcall",
+  5: "Far fastcall", 7: "Near stdcall", 8: "Far stdcall", 9: "Near syscall",
+  10: "Far syscall", 11: "Thiscall", 12: "MIPS call", 13: "Generic"
+};
+const AGGREGATE_KINDS: Readonly<Partial<Record<number, string>>> = {
+  4: "Class", 5: "Structure", 7: "Enum"
 };
 
-const qualifierColumns = (record: TypeRecord, resolve: ResolveType): string[] => [
-  record.type === 1 ? "Modifier" : "Pointer", hex(record.body!.attributes),
-  resolve(record.body!.targetType), hex(record.body!.memberAttributes), resolve(record.body!.classType)
+const flagsText = (value: number | undefined, flags: FlagNames): string => {
+  if (value === undefined) return "Not decoded";
+  const names = flags.filter(([mask]) => value & mask).map(([, name]) => name);
+  if (value & ~flags.reduce((mask, [bit]) => mask | bit, 0)) names.push("Unknown bits");
+  return names.length ? names.join(", ") : "None";
+};
+
+const callingConvention = (value: number | undefined): string => {
+  if (value === undefined) return "Not decoded";
+  return [CALLING_CONVENTIONS[value & 0x3f] ?? "Unknown calling convention",
+    ...(value & 0x40 ? ["Variable arguments"] : []),
+    ...(value & 0x80 ? ["Unknown flags"] : [])].join(", ");
+};
+
+const pointerStatistics = (body: Td32TypeBody): Statistic[] => {
+  const value = body.attributes;
+  return [["Pointer mode", value === undefined ? "Not decoded"
+    : POINTER_MODES[value >> 5 & 7] ?? "Unknown pointer mode", 1],
+  ["Pointer representation", value === undefined ? "Not decoded"
+    : POINTER_KINDS[value & 0x1f] ?? "Unknown pointer representation", 1],
+  ["Pointer qualifiers", flagsText(value === undefined ? undefined : value & 0xff00, POINTER_FLAGS), 1]];
+};
+
+const procedureStatistics = (body: Td32TypeBody): Statistic[] => [
+  ["Calling convention", callingConvention(body.callingConvention), 1],
+  ["Procedure parameter count", body.parameterCount === undefined ? "Not decoded" : String(body.parameterCount), 1],
+  ["Function attribute byte", body.functionAttributes === undefined ? "Not decoded"
+    : body.functionAttributes === 0 ? "Zero" : "Nonzero (meaning unresolved)", 1]
 ];
 
-const unresolvedSlots = (body: Td32TypeBody): string =>
-  ([12, 14, 16, 20] as const).flatMap(offset => {
-    const value = body[`relation${offset}`];
-    return value === undefined ? [] : [`+${offset}=${hex(value)}`];
-  }).join("; ");
+const argumentStatistics = (body: Td32TypeBody): Statistic[] => body.argumentTypes === undefined
+  ? [["Argument lists", "Not decoded", 1]]
+  : [["Argument-list length", String(body.argumentTypes.length), 1],
+    ["Arguments", "Total", body.argumentTypes.length]];
 
-const sizeText = (size: Td32TypeBody["byteSize"]): string => {
-  if (!size) return "";
-  return size.value ?? `Uninterpreted numeric leaf ${hex(size.leaf)}`;
-};
-
-const aggregateColumns = (record: TypeRecord, resolve: ResolveType): string[] => [
-  record.type === 4 ? "Class" : record.type === 5 ? "Structure" : "Enum",
-  decimal(record.body!.count), resolve(record.body!.fieldList), resolve(record.body!.underlyingType),
-  hex(record.body!.attributes), sizeText(record.body!.byteSize), unresolvedSlots(record.body!)
+const bitFieldStatistics = (body: Td32TypeBody): Statistic[] => [
+  ["Bit-field length", body.bitLength === undefined ? "Not decoded" : `${body.bitLength} bits`, 1],
+  ["Bit-field position", body.bitPosition === undefined ? "Not decoded" : `${body.bitPosition} bits`, 1]
 ];
 
-const procedureColumns = (record: TypeRecord, resolve: ResolveType): string[] => [
-  resolve(record.body!.returnType), hex(record.body!.callingConvention),
-  hex(record.body!.functionAttributes), decimal(record.body!.parameterCount),
-  resolve(record.body!.argumentList), resolve(record.body!.classType), resolve(record.body!.thisType),
-  decimal(record.body!.thisAdjustment)
-];
-
-const bitFieldColumns = (record: TypeRecord, resolve: ResolveType): string[] => [
-  resolve(record.body!.underlyingType), decimal(record.body!.bitLength), decimal(record.body!.bitPosition)
-];
-
-const argumentRows = (record: TypeRecord, resolve: ResolveType): string[][] => {
-  const argumentsList = record.body!.argumentTypes ?? [];
-  return argumentsList.length
-    ? argumentsList.map((type, index) => [String(index), resolve(type)]) : [["", "(empty list)"]];
+const BODY_STATISTICS: Readonly<Partial<Record<number, (body: Td32TypeBody) => Statistic[]>>> = {
+  1: body => [["Modifier qualifiers", flagsText(body.attributes, MODIFIER_FLAGS), 1]],
+  2: pointerStatistics, 8: procedureStatistics, 9: procedureStatistics,
+  0x201: argumentStatistics, 0x206: bitFieldStatistics
 };
 
-const TABLE_KEYS: Readonly<Partial<Record<number, string>>> = {
-  1: "typequalifiers", 2: "typequalifiers", 4: "typeaggregates", 5: "typeaggregates",
-  7: "typeaggregates", 8: "typeprocedures", 9: "typeprocedures",
-  0x201: "typearguments", 0x206: "typebitfields"
-};
-const COLUMN_BUILDERS: Readonly<Partial<Record<number,
-  (record: TypeRecord, resolve: ResolveType) => string[]>>> = {
-  1: qualifierColumns, 2: qualifierColumns, 4: aggregateColumns, 5: aggregateColumns,
-  7: aggregateColumns, 8: procedureColumns, 9: procedureColumns, 0x206: bitFieldColumns
+const addStatistic = (statistics: Map<string, Statistic>, [measure, value, count]: Statistic): void => {
+  const key = `${measure}\0${value}`;
+  statistics.set(key, [measure, value, (statistics.get(key)?.[2] ?? 0) + count]);
 };
 
-type Subsection = PeTd32Info["directories"][number]["subsections"][number];
-const appendTypes = (section: Subsection, names: readonly string[], generation: string,
-  tables: ReadonlyMap<string, Td32Table>): void => {
-  if (section.data?.kind !== "types") return;
-  const records = new Map(section.data.records.map(record => [record.index, record]));
-  const resolve: ResolveType = reference => resolveType(records, names, reference);
-  for (const record of section.data.records) {
-    const table = tables.get(TABLE_KEYS[record.type] ?? "");
-    if (!record.body || !table) continue;
-    for (const row of record.type === 0x201 ? argumentRows(record, resolve)
-      : [COLUMN_BUILDERS[record.type]!(record, resolve)]) {
-      table.rows.push([generation, String(section.module), String(record.index), ...row]);
-    }
+const appendStatistics = (record: TypeRecord, statistics: Map<string, Statistic>): void => {
+  if (!record.body) { addStatistic(statistics, ["Type bodies", "Not decoded", 1]); return; }
+  for (const statistic of BODY_STATISTICS[record.type]?.(record.body) ?? []) addStatistic(statistics, statistic);
+  // Meaning is disputed between published decoders. Count nonzero slots without
+  // promoting their raw IDs to relationships or publishing anonymous record rows.
+  const unresolved = [record.body.relation12, record.body.relation14,
+    record.body.relation16, record.body.relation20].filter(value => value !== undefined && value !== 0).length;
+  if (unresolved) addStatistic(statistics, ["Unresolved relation slots", "Nonzero", unresolved]);
+};
+
+const aggregateSize = (record: TypeRecord): string => {
+  if (record.type === 7) return "Not recorded";
+  if (!record.body?.byteSize) return "Not decoded";
+  return record.body.byteSize.value ?? "Numeric size not interpreted";
+};
+
+const appendAggregate = (record: TypeRecord, names: readonly string[], table: Td32Table,
+  statistics: Map<string, Statistic>): void => {
+  const kind = AGGREGATE_KINDS[record.type];
+  if (!kind) return;
+  const name = record.nameIndex ? names[record.nameIndex - 1] : undefined;
+  if (!name) {
+    addStatistic(statistics, ["Aggregate names", record.nameIndex ? "Unresolved shared name" : "Unnamed", 1]);
+    return;
   }
+  table.rows.push([name, kind,
+    aggregateSize(record), record.body?.count === undefined ? "Not decoded" : String(record.body.count),
+    record.type === 7 ? "Not recorded" : flagsText(record.body?.attributes, STRUCTURE_FLAGS)]);
 };
 
 export const buildTd32TypeSemanticsTables = (td32: PeTd32Info): Td32Table[] => {
-  const base = ["Directory", "Module", "Type index"];
-  const tables: Td32Table[] = [
-    { key: "typequalifiers", title: "TD32 modifiers and pointers", columns: [...base,
-      "Kind", "Attributes", "Target type", "Member attributes", "Class type"], rows: [] },
-    { key: "typeaggregates", title: "TD32 classes, structures and enums", columns: [...base,
-      "Kind", "Members/values", "Field list", "Underlying type", "Attributes", "Bytes",
-      "Raw slots (meaning unresolved)"], rows: [] },
-    { key: "typeprocedures", title: "TD32 procedure types", columns: [...base,
-      "Return type", "Calling convention", "Function attributes", "Parameters", "Argument list",
-      "Class type", "This type", "This adjustment"], rows: [] },
-    { key: "typearguments", title: "TD32 argument types", columns: [...base,
-      "Position", "Argument type"], rows: [] },
-    { key: "typebitfields", title: "TD32 bit fields", columns: [...base,
-      "Underlying type", "Bit length", "Bit position"], rows: [] }
-  ];
-  const byKey = new Map(tables.map(table => [table.key, table]));
-  td32.directories.forEach((directory, index) => {
-    const names = directory.subsections.find(section => section.data?.kind === "names")?.data;
-    for (const section of directory.subsections) appendTypes(section,
-      names?.kind === "names" ? names.names : [], String(index + 1), byKey);
-  });
-  return tables.filter(table => table.rows.length);
+  const aggregates: Td32Table = { key: "typeaggregates", title: "TD32 named classes, structures and enums",
+    columns: ["Name", "Kind", "Bytes", "Members/values", "Attributes"], rows: [] };
+  const statistics = new Map<string, Statistic>();
+  for (const directory of td32.directories) {
+    const shared = directory.subsections.find(section => section.data?.kind === "names")?.data;
+    for (const section of directory.subsections) {
+      if (section.data?.kind !== "types") continue;
+      for (const record of section.data.records) {
+        appendAggregate(record, shared?.kind === "names" ? shared.names : [], aggregates, statistics);
+        appendStatistics(record, statistics);
+      }
+    }
+  }
+  return [aggregates, { key: "typestatistics", title: "TD32 type characteristics",
+    columns: ["Measure", "Value", "Count"], rows: [...statistics.values()].map(([measure, value, count]) =>
+      [measure, value, String(count)]) }].filter(table => table.rows.length);
 };
