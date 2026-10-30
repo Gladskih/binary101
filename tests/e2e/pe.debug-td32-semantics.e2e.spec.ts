@@ -16,6 +16,10 @@ for (const width of [390, 1280]) {
     await expect(procedures).toContainText("64");
     await expect(types).toContainText("Widget");
     await expect(types).toContainText("24");
+    const members = panel.locator('[data-sort-state-key="pe-debug-entry-0-td32-typemembers"]');
+    const methods = panel.locator('[data-sort-state-key="pe-debug-entry-0-td32-typemethods"]');
+    await expect(members.getByRole("row").filter({ hasText: "count" })).toContainText("Widget");
+    await expect(methods.getByRole("row").filter({ hasText: "read" })).toContainText("Widget");
     await expect(panel.locator('[data-sort-state-key="pe-debug-entry-0-td32-typestatistics"]')).toContainText("Const");
     await expect(panel.locator('[data-sort-state-key="pe-debug-entry-0-td32-symbolmetadata"]')).toContainText("stored BP-relative offset -8");
     expect(await page.locator("body").evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(width);

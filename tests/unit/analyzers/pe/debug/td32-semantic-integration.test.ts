@@ -15,7 +15,9 @@ void test("TD32 semantic fields survive PE debug dispatch and populate named pro
   assert.equal(debug.warning, null);
   assert.equal(tables.find(table => table.key === "procedures")?.rows[0]?.[1], "64");
   assert.deepEqual(tables.find(table => table.key === "typeaggregates")?.rows[0]?.slice(0, 4),
-    ["Widget", "Structure", "24", "3"]);
+    ["Widget", "Structure", "24", "2"]);
   assert.ok(tables.find(table => table.key === "typestatistics")?.rows.some(row => row.includes("Const")));
   assert.equal(tables.find(table => table.key === "typequalifiers"), undefined);
+  assert.ok(tables.some(table => table.key !== "names" && table.rows.some(row => row.includes("count"))));
+  assert.ok(tables.some(table => table.key !== "names" && table.rows.some(row => row.includes("read"))));
 });

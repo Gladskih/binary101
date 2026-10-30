@@ -8,10 +8,11 @@ import { buildTd32Tables, type Td32Table } from "./td32-tables.js";
 
 const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Bytes|Code segments|Data segments|Contributed bytes|Segments|Line\/address pairs|Distinct source lines|Records)$/.test(label)
-    || ["Code bytes", "Debug bytes", "Count / bytes", "Members/values", "Count"].includes(label) ? "peNumeric" : "";
+    || ["Code bytes", "Debug bytes", "Count / bytes", "Members/values", "Count", "Parameters",
+      "Vtable offset", "Overloads", "Offset/value"].includes(label) ? "peNumeric" : "";
 const model = (table: Td32Table, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
-  ...(["procedures", "symbolmetadata", "typeaggregates"].includes(table.key)
+  ...(["procedures", "symbolmetadata", "typeaggregates", "typemembers", "typemethods"].includes(table.key)
     ? { tableClassName: "peCodeViewLocalTable" } : {}),
   columns: table.columns.map(label => ({ label, className: columnClass(label) })),
   rowAt: index => table.rows[index] ? { cells: table.rows[index]!.map((value, column) =>

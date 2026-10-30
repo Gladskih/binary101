@@ -16,13 +16,21 @@ export const createPeWithTd32Semantics = () => {
   fields.setUint32(32, 32, true);
   fields.setUint16(36, 1, true);
   fields.setInt32(4 + procedure.length + 4, -8, true);
-  const records = [localRecord(5, [...legacyU16(3), ...legacyU32(0), ...legacyU16(3),
+  const records = [localRecord(5, [...legacyU16(2), ...legacyU32(0x1002), ...legacyU16(3),
     ...[0, 0, 0, 3].flatMap(legacyU32), ...legacyU16(24)]),
-  localRecord(1, [...legacyU16(1), ...legacyU32(0x1000)])];
-  const types = Uint8Array.from([...legacyU32(1), ...legacyU32(2), ...legacyU32(16),
-    ...legacyU32(16 + records[0]!.length), ...records.flat()]);
+  localRecord(1, [...legacyU16(1), ...legacyU32(0x1000)]),
+  localRecord(0x204, [...legacyU16(0x406), ...legacyU32(0x74), ...legacyU16(3),
+    ...legacyU32(4), ...legacyU32(0), ...legacyU16(8),
+    ...legacyU16(0x408), ...legacyU16(1), ...legacyU32(0x1003), ...legacyU32(5)]),
+  localRecord(0x207, [...legacyU16(3), ...legacyU32(0x1004), ...legacyU32(0)]),
+  localRecord(9, [...[0x74, 0x1000, 0].flatMap(legacyU32), 0, 0, ...legacyU16(0),
+    ...legacyU32(0x1005), ...legacyU32(0)]), localRecord(0x201, legacyU16(0))];
+  let offset = 8 + records.length * 4;
+  const offsets = records.map(record => { const start = offset; offset += record.length; return start; });
+  const types = Uint8Array.from([...legacyU32(1), ...legacyU32(records.length),
+    ...offsets.flatMap(legacyU32), ...records.flat()]);
   return createPeWithDebugPayloads([{ type: 0, data: createTd32([
-    { type: 0x130, module: 0, data: td32Names(["<worker>", "value", "Widget"]) },
+    { type: 0x130, module: 0, data: td32Names(["<worker>", "value", "Widget", "count", "read"]) },
     { type: 0x125, module: 1, data: symbols }, { type: 0x12b, module: 0, data: types }
   ], "FB0A") }]);
 };
