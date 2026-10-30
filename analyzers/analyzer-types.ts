@@ -32,8 +32,10 @@ import type { MpegPsParseResult } from "./mpegps/types.js";
 import type { PcapClassicParseResult } from "./pcap/types.js";
 import type { PcapNgParseResult } from "./pcapng/types.js";
 import type { Iso9660ParseResult } from "./iso9660/types.js";
+import type { WasmParseResult } from "./wasm/types.js";
 
 export type AnalyzerName =
+  | "wasm"
   | "lnk"
   | "sqlite"
   | "elf"
@@ -69,6 +71,7 @@ export type AnalyzerName =
   | "asf";
 
 type AnalyzerParseMap = {
+  wasm: WasmParseResult;
   lnk: LnkParseResult;
   sqlite: SqliteParseResult;
   elf: ElfParseResult;

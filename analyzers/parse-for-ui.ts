@@ -44,6 +44,7 @@ import { parsePcapNg } from "./pcapng/index.js";
 import { parseGzip as parseGzipFile } from "./gzip/index.js";
 import { enrichPeImportMetadata } from "./pe/imports/winapi-metadata.js";
 import { probeCoffObject } from "./coff/probe.js";
+import { parseWasm } from "./wasm/index.js";
 
 type Fb2Parser = typeof parseFb2;
 
@@ -51,6 +52,8 @@ const tryContainerHeaderFormats = async (
   file: File,
   dv: DataView
 ): Promise<ParseForUiResult | null> => {
+  if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x0061736d)
+    return { analyzer: "wasm", parsed: (await parseWasm(file))! };
   if (hasShellLinkSignature(dv)) {
     const lnk = await parseLnk(file);
     if (lnk) return { analyzer: "lnk", parsed: lnk };
