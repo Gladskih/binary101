@@ -22,11 +22,11 @@ void test("TD32 named aggregates lead with shared names, size, counts and docume
     { index: 4, type: 4, nameIndex: 99, body: { count: 1, attributes: 0 } }
   ]));
   assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.columns,
-    ["Name", "Kind", "Bytes", "Members/values", "Attributes"]);
+    ["Name", "Kind", "Bytes", "Members/values", "Attributes", "Directory", "Module"]);
   assert.deepEqual(tables.find(table => table.key === "typeaggregates")!.rows,
-    [["Worker", "Class", "56", "3", "Packed, Has constructor, Forward reference, Has destructor"],
-      ["<unit>.pas", "Structure", "Not decoded", "0", "None"],
-      ["unused type name", "Enum", "Not recorded", "4", "Not recorded"]]);
+    [["Worker", "Class", "56", "3", "Packed, Has constructor, Forward reference, Has destructor", "1", "2"],
+      ["<unit>.pas", "Structure", "Not decoded", "0", "None", "1", "2"],
+      ["unused type name", "Enum", "Not recorded", "4", "Not recorded", "1", "2"]]);
   assert.ok(tables.find(table => table.key === "typestatistics")!.rows.some(row =>
     row.join("|") === "Unresolved relation slots|Nonzero|2"));
   assert.ok(!JSON.stringify(tables).includes("0x1002"));
@@ -69,8 +69,8 @@ void test("TD32 type summaries expose unknown mappings and missing names without
     { index: 6, type: 0x7777 }
   ]);
   const tables = buildTd32TypeSemanticsTables(info);
-  assert.deepEqual(tables[0]!.rows, [["Worker", "Class", "Numeric size not interpreted", "Not decoded", "Unknown bits"],
-    ["unused type name", "Structure", "Not decoded", "Not decoded", "Not decoded"]]);
+  assert.deepEqual(tables[0]!.rows, [["Worker", "Class", "Numeric size not interpreted", "Not decoded", "Unknown bits", "1", "2"],
+    ["unused type name", "Structure", "Not decoded", "Not decoded", "Not decoded", "1", "2"]]);
   assert.ok(JSON.stringify(tables).includes("Unknown pointer mode"));
   assert.ok(JSON.stringify(tables).includes("Unknown pointer representation"));
   assert.ok(JSON.stringify(tables).includes("Unknown calling convention"));

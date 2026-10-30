@@ -58,7 +58,10 @@ const decodeSection = async (reader: LegacyCodeViewReader, entry: LegacyCodeView
 const nameIndices = (data: Td32Data | undefined): number[] => {
   if (data?.kind === "module") return [data.nameIndex];
   if (data?.kind === "source") return data.files.map(file => file.nameIndex);
-  if (data?.kind === "symbols" || data?.kind === "types") return data.records.flatMap(record =>
+  if (data?.kind === "symbols") return data.records.flatMap(record => [
+    ...(record.nameIndex === undefined ? [] : [record.nameIndex]), ...(record.metadata?.nameIndices ?? []),
+    ...(record.metadata?.targetNameIndex === undefined ? [] : [record.metadata.targetNameIndex])]);
+  if (data?.kind === "types") return data.records.flatMap(record =>
     record.nameIndex === undefined ? [] : [record.nameIndex]);
   return [];
 };

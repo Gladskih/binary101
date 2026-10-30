@@ -98,7 +98,7 @@ const aggregateSize = (record: TypeRecord): string => {
 };
 
 const appendAggregate = (record: TypeRecord, names: readonly string[], table: Td32Table,
-  statistics: Map<string, Statistic>): void => {
+  statistics: Map<string, Statistic>, generation: number, module: number): void => {
   const kind = AGGREGATE_KINDS[record.type];
   if (!kind) return;
   const name = record.nameIndex ? names[record.nameIndex - 1] : undefined;
@@ -108,19 +108,21 @@ const appendAggregate = (record: TypeRecord, names: readonly string[], table: Td
   }
   table.rows.push([name, kind,
     aggregateSize(record), record.body?.count === undefined ? "Not decoded" : String(record.body.count),
-    record.type === 7 ? "Not recorded" : flagsText(record.body?.attributes, STRUCTURE_FLAGS)]);
+    record.type === 7 ? "Not recorded" : flagsText(record.body?.attributes, STRUCTURE_FLAGS),
+    String(generation), String(module)]);
 };
 
 export const buildTd32TypeSemanticsTables = (td32: PeTd32Info): Td32Table[] => {
   const aggregates: Td32Table = { key: "typeaggregates", title: "TD32 named classes, structures and enums",
-    columns: ["Name", "Kind", "Bytes", "Members/values", "Attributes"], rows: [] };
+    columns: ["Name", "Kind", "Bytes", "Members/values", "Attributes", "Directory", "Module"], rows: [] };
   const statistics = new Map<string, Statistic>();
-  for (const directory of td32.directories) {
-    const shared = directory.subsections.find(section => section.data?.kind === "names")?.data;
+  for (const [generation, directory] of td32.directories.entries()) {
+    const shared = directory.subsections.flatMap(section => section.data?.kind === "names" ? [section.data.names] : []);
     for (const section of directory.subsections) {
       if (section.data?.kind !== "types") continue;
       for (const record of section.data.records) {
-        appendAggregate(record, shared?.kind === "names" ? shared.names : [], aggregates, statistics);
+        appendAggregate(record, shared.length === 1 ? shared[0]! : [], aggregates,
+          statistics, generation + 1, section.module);
         appendStatistics(record, statistics);
       }
     }

@@ -115,14 +115,19 @@ void test("TD32 validates isolated source-file name references", async () => {
 });
 
 void test("TD32 type tables integrate with the directory and validate their name references", async () => {
+  const type = td32Symbol(4, 2, 24);
+  type.push(12, 0); // Immediate numeric size after the shared name index.
+  type.splice(0, 2, type.length - 2, 0);
   const result = await parse(createTd32([
     { type: 0x130, module: 0, data: td32Names(["one"]) },
     { type: 0x12b, module: 0, data: Uint8Array.from([
-      ...legacyU32(1), ...legacyU32(1), ...legacyU32(12), ...td32Symbol(4, 2, 24)]) }
+      ...legacyU32(1), ...legacyU32(1), ...legacyU32(12), ...type]) }
   ]));
 
   assert.deepEqual(result.parsed?.directories[0]?.subsections[1]?.data,
-    { kind: "types", version: 1, records: [{ index: 0, type: 4, nameIndex: 2 }] });
+    { kind: "types", version: 1, records: [{ index: 0, type: 4, nameIndex: 2, body: {
+      count: 0, fieldList: 0, attributes: 0, relation12: 0, relation16: 0, relation20: 0, byteSize: { value: "12" }
+    } }] });
   assert.deepEqual(result.warnings, ["TD32 name reference is outside the shared name table."]);
 });
 

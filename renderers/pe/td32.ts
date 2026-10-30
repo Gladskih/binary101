@@ -8,9 +8,11 @@ import { buildTd32Tables, type Td32Table } from "./td32-tables.js";
 
 const columnClass = (label: string): string =>
   /^(Directory|Module|Index|Bytes|Code segments|Data segments|Contributed bytes|Segments|Line\/address pairs|Distinct source lines|Records)$/.test(label)
-    ? "peNumeric" : "";
+    || ["Code bytes", "Debug bytes", "Count / bytes", "Members/values", "Count"].includes(label) ? "peNumeric" : "";
 const model = (table: Td32Table, prefix: string): PagedSortableTableModel => ({
   id: `${prefix}-${table.key}`, pageSize: 100, rowCount: table.rows.length,
+  ...(["procedures", "symbolmetadata", "typeaggregates"].includes(table.key)
+    ? { tableClassName: "peCodeViewLocalTable" } : {}),
   columns: table.columns.map(label => ({ label, className: columnClass(label) })),
   rowAt: index => table.rows[index] ? { cells: table.rows[index]!.map((value, column) =>
     ({ html: escapeHtml(value), className: columnClass(table.columns[column] ?? "") })) } : null,
@@ -31,8 +33,9 @@ export const getTd32TableModel = (pe: PeWindowsParseResult, tableId: string): Pa
 
 const renderTd32Info = (info: PeTd32Info, prefix: string, out: string[]): void => {
   out.push(`<dl>`, renderDefinitionRow("Borland TD32 format", escapeHtml(info.signature)), `</dl>`);
-  out.push(`<p class="smallNote">Type statistics retain every bounded record. Named types resolve ` +
-    `verified class, structure and enum name fields; other stored names remain in the shared names table.</p>`);
+  out.push(`<p class="smallNote">Stored symbol locations use producer segment and offset fields. ` +
+    `Frame bases and disputed layouts remain unresolved. Named types retain sizes and properties; ` +
+    `anonymous type descriptions are summarized.</p>`);
   for (const table of buildTd32Tables(info)) out.push(`<h4>${escapeHtml(table.title)}</h4>`,
     renderAutoPagedSortableTable(model(table, prefix)));
 };

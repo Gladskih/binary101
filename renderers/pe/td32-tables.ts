@@ -1,16 +1,13 @@
 import type { PeTd32Info } from "../../analyzers/pe/debug/td32.js";
+import { buildTd32SymbolTables } from "./td32-symbol-tables.js";
+import { buildTd32TypeSemanticsTables } from "./td32-type-semantics-tables.js";
+import { td32SymbolKind as symbolKind } from "./td32-symbol-properties.js";
 
 export interface Td32Table { key: string; title: string; columns: string[]; rows: string[][]; }
 
 // TD32 names are indexed from 1. Never substitute a guessed name for a dangling reference.
 const resolveName = (names: readonly string[], index: number): string => index === 0
   ? "(unnamed)" : names[index - 1] ?? `(unresolved name #${index})`;
-const SYMBOL_KINDS: Readonly<Partial<Record<number, string>>> = {
-  1: "Compiler", 2: "Register variable", 3: "Constant", 4: "User-defined type", 6: "Scope end", 9: "Object file",
-  0x200: "Stack variable", 0x201: "Local data", 0x202: "Global data", 0x203: "Public symbol",
-  0x204: "Local procedure", 0x205: "Global procedure", 0x208: "With scope", 0x209: "Label"
-};
-const symbolKind = (type: number): string => SYMBOL_KINDS[type] ?? `Unrecognized symbol kind ${type}`;
 const TYPE_KINDS: Readonly<Partial<Record<number, string>>> = {
   1: "Modifier", 2: "Pointer", 3: "Array", 4: "Class", 5: "Structure", 6: "Union", 7: "Enum",
   8: "Procedure", 9: "Member function", 10: "Virtual table shape", 0x201: "Arguments",
@@ -65,8 +62,8 @@ const appendNamedRows = (section: Subsection, names: readonly string[], generati
 };
 
 const sharedNames = (directory: PeTd32Info["directories"][number]): readonly string[] => {
-  const names = directory.subsections.find(section => section.data?.kind === "names")?.data;
-  return names?.kind === "names" ? names.names : [];
+  const names = directory.subsections.flatMap(section => section.data?.kind === "names" ? [section.data.names] : []);
+  return names.length === 1 ? names[0]! : [];
 };
 
 const countSymbols = (section: Subsection, counts: Map<number, number>): void => {
@@ -113,5 +110,6 @@ export const buildTd32Tables = (td32: PeTd32Info): Td32Table[] => {
     { key: "typekinds", title: "TD32 type statistics", columns: ["Directory", "Module", "Type kind", "Records"], rows: [] }
   ];
   td32.directories.forEach((directory, index) => directoryRows(directory, String(index + 1), tables));
-  return tables.filter(table => table.rows.length);
+  return [...tables.filter(table => table.rows.length), ...buildTd32SymbolTables(td32),
+    ...buildTd32TypeSemanticsTables(td32)];
 };
