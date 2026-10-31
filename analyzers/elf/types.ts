@@ -16,6 +16,7 @@ import type { ElfSectionGroup } from "./section-groups.js";
 import type { ElfUnwindSection } from "./unwind-types.js";
 import type { ElfHashTable } from "./hash-types.js";
 import type { GoBuildInfo } from "./go-build-info.js";
+import type { EmbeddedResourceAnalysis } from "../embedded-resources/types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -77,6 +78,7 @@ export interface ElfSectionHeader {
 }
 
 export interface ElfParseResult {
+  embeddedResources?: EmbeddedResourceAnalysis;
   goBuildInfo?: GoBuildInfo;
   lsdas?: ElfLsda[];
   armEhabi?: ArmEhabiTable[];

@@ -1,3 +1,4 @@
 # Ensure consistent line endings
 * text=auto
+scripts/build-embedded-resource-oracles.sh text eol=lf
 

@@ -19,6 +19,7 @@ import { renderElfTls } from "./tls.js";
 import { renderElfNotes } from "./notes.js";
 import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfDebug } from "./debug.js";
+import { renderEmbeddedResources } from "../embedded-resources.js";
 
 export interface ElfLazySection {
   key: string;
@@ -89,6 +90,8 @@ const addMetadata = (elf: ElfParseResult, add: AddSection): void => {
 };
 
 const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
+  if (elf.embeddedResources) add("embedded-resources", "Qt / GLib embedded resources",
+    (current, out) => { out.push(renderEmbeddedResources(current.embeddedResources)); });
   if (elf.nativeAot) add("native-aot", "NativeAOT metadata", renderElfNativeAot);
   if (elf.comment || elf.debugLink || elf.dwarf || elf.goBuildInfo) add("debug", "Build / debug", renderElfDebug);
 };

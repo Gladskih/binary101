@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ElfParseResult } from "../../analyzers/elf/types.js";
+import { getEmbeddedResourceTableModel } from "../embedded-resources.js";
 import { getDwarfPagedTableModel } from "../dwarf/paged-tables.js";
 import type { PagedSortableTableModel } from "../paged-sortable-table.js";
 import { getNativeAotReflectionTypeTableModel } from "../native-aot/reflection.js";
@@ -71,7 +72,8 @@ const getNativeAotTable: TableResolver = (elf, tableId) =>
   getNativeAotFunctionTableModel(elf.nativeAot?.functionMaps, tableId);
 
 export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
-  const dwarf = getDwarfPagedTableModel(elf.dwarf, tableId);
+  const dwarf = getEmbeddedResourceTableModel(elf.embeddedResources, tableId) ??
+    getDwarfPagedTableModel(elf.dwarf, tableId);
   if (dwarf) return dwarf;
   if (tableId === "elf-notes" && elf.notes) return createElfNotesTableModel(elf.notes);
   for (const resolve of tableResolvers) {

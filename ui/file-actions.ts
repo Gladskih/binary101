@@ -13,6 +13,7 @@ import { createPePayloadDownloadClickHandler } from "./pe-payload-download.js";
 import { createPeInnoSetupDownloadClickHandler } from "./pe-inno-setup-download.js";
 import { createSevenZipEntryClickHandler } from "./sevenz-actions.js";
 import { createZipEntryClickHandler } from "./zip-actions.js";
+import { createEmbeddedResourceClickHandler } from "./embedded-resource-actions.js";
 
 type FileActionDeps = {
   getParseResult: () => ParseForUiResult;
@@ -33,6 +34,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
   const sevenZipClickHandler = createSevenZipEntryClickHandler(deps);
   const gzipClickHandler = createGzipClickHandler(deps);
   const zipClickHandler = createZipEntryClickHandler(deps);
+  const embeddedResourceClickHandler = createEmbeddedResourceClickHandler(deps);
   const peDosNestedDownloadClickHandler = createPeDosNestedDownloadClickHandler(deps);
   const peLinuxPayloadDownloadClickHandler = createPeLinuxPayloadDownloadClickHandler(deps);
   const peOverlayDownloadClickHandler = createPeOverlayDownloadClickHandler(deps);
@@ -48,6 +50,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
     runAsyncHandler(sevenZipClickHandler, event);
     runAsyncHandler(gzipClickHandler, event);
     runAsyncHandler(zipClickHandler, event);
+    runAsyncHandler(embeddedResourceClickHandler, event);
     peDosNestedDownloadClickHandler(event);
     peLinuxPayloadDownloadClickHandler(event);
     peOverlayDownloadClickHandler(event);

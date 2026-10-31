@@ -1,5 +1,6 @@
 "use strict";
 import { renderElfSanitizers } from "./sanitizers.js";
+import { renderEmbeddedResources } from "../embedded-resources.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
@@ -277,6 +278,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderElfNotes(elf, out);
   renderElfNativeAot(elf, out);
   renderElfDebug(elf, out);
+  out.push(renderEmbeddedResources(elf.embeddedResources));
   renderProgramHeaders(elf, out);
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);

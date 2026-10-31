@@ -42,6 +42,8 @@
     "test:unit": "tsx --test --test-reporter=dot \"tests/unit/**/*.ts\"",
     "test:coverage": "c8 --config .c8rc.json tsx --test --test-reporter=dot \"tests/unit/**/*.ts\"",
     "test:mutation": "stryker run",
+    "test:mutation:embedded-resources": "stryker run scripts/embedded-resources-mutation.config.mjs",
+    "test:embedded-resources:oracles": "tsx scripts/prepare-embedded-resource-oracles.ts && tsx --test tests/external/embedded-resources-oracles.test.ts",
     "test:mutation:wasm": "npm run test:mutation -- --mutate analyzers/wasm/*.ts,renderers/wasm/*.ts,!analyzers/wasm/types.ts --testFiles tests/unit/analyzers/wasm/*.test.ts,tests/unit/renderers/wasm/*.test.ts --incrementalFile reports/mutation/stryker-incremental.wasm-full.json",
     "test:mutation:symbol-demangle": "npm run test:mutation -- --mutate analyzers/symbol-demangle/*.ts,analyzers/pe/symbol-name.ts,analyzers/coff/symbol-names.ts --testFiles tests/unit/analyzers/symbol-demangle/*.test.ts,tests/unit/analyzers/coff/symbol-names.test.ts,tests/unit/analyzers/pe/rust-dlang-names.test.ts,tests/unit/renderers/pe/import-function-table.test.ts --incrementalFile reports/mutation/stryker-incremental.rust-dlang.json",
     "test:mutation:pe": "npm run test:mutation",

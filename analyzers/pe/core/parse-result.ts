@@ -1,6 +1,7 @@
 "use strict";
 
 import type { CoffDebugInfo } from "../../coff/debug-types.js";
+import type { EmbeddedResourceAnalysis } from "../../embedded-resources/types.js";
 import type { DwarfAnalysis } from "../../dwarf/types.js";
 import type { GoRuntimeMetadata } from "../../go-runtime/types.js";
 import type { DRuntimeMetadata } from "../../d-runtime/types.js";
@@ -55,6 +56,7 @@ export interface PeDebugSection {
 }
 
 interface PeParseResultBase {
+  embeddedResources?: EmbeddedResourceAnalysis;
   dos: PeCore["dos"];
   signature: "PE";
   coff: PeCore["coff"];

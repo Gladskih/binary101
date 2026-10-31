@@ -9,6 +9,7 @@ import { buildHeaderOnlyPeParseResult } from "./core/header-only-result.js";
 import { collectPeLayoutWarnings } from "./layout/warnings.js";
 import { parseWindowsPe } from "./parse-windows.js";
 import { analyzePeDwarf } from "./dwarf.js";
+import { analyzePeEmbeddedResources } from "./embedded-resources.js";
 export {
   isPeRomParseResult,
   isPeWindowsParseResult
@@ -47,5 +48,6 @@ export async function parsePe(
     : await parseWindowsPe(file, reader, core, parseManifestXmlDocument);
   const dwarf = await analyzePeDwarf(reader, parsed.sections,
     parsed.opt?.Magic === 0x20b ? 8 : 4, parsed.coff.Machine === 0xaa64 ? 183 : 0);
-  return dwarf ? { ...parsed, dwarf } : parsed;
+  const embeddedResources = await analyzePeEmbeddedResources(file, parsed);
+  return { ...parsed, ...(dwarf ? { dwarf } : {}), ...(embeddedResources ? { embeddedResources } : {}) };
 }

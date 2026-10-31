@@ -16,6 +16,7 @@ import { getPeDisassemblyStringTableModel } from "./disassembly-strings.js";
 import { createImportFunctionTableModel } from "./import-function-table.js";
 import { getPeResourceTableModel } from "./resources.js";
 import { getManagedResourceTableModel } from "./managed-resources.js";
+import { getEmbeddedResourceTableModel } from "../embedded-resources.js";
 import { getMsvcEhTableModel } from "./msvc-eh.js";
 import { getMsvcRttiPagedTableModel } from "./msvc-rtti-table.js";
 import { getItaniumRttiTableModel } from "./itanium-rtti.js";
@@ -153,7 +154,7 @@ const windowsTableResolvers: TableResolver[] = [
 export const getPePagedTableModel = (
   pe: PeParseResult, tableId: string
 ): PagedSortableTableModel | null => {
-  const debug = getPeDebugCoffTableModel(pe, tableId);
+  const debug = getEmbeddedResourceTableModel(pe.embeddedResources, tableId) ?? getPeDebugCoffTableModel(pe, tableId);
   if (debug) return debug;
   if (!isPeWindowsParseResult(pe)) return null;
   for (const resolve of windowsTableResolvers) {
