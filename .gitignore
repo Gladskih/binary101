@@ -1,6 +1,9 @@
 # Node.js
 node_modules/
 
+# Python research-tool bytecode
+__pycache__/
+
 # Test coverage output
 coverage/
 
