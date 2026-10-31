@@ -47,7 +47,7 @@ const table = (entryCount: number): PeLoadConfigTable => ({
   }))
 });
 
-void test("renderLoadConfigGuardFlags renders decoded chips and inline explanations", () => {
+void test("renderLoadConfigGuardFlags keeps explanations in chip tooltips only", () => {
   const loadConfig = createPeLoadConfigResult();
   loadConfig.GuardFlags =
     0x00000100 | // Microsoft PE GuardFlags: CF_INSTRUMENTED.
@@ -56,10 +56,23 @@ void test("renderLoadConfigGuardFlags renders decoded chips and inline explanati
 
   const html = renderLoadConfigGuardFlags(loadConfig);
 
+  assert.match(html, /^0x30000500<div/);
   assert.ok(html.includes("CF_INSTRUMENTED"));
   assert.ok(html.includes("CF_FUNCTION_TABLE_PRESENT"));
-  assert.ok(html.includes("CF_FUNCTION_TABLE_SIZE_7BYTES"));
-  assert.ok(html.includes("Module contains compiler-inserted CFG checks"));
+  assert.match(html,
+    /<span class="opt sel" title="CFG table entries are 7 bytes">CF_FUNCTION_TABLE_SIZE_7BYTES<\/span>/);
+  assert.match(html, /title="CF_INSTRUMENTED - Module contains compiler-inserted CFG checks/);
+  assert.doesNotMatch(html, /smallNote|CF_INSTRUMENTED:/);
+});
+
+void test("renderLoadConfigGuardFlags renders zero with chip tooltips and no explanatory block", () => {
+  const html = renderLoadConfigGuardFlags(createPeLoadConfigResult());
+
+  assert.match(html, /^0<div/);
+  assert.match(html,
+    /<span class="opt dim" title="CFG table entries are plain 4-byte RVAs">CF_FUNCTION_TABLE_SIZE_4BYTES<\/span>/);
+  assert.match(html, /title="CF_INSTRUMENTED - Module contains compiler-inserted CFG checks/);
+  assert.doesNotMatch(html, /smallNote|No CFG-related flags/);
 });
 
 void test("renderLoadConfigGuardFlags names RF, retpoline, XFG, CastGuard and memcpy", () => {

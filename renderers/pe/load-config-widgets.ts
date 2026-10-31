@@ -199,16 +199,8 @@ export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
     ? `<span class="opt sel" title="CFG table entries are ${4 + stride} bytes">` +
       `CF_FUNCTION_TABLE_SIZE_${4 + stride}BYTES</span>`
     : `<span class="opt dim" title="CFG table entries are plain 4-byte RVAs">CF_FUNCTION_TABLE_SIZE_4BYTES</span>`;
-  const notes = GUARD_FLAGS
-    .filter(([bit]) => (guardFlags & bit) !== 0)
-    .map(([, name, explanation]) => `${name}: ${explanation ?? "documented GuardFlags bit"}`);
   return `${guardFlags ? hex(guardFlags, 8) : "0"}` +
-    `${renderFlagChips(guardFlags & 0x0fff_ffff, GUARD_FLAGS)}<div class="optionsRow">${strideChip}</div>` +
-    `<div class="smallNote" style="margin:0">${escapeHtml(
-      notes.length
-        ? notes.join("; ")
-        : "No CFG-related flags are set; high nibble still defines CFG table entry size."
-    )}</div>`;
+    `${renderFlagChips(guardFlags & 0x0fff_ffff, GUARD_FLAGS)}<div class="optionsRow">${strideChip}</div>`;
 };
 
 export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
