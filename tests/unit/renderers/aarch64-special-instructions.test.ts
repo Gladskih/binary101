@@ -30,7 +30,7 @@ void test("A64 special instructions distinguish privilege, configuration and deb
   assert.match(html, /minimum encoding requirements/);
   assert.match(html, /not proof that an operation exists/);
   assert.match(html, /Unvisited code may contain more sites/);
-  assert.match(html, /Instruction reference/);
+  assert.doesNotMatch(html, /Instruction reference:|href="https?:/);
   assert.match(html, /Requires at least Exception Level 1/);
   assert.match(html, /OS may emulate some trapped accesses/);
   assert.match(html, /Requires at least Exception Level 2/);
@@ -46,10 +46,7 @@ void test("A64 special instructions distinguish privilege, configuration and deb
   assert.equal(document.getElementsByTagName("tr").length, 6);
   assert.equal(document.getElementsByTagName("td").length, 20);
   assert.equal(document.getElementsByTagName("tbody")[0]?.childNodes.length, 5);
-  assert.equal(document.getElementsByTagName("a")[0]?.getAttribute("href"),
-    "https://developer.arm.com/documentation/ddi0487/latest/");
-  assert.equal(document.getElementsByTagName("a")[0]?.textContent,
-    "Arm Architecture Reference Manual");
+  assert.equal(document.getElementsByTagName("a").length, 0);
   assert.doesNotMatch(html, /Intel|AMD|<button/);
 });
 

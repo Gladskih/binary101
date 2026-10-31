@@ -43,9 +43,6 @@ export const renderX86SpecialInstructions = <Finding extends SpecialInstructionS
     `not execution frequency. Unvisited code may contain additional sites. ` +
     `Expand a category or instruction for an explanation. ` +
     `${escapeHtml(examplesDescription)}</div>` +
-    `<div class="smallNote">Instruction reference: ` +
-    `<a href="https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html">Intel SDM</a>` +
-    ` and <a href="https://docs.amd.com/v/u/en-US/24594_3.37">AMD APM</a>.</div>` +
     `<div class="tableWrap"><table class="table"><thead><tr>` +
     `<th>Category</th><th>Instruction</th><th style="text-align:right">Sites</th>` +
     `<th>${escapeHtml(examplesHeading)}</th></tr></thead><tbody>` +

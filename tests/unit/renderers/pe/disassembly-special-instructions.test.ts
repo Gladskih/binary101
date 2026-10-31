@@ -32,9 +32,7 @@ void test("explains instructions and categories with keyboard-accessible disclos
   assert.match(html, /Unvisited code may contain additional sites/);
   assert.match(html, /up to three locations/);
   assert.match(html, /<th>Example RVAs<\/th>/);
-  assert.match(html, /Intel SDM/);
-  assert.match(html, /Instruction reference:/);
-  assert.match(html, /AMD APM/);
+  assert.doesNotMatch(html, /Instruction reference:|href="https?:/);
   assert.match(html, /<h4>Special instructions<\/h4>/);
   assert.match(html, /<th>Category<\/th><th>Instruction<\/th>/);
   assert.match(html, /<th style="text-align:right">Sites<\/th>/);
@@ -43,8 +41,6 @@ void test("explains instructions and categories with keyboard-accessible disclos
   assert.match(html, /<\/tbody><\/table><\/div>$/);
   assert.match(html, /<\/button> <button/);
   assert.match(html, /Expand a category or instruction for an explanation/);
-  assert.match(html, /href="https:\/\/www.intel.com\/content\/www\/us\/en\/developer\/articles\/technical\/intel-sdm.html"/);
-  assert.match(html, /href="https:\/\/docs.amd.com\/v\/u\/en-US\/24594_3.37"/);
   assert.match(html, /<\/details><details><summary>Kernel privilege/);
   assert.match(html, /<\/td><\/tr><tr><td>/);
 });

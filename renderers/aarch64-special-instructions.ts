@@ -43,9 +43,6 @@ export const renderAarch64SpecialInstructions = (
     `<div class="smallNote dim">System access levels are minimum encoding requirements, ` +
     `not proof that an operation exists or is permitted on a particular CPU. EL0-accessible ` +
     `encodings may have additional restrictions. Unvisited code may contain more sites.</div>` +
-    `<div class="smallNote">Instruction reference: ` +
-    `<a href="https://developer.arm.com/documentation/ddi0487/latest/">Arm Architecture ` +
-    `Reference Manual</a>.</div>` +
     `<div class="tableWrap"><table class="table"><thead><tr>` +
     `<th>Category</th><th>Instruction</th><th style="text-align:right">Sites</th>` +
     `<th>${escapeHtml(examplesHeading)}</th></tr></thead><tbody>` +
