@@ -10,9 +10,13 @@ export interface RccArraySymbols {
 // Itanium local-name encoding, validating the encoded length before association.
 // https://code.qt.io/cgit/qt/qtbase.git/tree/src/tools/rcc/rcc.cpp
 const arrayName = (symbol: string): string | null => {
-  const mangled = /^_ZL(\d+)(qt_resource_(?:struct|name|data))$/u.exec(symbol);
+  // GCC privatizes names as NAME.lto_priv.N; N is per name, not per RCC set.
+  // https://github.com/gcc-mirror/gcc/blob/releases/gcc-15.2.0/gcc/lto/lto-partition.cc#L1526-L1543
+  // https://github.com/gcc-mirror/gcc/blob/releases/gcc-15.2.0/gcc/cgraphclones.cc#L487-L497
+  const original = symbol.replace(/\.lto_priv\.\d+$/u, "");
+  const mangled = /^_ZL(\d+)(qt_resource_(?:struct|name|data))$/u.exec(original);
   if (mangled) return Number(mangled[1]) === mangled[2]!.length ? mangled[2]! : null;
-  return /^_?qt_resource_(?:struct|name|data)$/u.test(symbol) ? symbol.replace(/^_/u, "") : null;
+  return /^_?qt_resource_(?:struct|name|data)$/u.test(original) ? original.replace(/^_/u, "") : null;
 };
 
 export const findRccArraySymbols = (symbols: ResourceSymbol[]): RccArraySymbols[] => {
