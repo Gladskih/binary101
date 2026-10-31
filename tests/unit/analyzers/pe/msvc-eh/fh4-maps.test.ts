@@ -51,7 +51,14 @@ void test("FH4 IP maps preserve delta addresses and EHstate+1", async () => {
     [{ ipRva: subject.beginRva, state: -1 }, { ipRva: subject.beginRva + 4, state: 0 }]);
 });
 
-for (const bytes of [[0], [2, 0, 4], [4, 0, 0, 0, 0], [2, 15, 255, 255, 255, 255, 0], [2, 0]]) {
+void test("FH4 IP maps accept a readable zero count without requiring entry bytes", async () => {
+  // MSVC ehdata4_export.h IPtoStateMap4 reads NumEntries without a positive-count requirement.
+  const subject = mapFixture([0]);
+  assert.deepEqual(await readFh4IpStates(subject.image, subject.rva, subject.beginRva, 0), []);
+  assert.equal(await readFh4IpStates(subject.image, subject.rva + 1, subject.beginRva, 0), null);
+});
+
+for (const bytes of [[2, 0, 4], [4, 0, 0, 0, 0], [2, 15, 255, 255, 255, 255, 0], [2, 0]]) {
   void test(`FH4 IP map rejects invalid encoding ${bytes.join(",")}`, async () => {
     const subject = mapFixture(bytes);
     assert.equal(await readFh4IpStates(subject.image, subject.rva, subject.beginRva, 1), null);

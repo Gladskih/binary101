@@ -69,6 +69,10 @@ export const renderMsvcEh = (analysis: MsvcEhAnalysis, out: string[]): void => {
   out.push(`<p class="smallNote">Only validated metadata is listed. Coverage depends on architecture, ` +
     `metadata version and available handler evidence. Unlisted or unresolved records do not establish ` +
     `the absence of exception handling or identify the compiler.</p>`);
+  const emptyIpMapCount = analysis.records.reduce((count, record) => count + Number(
+    record.functionInfo?.version === 4 && record.functionInfo.ipStates.length === 0), 0);
+  if (emptyIpMapCount) out.push(`<p class="smallNote">${emptyIpMapCount} verified FH4 record(s) ` +
+    `have empty IP-to-state maps.</p>`);
   if (analysis.records.length) out.push(renderAutoPagedSortableTable(createTable(analysis)));
   if (analysis.warnings.length) out.push(renderPeDiagnostics("Microsoft EH diagnostics", analysis.warnings));
   out.push(renderPeSectionEnd());

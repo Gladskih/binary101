@@ -111,9 +111,16 @@ void test("FH4 separated contributions choose their own IP map and validate ever
   subject.builder.patchUint32(map, 1, subject.beginRva);
   subject.builder.patchUint32(map, 5, ipMapRva);
   subject.builder.patchUint32(map, 9, subject.catchRva);
-  subject.builder.patchUint32(map, 13, 0x11ff); // Mapped byte, but not a complete IP map.
+  subject.builder.patchUint32(map, 13, 0x11ff); // Last mapped byte: enough for a zero count.
+  subject.builder.patchByte(0x11ff, 0);
   subject.builder.patchByte(infoRva, 0x3a);
   subject.builder.patchUint32(infoRva, 9, map);
   const fixture = subject.builder.build();
-  assert.equal(await parseFh4(createEhImage(fixture.file, fixture.core), infoRva, subject.beginRva), null);
+  assert.equal((await parseFh4(createEhImage(fixture.file, fixture.core), infoRva,
+    subject.beginRva))?.ipStates.length, 1);
+  assert.deepEqual((await parseFh4(createEhImage(fixture.file, fixture.core), infoRva,
+    subject.catchRva))?.ipStates, []);
+  subject.builder.patchByte(0x11ff, 2); // One advertised entry cannot fit in the remaining bytes.
+  const truncated = subject.builder.build();
+  assert.equal(await parseFh4(createEhImage(truncated.file, truncated.core), infoRva, subject.beginRva), null);
 });

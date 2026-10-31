@@ -22,3 +22,18 @@ for (const width of [390, 1280]) {
     await page.screenshot({ path: testInfo.outputPath("msvc-eh.png"), fullPage: true });
   });
 }
+
+test("empty FH4 IP maps show an informational count without EH diagnostics", async ({ page }) => {
+  const subject = createEhFixture();
+  const { ipMapRva } = addFh4(subject);
+  subject.builder.patchByte(ipMapRva, 0);
+  const file = buildEhPeImage(subject);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
+  const panel = page.locator('[data-pe-lazy-section="msvc-eh"]');
+  await panel.locator(":scope > details > summary").click();
+  await expect(panel.getByRole("cell", { name: "FH4", exact: true })).toBeVisible();
+  await expect(panel.getByText("1 verified FH4 record(s) have empty IP-to-state maps.",
+    { exact: true })).toBeVisible();
+  await expect(panel.getByText(/Microsoft EH diagnostics/)).toHaveCount(0);
+});

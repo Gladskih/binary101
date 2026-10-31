@@ -128,5 +128,7 @@ export const readFh4IpStates = async (
     if (!image.code(ipRva) || (index > 0 && delta === 0) || !validEhState(state, states)) return null;
     entries.push({ ipRva, state });
   }
-  return cursor.valid && count > 0 ? entries : null;
+  // MSVC ehdata4_export.h IPtoStateMap4 and CRT ehstate.cpp accept a zero entry count.
+  // https://devblogs.microsoft.com/cppblog/making-cpp-exception-handling-smaller-x64/
+  return cursor.valid ? entries : null;
 };

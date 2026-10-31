@@ -11,6 +11,26 @@ const cppAnalysis = (): MsvcEhAnalysis => ({ warnings: [], records: [{ handlerRv
         continuationRvas: [0x1110] },
       { handlerRva: 0x1140, typeDescriptorRva: 0x2100, continuationRvas: [] }] }] } }] });
 
+void test("empty IP maps produce one informational count alongside real warnings", () => {
+  const analysis = cppAnalysis();
+  const record = analysis.records[0]!;
+  assert.ok(record.functionInfo);
+  const emptyRecord = { ...record, functionInfo: { ...record.functionInfo, ipStates: [] } };
+  analysis.records.push(emptyRecord, emptyRecord,
+    { ...emptyRecord, functionInfo: { ...emptyRecord.functionInfo, version: 3 } },
+    { handlerRva: 0x1000, functionRvas: [], evidence: "registration", registration: "_except_handler4" });
+  analysis.warnings.push("metadata unavailable");
+  const out: string[] = [];
+  renderMsvcEh(analysis, out);
+  const html = out.join("");
+  assert.match(html, /<p class="smallNote">2 verified FH4 record\(s\) have empty IP-to-state maps\.<\/p>/);
+  assert.equal(html.match(/have empty IP-to-state maps/g)?.length, 1);
+  assert.match(html, /metadata unavailable/);
+  assert.match(html, /Microsoft EH diagnostics/);
+  assert.match(html, /<\/div><\/details><\/section>$/);
+  assert.doesNotMatch(html, /state -1/);
+});
+
 void test("EH renderer separates verified records and unresolved metadata diagnostics", () => {
   const out: string[] = [];
   renderMsvcEh({ warnings: ["bad <metadata>"], records: [{ scopeTableRva: 0x2010, unwindInfoRva: 0x2000,
@@ -33,6 +53,7 @@ void test("EH catch details preserve encoded continuations and typed descriptor 
   assert.match(html, /0x2100/);
   assert.match(html, /0x1110/);
   assert.match(html, /Not encoded/);
+  assert.doesNotMatch(html, /have empty IP-to-state maps/);
   assert.match(html, /<th class="peNumeric">Handler RVA<\/th>/);
   assert.match(html, /<td class="peNumeric">0x1120<\/td>/);
 });

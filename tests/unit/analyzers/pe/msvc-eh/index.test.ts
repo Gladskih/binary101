@@ -22,6 +22,18 @@ void test("FH4 bytes are never recognized from plausible metadata alone", async 
   assert.equal(await analyzeMsvcEh(fixture.file, fixture.core, subject.exception, subject.imports, []), null);
 });
 
+void test("a confirmed FH4 record with an empty IP map is retained without warnings", async () => {
+  const subject = createEhFixture();
+  const { infoRva, ipMapRva } = addFh4(subject);
+  subject.builder.patchByte(ipMapRva, 0);
+  const fixture = subject.builder.build();
+  const parsed = await analyzeMsvcEh(fixture.file, fixture.core, subject.exception, subject.imports, []);
+  assert.equal(parsed?.records.length, 1);
+  assert.equal(parsed?.records[0]?.functionInfo?.rva, infoRva);
+  assert.deepEqual(parsed?.records[0]?.functionInfo?.ipStates, []);
+  assert.deepEqual(parsed?.warnings, []);
+});
+
 void test("confirmed personality with malformed data yields a warning, not a claimed object", async () => {
   const subject = createEhFixture();
   addFh3(subject);
@@ -90,16 +102,40 @@ void test("truncated handler data is not a parsed FuncInfo", async () => {
 void test("SEH object survives an owner-range contradiction with an explicit warning", async () => {
   const subject = createEhFixture();
   subject.imports.entries[0]!.functions[0]!.name = "__C_specific_handler";
-  const scopes = subject.builder.allocateData(20);
-  subject.builder.patchUint32(scopes, 0, 1);
-  subject.builder.patchUint32(scopes, 4, subject.handlerRva);
-  subject.builder.patchUint32(scopes, 8, subject.handlerRva + 4);
+  const scopes = subject.builder.allocateData(36);
+  subject.builder.patchUint32(scopes, 0, 2);
+  subject.builder.patchUint32(scopes, 4, subject.beginRva);
+  subject.builder.patchUint32(scopes, 8, subject.beginRva + 4);
   subject.builder.patchUint32(scopes, 12, 1);
   subject.builder.patchUint32(scopes, 16, subject.catchRva);
+  subject.builder.patchUint32(scopes, 20, subject.handlerRva);
+  subject.builder.patchUint32(scopes, 24, subject.handlerRva + 4);
+  subject.builder.patchUint32(scopes, 28, 1);
+  subject.builder.patchUint32(scopes, 32, subject.catchRva);
   subject.exception.languageHandlers[0]!.dataRva = scopes;
   const fixture = subject.builder.build();
   const parsed = await analyzeMsvcEh(fixture.file, fixture.core, subject.exception, subject.imports, []);
   assert.equal(parsed?.records[0]?.scopeTableRva, scopes);
+  assert.match(parsed?.warnings[0] ?? "", /SEH scope table.*outside/);
+});
+
+void test("a SEH scope starting before its owner remains a real warning", async () => {
+  const subject = createEhFixture();
+  subject.imports.entries[0]!.functions[0]!.name = "__C_specific_handler";
+  const scopes = subject.builder.allocateData(20);
+  subject.builder.patchUint32(scopes, 0, 1);
+  subject.builder.patchUint32(scopes, 4, subject.beginRva);
+  subject.builder.patchUint32(scopes, 8, subject.beginRva + 4);
+  subject.builder.patchUint32(scopes, 12, 1);
+  subject.builder.patchUint32(scopes, 16, subject.catchRva);
+  subject.exception.languageHandlers[0]!.dataRva = scopes;
+  subject.exception.languageHandlers[0]!.functionRanges = [
+    { begin: subject.beginRva + 4, end: subject.beginRva + 16 }
+  ];
+  const fixture = subject.builder.build();
+  const parsed = await analyzeMsvcEh(fixture.file, fixture.core, subject.exception, subject.imports, []);
+  assert.equal(parsed?.records[0]?.scopeTableRva, scopes);
+  assert.equal(parsed?.warnings.length, 1);
   assert.match(parsed?.warnings[0] ?? "", /SEH scope table.*outside/);
 });
 

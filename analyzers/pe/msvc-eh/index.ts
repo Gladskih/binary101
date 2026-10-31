@@ -109,7 +109,9 @@ const recordWarnings = (
   record: MsvcEhRecord, seed: PeLanguageHandler, covers: ((rva: number) => boolean) | null
 ): string[] => {
   const warnings: string[] = [];
-  if (record.functionInfo && covers && !validateEhFunctionLinks(record.functionInfo, covers)) {
+  // Empty maps have no contradictory IPs; structural discovery still requires IP evidence.
+  if (record.functionInfo && record.functionInfo.ipStates.length > 0 && covers &&
+      !validateEhFunctionLinks(record.functionInfo, covers)) {
     warnings.push(`Validated FH${record.functionInfo.version} metadata at RVA 0x${record.functionInfo.rva.toString(16)} contains IP-to-state addresses outside the decoded runtime function ranges.`);
   }
   if (record.scopes?.some(scope => !seed.functionRanges?.some(range =>
