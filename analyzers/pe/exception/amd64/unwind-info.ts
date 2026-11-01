@@ -268,7 +268,7 @@ export const scanAmd64UnwindInfos = async (
   const validateRange = (begin: number, end: number): boolean =>
     isValidFunctionRange(begin, end - begin, rvaToOff, reader.size);
   const handlerRvasSet = new Set<number>();
-  const getUnwindOffset = createCachedRvaOffsetReader(rvaToOff);
+  const getUnwindOffset = createCachedRvaOffsetReader(rvaToOff, reader.size);
   const readBlock = createAmd64UnwindBlockReader(reader, rvaToOff);
   const compareUnwindRvas = createRvaFileOffsetComparer(getUnwindOffset);
   const unwindQueue = [...initialUnwindRvas.values()].sort(compareUnwindRvas);

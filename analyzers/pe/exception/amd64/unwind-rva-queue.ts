@@ -1,10 +1,27 @@
 "use strict";
 
 import type { RvaToOffset } from "../../types.js";
+import { mappedRvaSpan } from "../../rva-mapping.js";
+
+const createSpanOffsetReader = (rvaToOff: RvaToOffset, fileSize: number) => {
+  let start = 0, end = 0, offset = 0;
+  return (rva: number): number | null => {
+    if (Number.isSafeInteger(rva) && rva >= start && rva < end) return offset + rva - start;
+    const span = mappedRvaSpan(rvaToOff, rva, fileSize, fileSize);
+    if (!span) return null;
+    start = rva;
+    end = rva + span.size;
+    offset = span.offset;
+    return offset;
+  };
+};
 
 export const createCachedRvaOffsetReader = (
-  rvaToOff: RvaToOffset
+  rvaToOff: RvaToOffset, fileSize?: number
 ): ((rva: number) => number | null) => {
+  // The mapper proves a contiguous span. Retaining one span avoids an offset
+  // Map entry per unwind block (966k entries in a dense PE profile).
+  if (rvaToOff.span && fileSize !== undefined) return createSpanOffsetReader(rvaToOff, fileSize);
   const offsets = new Map<number, number | null>();
   return (rva: number): number | null => {
     if (offsets.has(rva)) {

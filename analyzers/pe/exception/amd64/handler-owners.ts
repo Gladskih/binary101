@@ -2,6 +2,7 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "./directory.js";
 
 type FunctionRange = { begin: number; end: number; sourceUnwindInfoRva?: number };
+type FunctionOwners = Map<number, FunctionRange[]>;
 
 export const decodeAmd64ChainedFunction = (
   tail: DataView, issues: string[],
@@ -27,6 +28,7 @@ export const readAmd64ChainedFunction = async (
 const resolveTerminal = (
   origin: number, chains: Map<number, number>, terminals: Map<number, number | null>, issues: string[]
 ): number | null => {
+  if (!chains.has(origin)) return origin;
   const path = new Set<number>();
   let current = origin;
   while (chains.has(current) && !terminals.has(current) && !path.has(current)) {
@@ -40,21 +42,38 @@ const resolveTerminal = (
   return terminal;
 };
 
+const appendFunctionRanges = (
+  owners: FunctionOwners, copied: Set<number>, terminal: number, ranges: FunctionRange[]
+): void => {
+  let existing = owners.get(terminal);
+  if (!existing) {
+    owners.set(terminal, ranges);
+    return;
+  }
+  // Copy only on the first merge. A dense PE profile otherwise allocated almost
+  // a million redundant range arrays; shared inventory ranges are never mutated.
+  if (!copied.has(terminal)) {
+    existing = existing.slice();
+    owners.set(terminal, existing);
+    copied.add(terminal);
+  }
+  for (const range of ranges) existing.push(range);
+};
+
 /** CHAININFO delegates to another RUNTIME_FUNCTION; all child ranges retain that handler.
  * https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#chained-unwind-info-structures
  * Path compression prevents rescanning shared suffixes; a visited path detects malformed cycles.
  */
 export const resolveAmd64HandlerOwners = (
-  direct: Map<number, FunctionRange[]>, chains: Map<number, number>, issues: string[]
-): Map<number, FunctionRange[]> => {
+  direct: ReadonlyMap<number, FunctionRange[]>, chains: Map<number, number>, issues: string[]
+): ReadonlyMap<number, FunctionRange[]> => {
   const terminals = new Map<number, number | null>();
-  const owners = new Map<number, FunctionRange[]>();
+  const owners: FunctionOwners = new Map();
+  const copied = new Set<number>();
   for (const [origin, ranges] of direct) {
     const terminal = resolveTerminal(origin, chains, terminals, issues);
     if (terminal == null) continue;
-    const existing = owners.get(terminal) ?? [];
-    for (const range of ranges) existing.push(range);
-    owners.set(terminal, existing);
+    appendFunctionRanges(owners, copied, terminal, ranges);
   }
   return owners;
 };

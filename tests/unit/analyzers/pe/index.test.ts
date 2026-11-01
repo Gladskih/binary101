@@ -13,6 +13,21 @@ import {
   createPeWithSectionAndIatFixture
 } from "../../../fixtures/sample-files-pe.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { createDenseUnwindPe } from "../../../fixtures/pe-dense-unwind.js";
+
+void test("parsePe keeps dense unwind I/O bounded without omitting records", async context => {
+  const file = createDenseUnwindPe(65536);
+  const slice = context.mock.method(file, "slice");
+
+  const parsed = await parsePe(file);
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.exception?.functionCount, 65536);
+  assert.equal(parsed.exception?.uniqueUnwindInfoCount, 65536);
+  assert.deepEqual(parsed.exception?.issues, []);
+  // Budget physical reads independently of hardware speed and event-loop scheduling.
+  assert.ok(slice.mock.callCount() <= 12, `Dense unwind scan needs ${slice.mock.callCount()} file slices`);
+});
 
 // Microsoft PE/COFF: IMAGE_OPTIONAL_HEADER32.DataDirectory begins 96 bytes into the optional header.
 const PE32_DATA_DIRECTORIES_OFFSET = 0x60;

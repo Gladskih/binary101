@@ -40,7 +40,9 @@ export async function parsePe(
   file: File,
   parseManifestXmlDocument: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<PeParseResult | null> {
-  const reader = createFileRangeReader(file, 0, file.size);
+  // Dense exception metadata: 256 KiB cut browser reads/time without the peak-memory
+  // jump measured at 384/512 KiB. The shared reader retains at most 16 windows (4 MiB).
+  const reader = createFileRangeReader(file, 0, file.size, 256 * 1024);
   const core = await parsePeHeaders(reader);
   if (!core) return null;
   const parsed = !isPeWindowsCore(core)
