@@ -87,9 +87,5 @@ export const analyzePeItaniumRtti = async (
   const width = pointerWidth(core);
   if (!width || (core.coff.Characteristics & 1) !== 0) return null;
   if (!relocations || relocations.warnings?.length) return null;
-  // Resource policy: limit pointer-index memory and candidate work on hostile input.
-  if (relocations.totalEntries > 250_000) return {
-    types: [], warnings: ["Itanium RTTI relocation limit reached; analysis skipped."]
-  };
   return readAnalysis(reader, core, relocations, width);
 };

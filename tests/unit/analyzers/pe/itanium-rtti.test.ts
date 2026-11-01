@@ -64,13 +64,6 @@ void test("requires relocations", async () => {
   const fixture = createPeItaniumFixture();
   assert.equal(await analyzePeItaniumRtti(fixture.reader(), fixture.core, null), null);
 });
-void test("reports resource limit separately from rejected candidates", async () => {
-  const fixture = createPeItaniumFixture();
-  fixture.relocations.totalEntries = 250001;
-  const result = await analyzePeItaniumRtti(fixture.reader(), fixture.core, fixture.relocations);
-  assert.deepEqual(result?.types, []);
-  assert.match(result?.warnings.join() ?? "", /limit/);
-});
 void test("reports I/O failure", async () => {
   const fixture = createPeItaniumFixture();
   const reader = fixture.reader();
