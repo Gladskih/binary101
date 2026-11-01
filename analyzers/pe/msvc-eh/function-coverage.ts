@@ -8,7 +8,7 @@ const completeRuntimeInventory = (exception: PeExceptionDirectory): boolean =>
 
 const createCoverageLookup = (ranges: { begin: number; end: number }[]) => {
   // Consecutive IP-state entries often belong to the same interval. Profiling
-  // codex.exe attributed 0.23 s to lookups; retain just the last successful range.
+  // attributed 0.23 s to lookups; retain just the last successful range.
   let previous = ranges[0];
   return (rva: number): boolean => {
     if (previous && rva >= previous.begin && rva <= previous.end) return true;

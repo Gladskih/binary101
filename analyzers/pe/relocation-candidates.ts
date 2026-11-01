@@ -63,8 +63,8 @@ const readBoundaryCandidates = async (state: PeRelocationDiscovery): Promise<voi
 export const collectPeRelocationCandidates = async (state: PeRelocationDiscovery): Promise<void> => {
   const width = state.nativeImage.pointerSize;
   const window: PointerReadWindow = { offset: -1, view: new DataView(new ArrayBuffer(0)) };
-  // Profiling msedge.dll: one source pass followed by ordered candidate checks
-  // reduced discovery from 6.86 s to 1.55 s. Keep this window and mutation local.
+  // In profiling, one source pass followed by ordered candidate checks reduced
+  // discovery from 6.86 s to 1.55 s. Keep this window and mutation local.
   for (const site of state.sites) {
     state.itaniumImage.relocations.add(site);
     if (!state.nativeImage.isDataRange(site, width, width)) continue;

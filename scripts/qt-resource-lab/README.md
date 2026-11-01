@@ -9,8 +9,8 @@ overlapping build/scan/report invocations fail before changing corpus state.
 
 ## Prepare and validate
 
-Use a new external output directory for an experiment. The examples use
-`C:/Users/glads/source/worktree-artifacts/qt-rcc-corpus-20261031`.
+Use a new external output directory for an experiment, such as
+`C:/path/to/artifacts`.
 
 ```powershell
 npm run research:qt-rcc -- doctor --out C:/path/to/artifacts
@@ -176,11 +176,15 @@ reads. It receives no expected data or auxiliary symbols.
 
 ## Real files and reports
 
-`real --out ...` imports local shipping Qt files. A SHA256-pinned Logi Qt5Widgets
-case has LLVM-audited registration arguments and independent Qt-consumer checks.
-Its known bundles are partially labelled; additional content is unscored rather
-than falsely called FP. Other shipping modules remain `unknown` until verified.
-No installed third-party executable is launched by this command.
+`real --out ...` imports only the PE files explicitly listed in `real-inputs.json`
+inside the external output directory. It does not search installed applications.
+The manifest is an array of objects with a `path` (absolute or relative to that
+directory), an optional `sha256`, and optional `registrations`. Each registration
+is an independently audited `[treeRva, namesRva, dataRva]` array. Registrations
+require a matching SHA-256 and a shared Qt 5 SDK for independent Qt-consumer checks.
+Keep this manifest, input fingerprints and local reports outside Git.
+Inputs without registrations remain `unknown`; verified bundles are partially
+labelled and additional content stays unscored. No imported executable is launched.
 
 After each larger build run, repeat `scan`, `evaluate`, and `report`. Reports
 separate file/resource/bundle TP/FP/FN, duplicate predictions, wrong content,

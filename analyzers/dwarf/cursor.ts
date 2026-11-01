@@ -5,7 +5,7 @@ import { DWARF_ENCODING } from "./constants.js";
 import type { DwarfSectionInput } from "./types.js";
 
 // A small view into the shared reader's window removes per-field async/cache work.
-// LatticeLab profiling attributes about 0.3 s to cursor/reader byte operations.
+// Profiling attributes about 0.3 s to cursor/reader byte operations.
 const CURSOR_WINDOW_BYTES = 4 * 1024;
 
 export class DwarfCursor {

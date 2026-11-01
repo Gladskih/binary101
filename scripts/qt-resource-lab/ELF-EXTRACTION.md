@@ -106,8 +106,7 @@ counterexample batch. Eight genuine Qt 5/6, GCC/Clang, PE/ELF builds produced
 nonzero intervening bytes. Table positions come from exact producer-array bytes;
 payload ownership and contents are independently confirmed by Qt runtime pointers.
 
-Evidence outside Git:
-`C:/Users/glads/source/worktree-artifacts/qt-rcc-adjacency-counterexample-20261101`.
+Evidence is kept in the experiment's external output directory.
 `proof.json` records the concrete ELF; `scanner-comparison.json` records its
 before/after detection; `matrix-proof.json` checks all 16 matrix images. The
 sources, commands, maps, real oracle responses and reproducible verification
@@ -136,8 +135,7 @@ must not be advertised as a universal replacement for all evidence sources.
 
 ## Saved evidence
 
-Output directory (outside Git):
-`C:/Users/glads/source/worktree-artifacts/qt-rcc-counterexamples-20261101`.
+The experiment's output directory is outside Git.
 
 It contains SDK fingerprints and commands, immutable job manifests, Qt oracle
 responses, image/retained-control hashes, baseline JSONL, content evaluation,

@@ -26,6 +26,7 @@
 - Prefer declarative over imperative
 - Prefer types over conventions
 - If mutation is required for performance reasons, isolate it locally and document why (profiling).
+- Keep developer-machine details out of version control
 - Keep code self-documenting:
   - use descriptive names
   - keep control flow straightforward;

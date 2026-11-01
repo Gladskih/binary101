@@ -9,7 +9,7 @@ import type { RvaToOffset } from "../../types.js";
 const MAX_UNWIND_BLOCK_BYTES = 528;
 
 /** Keep one local source window: the sorted scan should not consult the shared
- * LRU or remap each field of every unwind record (codex.exe: 2.22 s scan).
+ * LRU or remap each field of every unwind record (profiled 2.22 s scan).
  */
 export const createAmd64UnwindBlockReader = (reader: FileRangeReader, rvaToOff: RvaToOffset) => {
   let offset = 0;

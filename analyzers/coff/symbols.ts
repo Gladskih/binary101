@@ -136,8 +136,8 @@ const preloadSymbolNames = async (
   stringTable: CoffStringTable | null
 ): Promise<void> => {
   if (!stringTable) return;
-  // libLLVM-22.dll profiling: resolving names in file order reduced 62,212 file
-  // slices to 2,063. Keep this mutable index local and reuse the string-table cache.
+  // Resolving names in file order reduced 62,212 file slices to 2,063 in profiling.
+  // Keep this mutable index local and reuse the string-table cache.
   const offsets = new Set<number>();
   let offset = 0;
   while (offset + COFF_SYMBOL_RECORD_BYTE_LENGTH <= view.byteLength) {

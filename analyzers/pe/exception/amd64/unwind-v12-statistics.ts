@@ -27,7 +27,7 @@ const numericCounts = (counts: Float64Array): Record<number, number> => {
 };
 
 /** One accumulator per scan. Decode directly into numeric counters, then build
- * public dictionaries once; codex.exe spent 0.21 s updating generic dictionaries.
+ * public dictionaries once; profiling attributed 0.21 s to generic dictionary updates.
  * Float64 counters retain JS-number counts without a 32-bit wraparound.
  */
 export class Amd64UnwindV12StatisticsBuilder {
