@@ -50,13 +50,18 @@ void test("genuine IA64 descriptor summaries agree with unchanged GNU readelf", 
   const file = new MockFile(bytes);
   const core = await parsePeHeaders(file);
   assert.ok(core && isPeWindowsCore(core));
-  await writeFile("scan-results/pe-debug-native/ia64-descriptor-oracle.elf",
+  const elfPath = resolve("scan-results/pe-debug-native/ia64-descriptor-oracle.elf");
+  await writeFile(elfPath,
     createIa64DescriptorElf(bytes, oracle.rows, core.rvaToOff));
-  const root = "/mnt/c/Users/glads/source/binary101-pe-debug/scan-results";
+  const root = execFileSync("wsl.exe", ["--exec", "wslpath", "-a",
+    resolve(process.env["BINARY101_BINUTILS_ROOT"] ?? "scan-results/binutils-multiarch/root")],
+  { encoding: "utf8" }).trim();
+  const elfWslPath = execFileSync("wsl.exe", ["--exec", "wslpath", "-a", elfPath],
+    { encoding: "utf8" }).trim();
   const output = execFileSync("wsl.exe", ["-d", "Ubuntu-26.04", "--", "env",
-    `LD_LIBRARY_PATH=${root}/binutils-multiarch/root/usr/lib/x86_64-linux-gnu`,
-    `${root}/binutils-multiarch/root/usr/bin/x86_64-linux-gnu-readelf`, "-u",
-    `${root}/pe-debug-native/ia64-descriptor-oracle.elf`], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    `LD_LIBRARY_PATH=${root}/usr/lib/x86_64-linux-gnu`,
+    `${root}/usr/bin/x86_64-linux-gnu-readelf`, "-u", elfWslPath],
+  { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   const parsed = await parseExceptionDirectory(file, core.dataDirs, core.rvaToOff, core.coff.Machine);
 
   assert.match(output, /contains 1377 entries/);

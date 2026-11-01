@@ -67,9 +67,11 @@ void test("MSVC linker environment strings match unchanged llvm-pdbutil", async 
 
 // Deliberately synthesized records, assembled and decoded by unchanged LLVM 23.
 void test("public hot-patch and indirect-register symbol layouts match LLVM 23", async () => {
-  const root = "/mnt/c/Users/glads/source/binary101-pe-debug/scan-results/llvm23-resolute/root/usr/lib";
-  const oracle = execFileSync("wsl", ["env", `LD_LIBRARY_PATH=${root}/x86_64-linux-gnu`,
-    `${root}/llvm-23/bin/llvm-readobj`, "--codeview", "scan-results/pe-debug-native/CodeViewSymbolText.obj"],
+  const root = execFileSync("wsl.exe", ["--exec", "wslpath", "-a",
+    resolve(process.env["BINARY101_LLVM23_ROOT"] ?? "scan-results/llvm23-resolute/root")],
+  { encoding: "utf8" }).trim();
+  const oracle = execFileSync("wsl.exe", ["env", `LD_LIBRARY_PATH=${root}/usr/lib/x86_64-linux-gnu`,
+    `${root}/usr/lib/llvm-23/bin/llvm-readobj`, "--codeview", "scan-results/pe-debug-native/CodeViewSymbolText.obj"],
   { encoding: "utf8" });
   const bytes = await readFile("scan-results/pe-debug-native/codeview-controlled-symbols.bin");
   const warnings: string[] = [];
@@ -77,7 +79,10 @@ void test("public hot-patch and indirect-register symbol layouts match LLVM 23",
     readLegacyCodeViewSymbols(legacyReader(bytes, warnings), range.start, range.end)))).flatMap(value => value.records);
 
   assert.deepEqual(parsed.filter(record => record.type !== 0x1116),
-    [{ type: 0x1169, name: "patch_target" }, { type: 0x1171, name: "indirect_value" }]);
+    [{ type: 0x1169, name: "patch_target" }, { type: 0x1171, name: "indirect_value",
+      local: { typeIndex: 0, location: {
+        kind: "registerIndirectOffset", register: 0, offset: 0, memberOffset: 0
+      } } }]);
   assert.deepEqual(parsed.filter(record => record.type !== 0x1116).map(record => record.name),
     [...oracle.matchAll(/^ {6}(?:Name|VarName): (.+)$/gm)].map(match => match[1]));
   assert.deepEqual(warnings, []);
