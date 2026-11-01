@@ -71,3 +71,72 @@ void test("AArch64 code alignment is independent of raw readability", async () =
   assert.equal(image.code(subject.beginRva + 1), false);
   assert.ok(await image.read(subject.beginRva + 1, 1));
 });
+
+void test("EH mapping preserves physical bytes and separates execute permission from read permission", async () => {
+  const subject = createEhFixture();
+  subject.builder.patchUint32(subject.dataRva, 0, 0x78563412);
+  const fixture = subject.builder.build();
+  fixture.core.sections[0]!.characteristics = 0x20000000; // IMAGE_SCN_MEM_EXECUTE without MEM_READ.
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal((await image.read(subject.dataRva, 4))?.getUint32(0, true), 0x78563412);
+  assert.equal(image.code(subject.beginRva), true);
+  assert.equal(await image.read(subject.beginRva, 1), null);
+});
+
+void test("EH mapping detects overlapping owners even when sections are in reverse order", async () => {
+  const subject = createEhFixture();
+  const fixture = subject.builder.build();
+  fixture.core.sections.push({ ...fixture.core.sections[0]!, virtualAddress: subject.beginRva + 8 });
+  fixture.core.sections.reverse();
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal(image.available(subject.beginRva), 8);
+  assert.equal(image.code(subject.beginRva, 8), true);
+  assert.equal(image.code(subject.beginRva, 9), false);
+  assert.equal(image.available(subject.beginRva + 8), 0);
+  assert.equal(await image.read(subject.beginRva + 8, 1), null);
+});
+
+void test("EH mapping clips a short physical file before reading a declared full value", async () => {
+  const subject = createEhFixture();
+  subject.builder.truncateAtRva(subject.dataRva + 3);
+  const fixture = subject.builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal(image.available(subject.dataRva), 3);
+  assert.equal((await image.read(subject.dataRva, 3))?.byteLength, 3);
+  assert.equal(await image.read(subject.dataRva, 4), null);
+});
+
+void test("EH mapping rejects fractional positions inside mapped sections and invalid code sizes", () => {
+  const subject = createEhFixture();
+  const fixture = subject.builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal(image.available(subject.dataRva + 0.5), 0);
+  assert.equal(image.code(subject.beginRva, 0), false);
+  assert.equal(image.code(subject.beginRva, -1), false);
+  assert.equal(image.code(subject.beginRva, 1.5), false);
+  assert.equal(image.code(subject.beginRva, NaN), false);
+});
+
+void test("EH mapping accepts the exact start of an adjacent nonoverlapping section", () => {
+  const subject = createEhFixture();
+  const fixture = subject.builder.build();
+  const first = fixture.core.sections[0]!;
+  first.virtualSize = first.sizeOfRawData = 8;
+  fixture.core.sections.push({ ...first, virtualAddress: first.virtualAddress + 8,
+    pointerToRawData: first.pointerToRawData + 8 });
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal(image.available(subject.beginRva + 8), 8);
+  assert.equal(image.code(subject.beginRva + 8, 8), true);
+  assert.equal(image.code(subject.beginRva + 8, 9), false);
+});
+
+void test("EH mapping clips raw bytes independently of a longer virtual section", () => {
+  const subject = createEhFixture();
+  const fixture = subject.builder.build();
+  const first = fixture.core.sections[0]!;
+  first.virtualSize = first.sizeOfRawData + 16;
+  const last = first.virtualAddress + first.sizeOfRawData - 1;
+  const image = createEhImage(fixture.file, fixture.core);
+  assert.equal(image.available(last), 1);
+  assert.equal(image.code(last, 2), false);
+});

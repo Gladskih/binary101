@@ -11,12 +11,12 @@ import type { RvaToOffset } from "../../types.js";
 import type { Amd64UnwindV3Statistics } from "./unwind-v3-types.js";
 import { decodeAmd64UnwindV3 } from "./unwind-v3.js";
 import { createV3Statistics, recordV3Statistics } from "./unwind-v3-statistics.js";
-import { createV12Statistics, recordV12Statistics } from "./unwind-v12-statistics.js";
+import { Amd64UnwindV12StatisticsBuilder } from "./unwind-v12-statistics.js";
 import type { Amd64UnwindV12Header, Amd64UnwindV12Statistics } from "./unwind-v12-types.js";
 import {
   AMD64_UNWIND_INFO_VERSION_1,
   AMD64_UNWIND_INFO_VERSION_2,
-  decodeAmd64UnwindCodeSlots
+  visitAmd64UnwindCodeSlots
 } from "./unwind-code-slots.js";
 import {
   createCachedRvaOffsetReader,
@@ -45,7 +45,8 @@ export interface Amd64UnwindInfoTable {
   chainedUnwindRvas?: Map<number, number>;
 }
 
-interface Amd64UnwindScanState extends Amd64UnwindInfoTable {
+interface Amd64UnwindScanState extends Omit<Amd64UnwindInfoTable, "version12"> {
+  version12?: Amd64UnwindV12StatisticsBuilder;
   lateEpilogCodeCount: number;
   truncatedUnwindCodeArrayCount: number;
   unexpectedUnwindVersionCount: number;
@@ -139,11 +140,11 @@ const recordUnwindCodeAnalysis = (
     return recordV3CodeAnalysis(data, state, issues);
   }
   if (!hasRegularUnwindCodes(header.version)) return false;
-  const analysis = decodeAmd64UnwindCodeSlots(new DataView(data.buffer,
+  state.version12 ??= new Amd64UnwindV12StatisticsBuilder();
+  const analysis = visitAmd64UnwindCodeSlots(new DataView(data.buffer,
     data.byteOffset + UNWIND_INFO_HEADER_SIZE, data.byteLength - UNWIND_INFO_HEADER_SIZE),
-  header.countOfCodes, header.version);
-  state.version12 ??= createV12Statistics();
-  recordV12Statistics(state.version12, header, analysis);
+  header.countOfCodes, header.version, state.version12.visitOperation);
+  state.version12.recordBlock(header, analysis);
   issues.push(...analysis.issues);
   if (analysis.isTruncated) state.truncatedUnwindCodeArrayCount += 1;
   if (analysis.hasLateEpilogCode) state.lateEpilogCodeCount += 1;
@@ -179,7 +180,7 @@ const toUnwindInfoTable = (state: Amd64UnwindScanState): Amd64UnwindInfoTable =>
   unwindInfoVersion1Count: state.unwindInfoVersion1Count,
   unwindInfoVersion2Count: state.unwindInfoVersion2Count,
   ...(state.version3 ? { version3: state.version3 } : {}),
-  ...(state.version12 ? { version12: state.version12 } : {}),
+  ...(state.version12 ? { version12: state.version12.build() } : {}),
   ...(state.languageHandlers ? { languageHandlers: state.languageHandlers } : {}),
   ...(state.chainedUnwindRvas ? { chainedUnwindRvas: state.chainedUnwindRvas } : {})
 });

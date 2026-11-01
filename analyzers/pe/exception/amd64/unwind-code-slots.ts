@@ -1,8 +1,9 @@
 "use strict";
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
-import { amd64UnwindOperationSlots, decodeAmd64UnwindOperation } from "./unwind-operations.js";
-import type { Amd64UnwindOperation } from "./unwind-v12-types.js";
+import { amd64UnwindOperationSlots, createAmd64UnwindOperationCollector,
+  visitAmd64UnwindOperation } from "./unwind-operations.js";
+import type { Amd64UnwindOperation, Amd64UnwindOperationVisitor } from "./unwind-v12-types.js";
 
 // Conventional x64 UNWIND_INFO uses version 1; V3 has a separate payload decoder:
 // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
@@ -14,8 +15,7 @@ export const AMD64_UNWIND_INFO_VERSION_2 = 2;
 // https://github.com/llvm/llvm-project/commit/22011644
 const AMD64_UNWIND_V2_UOP_EPILOG = 6;
 
-export interface Amd64UnwindCodeAnalysis {
-  operations: Amd64UnwindOperation[];
+export interface Amd64UnwindCodeStatus {
   issues: string[];
   epilogScopeCount: number;
   hasEpilogInfo: boolean;
@@ -23,13 +23,19 @@ export interface Amd64UnwindCodeAnalysis {
   isTruncated: boolean;
 }
 
-const emptyAnalysis = (): Amd64UnwindCodeAnalysis => ({
-  operations: [], issues: [],
+export interface Amd64UnwindCodeAnalysis extends Amd64UnwindCodeStatus {
+  operations: Amd64UnwindOperation[];
+}
+
+const emptyStatus = (): Amd64UnwindCodeStatus => ({
+  issues: [],
   epilogScopeCount: 0,
   hasEpilogInfo: false,
   hasLateEpilogCode: false,
   isTruncated: false
 });
+
+const emptyAnalysis = (): Amd64UnwindCodeAnalysis => ({ operations: [], ...emptyStatus() });
 
 const truncatedAnalysis = (): Amd64UnwindCodeAnalysis => ({ ...emptyAnalysis(), isTruncated: true });
 
@@ -47,7 +53,8 @@ interface Amd64UnwindCodeScan {
   index: number;
   hasRegularCode: boolean;
   seenEpilogHeader: boolean;
-  analysis: Amd64UnwindCodeAnalysis;
+  analysis: Amd64UnwindCodeStatus;
+  visitor: Amd64UnwindOperationVisitor;
 }
 
 const readRegularOperation = (view: DataView, count: number, scan: Amd64UnwindCodeScan): boolean => {
@@ -58,9 +65,7 @@ const readRegularOperation = (view: DataView, count: number, scan: Amd64UnwindCo
     scan.analysis.isTruncated = true;
     return false;
   }
-  const operation = decodeAmd64UnwindOperation(view, scan.index, scan.analysis.issues);
-  if (!operation) return false;
-  scan.analysis.operations.push(operation);
+  if (!visitAmd64UnwindOperation(view, scan.index, scan.analysis.issues, scan.visitor)) return false;
   scan.index += slots;
   return true;
 };
@@ -85,10 +90,11 @@ const recordEpilog = (view: DataView, scan: Amd64UnwindCodeScan): void => {
 const analyzeUnwindOperations = (
   codeView: DataView,
   countOfCodes: number,
-  version: number
-): Amd64UnwindCodeAnalysis => {
+  version: number,
+  visitor: Amd64UnwindOperationVisitor
+): Amd64UnwindCodeStatus => {
   const scan: Amd64UnwindCodeScan = {
-    index: 0, hasRegularCode: false, seenEpilogHeader: false, analysis: emptyAnalysis()
+    index: 0, hasRegularCode: false, seenEpilogHeader: false, analysis: emptyStatus(), visitor
   };
   while (scan.index < countOfCodes) {
     const operationByte = readUnwindOperationByte(codeView, scan.index);
@@ -103,16 +109,26 @@ const analyzeUnwindOperations = (
   return scan.analysis;
 };
 
+export const visitAmd64UnwindCodeSlots = (
+  codeView: DataView, countOfCodes: number, version: number, visitor: Amd64UnwindOperationVisitor
+): Amd64UnwindCodeStatus => {
+  if (countOfCodes === 0) return emptyStatus();
+  if (!Number.isSafeInteger(countOfCodes) || countOfCodes < 0 ||
+      countOfCodes > Math.floor(codeView.byteLength / Uint16Array.BYTES_PER_ELEMENT)) {
+    return { ...emptyStatus(), isTruncated: true };
+  }
+  if (version !== AMD64_UNWIND_INFO_VERSION_1 && version !== AMD64_UNWIND_INFO_VERSION_2) {
+    return emptyStatus();
+  }
+  return analyzeUnwindOperations(codeView, countOfCodes, version, visitor);
+};
+
 export const decodeAmd64UnwindCodeSlots = (
   codeView: DataView, countOfCodes: number, version: number
 ): Amd64UnwindCodeAnalysis => {
-  if (countOfCodes === 0) return emptyAnalysis();
-  if (!Number.isSafeInteger(countOfCodes) || countOfCodes < 0 ||
-      countOfCodes > Math.floor(codeView.byteLength / Uint16Array.BYTES_PER_ELEMENT)) return truncatedAnalysis();
-  if (version !== AMD64_UNWIND_INFO_VERSION_1 && version !== AMD64_UNWIND_INFO_VERSION_2) {
-    return emptyAnalysis();
-  }
-  return analyzeUnwindOperations(codeView, countOfCodes, version);
+  const operations: Amd64UnwindOperation[] = [];
+  return { operations, ...visitAmd64UnwindCodeSlots(codeView, countOfCodes, version,
+    createAmd64UnwindOperationCollector(operations)) };
 };
 
 export const analyzeAmd64UnwindCodeSlots = async (

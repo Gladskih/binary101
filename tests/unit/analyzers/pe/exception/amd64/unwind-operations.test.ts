@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { amd64UnwindOperationSlots, decodeAmd64UnwindOperation }
+import { amd64UnwindOperationSlots, createAmd64UnwindOperationCollector,
+  decodeAmd64UnwindOperation, visitAmd64UnwindOperation }
   from "../../../../../../analyzers/pe/exception/amd64/unwind-operations.js";
 
 const viewOf = (bytes: number[]): DataView => new DataView(Uint8Array.from(bytes).buffer);
@@ -80,4 +81,40 @@ void test("rejects an incomplete two-byte operation header", () => {
   const issues: string[] = [];
   assert.equal(decodeAmd64UnwindOperation(viewOf([7]), 0, issues), null);
   assert.match(issues[0]!, /header is out of bounds/);
+});
+
+void test("operation visitors receive validated scalar operands without transient records", () => {
+  const emitted: number[][] = [];
+  const issues: string[] = [];
+  assert.equal(visitAmd64UnwindOperation(viewOf([7, 0x78, 0x34, 0x12]), 0, issues,
+    (...values) => emitted.push(values)), true);
+  assert.deepEqual(emitted, [[7, 8, 7, 0x12340]]); // SAVE_XMM128: a WORD displacement scaled by 16.
+  assert.deepEqual(issues, []);
+});
+
+void test("operation visitors are not called for incomplete operands", () => {
+  const issues: string[] = [];
+  assert.equal(visitAmd64UnwindOperation(viewOf([7, 0x11]), 0, issues,
+    () => { assert.fail("Incomplete operations must not reach the statistics visitor"); }), false);
+  assert.deepEqual(issues, ["AMD64 unwind operation operands are truncated."]);
+});
+
+void test("an operation collector retains complete operation records for existing consumers", () => {
+  const operations: NonNullable<ReturnType<typeof decodeAmd64UnwindOperation>>[] = [];
+  createAmd64UnwindOperationCollector(operations)(7, 0, 15, 0);
+  assert.deepEqual(operations, [{ codeOffset: 7, opcode: "PUSH_NONVOL", register: 15 }]);
+});
+
+void test("operation visitors report failure for an incomplete header", () => {
+  const issues: string[] = [];
+  assert.equal(visitAmd64UnwindOperation(viewOf([7]), 0, issues,
+    () => { assert.fail("An incomplete header cannot emit an operation"); }), false);
+  assert.deepEqual(issues, ["AMD64 unwind operation header is out of bounds."]);
+});
+
+void test("operation visitors report failure for reserved OpInfo", () => {
+  const issues: string[] = [];
+  assert.equal(visitAmd64UnwindOperation(viewOf([7, 0x21, 0, 0, 0, 0]), 0, issues,
+    () => { assert.fail("Reserved OpInfo cannot emit an operation"); }), false);
+  assert.deepEqual(issues, ["AMD64 unwind opcode 1 has reserved OpInfo 2."]);
 });

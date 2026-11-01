@@ -8,6 +8,13 @@ export type Amd64UnwindOperationBody =
 
 export type Amd64UnwindOperation = Amd64UnwindOperationBody & { codeOffset: number };
 
+export type Amd64UnwindOpcode = 0 | 1 | 2 | 3 | 4 | 5 | 8 | 9 | 10;
+
+/** Receives a validated operation; operand sizes/displacements are already scaled. */
+export type Amd64UnwindOperationVisitor = (
+  codeOffset: number, opcode: Amd64UnwindOpcode, info: number, operand: number
+) => void;
+
 export interface Amd64UnwindV12Header {
   prologSize: number;
   frameRegister: number;
