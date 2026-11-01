@@ -14,7 +14,7 @@ export type ItaniumClassKind = "class" | "si" | "vmi";
 export interface ItaniumBase {
   typeAddress: number;
   /** For virtual bases this is a vtable slot displacement, not an object offset. */
-  offset: number;
+  offset: number | bigint;
   isVirtual: boolean;
   isPublic: boolean;
 }

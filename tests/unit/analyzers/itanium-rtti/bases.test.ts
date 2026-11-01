@@ -32,7 +32,20 @@ for (const width of [4, 8] as const) {
         { typeAddress: fixture.addresses.derived, offset: 0, isVirtual: false, isPublic: true }]);
   });
 }
-for (const encoded of [-256n, 4n, 255n, -1n, -4093n, 3n, 0x7fffffffffffff00n]) {
+// ABI 2.9.5 stores a signed offset above the low eight flag bits.
+// https://itanium-cxx-abi.github.io/cxx-abi/abi.html#rtti-layout
+for (const [encoded, offset] of [
+  [0x7fffffffffffff00n, 0x7fffffffffffffn],
+  [-0x7ffffffffffffffdn, -0x80000000000000n]
+] as const) {
+  void test(`retains the full signed RTTI offset ${offset}`, async () => {
+    const fixture = createItaniumFixture();
+    fixture.word(fixture.addresses.multiple + 32, encoded);
+    assert.equal((await readItaniumBases(fixture.image, fixture.addresses.multiple, "vmi"))
+      ?.bases[0]?.offset, offset);
+  });
+}
+for (const encoded of [-256n, 4n, 255n, -1n, -4093n, 3n]) {
   void test(`rejects invalid offset flags ${encoded}`, async () => {
     const fixture = createItaniumFixture();
     fixture.word(fixture.addresses.multiple + 32, encoded);

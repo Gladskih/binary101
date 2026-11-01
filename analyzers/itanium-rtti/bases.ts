@@ -24,12 +24,13 @@ const decodeBase = (
   if (image.relocations.has(address + image.pointerSize)) return null;
   // GCC uses long long under LLP64; the field is pointer-sized on both PE variants.
   // https://github.com/gcc-mirror/gcc/blob/master/libstdc++-v3/libsupc++/cxxabi.h
-  const offset = Number(encoded >> 8n);
-  if (typeAddress == null || (encoded & 252n) !== 0n || !Number.isSafeInteger(offset)) return null;
+  const offset = encoded >> 8n;
+  if (typeAddress == null || (encoded & 252n) !== 0n) return null;
   const isVirtual = (encoded & 1n) !== 0n;
-  if (isVirtual ? offset >= -2 * image.pointerSize || offset % image.pointerSize !== 0
-    : offset < 0) return null;
-  return { typeAddress, offset, isVirtual, isPublic: (encoded & 2n) !== 0n };
+  if (isVirtual ? offset >= BigInt(-2 * image.pointerSize) || offset % BigInt(image.pointerSize) !== 0n
+    : offset < 0n) return null;
+  return { typeAddress, offset: Number.isSafeInteger(Number(offset)) ? Number(offset) : offset,
+    isVirtual, isPublic: (encoded & 2n) !== 0n };
 };
 
 const readMultipleBases = async (
