@@ -30,14 +30,15 @@ class ModelTests(unittest.TestCase):
                 {"id": "elf", "format": "ELF", "linkage": "shared"},
                 {"id": "static", "format": "ELF", "linkage": "static"}]
         rows = counterexample_schedule(schedule(kits, 101), kits)
-        self.assertEqual(len(rows), 88)
+        self.assertEqual(len(rows), 92)
         self.assertEqual({row["format"] for row in rows[:2]}, {"PE", "ELF"})
         self.assertEqual({row["family"] for row in rows},
                          {"tiny", "empty-file", "sizes", "metadata-text", "opaque", "small-sets", "compressed-sizes",
-                          "bad-size", "bad-hash", "empty", "payload-decoy"})
-        self.assertEqual({row["profile"] for row in rows}, {"O3", "LTO"})
+                          "bad-size", "bad-hash", "empty", "payload-decoy", "multiple"})
+        self.assertEqual({row["profile"] for row in rows}, {"O3", "LTO", "O3-sections"})
         self.assertEqual({row["compiler"] for row in rows}, {"gcc", "clang"})
         self.assertEqual({row["target"] for row in rows}, {"exe"})
+        self.assertEqual({row["family"] for row in rows if row["profile"] == "O3-sections"}, {"multiple"})
 
     def test_counterexamples_respect_compression_capability(self):
         kits = [{"id": "pe", "format": "PE", "linkage": "shared",

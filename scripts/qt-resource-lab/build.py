@@ -38,6 +38,8 @@ def project(directory, sdk, job, prepared):
 
 
 def link_flags(job):
+    if job["profile"] == "O3-sections":
+        return ["-Wl,--sort-section=name"]
     if job["profile"] != "LTO":
         return []
     return ["-flto", "-fuse-ld=lld"] if job["compiler"] == "clang" else ["-flto"]

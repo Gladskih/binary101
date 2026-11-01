@@ -53,7 +53,9 @@ npm run research:qt-rcc -- evaluate --out C:/path/to/counterexamples
 
 This bounded batch needs the existing SDKs and resumes valid completed jobs.
 It covers shared Qt 5/6, PE/ELF executables, GCC/Clang, O3/application LTO,
-and original/stripped twins. It does not require the long-run pilot gate.
+and original/stripped twins. It also schedules `multiple` with `O3-sections`
+(`-O3 -fdata-sections`, linking with `--sort-section=name`) to break adjacency
+of the data/name arrays without editing rcc output. It does not require the long-run pilot gate.
 The first eight jobs cover the one-byte case on both formats and Qt majors;
 validate that small batch before starting the full counterexample batch.
 

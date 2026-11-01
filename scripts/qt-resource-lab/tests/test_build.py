@@ -1,13 +1,30 @@
 from pathlib import Path
 import tempfile
 import unittest
-from build import project, target_path
+from build import link_flags, project, target_path
 from sdk import environment_for
 from controller import stop_reason
 import time
 
 
 class BuildTests(unittest.TestCase):
+    def test_sorted_profile_preserves_ordinary_and_lto_link_flags(self):
+        self.assertEqual(link_flags({"profile": "O3", "compiler": "gcc"}), [])
+        self.assertEqual(link_flags({"profile": "LTO", "compiler": "gcc"}), ["-flto"])
+        self.assertEqual(link_flags({"profile": "LTO", "compiler": "clang"}), ["-flto", "-fuse-ld=lld"])
+
+    def test_sorted_sections_profile_separates_resource_arrays_without_source_edits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project(root, {"gcc": "g++", "format": "ELF"},
+                    {"compiler": "gcc", "profile": "O3-sections", "target": "exe"},
+                    {"negative": False, "sourceFiles": ["qrc_resource0.cpp", "qrc_resource1.cpp"]})
+            text = (root / "sample.pro").read_text(encoding="utf-8")
+            self.assertIn("QMAKE_CXXFLAGS_RELEASE = -O3 -fdata-sections\n", text)
+            self.assertIn("QMAKE_LFLAGS += -Wl,--sort-section=name -Wl,-Map,link.map\n", text)
+            self.assertIn("qrc_resource0.cpp qrc_resource1.cpp", text)
+            self.assertNotIn("-flto", text)
+
     def test_qmake_cannot_strip_reference_image(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

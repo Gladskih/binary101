@@ -46,10 +46,10 @@ symbol names, production resource results or disassembly.
 4. Find a whole canonical RCC tree, validate all referenced names and their
    hashes, then test data arrays against every referenced payload offset and
    length. Reject the whole candidate on invalid links or truncated content.
-5. Measure a stronger local association: names/data must be adjacent except
-   for zero padding. No fixed distance or alignment threshold is used. This
-   condition supplies more evidence than independently picking unrelated
-   compatible byte ranges; it is not known to be a universal RCC invariant.
+5. An investigated association rule required names/data to be adjacent except
+   for zero padding, without a fixed distance/alignment threshold. **This rule
+   is now rejected as a validity requirement:** the ordinary sorted-sections
+   build below separates genuine arrays and makes this filter lose resources.
 6. Deduplicate by expanded SHA-256 for content discovery. Keep physical offsets,
    candidate ownership and empty-content ambiguity separately visible in metrics.
 
@@ -77,8 +77,45 @@ are exploratory rather than an untouched holdout estimate.
 The positive `payload-decoy` controls demonstrate why subtracting metadata is
 not a complete answer: unrelated read-only application data can have the same
 length-prefix shape as RCC. The adjacency condition rejects its nonempty decoy
-on this particular matrix, but could reject a true set if a linker separates
-the arrays. Earlier closest-table selection already missed real bundles.
+on this particular matrix, but rejects true sets in the sorted-sections
+counterexample below. Earlier closest-table selection already missed real bundles.
+
+## Confirmed counterexample to adjacency
+
+A real Qt 5.15.18 ELF was compiled with ordinary GCC options
+`-O3 -fdata-sections -Wl,--sort-section=name`, keeping the original rcc C++
+and real Qt registration unchanged. The linker groups data input sections by
+name, producing this order in the final module:
+
+```text
+data[0]   @ 32768, size 3759
+data[1]   @ 36544, size 3759
+names[0]  @ 40320, size 106
+names[1]  @ 40448, size 106
+```
+
+The real data/name association for resource 0 has 3754 nonzero bytes in the
+gap; resource 1 has 60. These are the other resource's arrays, not corruption.
+Qt enumerates and reads all four expected files with matching SHA-256. The
+structural search finds 4/4 physical contents before the adjacency filter,
+and only 2/4 after it. The same result holds after removing all symbols.
+
+The `O3-sections` profile is now included for `multiple` in the bounded
+counterexample batch. Eight genuine Qt 5/6, GCC/Clang, PE/ELF builds produced
+16 verified original/stripped images: all 32 actual data/name associations have
+nonzero intervening bytes. Table positions come from exact producer-array bytes;
+payload ownership and contents are independently confirmed by Qt runtime pointers.
+
+Evidence outside Git:
+`C:/Users/glads/source/worktree-artifacts/qt-rcc-adjacency-counterexample-20261101`.
+`proof.json` records the concrete ELF; `scanner-comparison.json` records its
+before/after detection; `matrix-proof.json` checks all 16 matrix images. The
+sources, commands, maps, real oracle responses and reproducible verification
+scripts are preserved alongside them.
+
+The options are documented by [GCC](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fdata-sections)
+and [GNU ld](https://sourceware.org/binutils/docs/ld/Options.html#index-g_t_002d_002dsort_002dsection).
+No custom linker script, patched arrays or registration stub is needed.
 
 Zero-length records expose the remaining missing information. Four zero bytes
 in ordinary data and an intentional empty RCC file have the same byte encoding.
