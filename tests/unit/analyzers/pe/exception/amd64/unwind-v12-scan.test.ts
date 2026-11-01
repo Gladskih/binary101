@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { scanAmd64UnwindInfos } from "../../../../../../analyzers/pe/exception/amd64/unwind-info.js";
-import { createAmd64ExceptionFixtureWithSlots } from "../../../../../helpers/pe-amd64-unwind-fixture.js";
+import {
+  createAmd64ExceptionFixtureWithSlots,
+  parseAmd64ExceptionFixture,
+  UNW_FLAG_EHANDLER,
+  writePrimaryHandlerRva
+} from "../../../../../helpers/pe-amd64-unwind-fixture.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import { createPeWithV12ExceptionCopy } from "../../../../../fixtures/pe-debug-file.js";
 import { parsePeHeaders } from "../../../../../../analyzers/pe/core/index.js";
@@ -46,6 +51,31 @@ void test("raw debug copies summarize shared v2 blocks once without treating epi
     { SAVE_XMM128: 1, SET_FPREG: 1, ALLOC_SMALL: 1, PUSH_NONVOL: 1 });
   assert.deepEqual(exception?.issues, []);
 });
+
+// Microsoft MASM 14.51 emits these three slots for .SETFRAME RBP, 30h after
+// PUSH RBP and SUB RSP, 60h: SET_FPREG OpInfo=5, ALLOC_SMALL 96, PUSH_NONVOL RBP.
+// The header, not OpInfo, supplies the frame offset (48). V2 uses the same operations.
+// https://learn.microsoft.com/en-us/cpp/assembler/masm/dot-setframe
+for (const version of [1, 2]) {
+  void test(`v${version} retains operations and handler metadata with MASM SET_FPREG info`, async () => {
+    const fixture = createAmd64ExceptionFixtureWithSlots([[10, 0x53], [5, 0xb2], [1, 0x50]],
+      { version, flags: UNW_FLAG_EHANDLER, trailingBytes: Uint32Array.BYTES_PER_ELEMENT });
+    fixture.bytes[fixture.primaryUnwindRva + 1] = 10;
+    fixture.bytes[fixture.primaryUnwindRva + 3] = 0x35; // RBP, frame offset 3 * 16.
+    writePrimaryHandlerRva(fixture, fixture.functionEndRva);
+    const parsed = await parseAmd64ExceptionFixture(fixture);
+
+    assert.deepEqual(parsed?.issues, []);
+    assert.equal(parsed?.unwindInfoV12?.incompleteBlockCount, 0);
+    assert.deepEqual(parsed?.unwindInfoV12?.operationCounts,
+      { SET_FPREG: 1, ALLOC_SMALL: 1, PUSH_NONVOL: 1 });
+    assert.deepEqual(parsed?.unwindInfoV12?.allocationCounts, { 96: 1 });
+    assert.deepEqual(parsed?.unwindInfoV12?.registerCounts, { RBP: 1 });
+    assert.deepEqual(parsed?.unwindInfoV12?.frameOffsetCounts, { 48: 1 });
+    assert.equal(parsed?.languageHandlers?.length, 1);
+    assert.equal(parsed?.languageHandlers?.[0]?.handlerRva, fixture.functionEndRva);
+  });
+}
 
 void test("malformed operations retain only a decoded prefix and remain visibly incomplete", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots([[3, 0x02], [2, 0x0b], [1, 0x50]], { version: 1 });

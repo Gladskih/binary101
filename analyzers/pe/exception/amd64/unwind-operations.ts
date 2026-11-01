@@ -34,7 +34,9 @@ const operationBody = (view: DataView, offset: number, opcode: number, info: num
 
 const validOperationInfo = (opcode: number, info: number): boolean => {
   if (opcode === 1 || opcode === 10) return info <= 1;
-  return opcode !== 3 || info === 0;
+  // SET_FPREG ignores OpInfo; Microsoft producers also emit nonzero values.
+  // https://github.com/dotnet/coreclr/blob/a9f3fc16483eecfc47fb79c362811d870be02249/src/vm/stublink.cpp#L1248
+  return true;
 };
 
 /** Decode one complete operation; callers must stop at an unknown encoding. */

@@ -13,6 +13,12 @@ const operations = [
   { bytes: [7, 0x11, 248, 255, 255, 255], body: { opcode: "ALLOC_LARGE", size: 4294967288 }, slots: 3 },
   { bytes: [7, 0xf2], body: { opcode: "ALLOC_SMALL", size: 128 }, slots: 1 },
   { bytes: [7, 3], body: { opcode: "SET_FPREG" }, slots: 1 },
+  // Non-palindromic operands distinguish little-endian decoding from byte reversal.
+  { bytes: [7, 1, 0x34, 0x12], body: { opcode: "ALLOC_LARGE", size: 0x91a0 }, slots: 2 },
+  { bytes: [7, 0x34, 0x34, 0x12],
+    body: { opcode: "SAVE_NONVOL", register: 3, displacement: 0x91a0 }, slots: 2 },
+  { bytes: [7, 0x65, 0x78, 0x56, 0x34, 0x12],
+    body: { opcode: "SAVE_NONVOL_FAR", register: 6, displacement: 0x12345678 }, slots: 3 },
   { bytes: [7, 0x34, 255, 255], body: { opcode: "SAVE_NONVOL", register: 3, displacement: 524280 }, slots: 2 },
   { bytes: [7, 0x65, 255, 255, 255, 255],
     body: { opcode: "SAVE_NONVOL_FAR", register: 6, displacement: 4294967295 }, slots: 3 },
@@ -33,7 +39,19 @@ for (const { bytes, body, slots } of operations) {
   });
 }
 
-for (const byte of [6, 7, 11, 15, 0x21, 0x13, 0x2a]) {
+// SET_FPREG has no OpInfo operand: every value of its four-bit field is ignored.
+// Microsoft producers emit nonzero values; CoreCLR StubLinker::UnwindSetFramePointer:
+// https://github.com/dotnet/coreclr/blob/a9f3fc16483eecfc47fb79c362811d870be02249/src/vm/stublink.cpp#L1248
+for (const info of Array.from({ length: 15 }, (_, index) => index + 1)) {
+  void test(`decodes SET_FPREG with unused OpInfo ${info}`, () => {
+    const issues: string[] = [];
+    assert.deepEqual(decodeAmd64UnwindOperation(viewOf([7, (info << 4) | 3]), 0, issues),
+      { codeOffset: 7, opcode: "SET_FPREG" });
+    assert.deepEqual(issues, []);
+  });
+}
+
+for (const byte of [6, 7, 11, 15, 0x21, 0x2a]) {
   void test(`rejects reserved opcode or OpInfo ${byte}`, () => {
     const issues: string[] = [];
     assert.equal(decodeAmd64UnwindOperation(viewOf([1, byte, 0, 0, 0, 0]), 0, issues), null);
