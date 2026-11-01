@@ -5,23 +5,22 @@ import { ehCodeRva, ehMetadataRva, readEhTable, validCatchType, validEhState,
 import { createEhImage } from "../../../../../analyzers/pe/msvc-eh/image.js";
 import { createEhFixture } from "../../../../fixtures/pe-msvc-eh.js";
 
-void test("EH table reads are bounded per entry and reject invalid indices and counts", async () => {
+void test("EH table chunks cover their declared rows and reject invalid counts", async () => {
   const subject = createEhFixture();
   const rva = subject.builder.allocateData(16);
   const fixture = subject.builder.build();
   const image = createEhImage(fixture.file, fixture.core);
   const table = readEhTable(image, rva, 2, 8);
   assert.ok(table);
-  assert.equal((await table.read(1))?.byteLength, 8);
-  assert.equal(await table.read(2), null);
-  assert.equal(await table.read(-1), null);
+  assert.deepEqual((await Array.fromAsync(table)).map(view => view?.byteLength), [16]);
+  assert.equal((await table.next()).done, true);
   assert.equal(readEhTable(image, rva, -1, 8), null);
   assert.equal(readEhTable(image, rva, 0, 8), null);
   assert.equal(readEhTable(image, 0, 1, 8), null);
   assert.equal(readEhTable(image, rva, 0xffffffff, 8), null);
   assert.equal(readEhTable(image, rva + 1, 1, 8), null);
   assert.equal(readEhTable(image, rva, 1, 0), null);
-  assert.equal(readEhTable(image, 0, 0, 8)?.count, 0);
+  assert.equal((await readEhTable(image, 0, 0, 8)!.next()).done, true);
 });
 
 for (const [state, count, expected] of [[-1, 0, true], [-2, 5, false], [0, 1, true], [1, 1, false]] as const) {
@@ -142,4 +141,35 @@ void test("table count fits the stride and every IP entry needs independent cove
   assert.equal(validateEhFunctionLinks({ rva: subject.dataRva, version: 3, unwindActions: [], tryBlocks: [],
     ipStates: [{ ipRva: subject.beginRva, state: -1 }, { ipRva: subject.catchRva, state: 0 }] },
   rva => rva === subject.beginRva), false);
+});
+
+void test("EH tables read bounded whole-row chunks and preserve a final partial chunk", async () => {
+  const fixture = createEhFixture().builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  const requests: number[][] = [];
+  image.available = () => 70000;
+  image.read = async (start, size) => {
+    requests.push([start, size]);
+    return new DataView(new ArrayBuffer(size));
+  };
+  const chunks = await Array.fromAsync(readEhTable(image, 0x2000, 3500, 20)!);
+  assert.deepEqual(chunks.map(chunk => chunk?.byteLength), [65520, 4480]);
+  assert.deepEqual(requests, [[0x2000, 65520], [0x2000 + 65520, 4480]]);
+});
+
+void test("EH tables report a failed chunk instead of accepting a shortened table", async () => {
+  const fixture = createEhFixture().builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  image.read = async () => null;
+  assert.deepEqual(await Array.fromAsync(readEhTable(image, 0x2000, 1, 8)!), [null]);
+});
+
+void test("EH tables stop after a failed chunk even when further rows were declared", async () => {
+  const fixture = createEhFixture().builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  image.available = () => 70000;
+  let reads = 0;
+  image.read = async () => { reads++; return null; };
+  assert.deepEqual(await Array.fromAsync(readEhTable(image, 0x2000, 3500, 20)!), [null]);
+  assert.equal(reads, 1);
 });

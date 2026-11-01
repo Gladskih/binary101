@@ -51,6 +51,7 @@ void test("FH4 cursor rejects a short physical read even when the image declares
   const cursor = new EhCursor(createEhImage(fixture.file, fixture.core), rva);
   assert.equal(await cursor.uint32(), 0);
   assert.equal(cursor.valid, false);
+  assert.equal(cursor.position, rva + 4);
 });
 
 void test("a cursor stays poisoned even after seeking back into readable bytes", async () => {
@@ -75,3 +76,52 @@ void test("the full-width compressed form rejects a value below its canonical th
   assert.equal(await cursor.compressed(), 0x0fffffff);
   assert.equal(cursor.valid, false);
 });
+
+void test("FH4 cursor decodes nearby fields synchronously after one window fill", async () => {
+  const cursor = cursorFor([2, 0x78, 0x56, 0x34, 0x12, 4]);
+  assert.equal(await cursor.byte(), 2);
+  assert.equal(cursor.uint32(), 0x12345678);
+  assert.equal(cursor.byte(), 4);
+  assert.equal(cursor.valid, true);
+});
+
+void test("FH4 cursor refills at a window edge and honors a backward seek", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const rva = builder.allocateData(4100);
+  builder.bytes.set([0x78, 0x56, 0x34, 0x12], builder.offsetOf(rva + 4095));
+  const fixture = builder.build();
+  const image = createEhImage(fixture.file, fixture.core);
+  const read = image.read;
+  const requests: number[][] = [];
+  image.read = (start, size) => { requests.push([start, size]); return read(start, size); };
+  const cursor = new EhCursor(image, rva);
+  await cursor.byte();
+  cursor.position = rva + 4095;
+  assert.equal(await cursor.uint32(), 0x12345678);
+  cursor.position = rva;
+  assert.equal(await cursor.byte(), 0);
+  assert.deepEqual(requests.map(request => request[0]), [rva, rva + 4095, rva]);
+  assert.equal(cursor.valid, true);
+});
+
+void test("FH4 compressed operands can cross the cursor's local window boundary", async () => {
+  const builder = new MsvcRttiPeFixtureBuilder();
+  const rva = builder.allocateData(4100);
+  builder.bytes.set([15, 0, 0, 0, 16], builder.offsetOf(rva + 4095));
+  const fixture = builder.build();
+  const cursor = new EhCursor(createEhImage(fixture.file, fixture.core), rva);
+  await cursor.byte();
+  cursor.position = rva + 4095;
+  assert.equal(await cursor.compressed(), 0x10000000);
+  assert.equal(cursor.valid, true);
+});
+
+for (const position of [0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+  void test(`FH4 cursor rejects invalid position ${position} after a window fill`, async () => {
+    const cursor = cursorFor([2, 4, 6]);
+    await cursor.byte();
+    cursor.position = Number.isFinite(position) ? cursor.position + position : position;
+    assert.equal(await cursor.byte(), 0);
+    assert.equal(cursor.valid, false);
+  });
+}

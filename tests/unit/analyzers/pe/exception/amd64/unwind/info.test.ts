@@ -16,6 +16,24 @@ import {
 
 const identityRvaToOffset = (rva: number): number => rva;
 
+void test("decodes an unwind block and its handler from one bounded source read", async () => {
+  const fixture = createAmd64ExceptionFixtureWithSlots(
+    [epilogScopeSlot()],
+    { flags: UNW_FLAG_EHANDLER, trailingBytes: Uint32Array.BYTES_PER_ELEMENT }
+  );
+  writePrimaryHandlerRva(fixture, fixture.functionEndRva);
+  const file = new MockFile(fixture.bytes);
+  const read = file.read.bind(file);
+  let reads = 0;
+  file.read = (offset, size) => { reads++; return read(offset, size); };
+  const issues: string[] = [];
+  const table = await scanAmd64UnwindInfos(file, identityRvaToOffset,
+    new Set([fixture.primaryUnwindRva]), issues);
+  assert.deepEqual(table.handlerRvas, [fixture.functionEndRva]);
+  assert.deepEqual(issues, []);
+  assert.equal(reads, 1);
+});
+
 void test("scanAmd64UnwindInfos records handler tails and v2 epilog stats", async () => {
   const fixture = createAmd64ExceptionFixtureWithSlots(
     [epilogScopeSlot()],
@@ -67,6 +85,33 @@ void test("scanAmd64UnwindInfos reports unreadable unwind records", async () => 
   assert.strictEqual(table.unwindInfoVersion1Count, 0);
   assert.strictEqual(table.unwindInfoVersion2Count, 0);
   assert.ok(issues.some(issue => /could not be read/i.test(issue)));
+});
+
+void test("a present header with a truncated handler tail retains its diagnostic", async () => {
+  const bytes = new Uint8Array([0, 0, 0, 0, 9, 0, 0, 0, 1, 2, 3]);
+  const issues: string[] = [];
+  const table = await scanAmd64UnwindInfos(new MockFile(bytes), identityRvaToOffset, new Set([4]), issues);
+  assert.equal(table.handlerUnwindInfoCount, 1);
+  assert.deepEqual(table.handlerRvas, []);
+  assert.deepEqual(issues,
+    ["UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated."]);
+});
+
+void test("unknown unwind versions retain their count and summary diagnostic", async () => {
+  const issues: string[] = [];
+  const table = await scanAmd64UnwindInfos(new MockFile(new Uint8Array([0, 0, 0, 0, 7, 0, 0, 0])),
+    identityRvaToOffset, new Set([4]), issues);
+  assert.equal(table.uniqueUnwindInfoCount, 1);
+  assert.deepEqual(issues, ["1 UNWIND_INFO block(s) have an unexpected version."]);
+});
+
+void test("CHAININFO with handler flags preserves the contradictory-flags warning", async () => {
+  const fixture = createChainedAmd64ExceptionFixture([]);
+  fixture.bytes[fixture.primaryUnwindRva] = 0x29; // v1, CHAININFO | EHANDLER.
+  const issues: string[] = [];
+  await scanAmd64UnwindInfos(new MockFile(fixture.bytes), identityRvaToOffset,
+    new Set([fixture.primaryUnwindRva]), issues);
+  assert.deepEqual(issues, ["UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER."]);
 });
 
 // Microsoft x64 exception handling specifies UWOP_ALLOC_LARGE (1).

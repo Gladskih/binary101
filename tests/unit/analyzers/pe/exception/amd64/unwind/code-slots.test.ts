@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  analyzeAmd64UnwindCodeSlots
+  analyzeAmd64UnwindCodeSlots,
+  decodeAmd64UnwindCodeSlots
 } from "../../../../../../../analyzers/pe/exception/amd64/unwind-code-slots.js";
 import { MockFile } from "../../../../../../helpers/mock-file.js";
 import {
@@ -285,4 +286,15 @@ void test("accepts an array ending exactly at EOF", async () => {
     0, 1, AMD64_UNWIND_INFO_VERSION_1
   );
   assert.strictEqual(analysis.isTruncated, false);
+});
+
+void test("in-memory code decoding respects DataView offsets and declared operand extents", () => {
+  const bytes = new Uint8Array([0xff, 1, 0x11, 0, 0, 0, 0, 0xff]);
+  const view = new DataView(bytes.buffer, 1, 6);
+  assert.equal(decodeAmd64UnwindCodeSlots(view, 1, 1).isTruncated, true);
+  assert.equal(decodeAmd64UnwindCodeSlots(view, 3, 1).isTruncated, false);
+  assert.equal(decodeAmd64UnwindCodeSlots(view, 4, 1).isTruncated, true);
+  assert.deepEqual(decodeAmd64UnwindCodeSlots(view, 3, 0).operations, []);
+  assert.equal(decodeAmd64UnwindCodeSlots(view, -1, 1).isTruncated, true);
+  assert.equal(decodeAmd64UnwindCodeSlots(view, 0, 1).isTruncated, false);
 });

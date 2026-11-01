@@ -11,6 +11,8 @@ export class EhCursor {
   valid = true;
   readonly #end: number;
   readonly #image: EhImage;
+  #offset = 0;
+  #window: DataView = new DataView(new ArrayBuffer(0));
 
   constructor(image: EhImage, rva: number) {
     this.#image = image;
@@ -18,34 +20,54 @@ export class EhCursor {
     this.#end = rva + image.available(rva);
   }
 
-  async #read(size: number): Promise<DataView | null> {
+  #read(size: 1 | 4): number | Promise<number> {
+    if (!Number.isSafeInteger(this.position)) {
+      this.valid = false;
+      return 0;
+    }
     if (!this.valid || this.position + size > this.#end) {
       this.valid = false;
-      return null;
+      return 0;
     }
-    const view = await this.#image.read(this.position, size);
-    if (!view) this.valid = false;
-    this.position += size;
-    return view;
+    const offset = this.position - this.#offset;
+    if (offset >= 0 && offset + size <= this.#window.byteLength) {
+      this.position += size;
+      return size === 1 ? this.#window.getUint8(offset) : this.#window.getUint32(offset, true);
+    }
+    // A working window, not a metadata limit. Refill as the cursor advances;
+    // 4 KiB requests can reuse nearby portions of the shared 64 KiB file cache.
+    return this.#image.read(this.position, Math.min(4096, this.#end - this.position)).then(view => {
+      if (!view) {
+        this.valid = false;
+        this.position += size;
+        return 0;
+      }
+      this.#offset = this.position;
+      this.#window = view;
+      return this.#read(size);
+    });
   }
 
-  async byte(): Promise<number> {
-    return (await this.#read(1))?.getUint8(0) ?? 0;
+  byte(): number | Promise<number> {
+    return this.#read(1);
   }
 
-  async uint32(): Promise<number> {
-    return (await this.#read(4))?.getUint32(0, true) ?? 0;
+  uint32(): number | Promise<number> {
+    return this.#read(4);
   }
 
   async compressed(): Promise<number> {
-    const first = await this.byte();
+    const pending = this.byte();
+    const first = typeof pending === "number" ? pending : await pending;
     // MSVC ehdata4_export.h, ReadUnsigned / Compress::getNETencoded.
     // https://devblogs.microsoft.com/cppblog/making-cpp-exception-handling-smaller-x64/
     let length = 1;
     while (length < 5 && (first & (1 << (length - 1)))) length++;
     let value = length === 5 ? 0 : first >>> length;
     for (let index = 1; index < length; index++) {
-      value += await this.byte() * 2 ** (length === 5 ? (index - 1) * 8 : index * 8 - length);
+      const next = this.byte();
+      value += (typeof next === "number" ? next : await next) *
+        2 ** (length === 5 ? (index - 1) * 8 : index * 8 - length);
     }
     // Fail closed on overlong encodings, including a noncanonical five-byte prefix.
     if (!canonicalEncoding(first, length, value)) this.valid = false;

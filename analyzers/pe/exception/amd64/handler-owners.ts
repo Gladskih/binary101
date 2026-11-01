@@ -3,13 +3,12 @@ import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "./directory.js";
 
 type FunctionRange = { begin: number; end: number; sourceUnwindInfoRva?: number };
 
-export const readAmd64ChainedFunction = async (
-  reader: FileRangeReader, offset: number, issues: string[],
+export const decodeAmd64ChainedFunction = (
+  tail: DataView, issues: string[],
   validateRange: (begin: number, end: number) => boolean
 ) => {
   // RUNTIME_FUNCTION contains BeginAddress, EndAddress and UnwindData; all 12 bytes matter.
   // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#chained-unwind-info-structures
-  const tail = await reader.read(offset, AMD64_RUNTIME_FUNCTION_ENTRY_SIZE);
   if (tail.byteLength < AMD64_RUNTIME_FUNCTION_ENTRY_SIZE) {
     issues.push("UNWIND_INFO declares CHAININFO, but the trailing chained RUNTIME_FUNCTION is truncated.");
     return null;
@@ -18,6 +17,12 @@ export const readAmd64ChainedFunction = async (
   if (!validRange) issues.push("UNWIND_INFO CHAININFO has an invalid chained function range.");
   return { rva: tail.getUint32(8, true), validRange };
 };
+
+export const readAmd64ChainedFunction = async (
+  reader: FileRangeReader, offset: number, issues: string[],
+  validateRange: (begin: number, end: number) => boolean
+) => decodeAmd64ChainedFunction(
+  await reader.read(offset, AMD64_RUNTIME_FUNCTION_ENTRY_SIZE), issues, validateRange);
 
 const resolveTerminal = (
   origin: number, chains: Map<number, number>, terminals: Map<number, number | null>, issues: string[]

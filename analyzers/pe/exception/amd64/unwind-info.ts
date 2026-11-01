@@ -1,10 +1,10 @@
 "use strict";
 
-import { createRvaRangeReader } from "../../rva-range-reader.js";
+import { createAmd64UnwindBlockReader } from "./unwind-block-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import { UNW_FLAG_EHANDLER, UNW_FLAG_UHANDLER, UNW_FLAG_CHAININFO, UNW_FLAG_LARGE }
   from "./unwind-flags.js";
-import { readAmd64ChainedFunction } from "./handler-owners.js";
+import { decodeAmd64ChainedFunction } from "./handler-owners.js";
 import type { PeLanguageHandler } from "../types.js";
 import { isValidFunctionRange } from "../function-range.js";
 import type { RvaToOffset } from "../../types.js";
@@ -16,7 +16,7 @@ import type { Amd64UnwindV12Header, Amd64UnwindV12Statistics } from "./unwind-v1
 import {
   AMD64_UNWIND_INFO_VERSION_1,
   AMD64_UNWIND_INFO_VERSION_2,
-  analyzeAmd64UnwindCodeSlots
+  decodeAmd64UnwindCodeSlots
 } from "./unwind-code-slots.js";
 import {
   createCachedRvaOffsetReader,
@@ -55,7 +55,6 @@ interface Amd64UnwindScanState extends Amd64UnwindInfoTable {
 interface Amd64UnwindHeader extends Amd64UnwindV12Header {
   countOfCodes: number;
   flags: number;
-  offset: number;
   version: number;
 }
 
@@ -74,32 +73,26 @@ const createEmptyScanState = (): Amd64UnwindScanState => ({
   unwindInfoVersion2Count: 0
 });
 
-const readUint32 = async (
-  reader: FileRangeReader,
+const readUint32 = (
+  data: DataView,
   offset: number
-): Promise<number | null> => {
-  if (offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT > reader.size) return null;
-  const view = await reader.read(offset, Uint32Array.BYTES_PER_ELEMENT);
-  return view.byteLength === Uint32Array.BYTES_PER_ELEMENT ? view.getUint32(0, true) >>> 0 : null;
+): number | null => {
+  if (offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT > data.byteLength) return null;
+  return data.getUint32(offset, true);
 };
 
-const readTrailingUint32 = async (
-  reader: FileRangeReader,
+const readTrailingUint32 = (
+  data: DataView,
   offset: number,
   issue: string,
   issues: string[]
-): Promise<number | null> => {
-  const value = await readUint32(reader, offset);
+): number | null => {
+  const value = readUint32(data, offset);
   if (value == null) issues.push(issue);
   return value;
 };
 
-const readUnwindHeader = async (
-  reader: FileRangeReader,
-  offset: number
-): Promise<Amd64UnwindHeader | null> => {
-  if (offset < 0 || offset >= reader.size) return null;
-  const headerView = await reader.read(offset, UNWIND_INFO_HEADER_SIZE);
+const readUnwindHeader = (headerView: DataView): Amd64UnwindHeader | null => {
   if (headerView.byteLength < UNWIND_INFO_HEADER_SIZE) return null;
   const headerByte0 = headerView.getUint8(0);
   return {
@@ -108,7 +101,6 @@ const readUnwindHeader = async (
     frameRegister: headerView.getUint8(3) & 15,
     frameOffset: (headerView.getUint8(3) >>> 4) * 16,
     flags: headerByte0 >> 3,
-    offset,
     version: headerByte0 & 0x07
   };
 };
@@ -126,34 +118,30 @@ const recordVersion = (version: number, state: Amd64UnwindScanState): void => {
 const hasRegularUnwindCodes = (version: number): boolean =>
   version === AMD64_UNWIND_INFO_VERSION_1 || version === AMD64_UNWIND_INFO_VERSION_2;
 
-const recordV3CodeAnalysis = async (
-  reader: FileRangeReader, header: Amd64UnwindHeader, state: Amd64UnwindScanState, issues: string[]
-): Promise<boolean> => {
+const recordV3CodeAnalysis = (
+  data: DataView, state: Amd64UnwindScanState, issues: string[]
+): boolean => {
   state.version3 ??= createV3Statistics();
   const decodeIssues: string[] = [];
-  const decoded = decodeAmd64UnwindV3(
-    await reader.read(header.offset, UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2), decodeIssues);
+  const decoded = decodeAmd64UnwindV3(data, decodeIssues);
   recordV3Statistics(state.version3, decoded);
   issues.push(...decodeIssues);
   return decoded != null && decodeIssues.length === 0;
 };
 
-const recordUnwindCodeAnalysis = async (
-  reader: FileRangeReader,
+const recordUnwindCodeAnalysis = (
+  data: DataView,
   header: Amd64UnwindHeader,
   state: Amd64UnwindScanState,
   issues: string[]
-): Promise<boolean> => {
+): boolean => {
   if (header.version === 3) {
-    return recordV3CodeAnalysis(reader, header, state, issues);
+    return recordV3CodeAnalysis(data, state, issues);
   }
   if (!hasRegularUnwindCodes(header.version)) return false;
-  const analysis = await analyzeAmd64UnwindCodeSlots(
-    reader,
-    header.offset,
-    header.countOfCodes,
-    header.version
-  );
+  const analysis = decodeAmd64UnwindCodeSlots(new DataView(data.buffer,
+    data.byteOffset + UNWIND_INFO_HEADER_SIZE, data.byteLength - UNWIND_INFO_HEADER_SIZE),
+  header.countOfCodes, header.version);
   state.version12 ??= createV12Statistics();
   recordV12Statistics(state.version12, header, analysis);
   issues.push(...analysis.issues);
@@ -218,16 +206,17 @@ const recordChainLink = (
   state.chainedUnwindRvas.set(unwindInfoRva, targetRva);
 };
 
-const readUnwindChain = async (
-  reader: FileRangeReader, header: Amd64UnwindHeader, state: Amd64UnwindScanState, issues: string[],
+const readUnwindChain = (
+  data: DataView, header: Amd64UnwindHeader, state: Amd64UnwindScanState, issues: string[],
   enqueue: (rva: number) => void, validateRange: (begin: number, end: number) => boolean
-): Promise<number | null> => {
+): number | null => {
   state.chainedUnwindInfoCount += 1;
   if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) !== 0) {
     issues.push("UNWIND_INFO sets CHAININFO together with EHANDLER/UHANDLER.");
   }
-  const chain = await readAmd64ChainedFunction(reader,
-    header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2), issues, validateRange);
+  const start = Math.min(data.byteLength, alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2));
+  const chain = decodeAmd64ChainedFunction(new DataView(data.buffer,
+    data.byteOffset + start, data.byteLength - start), issues, validateRange);
   if (chain?.rva) enqueue(chain.rva);
   return chain?.validRange ? chain.rva : null;
 };
@@ -239,28 +228,28 @@ const recordHandlerTarget = (state: Amd64UnwindScanState, targets: Set<number>, 
 };
 
 
-const processUnwindInfo = async (
-  unwindReader: FileRangeReader, header: Amd64UnwindHeader | null,
+const processUnwindInfo = (
+  data: DataView, header: Amd64UnwindHeader | null,
   state: Amd64UnwindScanState, issues: string[], enqueueUnwindRva: (rva: number) => void,
   handlerRvasSet: Set<number>, unwindInfoRva: number,
   validateRange: (begin: number, end: number) => boolean
-): Promise<void> => {
+): void => {
   if (!header) {
     state.unreadableUnwindCount += 1;
     return;
   }
   recordVersion(header.version, state);
-  const validCodes = await recordUnwindCodeAnalysis(unwindReader, header, state, issues);
+  const validCodes = recordUnwindCodeAnalysis(data, header, state, issues);
   if ((header.flags & UNW_FLAG_CHAININFO) !== 0) {
-    const target = await readUnwindChain(unwindReader, header, state, issues, enqueueUnwindRva, validateRange);
+    const target = readUnwindChain(data, header, state, issues, enqueueUnwindRva, validateRange);
     if (target && validCodes) recordChainLink(state, header, unwindInfoRva, target);
     return;
   }
   if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) return;
   state.handlerUnwindInfoCount += 1;
-  const handlerRva = await readTrailingUint32(
-    unwindReader,
-    header.offset + alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2),
+  const handlerRva = readTrailingUint32(
+    data,
+    alignTo4(UNWIND_INFO_HEADER_SIZE + header.countOfCodes * 2),
     "UNWIND_INFO declares EHANDLER/UHANDLER, but the trailing handler RVA is truncated.",
     issues
   );
@@ -279,6 +268,7 @@ export const scanAmd64UnwindInfos = async (
     isValidFunctionRange(begin, end - begin, rvaToOff, reader.size);
   const handlerRvasSet = new Set<number>();
   const getUnwindOffset = createCachedRvaOffsetReader(rvaToOff);
+  const readBlock = createAmd64UnwindBlockReader(reader, rvaToOff);
   const compareUnwindRvas = createRvaFileOffsetComparer(getUnwindOffset);
   const unwindQueue = [...initialUnwindRvas.values()].sort(compareUnwindRvas);
   const visitedUnwindRvas = new Set<number>(initialUnwindRvas);
@@ -291,13 +281,10 @@ export const scanAmd64UnwindInfos = async (
   while (unwindQueueIndex < unwindQueue.length) {
     const unwindInfoRva = unwindQueue[unwindQueueIndex]!;
     unwindQueueIndex += 1;
-    const unwindOffset = getUnwindOffset(unwindInfoRva);
-    // CountOfCodes (v1/v2) or PayloadWords (v3) bounds the payload to 510 bytes.
-    // DWORD alignment and a trailing 12-byte chain give a structural maximum of 528 bytes.
-    // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64#struct-unwind_info
-    const unwindReader = createRvaRangeReader(reader, rvaToOff, unwindInfoRva, 528);
-    const header = unwindOffset == null ? null : await readUnwindHeader(unwindReader, 0);
-    await processUnwindInfo(unwindReader, header, state, issues, enqueueUnwindRva,
+    const pending = readBlock(unwindInfoRva);
+    const data = pending instanceof DataView ? pending : await pending;
+    const header = readUnwindHeader(data);
+    processUnwindInfo(data, header, state, issues, enqueueUnwindRva,
       handlerRvasSet, unwindInfoRva, validateRange);
   }
   state.uniqueUnwindInfoCount = visitedUnwindRvas.size;

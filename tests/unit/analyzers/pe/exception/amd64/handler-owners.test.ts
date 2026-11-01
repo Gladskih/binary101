@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readAmd64ChainedFunction, resolveAmd64HandlerOwners }
+import { decodeAmd64ChainedFunction, readAmd64ChainedFunction, resolveAmd64HandlerOwners }
   from "../../../../../../analyzers/pe/exception/amd64/handler-owners.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 
@@ -42,4 +42,15 @@ void test("cyclic CHAININFO does not manufacture terminal handler owners", () =>
     new Map([[8, 16], [16, 8]]), issues);
   assert.equal(result.size, 0);
   assert.match(issues[0] ?? "", /CHAININFO.*cycle/);
+});
+
+void test("in-memory CHAININFO decoding honors the view's physical offset", () => {
+  const view = new DataView(new ArrayBuffer(20), 4, 12);
+  view.setUint32(0, 0x1230, true);
+  view.setUint32(4, 0x1240, true);
+  view.setUint32(8, 0x5670, true);
+  const issues: string[] = [];
+  assert.deepEqual(decodeAmd64ChainedFunction(view, issues,
+    (begin, end) => begin === 0x1230 && end === 0x1240), { rva: 0x5670, validRange: true });
+  assert.deepEqual(issues, []);
 });

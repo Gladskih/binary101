@@ -50,6 +50,9 @@ const isCachedWindowHit = (cachedWindow: CachedWindow, offset: number, size: num
 const findCachedWindow = (
   windows: CachedWindow[], offset: number, size: number
 ): CachedWindow | undefined => {
+  // Nearby reads normally stay in the most recent window. Avoid an LRU mutation
+  // on every field read (codex.exe profiling attributed 0.60 s to this lookup).
+  if (windows[0] && isCachedWindowHit(windows[0], offset, size)) return windows[0];
   const index = windows.findIndex(window => isCachedWindowHit(window, offset, size));
   if (index < 0) return undefined;
   const cached = windows[index]!;

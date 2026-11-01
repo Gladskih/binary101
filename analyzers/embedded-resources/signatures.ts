@@ -17,7 +17,27 @@ const signatureKind = (bytes: Uint8Array, index: number): ResourceSignature["kin
   return null;
 };
 
-// Scan each physical byte once even for aliased or overlapping executable sections.
+function* chunkSignatures(bytes: Uint8Array, limit: number) {
+  // qres, GVariant and raVGtnai: search their first bytes in native indexOf loops.
+  // Retain each search position so interleaved candidates never rescan a suffix.
+  let qt = bytes.indexOf(0x71), glib = bytes.indexOf(0x47), reversed = bytes.indexOf(0x72);
+  if (qt < 0) qt = bytes.length;
+  if (glib < 0) glib = bytes.length;
+  if (reversed < 0) reversed = bytes.length;
+  while (true) {
+    const index = Math.min(qt, glib, reversed);
+    if (index >= limit) return;
+    const kind = signatureKind(bytes, index);
+    if (kind) yield { index, kind };
+    const found = bytes.indexOf(bytes[index]!, index + 1);
+    const next = found < 0 ? bytes.length : found;
+    if (index === qt) qt = next;
+    else if (index === glib) glib = next;
+    else reversed = next;
+  }
+}
+
+// Read each physical range once even for aliased or overlapping executable sections.
 const scanRanges = (sections: ResourceSection[], fileSize: number): ResourceSection[] => {
   const sorted = sections.filter(section => section.size > 0 &&
     validResourceRange(section.offset, section.size, fileSize)).sort((left, right) => left.offset - right.offset);
@@ -46,9 +66,8 @@ export async function* findResourceSignatures(file: File,
         bytes.set(chunk, carry.length);
         const base = offset - carry.length;
         const limit = next.done ? bytes.length : bytes.length - 7;
-        for (let index = 0; index < limit; index += 1) {
-          const kind = signatureKind(bytes, index);
-          if (kind) yield { offset: base + index, end: range.offset + range.size, kind };
+        for (const { index, kind } of chunkSignatures(bytes, limit)) {
+          yield { offset: base + index, end: range.offset + range.size, kind };
         }
         if (next.done) break;
         carry = bytes.slice(-7);

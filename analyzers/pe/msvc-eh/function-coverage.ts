@@ -11,14 +11,21 @@ export const createEhFunctionCoverage = (
   exception: PeExceptionDirectory | null
 ): ((rva: number) => boolean) | null => {
   if (!exception || !completeRuntimeInventory(exception)) return null;
-  const ranges = exception.beginRvas.map((begin, index) => ({ begin, length: exception.rangeLengths![index]! }));
-  if (ranges.some(range => !isRvaRange(range.begin, range.length))) return null;
+  // Valid .pdata is already ordered. Only malformed/other inventories need an
+  // ordering array; avoid a temporary object per runtime function in the common path.
+  const order = exception.beginRvas.some((begin, index, begins) => index > 0 && begin < begins[index - 1]!)
+    ? Array.from(exception.beginRvas.keys()).sort((left, right) =>
+      exception.beginRvas[left]! - exception.beginRvas[right]!) : null;
   const merged: { begin: number; end: number }[] = [];
-  for (const range of ranges.sort((left, right) => left.begin - right.begin)) {
+  for (let index = 0; index < exception.beginRvas.length; index++) {
+    const position = order?.[index] ?? index;
+    const begin = exception.beginRvas[position]!;
+    const length = exception.rangeLengths![position]!;
+    if (!isRvaRange(begin, length)) return null;
     const previous = merged[merged.length - 1];
-    const end = range.begin + range.length;
-    if (previous && range.begin <= previous.end) previous.end = Math.max(previous.end, end);
-    else merged.push({ begin: range.begin, end });
+    const end = begin + length;
+    if (previous && begin <= previous.end) previous.end = Math.max(previous.end, end);
+    else merged.push({ begin, end });
   }
   return rva => {
     let low = 0, high = merged.length;

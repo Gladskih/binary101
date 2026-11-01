@@ -4,6 +4,7 @@ import { MAX_TYPE_DESCRIPTOR_NAME_BYTES, TYPE_DESCRIPTOR_POINTER_FIELDS }
   from "../msvc/type-descriptor-layout.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../optional-header/magic.js";
 import { IMAGE_FILE_MACHINE_I386, IMAGE_FILE_MACHINE_ARMNT } from "../../coff/machine.js";
+import { DEFAULT_FILE_READ_WINDOW_BYTES } from "../../file-range-reader.js";
 
 export const validEhState = (state: number, count: number): boolean => state >= -1 && state < count;
 
@@ -15,14 +16,23 @@ export const ehCodeRva = (image: EhImage, value: number): number => {
   return image.core.coff.Machine === IMAGE_FILE_MACHINE_ARMNT ? rva - (rva & 1) : rva;
 };
 
+async function* readTableChunks(image: EhImage, rva: number, count: number,
+  stride: number): AsyncGenerator<DataView | null> {
+  const rows = Math.max(1, Math.floor(DEFAULT_FILE_READ_WINDOW_BYTES / stride));
+  for (let index = 0; index < count; index += rows) {
+    const view = await image.read(rva + index * stride, Math.min(rows, count - index) * stride);
+    yield view;
+    if (!view) return;
+  }
+}
+
 export const readEhTable = (
   image: EhImage, rva: number, count: number, stride: number
-): { count: number; read: (index: number) => Promise<DataView | null> } | null => {
+): AsyncGenerator<DataView | null> | null => {
   if (!Number.isSafeInteger(count) || count < 0 || (count === 0) !== (rva === 0) || rva % FH3_LAYOUT.alignment ||
       !Number.isSafeInteger(stride) || stride <= 0) return null;
   if (count > Math.floor(image.available(rva) / stride)) return null;
-  return { count, read: (index: number) => Number.isSafeInteger(index) && index >= 0 && index < count
-    ? image.read(rva + index * stride, stride) : Promise.resolve(null) };
+  return readTableChunks(image, rva, count, stride);
 };
 
 const validCatchHeader = (header: DataView, pointerSize: 4 | 8): boolean => {

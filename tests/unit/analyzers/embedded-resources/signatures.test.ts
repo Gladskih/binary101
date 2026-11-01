@@ -10,6 +10,12 @@ const collect = async (file: File, sections = [{ name: ".data", offset: 0, size:
   return found;
 };
 
+void test("interleaved false starts do not skip candidates or change physical ordering", async () => {
+  const found = await collect(new MockFile(new TextEncoder().encode("qqreqresGGVariantrraVGtnai")));
+  assert.deepEqual(found.map(value => [value.offset, value.kind]),
+    [[4, "rcc"], [9, "gresource"], [18, "gresource"]]);
+});
+
 void test("finds signatures at unaligned offsets and final bytes without matching partial literals", async () => {
   const file = new MockFile(new TextEncoder().encode("?qres!GVariant?raVGtnai.qre"));
   assert.deepEqual(await collect(file), [

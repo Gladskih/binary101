@@ -103,6 +103,18 @@ const analyzeUnwindOperations = (
   return scan.analysis;
 };
 
+export const decodeAmd64UnwindCodeSlots = (
+  codeView: DataView, countOfCodes: number, version: number
+): Amd64UnwindCodeAnalysis => {
+  if (countOfCodes === 0) return emptyAnalysis();
+  if (!Number.isSafeInteger(countOfCodes) || countOfCodes < 0 ||
+      countOfCodes > Math.floor(codeView.byteLength / Uint16Array.BYTES_PER_ELEMENT)) return truncatedAnalysis();
+  if (version !== AMD64_UNWIND_INFO_VERSION_1 && version !== AMD64_UNWIND_INFO_VERSION_2) {
+    return emptyAnalysis();
+  }
+  return analyzeUnwindOperations(codeView, countOfCodes, version);
+};
+
 export const analyzeAmd64UnwindCodeSlots = async (
   reader: FileRangeReader,
   offset: number,
@@ -116,9 +128,5 @@ export const analyzeAmd64UnwindCodeSlots = async (
     return truncatedAnalysis();
   }
   const codeView = await reader.read(offset + Uint32Array.BYTES_PER_ELEMENT, codeBytes);
-  if (codeView.byteLength < codeBytes) return truncatedAnalysis();
-  if (version !== AMD64_UNWIND_INFO_VERSION_1 && version !== AMD64_UNWIND_INFO_VERSION_2) {
-    return emptyAnalysis();
-  }
-  return analyzeUnwindOperations(codeView, countOfCodes, version);
+  return decodeAmd64UnwindCodeSlots(codeView, countOfCodes, version);
 };

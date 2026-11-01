@@ -44,3 +44,15 @@ void test("a nested short range cannot hide the remaining extent of its outer ow
   assert.equal(covers(0x1080), true);
   assert.equal(covers(0x1100), true);
 });
+
+void test("a descending pair preserves both original intervals after sorting", () => {
+  const covers = createEhFunctionCoverage({ ...createEmptyExceptionDirectory([], "amd64"),
+    functionCount: 2, beginRvas: [0x2000, 0x1000], rangeLengths: [32, 16] });
+  assert.ok(covers);
+  assert.equal(covers(0x1000), true);
+  assert.equal(covers(0x1010), true);
+  assert.equal(covers(0x1011), false);
+  assert.equal(covers(0x2000), true);
+  assert.equal(covers(0x2020), true);
+  assert.equal(covers(0x2021), false);
+});

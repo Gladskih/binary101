@@ -7,17 +7,19 @@ import { ehCodeRva, ehMetadataRva, readEhTable, validCatchType, validEhState } f
 const readHandlers = async (image: EhImage, rva: number, count: number): Promise<EhHandler[] | null> => {
   // MSVC ehdata.h HandlerType on AMD64/ARM64 includes dispFrame at offset 16.
   // https://github.com/llvm/llvm-project/blob/main/llvm/lib/CodeGen/AsmPrinter/WinException.cpp
-  const table = readEhTable(image, rva, count, image.core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
-    ? FH3_LAYOUT.handlerEntrySize64 : FH3_LAYOUT.handlerEntrySize32);
+  const stride = image.core.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC
+    ? FH3_LAYOUT.handlerEntrySize64 : FH3_LAYOUT.handlerEntrySize32;
+  const table = readEhTable(image, rva, count, stride);
   if (!table || count === 0) return null;
   const handlers: EhHandler[] = [];
-  for (let index = 0; index < count; index++) {
-    const row = await table.read(index);
-    if (!row) return null;
-    const typeDescriptorRva = ehMetadataRva(image, row.getUint32(4, true));
-    const handlerRva = ehCodeRva(image, row.getUint32(12, true));
-    if (!image.code(handlerRva) || !await validCatchType(image, typeDescriptorRva)) return null;
-    handlers.push({ handlerRva, typeDescriptorRva, continuationRvas: [] });
+  for await (const chunk of table) {
+    if (!chunk) return null;
+    for (let offset = 0; offset < chunk.byteLength; offset += stride) {
+      const typeDescriptorRva = ehMetadataRva(image, chunk.getUint32(offset + 4, true));
+      const handlerRva = ehCodeRva(image, chunk.getUint32(offset + 12, true));
+      if (!image.code(handlerRva) || !await validCatchType(image, typeDescriptorRva)) return null;
+      handlers.push({ handlerRva, typeDescriptorRva, continuationRvas: [] });
+    }
   }
   return handlers;
 };
@@ -28,17 +30,18 @@ const readTryBlocks = async (
   const table = readEhTable(image, rva, count, FH3_LAYOUT.tryBlockEntrySize);
   if (!table) return null;
   const blocks: EhTryBlock[] = [];
-  for (let index = 0; index < count; index++) {
-    const row = await table.read(index);
-    if (!row) return null;
-    const tryLow = row.getInt32(0, true);
-    const tryHigh = row.getInt32(4, true);
-    const catchHigh = row.getInt32(8, true);
-    if (tryLow < 0 || tryLow > tryHigh || tryHigh >= catchHigh || catchHigh >= states) return null;
-    const handlers = await readHandlers(image, ehMetadataRva(image, row.getUint32(16, true)),
-      row.getUint32(12, true));
-    if (!handlers) return null;
-    blocks.push({ tryLow, tryHigh, catchHigh, handlers });
+  for await (const chunk of table) {
+    if (!chunk) return null;
+    for (let offset = 0; offset < chunk.byteLength; offset += FH3_LAYOUT.tryBlockEntrySize) {
+      const tryLow = chunk.getInt32(offset, true);
+      const tryHigh = chunk.getInt32(offset + 4, true);
+      const catchHigh = chunk.getInt32(offset + 8, true);
+      if (tryLow < 0 || tryLow > tryHigh || tryHigh >= catchHigh || catchHigh >= states) return null;
+      const handlers = await readHandlers(image, ehMetadataRva(image, chunk.getUint32(offset + 16, true)),
+        chunk.getUint32(offset + 12, true));
+      if (!handlers) return null;
+      blocks.push({ tryLow, tryHigh, catchHigh, handlers });
+    }
   }
   return blocks;
 };
@@ -62,13 +65,14 @@ const readUnwindActions = async (
   const unwind = readEhTable(image, rva, states, FH3_LAYOUT.unwindEntrySize);
   if (!unwind) return null;
   const unwindActions: EhFunctionInfo["unwindActions"] = [];
-  for (let index = 0; index < states; index++) {
-    const row = await unwind.read(index);
-    if (!row) return null;
-    const toState = row.getInt32(0, true);
-    const actionRva = ehCodeRva(image, row.getUint32(4, true));
-    if (!validEhState(toState, index) || (actionRva !== 0 && !image.code(actionRva))) return null;
-    unwindActions.push({ toState, actionRva });
+  for await (const chunk of unwind) {
+    if (!chunk) return null;
+    for (let offset = 0; offset < chunk.byteLength; offset += FH3_LAYOUT.unwindEntrySize) {
+      const toState = chunk.getInt32(offset, true);
+      const actionRva = ehCodeRva(image, chunk.getUint32(offset + 4, true));
+      if (!validEhState(toState, unwindActions.length) || (actionRva !== 0 && !image.code(actionRva))) return null;
+      unwindActions.push({ toState, actionRva });
+    }
   }
   return unwindActions;
 };
@@ -80,14 +84,15 @@ const readIpStates = async (
   // LLVM's x86 FuncInfo reserves both IP-map fields as zero; table-based ABIs use real maps.
   if (!ips || ((image.core.coff.Machine === IMAGE_FILE_MACHINE_I386) !== (count === 0))) return null;
   const ipStates: EhFunctionInfo["ipStates"] = [];
-  for (let index = 0; index < ips.count; index++) {
-    const row = await ips.read(index);
-    if (!row) return null;
-    const ipRva = ehCodeRva(image, row.getUint32(0, true));
-    const state = row.getInt32(4, true);
-    if (!image.code(ipRva) || !validEhState(state, states) ||
-        (ipStates.length > 0 && ipRva <= ipStates[ipStates.length - 1]!.ipRva)) return null;
-    ipStates.push({ ipRva, state });
+  for await (const chunk of ips) {
+    if (!chunk) return null;
+    for (let offset = 0; offset < chunk.byteLength; offset += FH3_LAYOUT.ipStateEntrySize) {
+      const ipRva = ehCodeRva(image, chunk.getUint32(offset, true));
+      const state = chunk.getInt32(offset + 4, true);
+      if (!image.code(ipRva) || !validEhState(state, states) ||
+          (ipStates.length > 0 && ipRva <= ipStates[ipStates.length - 1]!.ipRva)) return null;
+      ipStates.push({ ipRva, state });
+    }
   }
   return ipStates;
 };

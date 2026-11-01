@@ -4,6 +4,18 @@ import { parseFh3 } from "../../../../../analyzers/pe/msvc-eh/fh3.js";
 import { createEhImage } from "../../../../../analyzers/pe/msvc-eh/image.js";
 import { createEhFixture, addFh3 } from "../../../../fixtures/pe-msvc-eh.js";
 
+for (const source of ["unwindRva", "tryMapRva", "handlerMapRva", "ipMapRva"] as const) {
+  void test(`FH3 rejects a failed ${source} chunk without accepting preceding rows`, async () => {
+    const subject = createEhFixture();
+    const maps = addFh3(subject);
+    const fixture = subject.builder.build();
+    const image = createEhImage(fixture.file, fixture.core);
+    const read = image.read;
+    image.read = (rva, size) => rva === maps[source] ? Promise.resolve(null) : read(rva, size);
+    assert.equal(await parseFh3(image, maps.infoRva), null);
+  });
+}
+
 void test("FH3 validates complete state, try, handler and IP tables", async () => {
   const subject = createEhFixture();
   const { infoRva } = addFh3(subject);
@@ -142,4 +154,44 @@ void test("different FH3 records do not collide in the metadata cache", async ()
   const image = createEhImage(fixture.file, fixture.core);
   assert.equal((await parseFh3(image, first.infoRva))?.rva, first.infoRva);
   assert.equal((await parseFh3(image, second.infoRva))?.rva, second.infoRva);
+});
+
+void test("ARMNT FH3 uses sixteen-byte handler entries without Win64 dispFrame", async () => {
+  const subject = createEhFixture();
+  const maps = addFh3(subject);
+  const handlers = subject.builder.allocateData(32);
+  subject.builder.patchUint32(handlers, 12, subject.catchRva);
+  subject.builder.patchUint32(handlers, 28, subject.handlerRva);
+  subject.builder.patchUint32(maps.tryMapRva, 12, 2);
+  subject.builder.patchUint32(maps.tryMapRva, 16, handlers);
+  const fixture = subject.builder.build();
+  fixture.core.coff.Machine = 0x1c4;
+  fixture.core.opt = { ...fixture.core.opt, Magic: 0x10b, BaseOfData: 0x2000 };
+  const parsed = await parseFh3(createEhImage(fixture.file, fixture.core), maps.infoRva);
+  assert.deepEqual(parsed?.tryBlocks[0]?.handlers.map(handler => handler.handlerRva),
+    [subject.catchRva, subject.handlerRva]);
+});
+
+void test("FH3 rejects a try interval whose lower state exceeds its upper state", async () => {
+  const subject = createEhFixture();
+  const maps = addFh3(subject);
+  subject.builder.patchInt32(maps.tryMapRva, 0, 1);
+  const fixture = subject.builder.build();
+  assert.equal(await parseFh3(createEhImage(fixture.file, fixture.core), maps.infoRva), null);
+});
+
+void test("FH3 retains increasing IP states throughout a table", async () => {
+  const subject = createEhFixture();
+  const maps = addFh3(subject);
+  const ips = subject.builder.allocateData(16);
+  subject.builder.patchUint32(ips, 0, subject.beginRva);
+  subject.builder.patchInt32(ips, 4, -1);
+  subject.builder.patchUint32(ips, 8, subject.catchRva);
+  subject.builder.patchInt32(ips, 12, 0);
+  subject.builder.patchUint32(maps.infoRva, 20, 2);
+  subject.builder.patchUint32(maps.infoRva, 24, ips);
+  const fixture = subject.builder.build();
+  const parsed = await parseFh3(createEhImage(fixture.file, fixture.core), maps.infoRva);
+  assert.deepEqual(parsed?.ipStates,
+    [{ ipRva: subject.beginRva, state: -1 }, { ipRva: subject.catchRva, state: 0 }]);
 });

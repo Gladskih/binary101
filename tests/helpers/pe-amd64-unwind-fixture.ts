@@ -63,8 +63,10 @@ export class ShortReadMockFile extends MockFile implements FileRangeReader {
 
   override async read(offset: number, length: number): Promise<DataView> {
     const view = await super.read(offset, length);
-    if (offset === this.#shortReadOffset && length > Uint8Array.BYTES_PER_ELEMENT) {
-      return new DataView(view.buffer, view.byteOffset, length - Uint8Array.BYTES_PER_ELEMENT);
+    // Stop at the injected failure boundary whether a caller requests a field
+    // or a larger block containing it.
+    if (offset <= this.#shortReadOffset && view.byteLength > this.#shortReadOffset - offset) {
+      return new DataView(view.buffer, view.byteOffset, this.#shortReadOffset - offset);
     }
     return view;
   }
