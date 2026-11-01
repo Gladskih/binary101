@@ -4,6 +4,10 @@ import type { FileRangeReader } from "../file-range-reader.js";
 import { DWARF_ENCODING } from "./constants.js";
 import type { DwarfSectionInput } from "./types.js";
 
+// A small view into the shared reader's window removes per-field async/cache work.
+// LatticeLab profiling attributes about 0.3 s to cursor/reader byte operations.
+const CURSOR_WINDOW_BYTES = 4 * 1024;
+
 export class DwarfCursor {
   position: number;
   readonly end: number;
@@ -12,6 +16,9 @@ export class DwarfCursor {
   readonly #littleEndian: boolean;
   readonly #issues: string[];
   #failed = false;
+  #window: DataView = new DataView(new ArrayBuffer(0));
+  #windowBytes: Uint8Array = new Uint8Array(0);
+  #windowStart = 0;
 
   constructor(
     reader: FileRangeReader,
@@ -38,23 +45,23 @@ export class DwarfCursor {
     return this.#failed;
   }
 
-  async uint8(): Promise<number | null> {
-    return this.#number(Uint8Array.BYTES_PER_ELEMENT, view => view.getUint8(0));
+  uint8(): Promise<number | null> {
+    return this.#number(Uint8Array.BYTES_PER_ELEMENT, (view, offset) => view.getUint8(offset));
   }
 
-  async uint16(): Promise<number | null> {
-    return this.#number(Uint16Array.BYTES_PER_ELEMENT, view =>
-      view.getUint16(0, this.#littleEndian));
+  uint16(): Promise<number | null> {
+    return this.#number(Uint16Array.BYTES_PER_ELEMENT, (view, offset) =>
+      view.getUint16(offset, this.#littleEndian));
   }
 
-  async uint32(): Promise<number | null> {
-    return this.#number(Uint32Array.BYTES_PER_ELEMENT, view =>
-      view.getUint32(0, this.#littleEndian));
+  uint32(): Promise<number | null> {
+    return this.#number(Uint32Array.BYTES_PER_ELEMENT, (view, offset) =>
+      view.getUint32(offset, this.#littleEndian));
   }
 
-  async uint64(): Promise<bigint | null> {
-    const view = await this.#view(BigUint64Array.BYTES_PER_ELEMENT);
-    return view ? view.getBigUint64(0, this.#littleEndian) : null;
+  uint64(): Promise<bigint | null> {
+    return this.#number(BigUint64Array.BYTES_PER_ELEMENT, (view, offset) =>
+      view.getBigUint64(offset, this.#littleEndian));
   }
 
   async unsigned(byteLength: number): Promise<bigint | null> {
@@ -86,8 +93,9 @@ export class DwarfCursor {
   async uleb(): Promise<bigint | null> {
     let value = 0n;
     for (let index = 0; ; index += 1) {
-      const byte = await this.uint8();
-      if (byte == null) return null;
+      const ready = this.#prepare(1);
+      if (!(typeof ready === "boolean" ? ready : await ready)) return null;
+      const byte = this.#window.getUint8(this.position++ - this.#windowStart);
       value |= BigInt(byte & DWARF_ENCODING.lebPayloadMask) <<
         BigInt(index * DWARF_ENCODING.lebPayloadBits);
       if ((byte & DWARF_ENCODING.lebContinuationBit) === 0) return value;
@@ -97,8 +105,9 @@ export class DwarfCursor {
   async sleb(): Promise<bigint | null> {
     let value = 0n;
     for (let index = 0; ; index += 1) {
-      const byte = await this.uint8();
-      if (byte == null) return null;
+      const ready = this.#prepare(1);
+      if (!(typeof ready === "boolean" ? ready : await ready)) return null;
+      const byte = this.#window.getUint8(this.position++ - this.#windowStart);
       const shift = BigInt(index * DWARF_ENCODING.lebPayloadBits);
       value |= BigInt(byte & DWARF_ENCODING.lebPayloadMask) << shift;
       if ((byte & DWARF_ENCODING.lebContinuationBit) === 0) {
@@ -110,14 +119,19 @@ export class DwarfCursor {
   }
 
   async cstring(): Promise<string | null> {
-    const captured: number[] = [];
+    const decoder = new TextDecoder();
+    let captured = "";
     while (this.position < this.end) {
-      const byte = await this.uint8();
-      if (byte == null) return null;
-      if (byte === DWARF_ENCODING.nullByte) {
-        return new TextDecoder().decode(Uint8Array.from(captured));
-      }
-      captured.push(byte);
+      const ready = this.#prepare(1);
+      if (!(typeof ready === "boolean" ? ready : await ready)) return null;
+      const start = this.position - this.#windowStart;
+      const terminator = this.#windowBytes.indexOf(DWARF_ENCODING.nullByte, start);
+      const end = terminator < 0 ? this.#windowBytes.length : terminator;
+      this.position = this.#windowStart + end;
+      captured += decoder.decode(this.#windowBytes.subarray(start, end), { stream: true });
+      if (terminator < 0) continue;
+      this.position += 1;
+      return captured + decoder.decode();
     }
     this.fail("Unterminated DWARF string");
     return null;
@@ -162,26 +176,50 @@ export class DwarfCursor {
     return value == null ? null : BigInt(value);
   }
 
-  async #number(
+  async #number<Value>(
     byteLength: number,
-    read: (view: DataView) => number
-  ): Promise<number | null> {
-    const view = await this.#view(byteLength);
-    return view ? read(view) : null;
+    read: (view: DataView, offset: number) => Value
+  ): Promise<Value | null> {
+    const ready = this.#prepare(byteLength);
+    if (!(typeof ready === "boolean" ? ready : await ready)) return null;
+    const offset = this.position - this.#windowStart;
+    this.position += byteLength;
+    return read(this.#window, offset);
   }
 
   async #view(byteLength: number): Promise<DataView | null> {
-    if (this.#failed) return null;
+    return this.#number(byteLength, (view, offset) =>
+      new DataView(view.buffer, view.byteOffset + offset, byteLength));
+  }
+
+  #prepare(byteLength: number): boolean | Promise<boolean> {
+    if (this.#failed) return false;
+    if (!Number.isSafeInteger(this.position) || this.position < 0) {
+      this.fail("Invalid DWARF cursor position");
+      return false;
+    }
     if (byteLength > this.end - this.position) {
       this.fail(`Truncated value needs ${byteLength} bytes`);
-      return null;
+      return false;
     }
-    const view = await this.#reader.read(this.#section.offset + this.position, byteLength);
-    if (view.byteLength !== byteLength) {
+    const offset = this.position - this.#windowStart;
+    if (offset >= 0 && byteLength <= this.#window.byteLength - offset) return true;
+    return this.#refill(byteLength);
+  }
+
+  async #refill(byteLength: number): Promise<boolean> {
+    // Align random string/unit starts so local windows can share the reader cache.
+    const start = Math.floor(this.position / CURSOR_WINDOW_BYTES) * CURSOR_WINDOW_BYTES;
+    const required = this.position - start + byteLength;
+    const view = await this.#reader.read(this.#section.offset + start,
+      Math.min(this.end - start, Math.max(CURSOR_WINDOW_BYTES, required)));
+    if (view.byteLength < required) {
       this.fail(`File ended while reading ${byteLength} bytes`);
-      return null;
+      return false;
     }
-    this.position += byteLength;
-    return view;
+    this.#windowStart = start;
+    this.#window = view;
+    this.#windowBytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    return true;
   }
 }

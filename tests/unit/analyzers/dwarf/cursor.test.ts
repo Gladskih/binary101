@@ -245,3 +245,37 @@ void test("DwarfCursor handles file reads shorter than the declared section rang
   assert.equal(await cursor.uint16(), null);
   assert.ok(issues[0]?.includes("File ended while reading 2 bytes"));
 });
+
+for (const [offset, size, position, end] of [
+  [-1, 1, 0, 1], [0, -1, 0, 0], [0.5, 1, 0, 1],
+  [0, 1, 1, 0], [0, 1, 2, 3], [2, 1, 0, 1]
+] as const) {
+  void test(`DwarfCursor rejects range ${offset}/${size}/${position}/${end}`, () => {
+    const issues: string[] = [];
+    const cursor = new DwarfCursor(new MockFile(Uint8Array.of(1)),
+      { name: ".debug_info", offset, size, compressed: false }, position, end, true, issues);
+
+    assert.equal(cursor.failed, true);
+    assert.match(issues.join(" "), /Invalid DWARF cursor range/);
+  });
+}
+
+void test("DwarfCursor accepts an empty section at the file end and an empty skip", async () => {
+  const cursor = new DwarfCursor(new MockFile(Uint8Array.of(1)),
+    { name: ".debug_info", offset: 1, size: 0, compressed: false }, 0, 0, true, []);
+
+  assert.equal(cursor.failed, false);
+  assert.equal(cursor.skip(0), true);
+  assert.deepEqual(await cursor.bytes(0), new Uint8Array(0));
+});
+
+void test("DwarfCursor diagnoses invalid integer widths and retains notices", async () => {
+  const issues: string[] = [];
+  const cursor = createCursor([], issues);
+
+  assert.equal(cursor.failed, false);
+  cursor.notice("example");
+  assert.equal(await cursor.unsigned(0), null);
+  assert.deepEqual(issues, [".debug_info at 0x0: example.",
+    ".debug_info at 0x0: Invalid 0-byte integer."]);
+});

@@ -81,9 +81,9 @@ void test("GNU alternate links reject a short checksum read after a complete fil
   const source = dwarfMacroSources([{ name: ".gnu_debugaltlink", bytes: [65, 0, 7] }]).get(".gnu_debugaltlink")!;
   const issues: string[] = [];
   const parsed = await readDwarfAlternateFile({ ...source, reader: { size: source.reader.size,
-    read: (offset, size) => offset < 2 ? source.reader.read(offset, size)
-      : Promise.resolve(new DataView(new ArrayBuffer(0))),
-    readBytes: (offset, size) => source.reader.readBytes(offset, size) } }, issues);
+    // Expose only the complete filename, including when the cursor prefetches.
+    read: (offset, size) => source.reader.read(offset, Math.max(0, Math.min(size, 2 - offset))),
+    readBytes: (offset, size) => source.reader.readBytes(offset, Math.max(0, Math.min(size, 2 - offset))) } }, issues);
   assert.equal(parsed, null);
   assert.match(issues.join(" "), /File ended/);
 });

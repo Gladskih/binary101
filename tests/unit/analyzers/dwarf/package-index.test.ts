@@ -46,9 +46,9 @@ const interruptedIndex = async (boundary: number) => {
   const issues: string[] = [];
   return { parsed: await readDwarfPackageIndex({ ...source, reader: {
     size: source.reader.size,
-    read: (offset, size) => offset < boundary ? source.reader.read(offset, size)
-      : Promise.resolve(new DataView(new ArrayBuffer(0))),
-    readBytes: (offset, size) => source.reader.readBytes(offset, size)
+    // A short file must also truncate prefetches that start before the boundary.
+    read: (offset, size) => source.reader.read(offset, Math.max(0, Math.min(size, boundary - offset))),
+    readBytes: (offset, size) => source.reader.readBytes(offset, Math.max(0, Math.min(size, boundary - offset)))
   } }, sections, "little", issues), issues };
 };
 
