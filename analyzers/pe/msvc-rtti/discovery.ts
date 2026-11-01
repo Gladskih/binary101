@@ -27,6 +27,8 @@ interface DiscoveryCandidate {
   firstFunctionTargetRva: number;
 }
 
+export interface MsvcRttiCandidate extends DiscoveryCandidate { locatorSlotRva: number }
+
 const readDiscoveryCandidate = async (
   image: MsvcRttiImage,
   dir64Sites: Set<number>,
@@ -102,6 +104,36 @@ const buildResult = (
   };
 };
 
+const acceptCandidate = async (
+  image: MsvcRttiImage, dir64Sites: Set<number>, graph: MsvcRttiGraphParser,
+  candidate: MsvcRttiCandidate
+): Promise<AcceptedRtti | null> => {
+  const completeObjectLocator = await graph.completeObjectLocator(candidate.locatorRva);
+  if (!completeObjectLocator) return null;
+  const vftable = await parseRelocationBackedVftable(image, dir64Sites,
+    candidate.locatorSlotRva, completeObjectLocator.rva, candidate.firstFunctionTargetRva);
+  return vftable ? { completeObjectLocator, vftable } : null;
+};
+
+export const discoverMsvcRttiCandidates = async (
+  image: MsvcRttiImage, dir64Sites: Set<number>, graph: MsvcRttiGraphParser,
+  candidates: Iterable<MsvcRttiCandidate>
+): Promise<MsvcRttiAnalysis | null> => {
+  const accepted: AcceptedRtti[] = [];
+  for (const candidate of candidates) {
+    const result = await acceptCandidate(image, dir64Sites, graph, candidate);
+    if (result) accepted.push(result);
+  }
+  return accepted.length ? buildResult(accepted, graph) : null;
+};
+
+export const readMsvcRttiCandidate = async (
+  image: MsvcRttiImage, sites: Set<number>, locatorSlotRva: number
+): Promise<MsvcRttiCandidate | null> => {
+  const candidate = await readDiscoveryCandidate(image, sites, locatorSlotRva);
+  return candidate ? { locatorSlotRva, ...candidate } : null;
+};
+
 export const discoverMsvcRtti = async (
   image: MsvcRttiImage,
   dir64Sites: Set<number>,
@@ -109,18 +141,10 @@ export const discoverMsvcRtti = async (
 ): Promise<MsvcRttiAnalysis | null> => {
   const accepted: AcceptedRtti[] = [];
   for (const locatorSlotRva of dir64Sites) {
-    const candidate = await readDiscoveryCandidate(image, dir64Sites, locatorSlotRva);
+    const candidate = await readMsvcRttiCandidate(image, dir64Sites, locatorSlotRva);
     if (!candidate) continue;
-    const completeObjectLocator = await graph.completeObjectLocator(candidate.locatorRva);
-    if (!completeObjectLocator) continue;
-    const vftable = await parseRelocationBackedVftable(
-      image,
-      dir64Sites,
-      locatorSlotRva,
-      completeObjectLocator.rva,
-      candidate.firstFunctionTargetRva
-    );
-    if (vftable) accepted.push({ completeObjectLocator, vftable });
+    const result = await acceptCandidate(image, dir64Sites, graph, candidate);
+    if (result) accepted.push(result);
   }
   return accepted.length ? buildResult(accepted, graph) : null;
 };

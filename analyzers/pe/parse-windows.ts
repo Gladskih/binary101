@@ -23,7 +23,7 @@ import { collectLoadConfigChecks } from "./load-config/checks.js";
 import { getCanonicalPeMachine } from "./machine.js";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../coff/machine.js";
 import { detectNativeAotCandidate } from "./native-aot.js";
-import { analyzePeNativeAotMetadata } from "./native-aot-metadata.js";
+import type { analyzePeNativeAotMetadata } from "./native-aot-metadata.js";
 import type { PeWindowsParseResult } from "./core/parse-result.js";
 import { analyzeManifestConsistency } from "./resources/manifest-consistency.js";
 import { attachVersionFileTypeChecks } from "./resources/version-file-type-checks.js";
@@ -40,6 +40,7 @@ import { selectPeVariantParsers, type PeVariantParsers } from "./parse-variant.j
 import { withPeMsvcEh } from "./msvc-eh/pe.js";
 import { analyzePeMsvcRtti } from "./msvc-rtti/index.js";
 import { analyzePeItaniumRtti } from "./itanium-rtti.js";
+import { analyzePeRelocationStructures } from "./relocation-discovery.js";
 import { parsePeImageArtifacts } from "./image-artifacts.js";
 export type PeWindowsParseContext = {
   file: File;
@@ -211,8 +212,6 @@ const parsePeDirectoryArtifacts = async (
     exportsInfo,
     resources,
     reloc,
-    msvcRtti: await analyzePeMsvcRtti(reader, core, reloc),
-    itaniumRtti: await analyzePeItaniumRtti(reader, core, reloc),
     ...runtime,
     exception: await parseExceptionDirectory(
       reader, core.dataDirs, core.rvaToOff, canonicalMachine,
@@ -228,8 +227,12 @@ const parsePeRuntimeDirectories = async (
   const { reader, core } = context;
   const clr = await parseClrDirectory(reader, core.dataDirs, core.rvaToOff, core.coff.Machine);
   const readyToRun = await attachCompositeReadyToRun(context, exportsInfo, clr);
+  const structures = clr == null ? await analyzePeRelocationStructures(reader, core, reloc)
+    : { nativeAotMetadata: null, msvcRtti: await analyzePeMsvcRtti(reader, core, reloc),
+      itaniumRtti: await analyzePeItaniumRtti(reader, core, reloc) };
   return { clr, ...(readyToRun ? { readyToRun } : {}),
-    nativeAotCandidate: (clr == null ? await analyzePeNativeAotMetadata(reader, core, reloc) : null) ??
+    msvcRtti: structures.msvcRtti, itaniumRtti: structures.itaniumRtti,
+    nativeAotCandidate: structures.nativeAotMetadata ??
       detectNativeAotCandidate(clr != null, exportsInfo, core.sections) };
 };
 const attachCompositeReadyToRun = async (

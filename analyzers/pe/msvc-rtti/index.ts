@@ -32,14 +32,18 @@ export const analyzePeMsvcRtti = async (
       ? await discoverMsvcRtti(image, dir64Sites, createMsvcRttiGraphParser(image))
       : null;
   } catch (error) {
-    if (error instanceof MsvcRttiDemangleError) return {
-      layout: MSVC_RTTI_LAYOUT,
-      types: [],
-      classHierarchies: [],
-      completeObjectLocators: [],
-      vftables: [],
-      warnings: [error.message]
-    };
-    return null;
+    return msvcRttiReadFailure(error);
   }
+};
+
+export const msvcRttiReadFailure = (error: unknown): MsvcRttiAnalysis | null => {
+  if (error instanceof MsvcRttiDemangleError) return {
+    layout: MSVC_RTTI_LAYOUT,
+    types: [],
+    classHierarchies: [],
+    completeObjectLocators: [],
+    vftables: [],
+    warnings: [error.message]
+  };
+  return null;
 };

@@ -6,7 +6,9 @@ import type { NativeAotVirtualImage } from
   "../../../../analyzers/native-aot/virtual-image-types.js";
 import {
   findNativeAotMetadata,
-  parseNativeAotReadyToRunHeader
+  parseNativeAotReadyToRunHeader,
+  parseNativeAotRuntimeHeader,
+  readNativeAotHeaderReflection
 } from "../../../../analyzers/native-aot/ready-to-run.js";
 import {
   createNativeAotMetadataFixture,
@@ -62,6 +64,63 @@ const fixturePointerSites = (fixture: NativeAotMetadataFixture): Set<number> =>
   new Set(fixture.relocations.blocks.flatMap(block => block.entries
     .filter(entry => entry.type !== 0)
     .map(entry => block.pageRva + entry.offset)));
+
+void test("validates runtime headers before decoding reflection bytes", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const image = createVirtualImage(fixture);
+  const reads: number[] = [];
+  const read = image.readData;
+  image.readData = (rva, size, alignment) => { reads.push(size); return read(rva, size, alignment); };
+  const header = await parseNativeAotRuntimeHeader(image, fixturePointerSites(fixture), fixture.headerRva);
+  assert.ok(header);
+  assert.equal(header.reflection, undefined);
+  assert.equal(reads.includes(fixture.metadataSize), false);
+  const decoded = await readNativeAotHeaderReflection(image, header);
+  assert.ok(decoded.reflection);
+  assert.equal(header.reflection, undefined);
+  assert.equal(reads.filter(size => size === fixture.metadataSize).length, 1);
+});
+
+void test("does not decode reflection when the selected header has no metadata section", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const image = createVirtualImage(fixture);
+  const header = await parseNativeAotRuntimeHeader(image, fixturePointerSites(fixture), fixture.headerRva);
+  assert.ok(header);
+  header.sections = header.sections.filter(section => section.rva !== fixture.embeddedMetadataRva);
+  assert.equal(await readNativeAotHeaderReflection(image, header), header);
+});
+
+void test("does not decode a truncated reflection source supplied directly", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  const image = createVirtualImage(fixture);
+  const header = await parseNativeAotRuntimeHeader(image, fixturePointerSites(fixture), fixture.headerRva);
+  assert.ok(header);
+  header.sections.find(section => section.rva === fixture.embeddedMetadataRva)!.size = 0;
+  assert.equal(await readNativeAotHeaderReflection(image, header), header);
+});
+
+void test("retains reflection diagnostics for a signature-only metadata section", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  // The four-byte signature is present; the rest of the NativeFormat header is truncated.
+  setNativeAotReflectionMetadata(fixture, fixture.bytes.slice(
+    fixture.embeddedMetadataRva - SECTION_RVA, fixture.embeddedMetadataRva - SECTION_RVA + 4));
+  const image = createVirtualImage(fixture);
+  const header = await parseNativeAotRuntimeHeader(image, fixturePointerSites(fixture), fixture.headerRva);
+  assert.ok(header);
+  const decoded = await readNativeAotHeaderReflection(image, header);
+  assert.ok(decoded.reflection);
+  assert.deepEqual(decoded.reflection.scopes, []);
+  assert.ok(decoded.reflection.warnings?.length);
+});
+
+void test("rejects metadata whose declared extent truncates its signature", async () => {
+  const fixture = createNativeAotMetadataFixture();
+  // Only three of the four signature bytes belong to the declared metadata section.
+  setNativeAotReflectionMetadata(fixture, fixture.bytes.slice(
+    fixture.embeddedMetadataRva - SECTION_RVA, fixture.embeddedMetadataRva - SECTION_RVA + 3));
+  assert.equal(await parseNativeAotRuntimeHeader(
+    createVirtualImage(fixture), fixturePointerSites(fixture), fixture.headerRva), null);
+});
 
 void test("NativeAOT runtime header remains usable without reflection metadata", async () => {
   const fixture = createNativeAotMetadataFixture();

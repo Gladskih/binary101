@@ -169,7 +169,7 @@ const hasNativeRuntimeSections = (sections: NativeAotMetadataSection[] | null):
 const isInvalidEmbeddedMetadata = (metadata: NativeAotMetadataSection | null,
   sections: NativeAotMetadataSection[]): boolean => !metadata && findEmbeddedMetadata(sections) !== undefined;
 
-export const parseNativeAotReadyToRunHeader = async (
+export const parseNativeAotRuntimeHeader = async (
   image: NativeAotVirtualImage,
   sites: ReadonlySet<number>,
   headerRva: number
@@ -183,20 +183,47 @@ export const parseNativeAotReadyToRunHeader = async (
   if (!isKnownHeaderEncoding(header) || !layout) return null;
   const sections = await parseHeaderSections(image, sites, headerRva, count, entrySize, layout);
   if (!hasNativeRuntimeSections(sections)) return null;
-  const metadata = await findValidatedEmbeddedMetadata(image, sections);
   // Reflection metadata is optional; the validated runtime header and pointer ranges
   // establish NativeAOT even when compilation omits reflection support.
   // https://github.com/dotnet/runtime/blob/v10.0.0/src/coreclr/nativeaot/Runtime/inc/ModuleHeaders.h
-  if (isInvalidEmbeddedMetadata(metadata, sections)) return null;
+  if (isInvalidEmbeddedMetadata(await findValidatedEmbeddedMetadata(image, sections), sections)) return null;
   return {
     layout,
     headerRva,
     majorVersion: header.getUint16(4, true),
     minorVersion: header.getUint16(6, true),
-    sections,
-    ...(metadata ? { reflection: await parseEmbeddedReflectionMetadata(
-      image, metadata, header.getUint16(4, true)) } : {})
+    sections
   };
+};
+
+export const readNativeAotHeaderReflection = async (
+  image: NativeAotVirtualImage, header: NativeAotReadyToRunHeader
+): Promise<NativeAotReadyToRunHeader> => {
+  const metadata = findEmbeddedMetadata(header.sections);
+  if (metadata?.size == null || metadata.size < 4) return header;
+  return { ...header, reflection: await parseEmbeddedReflectionMetadata(image,
+    { ...metadata, size: metadata.size }, header.majorVersion) };
+};
+
+export const parseNativeAotReadyToRunHeader = async (
+  image: NativeAotVirtualImage, sites: ReadonlySet<number>, headerRva: number
+): Promise<NativeAotReadyToRunHeader | null> => {
+  const header = await parseNativeAotRuntimeHeader(image, sites, headerRva);
+  return header ? readNativeAotHeaderReflection(image, header) : null;
+};
+
+export const readNativeAotMetadata = async (
+  image: NativeAotVirtualImage, modulePointerRva: number,
+  header: NativeAotReadyToRunHeader
+): Promise<NativeAotMetadata> => {
+  const invokeMap = await parseNativeAotInvokeMap(image, header.sections,
+    [9, 10].includes(header.majorVersion) ? "dotnet9" : "dotnet10");
+  const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
+  const functionMaps = await parseNativeAotFunctionMaps(image, header.sections, header);
+  return { status: "confirmed", modulePointerRva, ...header,
+    initializers: await parseNativeAotInitializers(image, header),
+    ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}),
+    ...(functionMaps ? { functionMaps } : {}) };
 };
 
 export const findNativeAotMetadata = async (
@@ -209,16 +236,7 @@ export const findNativeAotMetadata = async (
     if (headerRva == null || checkedHeaders.has(headerRva)) continue;
     checkedHeaders.add(headerRva);
     const header = await parseNativeAotReadyToRunHeader(image, sites, headerRva);
-    if (header) {
-      const invokeMap = await parseNativeAotInvokeMap(image, header.sections,
-        [9, 10].includes(header.majorVersion) ? "dotnet9" : "dotnet10");
-      const stackTraceMap = await parseNativeAotStackTraceMap(image, header.sections);
-      const functionMaps = await parseNativeAotFunctionMaps(image, header.sections, header);
-      return { status: "confirmed", modulePointerRva, ...header,
-        initializers: await parseNativeAotInitializers(image, header),
-        ...(invokeMap ? { invokeMap } : {}), ...(stackTraceMap ? { stackTraceMap } : {}),
-        ...(functionMaps ? { functionMaps } : {}) };
-    }
+    if (header) return readNativeAotMetadata(image, modulePointerRva, header);
   }
   return null;
 };

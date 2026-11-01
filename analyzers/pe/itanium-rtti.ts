@@ -26,7 +26,7 @@ const pointerWidth = (core: PeWindowsCore): 4 | 8 | null => {
   return core.coff.Machine === 0x14c && core.opt.Magic === 0x10b ? 4 : null;
 };
 
-const relocationSites = (
+export const collectPeItaniumRelocationSites = (
   relocations: PeBaseRelocationResult, width: 4 | 8
 ): number[] | null => {
   const sites: number[] = [];
@@ -68,7 +68,7 @@ const readAnalysis = async (
   reader: FileRangeReader, core: PeWindowsCore,
   relocations: PeBaseRelocationResult, width: 4 | 8
 ): Promise<ItaniumRttiAnalysis | null> => {
-  const sites = relocationSites(relocations, width);
+  const sites = collectPeItaniumRelocationSites(relocations, width);
   const image = createPeItaniumImage(reader, core, width);
   if (!sites?.length || !image) return null;
   try {
