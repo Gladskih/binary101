@@ -9,6 +9,14 @@ const map = (rva: number) => rva;
 const table = (unwind = 16) => new MockFile(Uint8Array.from(
   [4, 8, 77, 8, 12, unwind].flatMap(legacyU32)));
 
+void test("direct AMD64 rows validate synchronously without reading metadata bytes", () => {
+  const reader = image();
+  reader.read = () => { assert.fail("Direct references require mapping checks, not byte reads"); };
+  const result = validateAmd64RuntimeFunction(reader, 4, 8, 16, 64, 24, map);
+  assert.equal(result instanceof Promise, false);
+  assert.deepEqual(result, { issue: null, unwindInfoRva: 16 });
+});
+
 void test("AMD64 validation resolves an indirect row through its separate bounded table source", async () => {
   const result = await validateAmd64RuntimeFunction(image(), 4, 8, 77, 64, 24, map, table());
 
@@ -83,4 +91,18 @@ void test("AMD64 validation rejects a truncated indirect target", async () => {
 
   assert.equal(result.unwindInfoRva, null);
   assert.match(result.issue ?? "", /could not be read/);
+});
+
+void test("AMD64 validation follows multiple indirect rows before a direct reference", async () => {
+  const source = new MockFile(Uint8Array.from([4, 8, 77, 8, 12, 89, 12, 16, 20].flatMap(legacyU32)));
+  // Image RVAs 76 and 88 select the second and third twelve-byte table rows.
+  const result = validateAmd64RuntimeFunction(image(), 4, 8, 77, 64, 36, map, source);
+  assert.ok(result instanceof Promise);
+  assert.deepEqual(await result, { issue: null, unwindInfoRva: 20 });
+});
+
+void test("AMD64 validation preserves visited rows across a multi-row indirect cycle", async () => {
+  const source = new MockFile(Uint8Array.from([4, 8, 77, 8, 12, 89, 12, 16, 77].flatMap(legacyU32)));
+  const result = await validateAmd64RuntimeFunction(image(), 4, 8, 77, 64, 36, map, source);
+  assert.deepEqual(result, { issue: "Indirect UnwindData forms a cycle", unwindInfoRva: null });
 });

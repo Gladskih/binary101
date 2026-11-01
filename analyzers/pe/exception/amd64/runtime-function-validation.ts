@@ -82,15 +82,15 @@ const resolveDirectUnwindInfoRva = (
     unwindInfoRva: unwindIssue ? null : unwindDataRva };
 };
 
-const resolveUnwindInfoRva = async (
+const resolveUnwindInfoRva = (
   reader: FileRangeReader,
   unwindDataRva: number,
   exceptionDirectoryRva: number | undefined,
   exceptionDirectorySize: number,
   rvaToOff: RvaToOffset,
-  visitedIndirectRvas = new Set<number>(),
+  visitedIndirectRvas: Set<number> | undefined,
   source?: FileRangeReader
-): Promise<RuntimeFunctionEntryValidation> => {
+): RuntimeFunctionEntryValidation | Promise<RuntimeFunctionEntryValidation> => {
   if (!unwindDataRva) return { issue: "UnwindData is zero", unwindInfoRva: null };
   if (!isIndirectRuntimeFunction(unwindDataRva)) {
     return resolveDirectUnwindInfoRva(reader, unwindDataRva, exceptionDirectoryRva,
@@ -99,7 +99,15 @@ const resolveUnwindInfoRva = async (
   if (exceptionDirectoryRva === undefined) {
     return { issue: "Indirect UnwindData cannot be validated because the table origin is unknown", unwindInfoRva: null };
   }
-  const indirectRuntimeFunctionRva = getIndirectRuntimeFunctionRva(unwindDataRva);
+  return resolveIndirectUnwindInfoRva(reader, getIndirectRuntimeFunctionRva(unwindDataRva),
+    exceptionDirectoryRva, exceptionDirectorySize, rvaToOff, visitedIndirectRvas ?? new Set(), source);
+};
+
+const resolveIndirectUnwindInfoRva = async (
+  reader: FileRangeReader, indirectRuntimeFunctionRva: number, exceptionDirectoryRva: number,
+  exceptionDirectorySize: number, rvaToOff: RvaToOffset, visitedIndirectRvas: Set<number>,
+  source?: FileRangeReader
+): Promise<RuntimeFunctionEntryValidation> => {
   if (visitedIndirectRvas.has(indirectRuntimeFunctionRva)) {
     return { issue: "Indirect UnwindData forms a cycle", unwindInfoRva: null };
   }
@@ -131,7 +139,7 @@ const resolveUnwindInfoRva = async (
   );
 };
 
-export const validateAmd64RuntimeFunction = async (
+export const validateAmd64RuntimeFunction = (
   reader: FileRangeReader,
   beginRva: number,
   endRva: number,
@@ -140,7 +148,7 @@ export const validateAmd64RuntimeFunction = async (
   exceptionDirectorySize: number,
   rvaToOff: RvaToOffset,
   source?: FileRangeReader
-): Promise<RuntimeFunctionEntryValidation> => {
+): RuntimeFunctionEntryValidation | Promise<RuntimeFunctionEntryValidation> => {
   // Microsoft documents .pdata as sorted RUNTIME_FUNCTION records with
   // image-relative function start, function end, and unwind data. Chained
   // RUNTIME_FUNCTION records are trailing UNWIND_INFO payload; indirect
@@ -161,7 +169,7 @@ export const validateAmd64RuntimeFunction = async (
     exceptionDirectoryRva,
     exceptionDirectorySize,
     rvaToOff,
-    new Set<number>(),
+    undefined,
     source
   );
 };

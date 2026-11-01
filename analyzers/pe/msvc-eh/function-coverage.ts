@@ -6,6 +6,29 @@ const completeRuntimeInventory = (exception: PeExceptionDirectory): boolean =>
   exception.functionCount === exception.beginRvas.length &&
   exception.rangeLengths?.length === exception.beginRvas.length;
 
+const createCoverageLookup = (ranges: { begin: number; end: number }[]) => {
+  // Consecutive IP-state entries often belong to the same interval. Profiling
+  // codex.exe attributed 0.23 s to lookups; retain just the last successful range.
+  let previous = ranges[0];
+  return (rva: number): boolean => {
+    if (previous && rva >= previous.begin && rva <= previous.end) return true;
+    let low = 0, high = ranges.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      const range = ranges[middle]!;
+      if (rva < range.begin) high = middle;
+      // End labels may appear in IP maps. Presence of the exact owner start is not required:
+      // LLVM WinException::computeIP2StateTable deliberately omits cleanup-funclet maps.
+      // https://github.com/llvm/llvm-project/blob/main/llvm/lib/CodeGen/AsmPrinter/WinException.cpp
+      else if (rva <= range.end) {
+        previous = range;
+        return true;
+      } else low = middle + 1;
+    }
+    return false;
+  };
+};
+
 /** One merged interval index per parse; no repeated linear searches across .pdata. */
 export const createEhFunctionCoverage = (
   exception: PeExceptionDirectory | null
@@ -27,18 +50,5 @@ export const createEhFunctionCoverage = (
     if (previous && begin <= previous.end) previous.end = Math.max(previous.end, end);
     else merged.push({ begin, end });
   }
-  return rva => {
-    let low = 0, high = merged.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      const range = merged[middle]!;
-      if (rva < range.begin) high = middle;
-      // End labels may appear in IP maps. Presence of the exact owner start is not required:
-      // LLVM WinException::computeIP2StateTable deliberately omits cleanup-funclet maps.
-      // https://github.com/llvm/llvm-project/blob/main/llvm/lib/CodeGen/AsmPrinter/WinException.cpp
-      else if (rva <= range.end) return true;
-      else low = middle + 1;
-    }
-    return false;
-  };
+  return createCoverageLookup(merged);
 };

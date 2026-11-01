@@ -85,8 +85,11 @@ export const readAmd64RuntimeFunctionTable = async (
       const beginRva = spanView.getUint32(entryOffset, true) >>> 0;
       const endRva = spanView.getUint32(entryOffset + 4, true) >>> 0;
       const unwindDataRva = spanView.getUint32(entryOffset + 8, true) >>> 0;
-      const validation = await validateAmd64RuntimeFunction(reader, beginRva, endRva, unwindDataRva,
+      // Ordinary direct rows need no I/O. Keep their million-row hot path
+      // synchronous; only indirect references require an asynchronous table walk.
+      const pending = validateAmd64RuntimeFunction(reader, beginRva, endRva, unwindDataRva,
         directoryRva, entryCount * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE, rvaToOff, source);
+      const validation = "issue" in pending ? pending : await pending;
       functionCount += 1;
       if (validation.issue) {
         invalidEntryCount += 1;

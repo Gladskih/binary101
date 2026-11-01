@@ -13,6 +13,24 @@ const rawRows = (count: number): MockFile => {
   return new MockFile(bytes);
 };
 
+void test("raw AMD64 table combines synchronous direct and asynchronous indirect row validation", async () => {
+  const bytes = new Uint8Array(24);
+  const view = new DataView(bytes.buffer);
+  writeRuntimeFunction(view, 0, 4, 8, 77); // Low bit selects the row at image RVA 76.
+  writeRuntimeFunction(view, 12, 8, 12, 16);
+  const issues: string[] = [];
+  const table = await readAmd64RuntimeFunctionTable(new MockFile(new Uint8Array(128)),
+    new MockFile(bytes), 2, identityRvaToOffset, issues, 64);
+  assert.equal(table.functionCount, 2);
+  assert.equal(table.invalidEntryCount, 0);
+  assert.deepEqual(table.beginRvas, [4, 8]);
+  assert.deepEqual(table.rangeLengths, [4, 4]);
+  assert.deepEqual([...table.unwindRvas], [16]);
+  assert.deepEqual(table.functionsByUnwindRva.get(16),
+    [{ begin: 4, end: 8, sourceUnwindInfoRva: 16 }, { begin: 8, end: 12, sourceUnwindInfoRva: 16 }]);
+  assert.deepEqual(issues, []);
+});
+
 void test("raw AMD64 table keeps valid rows after reporting unsorted starts once", async () => {
   const bytes = rawRows(3).data.slice();
   writeRuntimeFunction(new DataView(bytes.buffer), 0, 8, 12, 16);

@@ -56,3 +56,38 @@ void test("a descending pair preserves both original intervals after sorting", (
   assert.equal(covers(0x2020), true);
   assert.equal(covers(0x2021), false);
 });
+
+void test("nearby IP lookups and backward jumps preserve interval boundaries and gaps", () => {
+  const covers = createEhFunctionCoverage({ ...createEmptyExceptionDirectory([], "amd64"),
+    functionCount: 2, beginRvas: [0x1000, 0x2000], rangeLengths: [16, 32] });
+  assert.ok(covers);
+  assert.equal(covers(0x1001), true);
+  assert.equal(covers(0x1000), true);
+  assert.equal(covers(0xfff), false);
+  assert.equal(covers(0x1010), true);
+  assert.equal(covers(0x1011), false);
+  assert.equal(covers(0x2001), true);
+  assert.equal(covers(0x1fff), false);
+  assert.equal(covers(0x2020), true);
+  assert.equal(covers(0x2021), false);
+  assert.equal(covers(0x1002), true);
+  assert.equal(covers(0x2002), true);
+  assert.equal(covers(NaN), false);
+  assert.equal(covers(Infinity), false);
+});
+
+void test("an empty complete function inventory never supplies a cached interval", () => {
+  const covers = createEhFunctionCoverage({ ...createEmptyExceptionDirectory([], "amd64"), rangeLengths: [] });
+  assert.ok(covers);
+  assert.equal(covers(0), false);
+  assert.equal(covers(0x1000), false);
+  assert.equal(covers(NaN), false);
+});
+
+void test("an uncached interval includes its exact end on both forward and backward searches", () => {
+  const covers = createEhFunctionCoverage({ ...createEmptyExceptionDirectory([], "amd64"),
+    functionCount: 2, beginRvas: [0x1000, 0x2000], rangeLengths: [16, 32] });
+  assert.ok(covers);
+  assert.equal(covers(0x2020), true);
+  assert.equal(covers(0x1010), true);
+});
