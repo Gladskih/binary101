@@ -27,7 +27,6 @@ export const createNames = (image: ItaniumRttiImage) => {
     return names.get(address)!;
   };
   return { name,
-    get exhausted(): boolean { return strings.exhausted; },
     prepare: async (addresses: Iterable<number>): Promise<void> => {
       const ordered = [...new Set(addresses)].filter(address => !structuralNames.has(address))
         .sort((left, right) => image.readOrder(left) - image.readOrder(right));

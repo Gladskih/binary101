@@ -89,7 +89,6 @@ export const createItaniumRecords = (image: ItaniumRttiImage) => {
     prepareRuntime: createPreparation(image, names, runtimeTable),
     prepareTypes: names.prepare,
     name: names.name,
-    get nameValidationIncomplete(): boolean { return names.exhausted; },
     runtimeTable
   };
 };

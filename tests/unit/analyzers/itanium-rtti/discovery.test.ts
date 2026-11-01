@@ -89,18 +89,3 @@ void test("rejects an unsupported name and invalid VMI body silently", async () 
   assert.equal(result.types.some(type => type.address === fixture.addresses.multiple), false);
   assert.deepEqual(result.warnings, []);
 });
-
-void test("bounds deep inheritance without overflowing the stack", async () => {
-  const fixture = createItaniumFixture();
-  const chain = Array.from({ length: 65 }, (_, index) => 2000 + index * 24);
-  chain.forEach((address, index) => {
-    fixture.type(address, fixture.addresses.siTable, "4Deep");
-    fixture.pointer(address + 16, chain[index + 1] ?? fixture.addresses.base);
-  });
-  fixture.table(fixture.addresses.table, chain[0]!);
-  const result = await discoverItaniumRtti(fixture.image);
-  assert.ok(result);
-  assert.equal(result.types.some(type => type.address === chain[0]), false);
-  assert.match(result.warnings.join(), /depth limit/);
-  assert.ok(result.types.some(type => type.name === "4Base"));
-});

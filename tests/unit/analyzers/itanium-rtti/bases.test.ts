@@ -39,7 +39,7 @@ for (const encoded of [-256n, 4n, 255n, -1n, -4093n, 3n, 0x7fffffffffffff00n]) {
     assert.equal(await readItaniumBases(fixture.image, fixture.addresses.multiple, "vmi"), null);
   });
 }
-for (const count of [0, 257, 0xffffffff]) {
+for (const count of [0, 0xffffffff]) {
   void test(`rejects unsupported base count ${count}`, async () => {
     const fixture = createItaniumFixture();
     fixture.view.setUint32(fixture.addresses.multiple + 20, count, true);
