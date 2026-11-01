@@ -71,7 +71,7 @@ def reproductions(output, observations):
 
 def build_runs(output):
     result = {}
-    for name in ("smoke", "pilot", "build"):
+    for name in ("smoke", "pilot", "counterexamples", "build"):
         path = output / f"{name}-run.json"
         if path.is_file():
             result[name] = json.loads(path.read_text(encoding="utf-8"))
@@ -84,6 +84,8 @@ def denominators(observations):
     positive = sum(bool(label["files"] or label["bundles"]) for label, _ in verified)
     return {"evaluatedCompleteInputs": len(verified), "positiveInputs": positive,
             "negativeInputs": len(verified) - positive,
+            "uniqueExpectedContentSha256": len({entry["sha256"] for label, _ in verified for entry in label["files"]}),
+            "expectedContentSizes": sorted({entry["size"] for label, _ in verified for entry in label["files"] if "size" in entry}),
             "expectedResourceFiles": sum(len(label["files"]) for label, _ in verified),
             "expectedBundles": sum(len(label["bundles"]) for label, _ in verified)}
 

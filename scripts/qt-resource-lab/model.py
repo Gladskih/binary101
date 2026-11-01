@@ -3,12 +3,13 @@ import hashlib
 import itertools
 import json
 from pathlib import Path
+from counterexample_assets import FAMILIES as COUNTEREXAMPLES
 
 FAMILIES = ("basic", "localized", "compressed", "zstd", "shared", "multiple", "unused",
-            "empty", "plain", "magic", "bad-hash", "bad-link", "bad-size", "mixed")
+            "empty", "plain", "magic", "bad-hash", "bad-link", "bad-size", "mixed", *COUNTEREXAMPLES)
 PROFILES = {"O0": ["-O0"], "O2": ["-O2"], "O3": ["-O3"], "Os": ["-Os"],
             "Oz": ["-Oz"], "LTO": ["-O3", "-flto"]}
-HOLDOUT = frozenset(("multiple", "bad-link", "mixed"))
+HOLDOUT = frozenset(("multiple", "bad-link", "mixed", "small-sets", "opaque"))
 
 
 def digest(path):
@@ -45,7 +46,7 @@ def schedule(sdks, seed):
 
 
 def supported_family(sdk, family):
-    algorithm = {"zstd": "zstd", "compressed": "zlib"}.get(family, "none")
+    algorithm = {"zstd": "zstd", "compressed": "zlib", "compressed-sizes": "zlib"}.get(family, "none")
     return sdk.get("compression", {}).get(algorithm, {"supported": True})["supported"]
 
 
@@ -75,3 +76,12 @@ def coverage_examples(rows):
 def job_for(rows, sdk, compiler, target, profile, family):
     identity = (sdk, compiler, target, profile, family)
     return next(row for row in rows if tuple(row[key] for key in ("sdk", "compiler", "target", "profile", "family")) == identity)
+
+
+def counterexample_schedule(rows, sdks):
+    # Validate each family on both formats/Qt majors before multiplying variants.
+    kits = [sdk for sdk in sdks if sdk["linkage"] == "shared"]
+    return [job_for(rows, sdk["id"], compiler, "exe", profile, family)
+            for family, profile, compiler in itertools.product((*COUNTEREXAMPLES, "bad-size", "bad-hash", "empty"),
+                                                               ("O3", "LTO"), ("gcc", "clang"))
+            for sdk in kits if supported_family(sdk, family)]

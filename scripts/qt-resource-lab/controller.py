@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
-from model import digest, job_for, pilot_schedule, read_jsonl, schedule, write_json
+from model import counterexample_schedule, digest, job_for, pilot_schedule, read_jsonl, schedule, write_json
 
 WORKER = Path(__file__).with_name("worker.py")
 PYTHON = os.environ.get("QT_LAB_WINDOWS_PYTHON", "C:/msys64/ucrt64/bin/python.exe")
@@ -84,7 +84,7 @@ def valid_published(label):
 
 def recipe_hash():
     value = hashlib.sha256()
-    dependencies = {"build.py", "sources.py", "truth.py", "image.py", "process.py",
+    dependencies = {"build.py", "sources.py", "counterexample_assets.py", "truth.py", "image.py", "process.py",
                     "windows_job.py", "sdk.py", "worker.py", "model.py"}
     for path in sorted(WORKER.parent.iterdir()):
         if path.name in dependencies or path.suffix == ".cpp":
@@ -111,12 +111,14 @@ def build(output, mode, workers, minutes, seed, limit=None):
         rows = smoke_schedule(rows, kits)
     elif mode == "pilot":
         rows = pilot_schedule(rows)
+    elif mode == "counterexamples":
+        rows = counterexample_schedule(rows, kits)
     else:
         require_pilot(output, kits)
     rows = rows[:limit]
     write_json(output / f"{mode}-schedule.json", rows)
     write_json(output / "unsupported-cells.json", unsupported_cells(kits))
-    executor = execute if mode == "build" else rebuild
+    executor = execute if mode in ("build", "counterexamples") else rebuild
     result = run_batch(rows, kits, output, workers, minutes, executor)
     write_json(output / f"{mode}-run.json", result)
     export_corpus(output)

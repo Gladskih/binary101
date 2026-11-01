@@ -117,6 +117,8 @@ def label_variants(job, sdk, directory, target, stripped, prepared, oracle, outp
     for variant, image in (("symbols", target), ("stripped", stripped)):
         files, bundles, bundle_status = label_image(job, directory, image, target, prepared, oracle)
         negative_evidence = negative_bytes(directory, image, prepared)
+        retained_controls = negative_bytes(directory, image, {"negative": True,
+            "sourceFiles": prepared.get("retainedControlSources", [])})
         if variant == "stripped":
             verify_retained_bytes(target, image, files)
         identity = hashlib.sha256((job["id"] + "-" + variant).encode()).hexdigest()[:24]
@@ -128,6 +130,7 @@ def label_variants(job, sdk, directory, target, stripped, prepared, oracle, outp
                        "caseId": job["id"], "family": job["family"], "split": job["split"], "variant": variant,
                        "format": sdk["format"], "registration": prepared["registration"],
                        "producer": job, "negativeEvidence": negative_evidence, "evidence": image_evidence(job)})
+        labels[-1]["retainedControls"] = retained_controls
     return labels
 
 
@@ -144,7 +147,7 @@ def negative_bytes(directory, image, prepared):
     with image.open("rb") as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
         for name in prepared["sourceFiles"]:
             text = (directory / name).read_text(encoding="utf-8")
-            declarations = re.findall(r"static const volatile unsigned char (\w+)\[\][^=]*=\s*\{([^}]*)\}", text)
+            declarations = re.findall(r"static const (?:volatile )?unsigned char (\w+)\[\][^=]*=\s*\{([^}]*)\}", text)
             if not declarations:
                 raise ValueError("Negative source contains no independently verifiable decoy")
             for symbol, numbers in declarations:

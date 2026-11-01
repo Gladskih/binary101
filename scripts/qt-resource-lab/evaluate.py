@@ -1,6 +1,7 @@
 """Compare predictions with final-image truth, without passing truth to scanners."""
 from collections import Counter
 from model import read_jsonl
+from content_metrics import compare_contents
 
 
 def file_key(record):
@@ -19,6 +20,7 @@ def compare_sample(label, prediction):
         return result
     result["status"] = "partial-evaluated" if label["status"] == "partial" else "evaluated"
     result.update(compare_files(label, prediction))
+    result.update(compare_contents(label, prediction))
     positive = bool(label["files"] or label["bundles"])
     result["file_tp"] = int(positive and bool(prediction["bundles"]))
     result["file_fp"] = int(not positive and bool(prediction["bundles"]))

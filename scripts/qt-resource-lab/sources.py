@@ -6,11 +6,14 @@ import shutil
 import struct
 from process import run
 from truth import arrays_from_cpp
+from counterexample_assets import FAMILIES as COUNTEREXAMPLES, assets as counterexample_assets, payload_decoy
 
 TEMPLATES = Path(__file__).parent
 
 
 def assets(directory, job, index):
+    if job["family"] in COUNTEREXAMPLES:
+        return counterexample_assets(directory, job, index)
     salt = hashlib.sha256(f"{job['family']}:{job['seed']}:{index}".encode()).hexdigest()[:12]
     prefix = f"/assets/{salt}/{index}"
     text = (f"Qt resource {salt}: independent oracle.\n" * 80).encode()
@@ -40,9 +43,11 @@ def prepare(directory, sdk, job):
         shutil.copyfile(TEMPLATES / name, directory / name)
     resources, commands = [], []
     if job["family"] not in ("empty", "plain", "magic"):
-        for index in range(2 if job["family"] in ("multiple", "mixed") else 1):
+        for index in range(2 if job["family"] in ("multiple", "mixed", "small-sets") else 1):
             resources.append(generate_resource(directory, sdk, job, index, commands))
     source_files = [record["cpp"] for record in resources]
+    controls = [payload_decoy(directory)] if job["family"] == "payload-decoy" else []
+    source_files += controls
     negative = job["family"] in ("magic", "bad-hash", "bad-link", "bad-size", "mixed")
     if negative:
         source_files = negative_source(directory, job, resources)
@@ -54,7 +59,8 @@ def prepare(directory, sdk, job):
             'extern "C" EXPORT const char *lab_probe() { return "{\\"files\\":[]}"; }\n'
             'extern "C" EXPORT const char *lab_validate_file(const char *) { return "{\\"error\\":\\"no Qt\\"}"; }\n', encoding="utf-8")
     return {"resources": resources, "sourceFiles": source_files, "negative": negative,
-            "commands": commands, "registration": registration_for(job["family"])}
+            "commands": commands, "registration": registration_for(job["family"]),
+            "retainedControlSources": controls}
 
 
 def retain_unregistered(directory, resources):
@@ -72,7 +78,7 @@ def generate_resource(directory, sdk, job, index, commands):
     qrc = f"resource{index}.qrc"
     cpp = f"qrc_resource{index}.cpp"
     (directory / qrc).write_text(f"<RCC>{xml}</RCC>", encoding="utf-8")
-    algorithm = "zstd" if job["family"] == "zstd" else "zlib" if job["family"] == "compressed" else "none"
+    algorithm = "zstd" if job["family"] == "zstd" else "zlib" if job["family"] in ("compressed", "compressed-sizes") else "none"
     flags = ["--format-version", str(job["rccVersion"]), "--compress-algo", algorithm]
     if algorithm != "none":
         flags += ["--threshold", "0"]
@@ -103,6 +109,11 @@ def negative_source(directory, job, resources):
         if job["family"] == "bad-link":
             struct.pack_into(">I", blob, tree + 10, 0xffffffff)
         elif job["family"] == "bad-size":
+            # A broken qres header alone leaves valid unregistered arrays behind.
+            # Corrupt the retained payload region too, before changing its offset.
+            data_start = struct.unpack_from(">I", blob, 12)[0]
+            data_end = min(value for value in (tree, names, len(blob)) if value > data_start)
+            blob[data_start:data_end] = b"\xff" * (data_end - data_start)
             struct.pack_into(">I", blob, 12, len(blob) + 4096)
         else:
             # Corrupt every stored Qt name hash, not only one optional branch.

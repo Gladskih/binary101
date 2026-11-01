@@ -13,7 +13,7 @@ from lock import corpus_lock
 
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("doctor", "smoke", "pilot", "build", "scan", "evaluate", "report", "gate", "selftest", "real", "mutate-evaluator"))
+    parser.add_argument("command", choices=("doctor", "smoke", "pilot", "counterexamples", "build", "scan", "evaluate", "report", "gate", "selftest", "real", "mutate-evaluator"))
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--workers", type=int, default=4, choices=range(1, 9))
     parser.add_argument("--minutes", type=float, default=60)
@@ -60,7 +60,7 @@ def dispatch(args, output):
                "mutate-evaluator": lambda: mutate_evaluator(output),
                "scan": lambda: scan_corpus(output, args.scanner, args.workers, args.timeout, args.scanner_revision),
                "evaluate": lambda: evaluate_report(output), "report": lambda: report(output)}
-    if args.command in ("smoke", "pilot", "build"):
+    if args.command in ("smoke", "pilot", "counterexamples", "build"):
         return build(output, args.command, args.workers, args.minutes, args.seed, args.limit)
     return actions[args.command]()
 

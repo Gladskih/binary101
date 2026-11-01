@@ -1,7 +1,7 @@
 from pathlib import Path
 import tempfile
 import unittest
-from model import HOLDOUT, digest, pilot_schedule, read_jsonl, schedule, write_json
+from model import HOLDOUT, counterexample_schedule, digest, pilot_schedule, read_jsonl, schedule, write_json
 from controller import linux_path, windows_path
 
 
@@ -24,6 +24,26 @@ class ModelTests(unittest.TestCase):
         self.assertEqual({r["target"] for r in rows}, {"exe", "library"})
         self.assertIn("basic", {r["family"] for r in rows})
         self.assertIn("bad-hash", {r["family"] for r in rows})
+
+    def test_counterexample_batch_is_bounded_and_covers_both_formats(self):
+        kits = [{"id": "pe", "format": "PE", "linkage": "shared"},
+                {"id": "elf", "format": "ELF", "linkage": "shared"},
+                {"id": "static", "format": "ELF", "linkage": "static"}]
+        rows = counterexample_schedule(schedule(kits, 101), kits)
+        self.assertEqual(len(rows), 88)
+        self.assertEqual({row["format"] for row in rows[:2]}, {"PE", "ELF"})
+        self.assertEqual({row["family"] for row in rows},
+                         {"tiny", "empty-file", "sizes", "metadata-text", "opaque", "small-sets", "compressed-sizes",
+                          "bad-size", "bad-hash", "empty", "payload-decoy"})
+        self.assertEqual({row["profile"] for row in rows}, {"O3", "LTO"})
+        self.assertEqual({row["compiler"] for row in rows}, {"gcc", "clang"})
+        self.assertEqual({row["target"] for row in rows}, {"exe"})
+
+    def test_counterexamples_respect_compression_capability(self):
+        kits = [{"id": "pe", "format": "PE", "linkage": "shared",
+                 "compression": {"zlib": {"supported": False}}}]
+        rows = counterexample_schedule(schedule(kits, 101), kits)
+        self.assertNotIn("compressed-sizes", {row["family"] for row in rows})
 
     def test_atomic_json_and_hash(self):
         with tempfile.TemporaryDirectory() as temporary:

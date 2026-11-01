@@ -1,12 +1,31 @@
 from pathlib import Path
 import tempfile
 import unittest
-from sources import disable_registration
+from unittest.mock import patch
+import struct
+from sources import disable_registration, negative_source
 from truth import arrays_from_cpp, confirm_expected, select_variants, negative_bytes
 from scan import validate_reply
 
 
 class SourcesTests(unittest.TestCase):
+    def test_bad_size_corrupts_embedded_payload_not_only_container_header(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            # qres v1: data at 20, names at 25, tree at 33; one-byte payload.
+            blob = struct.pack(">4sIIII", b"qres", 1, 33, 20, 25) + b"\0\0\0\1x" + bytes(8 + 28)
+            (root / "resource.rcc").write_bytes(blob)
+            with patch("sources.negative_tables", return_value="tables.cpp"):
+                negative_source(root, {"family": "bad-size"}, [{"qres": "resource.rcc"}])
+            declaration = (root / "decoy.cpp").read_text(encoding="utf-8")
+            numbers = declaration.split(" = {", 1)[1].split("};", 1)[0]
+            retained = bytes(int(number) for number in numbers.split(","))
+            start = retained.index(b"qres")
+            # First qres occurs in the string decoy; inspect the actual header after it.
+            start = retained.index(b"qres", start + 4)
+            self.assertEqual(retained[start + 20:start + 25], b"\xff" * 5)
+            self.assertGreater(struct.unpack_from(">I", retained, start + 12)[0], len(blob))
+
     def test_missing_compiled_decoy_prevents_verified_negative_label(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
