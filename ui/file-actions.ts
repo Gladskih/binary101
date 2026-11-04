@@ -14,6 +14,9 @@ import { createPeInnoSetupDownloadClickHandler } from "./pe-inno-setup-download.
 import { createSevenZipEntryClickHandler } from "./sevenz-actions.js";
 import { createZipEntryClickHandler } from "./zip-actions.js";
 import { createEmbeddedResourceClickHandler } from "./embedded-resource-actions.js";
+import { handlePeResourcePreviewClick } from "./pe-resource-preview-controls.js";
+import { handleResourceAnimationClick } from "./resource-animation-controls.js";
+import { createPeResourcePayloadClickHandler } from "./pe-resource-payload-actions.js";
 
 type FileActionDeps = {
   getParseResult: () => ParseForUiResult;
@@ -35,6 +38,8 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
   const gzipClickHandler = createGzipClickHandler(deps);
   const zipClickHandler = createZipEntryClickHandler(deps);
   const embeddedResourceClickHandler = createEmbeddedResourceClickHandler(deps);
+  const resourcePayloadClickHandler = createPeResourcePayloadClickHandler(
+    deps.getParseResult, deps.getFile, deps.setStatusMessage);
   const peDosNestedDownloadClickHandler = createPeDosNestedDownloadClickHandler(deps);
   const peLinuxPayloadDownloadClickHandler = createPeLinuxPayloadDownloadClickHandler(deps);
   const peOverlayDownloadClickHandler = createPeOverlayDownloadClickHandler(deps);
@@ -44,6 +49,8 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
     setStatusMessage: deps.setStatusMessage
   });
   return (event: Event): void => {
+    handlePeResourcePreviewClick(event, deps.getParseResult());
+    handleResourceAnimationClick(event);
     runAsyncHandler(peChecksumClickHandler, event);
     runAsyncHandler(sectionEntropyClickHandler, event);
     runAsyncHandler(isoClickHandler, event);
@@ -51,6 +58,7 @@ export const createFileActionClickHandler = (deps: FileActionDeps) => {
     runAsyncHandler(gzipClickHandler, event);
     runAsyncHandler(zipClickHandler, event);
     runAsyncHandler(embeddedResourceClickHandler, event);
+    runAsyncHandler(resourcePayloadClickHandler, event);
     peDosNestedDownloadClickHandler(event);
     peLinuxPayloadDownloadClickHandler(event);
     peOverlayDownloadClickHandler(event);

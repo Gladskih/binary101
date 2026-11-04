@@ -139,6 +139,6 @@ void test("renderResources pages resource detail tables only above the inline li
   assert.match(html, /data-paged-sortable-table-id="pe-resource-detail-0"/);
   assert.match(html, /<table class="table peResourcePreviewTable"/);
   assert.match(html, /Showing 1-50 of 51/);
-  assert.match(html, /<td[^>]*>payload-49<\/td>/);
+  assert.match(html, /payload-49<\/td>/);
   assert.doesNotMatch(html, /<td[^>]*>payload-50<\/td>/);
 });

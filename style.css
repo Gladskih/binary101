@@ -1,5 +1,6 @@
 @import url("./renderers/pe/exception-range-histogram.css");
 @import url("./renderers/pe/msvc-eh.css");
+@import url("./renderers/pe/resource-previews.css");
 
 :root{
   color-scheme: light dark;

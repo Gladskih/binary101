@@ -106,6 +106,17 @@ void test("renderPreviewCell renders audio and font inline previews", () => {
   assert.match(fontHtml, /TrueType font \(heuristic\)/);
 });
 
+void test("isolates different embedded font faces and preserves their formats", () => {
+  const first = renderPreviewCell({ previewKind: "font", previewMime: "font/woff2",
+    previewDataUrl: "data:font/woff2;base64,AAAA" });
+  const second = renderPreviewCell({ previewKind: "font", previewMime: "font/otf",
+    previewDataUrl: "data:font/otf;base64,AQAA" });
+
+  assert.notEqual(first.match(/font-family:([^;]+)/u)?.[1], second.match(/font-family:([^;]+)/u)?.[1]);
+  assert.match(first, /format\('woff2'\)/u);
+  assert.match(second, /format\('opentype'\)/u);
+});
+
 void test("renderPreviewCell renders grouped VERSION details with human-readable translations", () => {
   const versionHtml = renderPreviewCell({
     ...createBaseLang(),

@@ -4,6 +4,8 @@ import { addHeuristicResourcePreview } from "./sniff.js";
 import { decodeTextResource } from "./text.js";
 import type { ResourcePreviewField, ResourcePreviewResult } from "./types.js";
 import { addLegacyFontPreview } from "./legacy-font.js";
+import { parseBrowserManifestXmlDocument } from "./manifest-xml.js";
+import type { ManifestXmlDocumentParser } from "./manifest-xml.js";
 
 const buildSummaryPreview = (
   previewFields: ResourcePreviewField[],
@@ -43,12 +45,14 @@ const buildBinarySummary = (typeName: string, dataLength: number, note: string):
 export const addRcDataPreview = async (
   data: Uint8Array,
   typeName: string,
-  codePage: number | undefined
+  codePage: number | undefined,
+  parseXml: ManifestXmlDocumentParser = parseBrowserManifestXmlDocument
 ): Promise<ResourcePreviewResult | null> => {
   if (typeName !== "RCDATA") return null;
-  const heuristic = await addHeuristicResourcePreview(data, codePage);
+  const heuristic = await addHeuristicResourcePreview(data, codePage, parseXml);
   if (heuristic?.preview) return prependTypeField(typeName, heuristic);
-  return buildBinarySummary(typeName, data.length, "Application-defined raw data.");
+  return { ...buildBinarySummary(typeName, data.length, "Application-defined raw data."),
+    ...(heuristic?.issues ? { issues: heuristic.issues } : {}) };
 };
 
 export const addFontPreview = async (
@@ -60,7 +64,8 @@ export const addFontPreview = async (
   if (legacy) return legacy;
   const heuristic = await addHeuristicResourcePreview(data, 0);
   if (heuristic?.preview) return prependTypeField(typeName, heuristic);
-  return buildBinarySummary(typeName, data.length, "Legacy FONT resource payload.");
+  return { ...buildBinarySummary(typeName, data.length, "Legacy FONT resource payload."),
+    ...(heuristic?.issues ? { issues: heuristic.issues } : {}) };
 };
 
 export const addDialogIncludePreview = (

@@ -37,6 +37,16 @@ const ROOT_SELECTOR = "[data-paged-sortable-table-root]";
 const runtimeByElement = new WeakMap<HTMLElement, PagedSortableTableRuntime>();
 const snapshotsByProvider = new WeakMap<PagedSortableTableProvider, Map<string, PagedSortableTableState>>();
 
+export const revealPagedSortableTableRow = (element: HTMLElement, rowIndex: number): boolean => {
+  const runtime = runtimeByElement.get(element);
+  if (!runtime || !Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= runtime.model.rowCount) return false;
+  runtime.state = { pageIndex: Math.floor(rowIndex / runtime.model.pageSize),
+    sortColumnIndex: null, sortDirection: null };
+  runtime.sortedIndexes = null;
+  renderRuntime(element, runtime);
+  return true;
+};
+
 const providerSnapshots = (
   provider: PagedSortableTableProvider, snapshots: readonly PagedSortableTableSnapshot[]
 ): Map<string, PagedSortableTableState> => {
@@ -154,6 +164,7 @@ const renderRuntime = (
       sortedIndexes(runtime) ?? undefined
     );
     enhancePagedSortableTables(element, runtime.provider);
+    body.dispatchEvent?.(new Event("analysis-content-rendered", { bubbles: true }));
   }
   const toolbar = element.querySelector<HTMLElement>(".pagedSortableTableToolbar");
   if (toolbar) toolbar.outerHTML = renderPagedSortableToolbar(runtime.model, runtime.state);

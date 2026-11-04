@@ -36,6 +36,14 @@ void test("preserves generic XML and empty Ribbon trees", () => {
   assert.match(renderRibbonXmlPreview(undefined, node("RIBBON_BAR")), /0 categories, 0 controls/);
 });
 
+void test("accepts the AFX_RIBBON document wrapper used by MFC", () => {
+  const tree = node("AFX_RIBBON", [node("HEADER"), node("RIBBON_BAR", [
+    node("CATEGORIES", [node("CATEGORY", [node("NAME", [], "Home")])])
+  ])]);
+
+  assert.match(renderRibbonXmlPreview(undefined, tree), /MFC Ribbon: 1 categories/);
+});
+
 void test("labels unnamed MFC ribbon controls and numeric command IDs", () => {
   const tree = node("RIBBON_BAR", [node("BUTTON_MAIN"),
     node("CATEGORIES", [node("CATEGORY", [node("PANELS", [node("PANEL", [

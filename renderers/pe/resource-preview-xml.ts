@@ -34,21 +34,26 @@ const renderNodeSummary = (node: ResourceXmlTreeNode): string => {
 };
 
 const renderXmlTreeNode = (node: ResourceXmlTreeNode, depth: number): string => {
-  const body = [
-    renderAttributeList(node),
-    renderNodeText(node.text),
-    node.children.length
-      ? `<div style="margin-top:.3rem;padding-left:.8rem;border-left:1px solid var(--border2)">${node.children
-          .map(child => renderXmlTreeNode(child, depth + 1))
-          .join("")}</div>`
-      : ""
-  ].join("");
-  return `<details style="margin-top:${depth ? ".25rem" : ".2rem"}"${depth === 0 ? " open" : ""}>` +
-    `<summary style="cursor:pointer">${renderNodeSummary(node)}</summary>${body}</details>`;
+  const markup: string[] = [];
+  const stack: Array<{ node: ResourceXmlTreeNode; depth: number } | string> = [{ node, depth }];
+  while (stack.length) {
+    const frame = stack.pop()!;
+    if (typeof frame === "string") { markup.push(frame); continue; }
+    markup.push(`<details style="margin-top:${frame.depth ? ".25rem" : ".2rem"}"` +
+      `${frame.depth === 0 ? " open" : ""}><summary style="cursor:pointer">` +
+      `${renderNodeSummary(frame.node)}</summary>${renderAttributeList(frame.node)}` +
+      renderNodeText(frame.node.text));
+    stack.push("</details>");
+    if (frame.node.children.length) {
+      markup.push(`<div style="margin-top:.3rem;padding-left:.8rem;border-left:1px solid var(--border2)">`);
+      stack.push("</div>");
+      for (let index = frame.node.children.length - 1; index >= 0; index -= 1) {
+        stack.push({ node: frame.node.children[index]!, depth: frame.depth + 1 });
+      }
+    }
+  }
+  return markup.join("");
 };
-
-const countXmlTreeNodes = (node: ResourceXmlTreeNode): number =>
-  1 + node.children.reduce((count, child) => count + countXmlTreeNodes(child), 0);
 
 const renderXmlTreeButton = (
   action: "expand" | "collapse",
@@ -62,12 +67,11 @@ const renderXmlTreeButton = (
 
 const renderXmlTree = (tree: ResourceXmlTreeNode | undefined): string => {
   if (!tree) return "";
-  const nodeCount = countXmlTreeNodes(tree);
   return `<section data-manifest-tree-viewer style="margin-top:.35rem;padding:.45rem .55rem;` +
     `border:1px solid var(--border2);border-radius:8px;background:var(--card)">` +
     `<div class="smallNote" style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;` +
     `margin-top:.2rem"><span><b>Parsed XML tree</b></span>` +
-    renderXmlTreeButton("expand", "Expand all", nodeCount <= 1) +
+    renderXmlTreeButton("expand", "Expand all", !tree.children.length) +
     renderXmlTreeButton("collapse", "Collapse all", false) +
     `</div><div data-manifest-tree style="margin-top:.2rem">${renderXmlTreeNode(tree, 0)}</div></section>`;
 };

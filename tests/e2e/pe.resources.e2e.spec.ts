@@ -138,7 +138,7 @@ test.describe("PE resource previews", () => {
     const resourcesSection = await openTopLevelSection(page, "Resources");
     await expect(resourcesSection).toHaveJSProperty("open", true);
     await expectWidePreviewRowsAttached(resourcesSection);
-    await expect(page.locator('#analysisValue img[alt="resource preview"]')).toHaveCount(5);
+    await expect(page.locator('#analysisValue img[alt="resource preview"]')).toHaveCount(3);
     await expectVisualResourcePreviews(page);
     await expectLegacyResourcePreviews(page);
     await expectManifestAndMessageTablePreviews(page);

@@ -3,6 +3,8 @@
 import type { ResourceXmlTreeNode } from "../../analyzers/pe/resources/preview/types.js";
 import { escapeHtml } from "../../html-utils.js";
 import { renderXmlPreview } from "./resource-preview-xml.js";
+import { renderResourceRibbonBar } from "./resource-ribbon-bar.js";
+import type { ResourcePreviewContext } from "./resource-preview-context.js";
 
 // The MFC resource structure is visible in Microsoft's Ribbon Designer docs and
 // the upstream Kerberos MFC sample's ribbon1.mfcribbon-ms.
@@ -22,11 +24,18 @@ interface RibbonRow { category: string; panel: string; control: string;
 
 const rowsForElements = (
   node: ResourceXmlTreeNode | undefined, category: string, panel: string
-): RibbonRow[] => children(child(node, "ELEMENTS"), "ELEMENT").map(element => ({
-  category, panel, control: value(element, "ELEMENT_NAME") ?? "Element",
-  label: value(element, "TEXT"), command: value(child(element, "ID"), "NAME") ??
-    value(child(element, "ID"), "VALUE")
-}));
+): RibbonRow[] => {
+  const rows: RibbonRow[] = [];
+  const stack = [...children(child(node, "ELEMENTS"), "ELEMENT")].reverse();
+  while (stack.length) {
+    const element = stack.pop()!;
+    rows.push({ category, panel, control: value(element, "ELEMENT_NAME") ?? "Element",
+      label: value(element, "TEXT"), command: value(child(element, "ID"), "NAME") ??
+        value(child(element, "ID"), "VALUE") });
+    for (const nested of [...children(child(element, "ELEMENTS"), "ELEMENT")].reverse()) stack.push(nested);
+  }
+  return rows;
+};
 
 const rowsForCategory = (category: ResourceXmlTreeNode): RibbonRow[] => {
   const name = value(category, "NAME") ?? (category.name === "CATEGORY_MAIN" ?
@@ -37,19 +46,23 @@ const rowsForCategory = (category: ResourceXmlTreeNode): RibbonRow[] => {
 };
 
 export const renderRibbonXmlPreview = (
-  text: string | undefined, tree: ResourceXmlTreeNode | undefined
+  text: string | undefined, tree: ResourceXmlTreeNode | undefined, context?: ResourcePreviewContext
 ): string => {
-  if (tree?.name !== "RIBBON_BAR") return renderXmlPreview(text, tree);
+  const ribbon = tree?.name === "AFX_RIBBON" ? child(tree, "RIBBON_BAR") : tree;
+  if (ribbon?.name !== "RIBBON_BAR") return renderXmlPreview(text, tree);
   const categories = [
-    ...children(tree, "CATEGORY_MAIN"),
-    ...children(child(tree, "CATEGORIES"), "CATEGORY")
+    ...children(ribbon, "CATEGORY_MAIN"),
+    ...children(child(ribbon, "CATEGORIES"), "CATEGORY"),
+    ...children(child(ribbon, "CONTEXTS"), "CONTEXT").flatMap(context =>
+      children(child(context, "CATEGORIES"), "CATEGORY"))
   ];
   const rows = categories.flatMap(rowsForCategory);
-  const button = child(tree, "BUTTON_MAIN");
+  const button = child(ribbon, "BUTTON_MAIN");
   if (button) rows.unshift({ category: "Application button", panel: "–",
     control: value(button, "ELEMENT_NAME") ?? "Button",
-    label: value(button, "TEXT"), command: value(child(button, "ID"), "NAME") });
-  return `<p>MFC Ribbon: ${categories.length} categories, ${rows.length} controls.</p>` +
+    label: value(button, "TEXT"), command: value(child(button, "ID"), "NAME") ?? value(child(button, "ID"), "VALUE") });
+  return renderResourceRibbonBar(ribbon, context) +
+    `<p>MFC Ribbon: ${categories.length} categories, ${rows.length} controls.</p>` +
     (rows.length ? `<div style="overflow-x:auto"><table class="table peResourceNestedTable">` +
       `<thead><tr><th>Category</th><th>Panel</th><th>Control</th>` +
       `<th>Label</th><th>Command</th></tr></thead><tbody>` +

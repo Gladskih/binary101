@@ -7,6 +7,8 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
 import { createRegistryTableModel } from "./resource-registry-table.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
+import { resourceAnchor, renderResourceConnections, getResourcePreviewModel } from "./resource-preview-context.js";
+import type { ResourcePreviewContext } from "./resource-preview-context.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
   renderAutoPagedSortableTable,
@@ -21,6 +23,8 @@ type ResourceLangEntry = ResourceDetailGroup["entries"][number]["langs"][number]
 type ResourcePreviewRow = {
   displayName: string;
   langEntry: ResourceLangEntry;
+  entryIndex: number;
+  languageIndex: number;
 };
 
 const formatLang = (lang: number | null | undefined): string => {
@@ -44,17 +48,18 @@ const isWideResourcePreview = (
 ): boolean =>
   ["dialog", "image", "stringTable", "messageTable", "version", "menu", "accelerator",
     "font", "fontDirectory", "legacyFont", "dialogInit", "dialogLayout", "toolbar", "audio", "muiConfig",
-    "inf", "xml", "typeLibrary", "wevtTemplate", "html", "text", "registry"]
-    .includes(langEntry.previewKind ?? "");
+    "inf", "xml", "ribbonXml", "imageGroup", "dfm", "vector", "deferred", "nested", "typeLibrary", "wevtTemplate", "html", "text", "registry"]
+    .includes(langEntry.previewKind ?? "") || Boolean(langEntry.animation);
 
 const flattenResourcePreviewRows = (group: ResourceDetailGroup): ResourcePreviewRow[] =>
-  group.entries.flatMap(entry => {
+  group.entries.flatMap((entry, entryIndex) => {
     const displayName = entry.name
       ? entry.name
       : entry.id != null
         ? `ID ${entry.id}`
         : "(unnamed)";
-    return (entry.langs || []).map(langEntry => ({ displayName, langEntry }));
+    return (entry.langs || []).map((langEntry, languageIndex) =>
+      ({ displayName, langEntry, entryIndex, languageIndex }));
   });
 
 const resourceTableId = (groupIndex: number): string => `pe-resource-detail-${groupIndex}`;
@@ -65,15 +70,19 @@ const renderResourcePreviewCellHtml = (langEntry: ResourceLangEntry): string => 
 };
 
 const renderResourcePreviewAdditionalRowsHtml = (
-  langEntry: ResourceLangEntry, registryTableId: string
+  langEntry: ResourceLangEntry, registryTableId: string, context?: ResourcePreviewContext
 ): string =>
   isWideResourcePreview(langEntry)
     ? `<tr class="peResourcePreviewWideRow"><td colspan="5">` +
-      `${renderPreviewCell(langEntry, registryTableId)}</td></tr>`
+      `<div data-pe-resource-preview-content>${renderPreviewCell(langEntry, registryTableId, context)}</div>` +
+      `${context ? renderResourceConnections(context) : ""}</td></tr>`
     : "";
 
-const renderResourcePreviewCells = (row: ResourcePreviewRow): PagedSortableTableCell[] => [
-  { html: escapeHtml(row.displayName), sortValue: row.displayName },
+const renderResourcePreviewCells = (
+  row: ResourcePreviewRow, context?: ResourcePreviewContext
+): PagedSortableTableCell[] => [
+  { html: `${context ? `<span id="${resourceAnchor(context.source)}"></span>` : ""}` +
+    escapeHtml(row.displayName), sortValue: row.displayName },
   {
     html: formatLang(row.langEntry.lang),
     sortValue: formatLang(row.langEntry.lang)
@@ -113,9 +122,11 @@ const resourcePreviewSortValue = (row: ResourcePreviewRow, columnIndex: number):
 
 export const createResourceDetailTableModel = (
   group: ResourceDetailGroup,
-  groupIndex: number
+  groupIndex: number,
+  resources?: PeResources
 ): PagedSortableTableModel => {
   const rows = flattenResourcePreviewRows(group);
+  const model = getResourcePreviewModel(resources ?? { top: [], detail: [group] });
   return {
     columns: [
       { label: "Name / ID" },
@@ -129,11 +140,13 @@ export const createResourceDetailTableModel = (
     rowAt: rowIndex => {
       const row = rows[rowIndex];
       if (!row) return null;
-      if (!isWideResourcePreview(row.langEntry)) return { cells: renderResourcePreviewCells(row) };
+      const context = { ...model, source: { group: resources ? groupIndex : 0,
+        entry: row.entryIndex, language: row.languageIndex } };
+      if (!isWideResourcePreview(row.langEntry)) return { cells: renderResourcePreviewCells(row, context) };
       return {
         additionalRowsHtml: renderResourcePreviewAdditionalRowsHtml(
-          row.langEntry, `pe-registry-${groupIndex}-${rowIndex}`),
-        cells: renderResourcePreviewCells(row),
+          row.langEntry, `pe-registry-${groupIndex}-${rowIndex}`, context),
+        cells: renderResourcePreviewCells(row, context),
         className: "peResourcePreviewMetaRow"
       };
     },
@@ -144,22 +157,28 @@ export const createResourceDetailTableModel = (
   };
 };
 
-export const getPeResourceTableModel = (
-  resources: PeResources | null | undefined,
-  tableId: string
-): PagedSortableTableModel | null => {
+const registryTableModel = (resources: PeResources | null | undefined,
+  tableId: string): PagedSortableTableModel | null => {
   const registryMatch = tableId.match(/^pe-registry-(\d+)-(\d+)$/u);
   if (registryMatch) {
     const group = resources?.detail?.[Number(registryMatch[1])];
     const script = group && flattenResourcePreviewRows(group)[Number(registryMatch[2])]?.langEntry.registry;
     return script ? createRegistryTableModel(script, tableId) : null;
   }
+  return null;
+};
+
+export const getPeResourceTableModel = (
+  resources: PeResources | null | undefined,
+  tableId: string
+): PagedSortableTableModel | null => {
+  if (tableId.startsWith("pe-registry-")) return registryTableModel(resources, tableId);
   const match = tableId.match(/^pe-resource-detail-(\d+)$/);
   if (!match?.[1]) return null;
   const groupIndex = Number(match[1]);
   const group = resources?.detail?.[groupIndex];
   return group && Number.isInteger(groupIndex)
-    ? createResourceDetailTableModel(group, groupIndex)
+    ? createResourceDetailTableModel(group, groupIndex, resources ?? undefined)
     : null;
 };
 
@@ -191,7 +210,7 @@ const renderResourceCrossChecks = (resources: PeResources, out: string[]): void 
   out.push(`<div style="overflow-x:auto"><table class="table"><thead><tr>` +
     `<th>Status</th><th>Resource</th><th>Finding</th></tr></thead><tbody>`);
   for (const check of resources.crossChecks) {
-    out.push(`<tr><td>${check.status === "confirmed" ? "Confirmed" : "Warning"}</td>` +
+    out.push(`<tr><td>${check.status === "confirmed" ? "Confirmed" : check.status === "unresolved" ? "Unresolved" : "Warning"}</td>` +
       `<td>${escapeHtml(check.subject)}</td><td>${escapeHtml(check.detail)}</td></tr>`);
   }
   out.push(`</tbody></table></div></details>`);
@@ -202,7 +221,7 @@ const renderTopResourceKinds = (resources: PeResources, out: string[]): void => 
   if (!topRows.length) return;
   if (topRows.length > 12) {
     out.push(
-      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Top-level resource kinds</b> - ${topRows.length} type bucket${topRows.length === 1 ? "" : "s"}</summary>`
+      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Top-level resource kinds</b> - ${topRows.length} type buckets</summary>`
     );
   }
   out.push(
@@ -239,10 +258,10 @@ const renderResourceDetails = (resources: PeResources, out: string[]): void => {
     const typeName = escapeHtml(group.typeName || "(unknown)");
     const entryCount = flattenResourcePreviewRows(group).length;
     out.push(
-      `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
+      `<details data-pe-resource-group="${groupIndex}" style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
     );
     if (entryCount) {
-      out.push(renderAutoPagedSortableTable(createResourceDetailTableModel(group, groupIndex)));
+      out.push(renderAutoPagedSortableTable(createResourceDetailTableModel(group, groupIndex, resources)));
     }
     out.push(`</details>`);
   });

@@ -2,6 +2,8 @@
 
 import type { ResourcePreviewData } from "../../analyzers/pe/resources/preview/types.js";
 import { escapeHtml } from "../../html-utils.js";
+import { resolvedPreview } from "./resource-preview-context.js";
+import type { ResourcePreviewContext } from "./resource-preview-context.js";
 
 const describeMessage = (message: number): string => {
   // CWnd::ExecuteDlgInit translates the Win16 messages, not the current Win32 values.
@@ -29,11 +31,30 @@ export const renderDialogInitPreview = (init: NonNullable<ResourcePreviewData["d
     `<td>${escapeHtml(describeMessage(entry.message))}</td><td class="peNumeric">${entry.data.length}</td>` +
     `<td>${renderPayload(entry.message, entry.data)}</td></tr>`).join("") + `</tbody></table></div>`;
 
-export const renderToolbarPreview = (toolbar: NonNullable<ResourcePreviewData["toolbar"]>): string =>
+export const renderToolbarPreview = (
+  toolbar: NonNullable<ResourcePreviewData["toolbar"]>, context?: ResourcePreviewContext
+): string => {
+  const entry = context?.catalog.detail[context.source.group]?.entries[context.source.entry];
+  const key = entry?.name ?? entry?.id;
+  const bitmap = key == null ? undefined : resolvedPreview(context, ["BITMAP"], key)?.previewDataUrl;
+  let imageIndex = 0;
+  const buttons = toolbar.items.map(id => {
+    if (!id) return `<span class="peToolbar__separator" role="separator"></span>`;
+    const index = imageIndex++;
+    const text = resolvedPreview(context, ["STRING"], Math.floor(id / 16) + 1)?.stringTable
+      ?.find(item => item.id === id)?.text;
+    return `<button type="button" title="${escapeHtml(text ?? `Command #${id}`)}" ` +
+      `aria-label="${escapeHtml(text?.split("\n").at(-1) || `Command #${id}`)}">` +
+      (bitmap ? `<span style="display:inline-block;width:${toolbar.width}px;height:${toolbar.height}px;` +
+        `background-image:url(${bitmap});background-position:-${index * toolbar.width}px 0"></span>` : `#${id}`) +
+      `</button>`;
+  }).join("");
+  return `<div class="peToolbar" role="toolbar" aria-label="Resource toolbar">${buttons}</div>` +
   `<p>MFC toolbar v${toolbar.version}; ${toolbar.width}×${toolbar.height} pixel images.</p>` +
   `<table class="table peResourceNestedTable"><thead><tr><th>Position</th><th>Command</th></tr></thead>` +
   `<tbody>${toolbar.items.map((id, index) => `<tr><td class="peNumeric">${index + 1}</td>` +
     `<td class="mono">${id ? `#${id}` : "Separator"}</td></tr>`).join("")}</tbody></table>`;
+};
 
 export const renderDialogLayoutPreview = (
   layout: NonNullable<ResourcePreviewData["dialogLayout"]>

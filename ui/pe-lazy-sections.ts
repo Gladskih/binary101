@@ -1,8 +1,6 @@
 "use strict";
 import { renderPeSanitizers } from "../renderers/pe/sanitizers.js";
-import {
-  isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult
-} from "../analyzers/pe/index.js";
+import { isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult } from "../analyzers/pe/index.js";
 import type { PePackerId } from "../analyzers/pe/packers/index.js";
 import { renderHeaders } from "../renderers/pe/headers.js";
 import { renderPackerReport } from "../renderers/pe/packers.js";
@@ -12,8 +10,7 @@ import { renderDebug } from "../renderers/pe/debug-view.js";
 import { renderPeDwarf } from "../renderers/pe/dwarf.js";
 import { renderResources } from "../renderers/pe/resources.js";
 import { renderTypeLibraries } from "../renderers/pe/type-libraries.js";
-import { analyzeTypeLibraryExports } from
-  "../analyzers/pe/resources/type-library-export-links.js";
+import { analyzeTypeLibraryExports } from "../analyzers/pe/resources/type-library-export-links.js";
 import { analyzeTypeLibraryRegistrations } from
   "../analyzers/pe/resources/type-library-registry-links.js";
 import { openPeTypeLibrarySection } from "./pe-type-library-navigation.js";
@@ -52,6 +49,7 @@ import {
   type PagedSortableTableSnapshot
 } from "./paged-sortable-tables.js";
 import { syncManifestTreeControls } from "./manifest-tree-controls.js";
+import { enhancePeResourcePreviews, handleResourcePreviewRendered } from "./pe-resource-preview-controls.js";
 import { attachClrDependencyInputs } from "./pe-clr-dependencies.js";
 import {
   captureSortableTableState,
@@ -215,6 +213,7 @@ const restoreMountedState = (
   enhanceSortableTables(body);
   restoreSortableTableState(body, snapshot.sortableTables);
   enhancePeDisassemblyPagedTables(body, pe, snapshot.pagedTables);
+  enhancePeResourcePreviews(body);
   enhanceAccessibleTooltips(body);
   restoreOpenDetails(
     body,
@@ -270,6 +269,7 @@ export const enhancePeLazySections = (root: ParentNode, pe: PeParseResult | null
     attachClrDependencyInputs(root, () => parseResultByRoot.get(root),
       current => { refreshPeLazySection(PE_LAZY_SECTION_KEYS.clr, current); });
     root.addEventListener("toggle", handleToggle, true);
+    root.addEventListener("analysis-content-rendered", handleResourcePreviewRendered);
     root.addEventListener("click", event => {
       const current = parseResultByRoot.get(root);
       const section = openPeTypeLibrarySection(event, root);

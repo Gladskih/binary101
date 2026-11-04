@@ -28,11 +28,11 @@ void test("renders a compiled Ribbon control hierarchy", () => {
   assert.doesNotMatch(html, /<Button>/);
 });
 
-void test("limits very large control tables", () => {
+void test("retains all controls in large tables", () => {
   const html = renderRibbonBmlPreview({ strings: [], commands: [], tree: {
     kind: "Root", commandId: null,
     children: Array.from({ length: 1001 }, () =>
       ({ kind: "Button", commandId: null, children: [] }))
   } });
-  assert.match(html, /Only the first 1000 controls are shown/);
+  assert.equal([...html.matchAll(/<td>Button<\/td>/gu)].length, 1001);
 });

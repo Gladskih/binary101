@@ -1,6 +1,10 @@
 "use strict";
 
 import type { ParseForUiResult } from "../analyzers/index.js";
+import type { ResourceCatalog } from "../analyzers/pe/resources/resource-index.js";
+import type { ResourceLangWithPreview } from "../analyzers/pe/resources/preview/types.js";
+import { indexResourceLeaves, resourceAt } from "../analyzers/pe/resources/resource-index.js";
+import { resolveImageGroupTarget } from "../analyzers/pe/resources/preview/image-group-links.js";
 
 // ICO directory dimensions use 0 to represent 256px. Source:
 // https://learn.microsoft.com/en-us/windows/win32/menurc/iconresdir
@@ -12,14 +16,26 @@ const clearPeFileIcon = (imageElement: HTMLImageElement, wrapperElement: HTMLEle
   imageElement.removeAttribute("src");
 };
 
-const findPeFileIconDataUrl = (result: ParseForUiResult): string | null => {
-  if (result.analyzer !== "pe" || !("resources" in result.parsed)) return null;
-  const iconGroup = result.parsed.resources?.detail.find(group => group.typeName === "GROUP_ICON");
-  for (const entry of iconGroup?.entries ?? []) {
-    for (const language of entry.langs) {
+const groupImageUrl = (catalog: ResourceCatalog, language: ResourceLangWithPreview): string | null => {
+      const target = resolveImageGroupTarget(catalog, language);
+      if (target) return resourceAt(catalog, target)?.previewDataUrl ?? null;
       if (language.previewKind === "image" && language.previewDataUrl?.startsWith("data:image/")) {
         return language.previewDataUrl;
       }
+  return null;
+};
+
+const findPeFileIconDataUrl = (result: ParseForUiResult): string | null => {
+  if (result.analyzer !== "pe" || !("resources" in result.parsed)) return null;
+  const resources = result.parsed.resources;
+  if (!resources) return null;
+  const iconGroup = resources.detail.find(group => group.typeName === "GROUP_ICON");
+  if (!iconGroup) return null;
+  const catalog = indexResourceLeaves(resources.detail);
+  for (const entry of iconGroup.entries) {
+    for (const language of entry.langs) {
+      const url = groupImageUrl(catalog, language);
+      if (url) return url;
     }
   }
   return null;

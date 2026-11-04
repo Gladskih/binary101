@@ -2,7 +2,11 @@
 
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import { addBitmapPreview } from "./bitmap.js";
-import { addCursorPreview, addGroupCursorPreview } from "./cursor.js";
+import { addCursorPreview } from "./cursor.js";
+import { addImageGroupPreview } from "./image-group.js";
+import { collectResourceLinks } from "../resource-links.js";
+import { linkImageGroupPreviews } from "./image-group-links.js";
+import { deferLargeResourceMedia } from "./deferred-media.js";
 import { addDialogPreview } from "./dialog.js";
 import { addDialogInitPreview } from "./dialog-init.js";
 import { addDialogLayoutPreview } from "./dialog-layout.js";
@@ -12,9 +16,8 @@ import { addToolbarPreview } from "./toolbar.js";
 import { addFontDirectoryPreview } from "./font-directory.js";
 import { validateFontReferences } from "./font-reference-validation.js";
 import { addAcceleratorPreview } from "./accelerator.js";
-import { buildResourceLeafIndex } from "./leaf-index.js";
-import { createGroupLeafLoader, readResourceLeafBytes } from "./leaf-data.js";
-import { addGroupIconPreview, addIconPreview, type LoadResourceLeafData } from "./icon.js";
+import { readResourceLeafBytes } from "./leaf-data.js";
+import { addIconPreview } from "./icon.js";
 import { addMenuPreview } from "./menu.js";
 import { addHeuristicResourcePreview } from "./sniff.js";
 import { addHtmlPreview, addStringTablePreview } from "./text.js";
@@ -75,10 +78,11 @@ const withLeafIssues = (
 
 const finishResourcePreview = async (
   data: Uint8Array, leafIssues: string[] | undefined,
-  typed: ResourcePreviewResult | null, codePage: number | undefined
+  typed: ResourcePreviewResult | null, codePage: number | undefined,
+  parseXml: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
   if (typed?.preview) return withLeafIssues(leafIssues, typed);
-  const heuristic = await runAsyncPreviewDecoder(() => addHeuristicResourcePreview(data, codePage));
+  const heuristic = await runAsyncPreviewDecoder(() => addHeuristicResourcePreview(data, codePage, parseXml));
   return withLeafIssues(combineIssues(leafIssues, typed?.issues), heuristic ?? {});
 };
 
@@ -86,6 +90,7 @@ const simplePreviewDecoders = new Map<string,
   (data: Uint8Array, typeName: string) => ResourcePreviewResult | null | Promise<ResourcePreviewResult | null>
 >([
   ["ICON", addIconPreview], ["CURSOR", addCursorPreview], ["BITMAP", addBitmapPreview],
+  ["GROUP_ICON", addImageGroupPreview], ["GROUP_CURSOR", addImageGroupPreview],
   ["MUI", addMuiConfigPreview], ["VERSION", addVersionPreview], ["DIALOG", addDialogPreview],
   ["DLGINIT", addDialogInitPreview], ["AFX_DIALOG_LAYOUT", addDialogLayoutPreview],
   ["TOOLBAR", addToolbarPreview], ["FONTDIR", addFontDirectoryPreview],
@@ -102,16 +107,12 @@ const decodeSpecificResourcePreview = async (
   typeName: string,
   entryId: number | null,
   langEntry: ResourceLangWithPreview,
-  loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData,
   muiResource: MuiResourceCandidate | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult | null> => {
   const simple = simplePreviewDecoders.get(typeName);
   if (simple) return runAsyncPreviewDecoder(async () => simple(data, typeName));
   const decoders = new Map<string, () => ResourcePreviewResult | null | Promise<ResourcePreviewResult | null>>([
-    ["GROUP_ICON", () => addGroupIconPreview(data, typeName, loadIconLeafData, langEntry.lang)],
-    ["GROUP_CURSOR", () => addGroupCursorPreview(data, typeName, loadCursorLeafData, langEntry.lang)],
     ["REGINST", () => addRegInstPreview(data, typeName, langEntry.codePage)],
     ["TYPELIB", () => addTypeLibraryPreview(data, typeName, muiResource?.result.configuration ?? null)],
     ["XMLFILE", () => addXmlResourcePreviewWithParser(
@@ -124,7 +125,7 @@ const decodeSpecificResourcePreview = async (
       data, typeName, muiResource?.result.configuration ?? null) || addManifestPreviewWithXmlParser(
       data, typeName, langEntry.codePage, parseManifestXmlDocument)],
     ["HTML", () => addHtmlPreview(data, typeName, langEntry.codePage)],
-    ["RCDATA", () => addRcDataPreview(data, typeName, langEntry.codePage)],
+    ["RCDATA", () => addRcDataPreview(data, typeName, langEntry.codePage, parseManifestXmlDocument)],
     ["STRING", () => addStringTablePreview(data, typeName, entryId)],
     ["MESSAGETABLE", () => addMessageTableResourcePreview(data, typeName, langEntry.codePage)],
     ["DLGINCLUDE", () => addDialogIncludePreview(data, typeName, langEntry.codePage)]
@@ -138,16 +139,16 @@ const decodeResourceLeafPreview = async (
   groupTypeName: string,
   entryId: number | null,
   langEntry: ResourceLangWithPreview,
-  loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData,
   muiResource: MuiResourceCandidate | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourcePreviewResult> => {
-  if (!langEntry.size || !langEntry.dataRVA) return {};
+  if (langEntry.size === 0) return {};
   if (matchesMuiResource(groupTypeName, langEntry, muiResource)) {
     return createMuiConfigPreview(muiResource.result);
   }
   try {
+    const deferred = await deferLargeResourceMedia(reader, groupTypeName, langEntry);
+    if (deferred) return deferred;
     const leaf = await readResourceLeafBytes(reader, langEntry);
     if (!leaf.data?.length) return { issues: leaf.issues ?? [] };
     const leafData = leaf.data;
@@ -156,12 +157,11 @@ const decodeResourceLeafPreview = async (
       groupTypeName,
       entryId,
       langEntry,
-      loadIconLeafData,
-      loadCursorLeafData,
       muiResource,
       parseManifestXmlDocument
     );
-    return await finishResourcePreview(leafData, leaf.issues, typedPreview, langEntry.codePage);
+    return await finishResourcePreview(leafData, leaf.issues, typedPreview,
+      langEntry.codePage, parseManifestXmlDocument);
   } catch {
     return { issues: ["Resource bytes could not be read for preview."] };
   }
@@ -170,16 +170,17 @@ const decodeResourceLeafPreview = async (
 const decodeDetailPreviews = async (
   reader: FileRangeReader,
   detail: ResourceDetailGroup[],
-  loadIconLeafData: LoadResourceLeafData,
-  loadCursorLeafData: LoadResourceLeafData,
   muiResource: MuiResourceCandidate | null,
   parseManifestXmlDocument: ManifestXmlDocumentParser
 ): Promise<ResourceGroupPreviewDecode[]> => {
   const readRegistry = createRegistryResourceReader(reader);
-  return Promise.all(detail.map(group =>
-    Promise.all(group.entries.map(entry =>
-      Promise.all(entry.langs.map(langEntry =>
-        isRegistryResource(group.typeName) ||
+  const decoded: ResourceGroupPreviewDecode[] = [];
+  for (const group of detail) {
+    const entries: ResourceGroupPreviewDecode = [];
+    for (const entry of group.entries) {
+      const languages: ResourceEntryPreviewDecode = [];
+      for (const langEntry of entry.langs) {
+        languages.push(await (isRegistryResource(group.typeName) ||
           (group.typeName === "RCDATA" && entry.name?.toLowerCase().endsWith(".rgs"))
           ? readRegistry(langEntry as ResourceLangWithPreview)
           : decodeResourceLeafPreview(
@@ -187,14 +188,15 @@ const decodeDetailPreviews = async (
           group.typeName,
           entry.id,
           langEntry as ResourceLangWithPreview,
-          loadIconLeafData,
-          loadCursorLeafData,
           muiResource,
           parseManifestXmlDocument
-        )
-      ))
-    ))
-  ));
+        )));
+      }
+      entries.push(languages);
+    }
+    decoded.push(entries);
+  }
+  return decoded;
 };
 
 const attachLangPreview = (
@@ -223,6 +225,12 @@ const attachDetailPreviews = (
     }))
   }));
 
+const resourceTreeMetadata = (tree: ResourceTree) => ({
+  ...(tree.directories?.length ? { directories: tree.directories } : {}),
+  ...(tree.paths?.length ? { paths: tree.paths } : {}),
+  ...(tree.issues?.length ? { issues: tree.issues } : {})
+});
+
 export async function enrichResourcePreviews(
   reader: FileRangeReader,
   tree: ResourceTree,
@@ -234,40 +242,29 @@ export async function enrichResourcePreviews(
   paths?: ResourceTree["paths"];
   muiResourceConfiguration?: MuiResourceConfiguration;
   crossChecks?: ReturnType<typeof collectResourceCrossChecks>;
+  links?: ReturnType<typeof collectResourceLinks>;
   issues?: string[];
 }> {
   const detail = tree.detail as ResourceDetailGroup[];
-  const iconIndex = buildResourceLeafIndex(detail, "ICON");
-  const cursorIndex = buildResourceLeafIndex(detail, "CURSOR");
-  const loadIconLeafData = createGroupLeafLoader(reader, iconIndex, "GROUP_ICON", "ICON");
-  const loadCursorLeafData = createGroupLeafLoader(
-    reader,
-    cursorIndex,
-    "GROUP_CURSOR",
-    "CURSOR"
-  );
   const muiResource = await readMuiResource(reader, detail);
   const decodedGroups = await decodeDetailPreviews(
     reader,
     detail,
-    loadIconLeafData,
-    loadCursorLeafData,
     muiResource,
     parseManifestXmlDocument
   );
-  const issues = [...(tree.issues || [])];
   const enrichedDetail = linkDialogLayouts(linkWevtMessages(
-    validateFontReferences(attachDetailPreviews(detail, decodedGroups))));
+    validateFontReferences(linkImageGroupPreviews(attachDetailPreviews(detail, decodedGroups)))));
   const crossChecks = collectResourceCrossChecks(enrichedDetail);
+  const links = collectResourceLinks(enrichedDetail);
   return {
     top: tree.top,
     detail: enrichedDetail,
+    ...(links.length ? { links } : {}),
     ...(crossChecks.length ? { crossChecks } : {}),
-    ...(tree.directories?.length ? { directories: tree.directories } : {}),
-    ...(tree.paths?.length ? { paths: tree.paths } : {}),
+    ...resourceTreeMetadata(tree),
     ...(muiResource?.result.configuration
       ? { muiResourceConfiguration: muiResource.result.configuration }
       : {}),
-    ...(issues.length ? { issues } : {})
   };
 }
