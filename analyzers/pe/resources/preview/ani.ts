@@ -1,34 +1,29 @@
 "use strict";
 
-import { parseAni } from "../../../ani/index.js";
+import { parseAniAnimation } from "./ani-animation.js";
 import type { ResourcePreviewResult } from "./types.js";
 
 const addAniTypePreview = async (
   data: Uint8Array,
   typeName: "ANICURSOR" | "ANIICON"
 ): Promise<ResourcePreviewResult | null> => {
-  const payload = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
-  const parsed = await parseAni(new File([payload], `${typeName.toLowerCase()}.ani`));
+  const issues: string[] = [];
+  const parsed = parseAniAnimation(data, issues);
   if (!parsed) return null;
   const detectedLabel = typeName === "ANICURSOR" ? "Animated cursor (ANI)" : "Animated icon (ANI)";
   const fields = [
     { label: "Type", value: typeName },
     { label: "Detected", value: detectedLabel },
-    { label: "Frames", value: String(parsed.header?.frameCount ?? parsed.frames) },
-    { label: "Steps", value: String(parsed.header?.stepCount ?? parsed.sequence.length) }
+    { label: "Frames", value: String(parsed.declaredFrames) },
+    { label: "Steps", value: String(parsed.declaredSteps) }
   ];
-  if (parsed.header?.defaultFps != null) {
-    fields.push({ label: "Default FPS", value: String(parsed.header.defaultFps) });
-  }
-  if (parsed.header?.width && parsed.header?.height) {
-    fields.push({ label: "Dimensions", value: `${parsed.header.width}x${parsed.header.height}` });
-  }
   return {
     preview: {
       previewKind: "summary",
-      previewFields: fields
+      previewFields: fields,
+      animation: parsed
     },
-    ...(parsed.issues.length ? { issues: parsed.issues } : {})
+    ...(issues.length ? { issues } : {})
   };
 };
 

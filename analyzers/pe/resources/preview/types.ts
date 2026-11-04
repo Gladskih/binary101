@@ -7,6 +7,10 @@ import type { ResourceFontDirectory, ResourceFontPreview } from "./font-types.js
 import type { RegistryScript } from "./registry-types.js";
 import type { BinaryMofClass } from "./mof-classes.js";
 import type { RibbonBmlControl } from "./ribbon-bml-tree.js";
+import type { DfmComponent } from "./dfm.js";
+import type { ResourceAnimation } from "./ani-animation.js";
+import type { ResourceVector } from "./vector-types.js";
+import type { ResourceEmbeddedDocument } from "./embedded-document.js";
 
 export interface ResourcePreviewField {
   label: string;
@@ -158,6 +162,10 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  embeddedDocument?: ResourceEmbeddedDocument;
+  vector?: ResourceVector;
+  animation?: ResourceAnimation;
+  dfm?: DfmComponent;
   imageGroup?: ResourceImageGroup;
   binaryMof?: { classes: BinaryMofClass[]; flavorCount: number };
   ribbonBml?: { strings: string[]; tree?: RibbonBmlControl; commands: Array<{ id: number; resources: Array<{
