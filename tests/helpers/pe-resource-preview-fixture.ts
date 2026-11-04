@@ -159,17 +159,17 @@ export const buildLargeGroupIconResource = (
 export const buildSingleEntryGroupCursorResource = (
   cursorSize: number,
   cursorId: number,
-  hotspotX: number,
-  hotspotY: number
+  planes: number,
+  bitCount: number
 ): Uint8Array => {
   const bytes = new Uint8Array(GROUP_RESOURCE_HEADER_SIZE + GROUP_RESOURCE_ENTRY_SIZE).fill(0);
   const view = new DataView(bytes.buffer);
   view.setUint16(2, 2, true); // GRPCURSORDIR.idType = 2 for cursors in winuser.h.
   view.setUint16(4, 1, true);
-  view.setUint8(6, PREFERRED_GROUP_IMAGE_SIZE);
-  view.setUint8(7, PREFERRED_GROUP_IMAGE_SIZE);
-  view.setUint16(10, hotspotX, true);
-  view.setUint16(12, hotspotY, true);
+  view.setUint16(6, PREFERRED_GROUP_IMAGE_SIZE, true);
+  view.setUint16(8, PREFERRED_GROUP_IMAGE_SIZE * 2, true);
+  view.setUint16(10, planes, true);
+  view.setUint16(12, bitCount, true);
   view.setUint32(14, cursorSize, true);
   view.setUint16(18, cursorId, true);
   return bytes;

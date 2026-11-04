@@ -1,34 +1,27 @@
 "use strict";
 
+import { indexResourceLeaves, resolveResourceContent, resourceAt } from "../resource-index.js";
+import type { ResourceCatalog } from "../resource-index.js";
 import type {
   ResourceDetailGroup, ResourceLangWithPreview, ResourceWevtProvider
 } from "./types.js";
 
-const indexMessages = (detail: ResourceDetailGroup[]): Map<number, Map<number, string>> => {
-  const messages = new Map<number, Map<number, string>>();
-  for (const group of detail.filter(entry => entry.typeName === "MESSAGETABLE")) {
-    for (const entry of group.entries) {
-      for (const lang of entry.langs) {
-        const byId = messages.get(lang.lang ?? 0) ?? new Map<number, string>();
-        for (const message of lang.messageTable?.messages ?? []) {
-          if (!byId.has(message.id)) byId.set(message.id, message.strings.join(" | "));
-        }
-        messages.set(lang.lang ?? 0, byId);
-      }
-    }
-  }
-  return messages;
+const messageText = (catalog: ResourceCatalog, language: number | null, id: number): string | undefined => {
+  const resolution = resolveResourceContent(catalog, "MESSAGETABLE", id, language);
+  if (resolution.kind !== "exact" && resolution.kind !== "neutral") return undefined;
+  return resourceAt(catalog, resolution.targets[0]!)?.messageTable?.messages
+    .find(message => message.id === id)?.strings.join(" | ");
 };
 
 const linkMessage = <Value extends { messageId: number | null }>(
-  value: Value, messages: Map<number, string>
+  value: Value, messages: (id: number) => string | undefined
 ): Value => {
-  const messageText = value.messageId === null ? undefined : messages.get(value.messageId);
+  const messageText = value.messageId === null ? undefined : messages(value.messageId);
   return { ...value, ...(messageText !== undefined ? { messageText } : {}) };
 };
 
 const linkProvider = (
-  provider: ResourceWevtProvider, messages: Map<number, string>
+  provider: ResourceWevtProvider, messages: (id: number) => string | undefined
 ): ResourceWevtProvider => ({
   ...linkMessage(provider, messages),
   metadata: provider.metadata.map(entry => linkMessage(entry, messages)),
@@ -38,20 +31,19 @@ const linkProvider = (
 });
 
 const linkLanguage = (
-  lang: ResourceLangWithPreview, messages: Map<number, Map<number, string>>
+  lang: ResourceLangWithPreview, catalog: ResourceCatalog
 ): ResourceLangWithPreview => {
   if (!lang.wevtTemplate) return lang;
-  const byId = messages.get(lang.lang ?? 0) ?? messages.get(0);
-  if (!byId?.size) return lang;
+  const byId = (id: number) => messageText(catalog, lang.lang, id);
   return { ...lang, wevtTemplate: { ...lang.wevtTemplate,
     providers: lang.wevtTemplate.providers.map(provider => linkProvider(provider, byId)) } };
 };
 
 export const linkWevtMessages = (detail: ResourceDetailGroup[]): ResourceDetailGroup[] => {
-  const messages = indexMessages(detail);
-  if (!messages.size) return detail;
+  const catalog = indexResourceLeaves(detail);
+  if (!catalog.byContent.size) return detail;
   return detail.map(group => group.typeName === "WEVT_TEMPLATE"
     ? { ...group, entries: group.entries.map(entry => ({ ...entry,
-      langs: entry.langs.map(lang => linkLanguage(lang, messages)) })) }
+      langs: entry.langs.map(lang => linkLanguage(lang, catalog)) })) }
     : group);
 };

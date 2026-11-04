@@ -44,7 +44,7 @@ const readControl = (
       helpId: templateKind === "extended" ? view.getUint32(offset, true) : null,
       id: templateKind === "extended" ? view.getUint32(offset + 20, true)
         : view.getUint16(offset + 16, true),
-      kind: klass.value || "(custom)", title: title.value,
+      kind: typeof klass.value === "number" ? `#${klass.value}` : klass.value || "(custom)", title: title.value,
       x: view.getInt16(boundsOffset, true), y: view.getInt16(boundsOffset + 2, true),
       width: view.getInt16(boundsOffset + 4, true), height: view.getInt16(boundsOffset + 6, true),
       style: view.getUint32(offset + (templateKind === "standard" ? 0 : 8), true),
@@ -82,7 +82,7 @@ const readDialog = (
   const font = readDialogFont(view, title.nextOffset, style, templateKind, issues);
   return {
     templateKind, helpId: templateKind === "extended" ? view.getUint32(4, true) : null,
-    title: title.value, menu: menu.value, className: klass.value,
+    title: title.value, menu: menu.value, className: typeof klass.value === "number" ? `#${klass.value}` : klass.value,
     x: view.getInt16(boundsOffset, true), y: view.getInt16(boundsOffset + 2, true),
     width: view.getInt16(boundsOffset + 4, true), height: view.getInt16(boundsOffset + 6, true),
     style, exStyle: view.getUint32(templateKind === "standard" ? 4 : 8, true), font: font.font,

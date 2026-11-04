@@ -26,7 +26,7 @@ const readText = (
 
 export const readDialogField = (
   view: DataView, offset: number, field: "class" | "title" | "menu", issues: string[]
-): { value: string | null; nextOffset: number } => {
+): { value: string | number | null; nextOffset: number } => {
   if (offset + 2 > view.byteLength) {
     issues.push(`DIALOG ${field} field is truncated.`);
     return { value: null, nextOffset: view.byteLength };
@@ -39,7 +39,7 @@ export const readDialogField = (
     return { value: null, nextOffset: view.byteLength };
   }
   const ordinal = view.getUint16(offset + 2, true);
-  return { value: (field === "class" ? classes.get(ordinal) : undefined) ?? `#${ordinal}`,
+  return { value: (field === "class" ? classes.get(ordinal) : undefined) ?? ordinal,
     nextOffset: offset + 4 };
 };
 

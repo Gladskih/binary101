@@ -5,10 +5,10 @@ import { readDialogField, readDialogFont } from "../../../../../../analyzers/pe/
 void test("handles ordinals only as classes when reading a class field", () => {
   const view = new DataView(new Uint8Array([255, 255, 128, 0]).buffer);
   assert.equal(readDialogField(view, 0, "class", []).value, "BUTTON");
-  assert.equal(readDialogField(view, 0, "menu", []).value, "#128");
-  assert.equal(readDialogField(view, 0, "title", []).value, "#128");
+  assert.equal(readDialogField(view, 0, "menu", []).value, 128);
+  assert.equal(readDialogField(view, 0, "title", []).value, 128);
   const unknown = new DataView(new Uint8Array([255, 255, 1, 0]).buffer);
-  assert.equal(readDialogField(unknown, 0, "class", []).value, "#1");
+  assert.equal(readDialogField(unknown, 0, "class", []).value, 1);
 });
 
 void test("warns on missing fields, incomplete ordinals, unterminated strings and font metadata", () => {
@@ -29,4 +29,12 @@ void test("reads extended italic fonts and empty dialog fields", () => {
     font: { pointSize: 9, weight: 400, italic: true, charset: 2, typeface: "A" }, nextOffset: 10
   });
   assert.deepEqual(readDialogField(view, 8, "title", []), { value: null, nextOffset: 10 });
+});
+
+void test("distinguishes numeric menu ordinals from literal hash-prefixed names", () => {
+  const ordinal = new DataView(Uint8Array.of(255, 255, 1, 0).buffer);
+  const named = new DataView(Uint8Array.of(35, 0, 49, 0, 0, 0).buffer);
+
+  assert.equal(readDialogField(ordinal, 0, "menu", []).value, 1);
+  assert.equal(readDialogField(named, 0, "menu", []).value, "#1");
 });

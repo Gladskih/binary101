@@ -37,7 +37,7 @@ void test("returns resources without message tables unchanged", () => {
   assert.strictEqual(linkWevtMessages(detail), detail);
 });
 
-void test("uses neutral messages and preserves the first text for duplicate IDs", () => {
+void test("retains duplicate neutral message IDs as unresolved", () => {
   const detail = fixture();
   const table = detail[0]?.entries[0]?.langs[0];
   const event = detail[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0]?.events[0];
@@ -49,7 +49,7 @@ void test("uses neutral messages and preserves the first text for duplicate IDs"
   template.lang = null;
   const linked = linkWevtMessages(detail);
   assert.equal(linked[1]?.entries[0]?.langs[0]?.wevtTemplate?.providers[0]?.events[0]?.messageText,
-    "Hello");
+    undefined);
 });
 
 void test("keeps undecoded WEVT leaves and events without message IDs", () => {

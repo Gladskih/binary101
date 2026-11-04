@@ -27,8 +27,7 @@ const writeSectionName = (view: DataView, offset: number, name: string): void =>
   }
 };
 
-export const createPeResourcePreviewFile = (): MockFile => {
-  const resourceSection = buildResourceSection();
+export const createPeResourcePreviewFile = (resourceSection = buildResourceSection()): MockFile => {
   const resourceSectionRawSize = align(resourceSection.length, FILE_ALIGNMENT);
   const sizeOfImage = RESOURCE_SECTION_RVA + align(resourceSection.length, SECTION_ALIGNMENT);
   const fileSize = RESOURCE_SECTION_RAW_OFFSET + resourceSectionRawSize;

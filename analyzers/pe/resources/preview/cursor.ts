@@ -11,6 +11,7 @@ import {
   wrapAsIco
 } from "./icon.js";
 import { makeDataUrl } from "./data-url.js";
+import { addImageGroupPreview } from "./image-group.js";
 
 const CURSOR_LOCAL_HEADER_SIZE = 4; // LOCALHEADER is two WORD hotspot fields.
 
@@ -62,41 +63,28 @@ export async function addGroupCursorPreview(
   loadLeafData: LoadResourceLeafData,
   lang: number | null | undefined
 ): Promise<ResourcePreviewResult | null> {
-  if (typeName !== "GROUP_CURSOR" || data.length < 6) return null;
-  const group = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  // RT_GROUP_CURSOR starts with NEWHEADER (6 bytes), then fixed-size 14-byte entries.
-  const entryCount = group.getUint16(4, true);
-  if (!entryCount || 6 + entryCount * 14 > data.length) return null;
-  let selectedIndex = 0;
-  let bestWidth = 0;
-  for (let index = 0; index < entryCount; index += 1) {
-    // UI heuristic: prefer a 32px cursor preview when present; otherwise pick the largest width.
-    const width = group.getUint8(6 + index * 14) || 256;
-    if (width === 32) {
-      selectedIndex = index;
-      break;
-    }
-    if (width > bestWidth) {
-      selectedIndex = index;
-      bestWidth = width;
-    }
-  }
-  const entryOffset = 6 + selectedIndex * 14;
-  const cursorId = group.getUint16(entryOffset + 12, true);
-  const leaf = await loadLeafData(cursorId, lang);
+  if (typeName !== "GROUP_CURSOR") return null;
+  const metadata = addImageGroupPreview(data, typeName)!;
+  const entries = metadata.preview?.imageGroup?.entries;
+  if (!entries?.length) return metadata;
+  // UI policy: prefer a conventional 32px cursor, otherwise the widest saved variant.
+  const selected = entries.find(entry => entry.width === 32) ?? entries.reduce((best, entry) =>
+    entry.width > best.width ? entry : best);
+  return loadGroupCursorImage(selected.id, lang, loadLeafData, metadata.issues ?? []);
+}
+
+const loadGroupCursorImage = async (id: number, lang: number | null | undefined,
+  loadLeafData: LoadResourceLeafData, metadataIssues: string[]): Promise<ResourcePreviewResult | null> => {
+  const leaf = await loadLeafData(id, lang);
   if (!leaf.data?.length || leaf.data.length <= CURSOR_LOCAL_HEADER_SIZE) {
     return leaf.issues?.length ? { issues: leaf.issues } : null;
   }
-  const hotspotX = group.getUint16(entryOffset + 4, true);
-  const hotspotY = group.getUint16(entryOffset + 6, true);
-  const preview = buildCursorPreview(
-    leaf.data.subarray(CURSOR_LOCAL_HEADER_SIZE),
-    hotspotX,
-    hotspotY
-  );
-  if (!leaf.issues?.length) return preview;
+  // RESDIR holds Planes/BitCount. LOCALHEADER in RT_CURSOR holds the hotspot.
+  // https://learn.microsoft.com/en-us/windows/win32/menurc/localheader
+  const preview = addCursorPreview(leaf.data, "CURSOR")!;
+  const issues = [...metadataIssues, ...(preview.issues ?? []), ...(leaf.issues ?? [])];
   return {
     ...preview,
-    issues: [...(preview.issues || []), ...leaf.issues]
+    ...(issues.length ? { issues } : {})
   };
-}
+};

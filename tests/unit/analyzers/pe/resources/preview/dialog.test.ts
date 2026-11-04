@@ -117,7 +117,7 @@ for (const kind of ["standard", "extended"] as const) {
     assert.equal(dialog.controls.length, 2);
     assert.equal(dialog.controls[0]?.helpId, kind === "extended" ? 456 : null);
     assert.equal(dialog.controls[1]?.id, 101);
-    assert.equal(dialog.controls[0]?.title, "#128");
+    assert.equal(dialog.controls[0]?.title, 128);
     assert.deepEqual(dialog.controls[0]?.creationData, new Uint8Array([0xaa, 0xbb]));
   });
 }

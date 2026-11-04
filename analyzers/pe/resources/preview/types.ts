@@ -75,7 +75,7 @@ export interface ResourceDialogControlPreview {
   creationData?: Uint8Array;
   id: number | null;
   kind: string;
-  title: string | null;
+  title: string | number | null;
   x: number;
   y: number;
   width: number;
@@ -87,8 +87,8 @@ export interface ResourceDialogControlPreview {
 export interface ResourceDialogPreview {
   helpId?: number | null;
   templateKind: "standard" | "extended";
-  title: string | null;
-  menu: string | null;
+  title: string | number | null;
+  menu: string | number | null;
   className: string | null;
   x: number;
   y: number;
@@ -158,6 +158,7 @@ export interface ResourceTypeLibraryPreview {
 }
 
 export interface ResourcePreviewData {
+  imageGroup?: ResourceImageGroup;
   binaryMof?: { classes: BinaryMofClass[]; flavorCount: number };
   ribbonBml?: { strings: string[]; tree?: RibbonBmlControl; commands: Array<{ id: number; resources: Array<{
     kind: string; resourceId: number; minimumDpi?: number
@@ -168,7 +169,7 @@ export interface ResourcePreviewData {
   toolbar?: { version: number; width: number; height: number; items: number[] };
   dialogLayout?: { version: number; controls: Array<{
     moveX: number; moveY: number; sizeX: number; sizeY: number;
-    dialogControl?: { id: number | null; kind: string; title: string | null }
+    dialogControl?: { id: number | null; kind: string; title: string | number | null }
   }> };
   fontDirectory?: ResourceFontDirectory;
   legacyFont?: ResourceFontPreview;
@@ -243,6 +244,12 @@ export interface ResourceWevtTemplate {
 export interface ResourcePreviewResult {
   preview?: ResourcePreviewData;
   issues?: string[];
+}
+
+export interface ResourceImageGroup {
+  type: "ICON" | "CURSOR";
+  entries: Array<{ id: number; width: number; height: number;
+    planes: number; bitCount: number; size: number }>;
 }
 
 export type ResourcePreviewWithIssues = Partial<ResourcePreviewData> & {

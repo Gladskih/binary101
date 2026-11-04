@@ -1,24 +1,28 @@
 "use strict";
 
+import { indexResourceLeaves, resolveResourceReference, resourceAt } from "../resource-index.js";
+import type { ResourceCatalog } from "../resource-index.js";
 import type { ResourceDetailGroup, ResourceDialogPreview } from "./types.js";
 
 // MFC ApplyLayoutDataTo walks child windows in order alongside layout records.
 // https://github.com/adzm/atlmfc/blob/master/src/mfc/afxlayout.cpp#L414-L453
 const findDialog = (
-  detail: ResourceDetailGroup[], id: number | null, name: string | null, language: number | null
+  catalog: ResourceCatalog, id: number | null, name: string | null, language: number | null
 ): ResourceDialogPreview | null => {
-  if (id === null && name === null) return null;
-  const group = detail.find(item => item.typeName === "DIALOG");
-  const entry = group?.entries.find(item => item.id === id && item.name === name);
-  return entry?.langs.find(item => item.lang === language)?.dialogPreview ?? null;
+  const key = name ?? id;
+  if (key === null) return null;
+  const resolution = resolveResourceReference(catalog, "DIALOG", key, language);
+  if (resolution.kind !== "exact" && resolution.kind !== "neutral") return null;
+  return resourceAt(catalog, resolution.targets[0]!)?.dialogPreview ?? null;
 };
 
-export const linkDialogLayouts = (detail: ResourceDetailGroup[]): ResourceDetailGroup[] =>
-  detail.map(group => group.typeName === "AFX_DIALOG_LAYOUT" ? {
+export const linkDialogLayouts = (detail: ResourceDetailGroup[]): ResourceDetailGroup[] => {
+  const catalog = indexResourceLeaves(detail);
+  return detail.map(group => group.typeName === "AFX_DIALOG_LAYOUT" ? {
     ...group,
     entries: group.entries.map(entry => ({ ...entry,
       langs: entry.langs.map(lang => {
-        const dialog = findDialog(detail, entry.id, entry.name, lang.lang);
+        const dialog = findDialog(catalog, entry.id, entry.name, lang.lang);
         if (!dialog || !lang.dialogLayout) return lang;
         return { ...lang, dialogLayout: { ...lang.dialogLayout,
           controls: lang.dialogLayout.controls.map((control, index) => {
@@ -31,3 +35,4 @@ export const linkDialogLayouts = (detail: ResourceDetailGroup[]): ResourceDetail
       })
     }))
   } : group);
+};

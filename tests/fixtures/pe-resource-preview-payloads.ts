@@ -46,7 +46,7 @@ const WELL_KNOWN_SUPPORTED_OS_IDS = [
 ];
 
 export type ResourceSpec = {
-  typeId: number;
+  typeId: number | string;
   entryId: number;
   langId: number;
   codePage: number;
@@ -77,6 +77,7 @@ const buildCursorResource = (hotspotX: number, hotspotY: number, payload: Uint8A
 const buildGroupIconResource = (iconSize: number, iconId: number): Uint8Array => {
   const bytes = new Uint8Array(20).fill(0);
   const view = new DataView(bytes.buffer);
+  view.setUint16(2, 1, true);
   view.setUint16(4, 1, true);
   view.setUint8(6, 32);
   view.setUint8(7, 32);
@@ -91,10 +92,11 @@ const buildGroupCursorResource = (cursorSize: number, cursorId: number): Uint8Ar
   const bytes = new Uint8Array(20).fill(0);
   const view = new DataView(bytes.buffer);
   view.setUint16(4, 1, true);
-  view.setUint8(6, 32);
-  view.setUint8(7, 32);
-  view.setUint16(10, 7, true);
-  view.setUint16(12, 9, true);
+  view.setUint16(2, 2, true);
+  view.setUint16(6, 32, true);
+  view.setUint16(8, 64, true);
+  view.setUint16(10, 1, true);
+  view.setUint16(12, 32, true);
   view.setUint32(14, cursorSize, true);
   view.setUint16(18, cursorId, true);
   return bytes;
@@ -208,4 +210,4 @@ export const createPeResourceSpecs = (): ResourceSpec[] => [
     data: new Uint8Array([0x50, 0x4e, 0x50, 0]) },
   { typeId: RESOURCE_TYPE_VXD, entryId: 1, langId: 1033, codePage: 0,
     data: new Uint8Array([0x56, 0x58, 0x44, 0]) }
-].sort((left, right) => left.typeId - right.typeId);
+].sort((left, right) => Number(left.typeId) - Number(right.typeId));

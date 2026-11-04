@@ -25,7 +25,12 @@ void test("addCursorPreview renders cursor frames and exposes hotspot metadata",
 
 void test("addGroupCursorPreview resolves cursor leaves by id and renders the selected frame", async () => {
   const cursorLeaf = buildCursorResource(7, 9, createPngFile().data);
-  const groupCursor = buildSingleEntryGroupCursorResource(cursorLeaf.length, 4, 7, 9);
+  const groupCursor = buildSingleEntryGroupCursorResource(cursorLeaf.length, 4, 1, 32);
+  const directory = new DataView(groupCursor.buffer);
+  // CURSORDIR has WORD dimensions; RESDIR then stores Planes and BitCount, not hotspot.
+  // https://learn.microsoft.com/en-us/windows/win32/menurc/resdir
+  directory.setUint16(6, 32, true);
+  directory.setUint16(8, 64, true);
 
   const result = await addGroupCursorPreview(
     groupCursor,
