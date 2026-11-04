@@ -10,6 +10,25 @@ const ribbonTree = (): Uint8Array => Uint8Array.from([
   1, 1, 0, 3, 0x34, 0x12
 ]);
 
+const deepControlTree = (): Uint8Array => {
+  const bytes = new Uint8Array(8 * 200);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < 200; index += 1) {
+    view.setUint8(index * 8, 22);
+    view.setUint16(index * 8 + 2, 15, true);
+    view.setUint8(index * 8 + 7, index === 199 ? 0 : 1);
+  }
+  return bytes;
+};
+
+void test("retains valid deeply nested control trees", () => {
+  const bytes = deepControlTree();
+  const issues: string[] = [];
+
+  assert.ok(parseRibbonBmlTree(bytes, 0, issues));
+  assert.deepEqual(issues, []);
+});
+
 void test("parses nested Ribbon controls and command IDs", () => {
   const issues: string[] = [];
   assert.deepEqual(parseRibbonBmlTree(ribbonTree(), 0, issues), {
@@ -90,7 +109,8 @@ void test("resumes after extension references and permits repeated targets", () 
   // The second reference uses the same absolute position as the first.
   const issues: string[] = [];
   const tree = parseRibbonBmlTree(bytes, 0, issues);
-  assert.deepEqual(tree?.children.map(child => child.kind), ["Button", "Button"]);
+  assert.deepEqual(tree?.children.map(child => child.kind), ["Button", "Shared block"]);
+  assert.equal(tree?.children[1]?.reference,23);
   assert.deepEqual(issues, []);
 });
 
@@ -132,8 +152,8 @@ void test("bounds checks command containers and recursive arrays", () => {
   const nested = Uint8Array.from([...Array.from({ length: 34 }, () =>
     [24, 1, 0, 1, 0]).flat(), ...ribbonTree()]);
   const depthIssues: string[] = [];
-  assert.equal(parseRibbonBmlTree(nested, 0, depthIssues), null);
-  assert.match(depthIssues.join(" "), /nesting limit/);
+  assert.ok(parseRibbonBmlTree(nested, 0, depthIssues));
+  assert.deepEqual(depthIssues, []);
 });
 
 void test("recognizes documented Ribbon control types", () => {
@@ -208,4 +228,37 @@ void test("rejects fractional and out-of-range tree offsets", () => {
     assert.equal(parseRibbonBmlTree(ribbonTree(), offset, issues), null);
     assert.deepEqual(issues, ["Compiled BML control tree offset is invalid."]);
   }
+});
+
+const sharedControlTree = (depth: number): Uint8Array => {
+  const bytes = new Uint8Array(5 + (depth - 1) * 20 + 10);
+  const view = new DataView(bytes.buffer);
+  bytes[0] = 62; view.setUint32(1,5,true);
+  for (let index = 0; index < depth; index += 1) {
+    const at = 5 + index * 20;
+    const last = index === depth - 1;
+    view.setUint16(at,last ? 10 : 20,true);
+    bytes[at + 2] = 22; view.setUint16(at + 4,15,true); bytes[at + 9] = last ? 0 : 2;
+    if (!last) {
+      bytes[at + 10] = 62; view.setUint32(at + 11,at + 20,true);
+      bytes[at + 15] = 62; view.setUint32(at + 16,at + 20,true);
+    }
+  }
+  return bytes;
+};
+const controlCount = (root: ReturnType<typeof parseRibbonBmlTree>): number => {
+  const stack = root ? [root] : [];
+  let count = 0;
+  while (stack.length) {
+    const node = stack.pop()!; count += 1;
+    stack.push(...node.children);
+  }
+  return count;
+};
+void test("retains shared extension references without exponentially expanding their subtrees", () => {
+  const issues: string[] = [];
+  const tree = parseRibbonBmlTree(sharedControlTree(12),0,issues);
+
+  assert.deepEqual(issues,[]);
+  assert.ok(controlCount(tree) <= 24);
 });

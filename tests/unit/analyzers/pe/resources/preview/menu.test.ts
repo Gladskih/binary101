@@ -115,10 +115,10 @@ void test("warns for every truncated menu prefix and unknown versions", () => {
   assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);
 });
 
-void test("bounds popup nesting and rejects bad extended offsets", () => {
+void test("reports unterminated popup nesting and rejects bad extended offsets", () => {
   const bytes = buildDeeplyNestedMenu();
   const view = new DataView(bytes.buffer);
-  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.some(issue => issue.includes("nesting")));
+  assert.ok(addMenuPreview(bytes, "MENU")?.issues?.some(issue => issue.includes("end marker")));
   view.setUint16(0, 1, true);
   view.setUint16(2, 0, true);
   assert.ok(addMenuPreview(bytes, "MENU")?.issues?.length);

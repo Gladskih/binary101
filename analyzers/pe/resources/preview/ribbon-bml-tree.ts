@@ -4,6 +4,7 @@ export interface RibbonBmlControl {
   kind: string;
   commandId: number | null;
   children: RibbonBmlControl[];
+  reference?: number;
 }
 
 // Tree entry codes, control types and ID payloads follow new.ksy.
@@ -19,7 +20,7 @@ interface Reader {
   bytes: Uint8Array;
   view: DataView;
   cursor: number;
-  count: number;
+  extensions: Map<number, Entry>;
   issues: string[];
   activeExtensions: Set<number>;
 }
@@ -36,6 +37,14 @@ const failure = (reader: Reader, description: string): null => {
 
 const emptyEntry = (): Entry => ({ controls: [], commandId: null });
 
+const readPropertyId = (reader: Reader, idSize: number, kind: number): Entry => {
+  const offset = reader.cursor + 4;
+  const commandId = idSize === 4 ? reader.view.getUint32(offset, true) :
+    idSize === 2 ? reader.view.getUint16(offset, true) : reader.bytes[offset] ?? 0;
+  reader.cursor += 4 + idSize;
+  return { controls: [], commandId: kind === 0 ? commandId : null };
+};
+
 const readNumber = (reader: Reader): Entry | null => {
   if (!within(reader, 4)) return failure(reader, "property is truncated");
   const size = reader.bytes[reader.cursor + 1];
@@ -47,45 +56,10 @@ const readNumber = (reader: Reader): Entry | null => {
   }
   if (size !== 1) return failure(reader, "property size is unsupported");
   const flag = reader.bytes[reader.cursor + 3];
-  const idSize = flag === 2 ? 4 : flag === 3 ? 2 :
-    flag === 4 || flag === 9 || flag === 43 ? 1 : 0;
+  const idSize = new Map([[2, 4], [3, 2], [4, 1], [9, 1], [43, 1]]).get(flag ?? -1) ?? 0;
   if (!idSize) return failure(reader, "property ID encoding is unsupported");
   if (!within(reader, 4 + idSize)) return failure(reader, "property ID is truncated");
-  const offset = reader.cursor + 4;
-  const commandId = idSize === 4 ? reader.view.getUint32(offset, true) :
-    idSize === 2 ? reader.view.getUint16(offset, true) : reader.bytes[offset] ?? 0;
-  reader.cursor += 4 + idSize;
-  return { controls: [], commandId: kind === 0 ? commandId : null };
-};
-
-const readNode = (reader: Reader, depth: number): Entry | null => {
-  if (!within(reader, 8)) return failure(reader, "node is truncated");
-  const kindCode = reader.view.getUint16(reader.cursor + 2, true);
-  const childCount = reader.bytes[reader.cursor + 7] ?? 0;
-  reader.cursor += 8;
-  const control: RibbonBmlControl = {
-    kind: controlKinds.get(kindCode) ?? `Type ${kindCode}`, commandId: null, children: []
-  };
-  for (let index = 0; index < childCount; index += 1) {
-    const child = readEntry(reader, depth + 1);
-    if (!child) return null;
-    control.children.push(...child.controls);
-    if (child.commandId !== null) control.commandId = child.commandId;
-  }
-  return { controls: [control], commandId: null };
-};
-
-const readArray = (reader: Reader, depth: number): Entry | null => {
-  if (!within(reader, 5)) return failure(reader, "array is truncated");
-  const count = reader.view.getUint16(reader.cursor + 3, true);
-  reader.cursor += 5;
-  const controls: RibbonBmlControl[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const child = readEntry(reader, depth + 1);
-    if (!child) return null;
-    controls.push(...child.controls);
-  }
-  return { controls, commandId: null };
+  return readPropertyId(reader, idSize, kind!);
 };
 
 const skipContainer = (reader: Reader): Entry | null => {
@@ -108,44 +82,107 @@ const skipSizeInfo = (reader: Reader): Entry | null => {
   return emptyEntry();
 };
 
-const readExtension = (reader: Reader, depth: number): Entry | null => {
-  if (!within(reader, 5)) return failure(reader, "extension is truncated");
+type TreeTask = { kind: "entry"; assign: (entry: Entry) => void }
+  | { kind: "complete"; entry: Entry; assign: (entry: Entry) => void }
+  | { kind: "children"; remaining: number; entry: Entry; control?: RibbonBmlControl }
+  | { kind: "extension"; position: number; resume: number; end: number;
+    assign: (entry: Entry) => void; entry: Entry | null };
+
+const beginExtension = (reader: Reader, task: Extract<TreeTask, { kind: "entry" }>, tasks: TreeTask[]): boolean => {
+  if (!within(reader, 5)) { failure(reader, "extension is truncated"); return false; }
   const position = reader.view.getUint32(reader.cursor + 1, true);
   const resume = reader.cursor + 5;
   if (position > reader.bytes.length - 2 || reader.activeExtensions.has(position)) {
-    return failure(reader, "extension target is invalid or cyclic");
+    failure(reader, "extension target is invalid or cyclic"); return false;
   }
   const size = reader.view.getUint16(position, true);
   if (size < 3 || size > reader.bytes.length - position) {
-    return failure(reader, "extension block size is invalid");
+    failure(reader, "extension block size is invalid"); return false;
+  }
+  const cached = reader.extensions.get(position);
+  if (cached) {
+    reader.cursor = resume;
+    // Preserve the shared block identity instead of expanding a compressed DAG into a tree.
+    task.assign({ commandId: cached.commandId, controls: [{ kind: "Shared block",
+      commandId: null, children: [], reference: position }] });
+    return true;
   }
   reader.activeExtensions.add(position);
   reader.cursor = position + 2;
-  const entry = readEntry(reader, depth + 1);
-  const overrun = reader.cursor > position + size;
-  reader.activeExtensions.delete(position);
-  reader.cursor = resume;
-  if (overrun) return failure(reader, "extension block exceeds its declared size");
-  return entry;
+  const extension: Extract<TreeTask, { kind: "extension" }> = { kind: "extension", position,
+    resume, end: position + size, assign: task.assign, entry: null };
+  tasks.push(extension, { kind: "entry", assign: entry => { extension.entry = entry; } });
+  return true;
 };
 
-const readEntry = (reader: Reader, depth: number): Entry | null => {
-  // The format is recursive; these limits prevent hostile child counts exhausting the stack.
-  if (depth > 32 || reader.count++ >= 10000) return failure(reader, "nesting limit is exceeded");
-  if (!within(reader, 1)) return failure(reader, "entry is truncated");
+const readControlHeader = (reader: Reader): RibbonBmlControl => {
+  return {
+    kind: controlKinds.get(reader.view.getUint16(reader.cursor + 2, true)) ??
+      `Type ${reader.view.getUint16(reader.cursor + 2, true)}`,
+    commandId: null, children: [] };
+};
+
+const beginContainer = (reader: Reader, task: Extract<TreeTask, { kind: "entry" }>, tasks: TreeTask[]): boolean => {
+  const node = reader.bytes[reader.cursor] === 22;
+  if (!within(reader, node ? 8 : 5)) { failure(reader, node ? "node is truncated" : "array is truncated"); return false; }
+  const control = node ? readControlHeader(reader) : undefined;
+  const remaining = node ? reader.bytes[reader.cursor + 7]! : reader.view.getUint16(reader.cursor + 3, true);
+  reader.cursor += node ? 8 : 5;
+  const entry: Entry = { controls: control ? [control] : [], commandId: null };
+  tasks.push({ kind: "complete", entry, assign: task.assign },
+    { kind: "children", remaining, entry, ...(control ? { control } : {}) });
+  return true;
+};
+
+const readPrimitive = (reader: Reader): Entry | null => {
   switch (reader.bytes[reader.cursor]) {
     case 1: return readNumber(reader);
-    case 22: return readNode(reader, depth);
-    case 24: return readArray(reader, depth);
     case 16: return skipContainer(reader);
     case 13:
       if (!within(reader, 7)) return failure(reader, "command extension is truncated");
-      reader.cursor += 7;
-      return emptyEntry();
-    case 62: return readExtension(reader, depth);
+      reader.cursor += 7; return emptyEntry();
     case 59: return skipSizeInfo(reader);
     default: return failure(reader, "entry type is unknown");
   }
+};
+
+const readEntryTask = (reader: Reader, task: Extract<TreeTask, { kind: "entry" }>,
+  tasks: TreeTask[]): boolean => {
+      if (!within(reader, 1)) return Boolean(failure(reader, "entry is truncated"));
+      const type = reader.bytes[reader.cursor];
+      if (type === 22 || type === 24) { if (!beginContainer(reader, task, tasks)) return false; }
+      else if (type === 62) { if (!beginExtension(reader, task, tasks)) return false; }
+      else {
+        const entry = readPrimitive(reader);
+        if (!entry) return false;
+        task.assign(entry);
+      }
+  return true;
+};
+
+const readEntry = (reader: Reader): Entry | null => {
+  let result: Entry | null = null;
+  const tasks: TreeTask[] = [{ kind: "entry", assign: entry => { result = entry; } }];
+  while (tasks.length) {
+    const task = tasks.pop()!;
+    if (task.kind === "complete") task.assign(task.entry);
+    else if (task.kind === "extension") {
+      reader.activeExtensions.delete(task.position);
+      const overrun = reader.cursor > task.end;
+      reader.cursor = task.resume;
+      if (overrun || !task.entry) return failure(reader, "extension block exceeds its declared size");
+      reader.extensions.set(task.position, task.entry); task.assign(task.entry);
+    } else if (task.kind === "children") {
+      if (!task.remaining) continue;
+      task.remaining -= 1;
+      tasks.push(task, { kind: "entry", assign: child => {
+        const controls = task.control?.children ?? task.entry.controls;
+        for (const control of child.controls) controls.push(control);
+        if (task.control && child.commandId !== null) task.control.commandId = child.commandId;
+      } });
+    } else if (!readEntryTask(reader, task, tasks)) return null;
+  }
+  return result;
 };
 
 export const parseRibbonBmlTree = (
@@ -156,9 +193,9 @@ export const parseRibbonBmlTree = (
     return null;
   }
   const reader: Reader = { bytes, view: new DataView(bytes.buffer, bytes.byteOffset,
-    bytes.byteLength), cursor: start, count: 0, issues, activeExtensions: new Set() };
+    bytes.byteLength), cursor: start, extensions: new Map(), issues, activeExtensions: new Set() };
   while (reader.cursor < bytes.length) {
-    const entry = readEntry(reader, 0);
+    const entry = readEntry(reader);
     if (!entry) return null;
     if (entry.controls.length) return entry.controls[0] ?? null;
   }

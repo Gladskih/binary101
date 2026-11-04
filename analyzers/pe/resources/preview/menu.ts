@@ -24,7 +24,7 @@ const MFR_END = 0x0080;
 const MFS_GRAYED = 0x0003;
 const MFS_CHECKED = 0x0008;
 
-const alignDword = (offset: number): number => (offset + 3) & ~3;
+const alignDword = (offset: number): number => Math.ceil(offset / 4) * 4;
 
 const readUtf16Z = (
   view: DataView, offset: number, end: number, issues: string[]
@@ -75,47 +75,18 @@ const describeExtendedFlags = (type: number, state: number, resInfo: number): st
   return flags;
 };
 
-const parseStandardItems = (
-  view: DataView,
-  offset: number,
-  end: number,
-  issues: string[],
-  depth = 0
-): { items: ResourceMenuItemPreview[]; nextOffset: number } => {
-  // Bound recursion for malicious popup nesting; keep partial previews and report the limit.
-  if (depth >= 64) {
-    issues.push("MENU nesting exceeds the preview limit of 64 levels.");
-    return { items: [], nextOffset: end };
-  }
-  const items: ResourceMenuItemPreview[] = [];
-  let pos = offset;
-  while (pos + 1 < end) {
-    const options = view.getUint16(pos, true);
-    pos += 2;
-    const isPopup = (options & MF_POPUP) !== 0;
-    const isEnd = (options & MF_END) !== 0;
-    const id = isPopup ? null : readStandardId(view, pos, end);
-    if (!isPopup) pos += 2;
-    const text = readUtf16Z(view, pos, end, issues);
-    pos = text.nextOffset;
-    const item: ResourceMenuItemPreview = {
-      text: text.text || null,
-      id,
-      type: options,
-      state: null,
-      flags: describeStandardFlags(options),
-      children: []
-    };
-    if (isPopup) {
-      const child = parseStandardItems(view, pos, end, issues, depth + 1);
-      item.children = child.items;
-      pos = child.nextOffset;
-    }
-    items.push(item);
-    if (isEnd) return { items, nextOffset: pos };
-  }
-  issues.push("MENU item list is truncated or lacks an end marker.");
-  return { items, nextOffset: pos };
+const readStandardItem = (
+  view: DataView, offset: number, end: number, issues: string[]
+): { item: ResourceMenuItemPreview; nextOffset: number; popup: boolean; last: boolean } | null => {
+  if (offset + 2 > end) return null;
+  const options = view.getUint16(offset, true);
+  const popup = (options & MF_POPUP) !== 0;
+  if (!popup && offset + 4 > end) return null;
+  const id = popup ? null : readStandardId(view, offset + 2, end);
+  const text = readUtf16Z(view, offset + (popup ? 2 : 4), end, issues);
+  return { item: { text: text.text || null, id, type: options, state: null,
+    flags: describeStandardFlags(options), children: [] }, nextOffset: text.nextOffset,
+  popup, last: (options & MF_END) !== 0 };
 };
 
 const readExtendedItem = (
@@ -147,36 +118,43 @@ const readExtendedItem = (
   return { item, nextOffset: pos, resInfo };
 };
 
-const parseExtendedItems = (
-  view: DataView,
-  offset: number,
-  end: number,
-  issues: string[],
-  depth = 0
-): { items: ResourceMenuItemPreview[]; nextOffset: number } => {
-  // Bound recursion for malicious popup nesting; keep partial previews and report the limit.
-  if (depth >= 64) {
-    issues.push("MENU nesting exceeds the preview limit of 64 levels.");
-    return { items: [], nextOffset: end };
-  }
+const readMenuItem = (view: DataView, pos: number, end: number,
+  kind: ResourceMenuPreview["templateKind"], issues: string[]) => {
+  return kind === "standard" ? readStandardItem(view, pos, end, issues) : (() => {
+      const result = readExtendedItem(view, pos, end, issues);
+      return { item: result.item, nextOffset: result.nextOffset,
+        popup: (result.resInfo & MFR_POPUP) !== 0, last: (result.resInfo & MFR_END) !== 0 };
+    })();
+};
+
+const discardEndedMenus = (stack: Array<{ endAfterChild: boolean }>): void => {
+  while (stack[stack.length - 1]?.endAfterChild) stack.pop();
+};
+
+const parseMenuItems = (
+  view: DataView, offset: number, end: number,
+  kind: ResourceMenuPreview["templateKind"], issues: string[]
+): ResourceMenuItemPreview[] => {
   const items: ResourceMenuItemPreview[] = [];
+  const stack = [{ items, endAfterChild: false }];
   let pos = offset;
-  // MENUEX_TEMPLATE_ITEM has a fixed 14-byte prefix before the UTF-16 item text.
-  while (pos + 13 < end) {
-    const { item, nextOffset, resInfo } = readExtendedItem(view, pos, end, issues);
-    pos = nextOffset;
-    const isPopup = (resInfo & MFR_POPUP) !== 0;
-    const isEnd = (resInfo & MFR_END) !== 0;
-    if (isPopup) {
-      const child = parseExtendedItems(view, pos, end, issues, depth + 1);
-      item.children = child.items;
-      pos = child.nextOffset;
+  while (stack.length) {
+    if (pos + (kind === "standard" ? 2 : 14) > end) break;
+    const record = readMenuItem(view, pos, end, kind, issues);
+    if (!record) break;
+    const frame = stack[stack.length - 1]!;
+    frame.items.push(record.item);
+    pos = record.nextOffset;
+    if (record.popup) {
+      frame.endAfterChild = record.last;
+      stack.push({ items: record.item.children, endAfterChild: false });
+    } else if (record.last) {
+      stack.pop();
+      discardEndedMenus(stack);
     }
-    items.push(item);
-    if (isEnd) return { items, nextOffset: pos };
   }
-  issues.push("MENU item list is truncated or lacks an end marker.");
-  return { items, nextOffset: pos };
+  if (stack.length) issues.push("MENU item list is truncated or lacks an end marker.");
+  return items;
 };
 
 const parseStandardMenu = (view: DataView, issues: string[]): ResourceMenuPreview | null => {
@@ -187,7 +165,7 @@ const parseStandardMenu = (view: DataView, issues: string[]): ResourceMenuPrevie
   return {
     templateKind: "standard",
     helpId: null,
-    items: parseStandardItems(view, itemOffset, view.byteLength, issues).items
+    items: parseMenuItems(view, itemOffset, view.byteLength, "standard", issues)
   };
 };
 
@@ -199,7 +177,7 @@ const parseExtendedMenu = (view: DataView, issues: string[]): ResourceMenuPrevie
   return {
     templateKind: "extended",
     helpId: view.getUint32(4, true),
-    items: parseExtendedItems(view, itemOffset, view.byteLength, issues).items
+    items: parseMenuItems(view, itemOffset, view.byteLength, "extended", issues)
   };
 };
 

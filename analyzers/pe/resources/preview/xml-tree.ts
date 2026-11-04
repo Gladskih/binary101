@@ -32,24 +32,26 @@ const readElementAttributes = (element: ManifestXmlElement): ResourceXmlTreeAttr
     .filter(attribute => attribute.name);
 
 const buildTreeNode = (element: ManifestXmlElement): ResourceXmlTreeNode => {
-  const children: ResourceXmlTreeNode[] = [];
-  const textSegments: string[] = [];
-  for (const childNode of Array.from(element.childNodes || [])) {
-    if (childNode.nodeType === XML_ELEMENT_NODE) {
-      children.push(buildTreeNode(childNode as ManifestXmlElement));
-      continue;
+  const root: ResourceXmlTreeNode = { name: element.tagName,
+    attributes: readElementAttributes(element), text: null, children: [] };
+  const stack = [{ element, node: root }];
+  while (stack.length) {
+    const frame = stack.pop()!;
+    const textSegments: string[] = [];
+    for (const childNode of Array.from(frame.element.childNodes || [])) {
+      if (childNode.nodeType === XML_ELEMENT_NODE) {
+        const child = childNode as ManifestXmlElement;
+        const node: ResourceXmlTreeNode = { name: child.tagName,
+          attributes: readElementAttributes(child), text: null, children: [] };
+        frame.node.children.push(node); stack.push({ element: child, node });
+      } else if (childNode.nodeType === XML_TEXT_NODE || childNode.nodeType === XML_CDATA_SECTION_NODE) {
+        const text = normalizeNodeText(childNode);
+        if (text) textSegments.push(text);
+      }
     }
-    if (childNode.nodeType === XML_TEXT_NODE || childNode.nodeType === XML_CDATA_SECTION_NODE) {
-      const text = normalizeNodeText(childNode);
-      if (text) textSegments.push(text);
-    }
+    frame.node.text = textSegments.length ? textSegments.join(" ") : null;
   }
-  return {
-    name: element.tagName,
-    attributes: readElementAttributes(element),
-    text: textSegments.length ? textSegments.join(" ") : null,
-    children
-  };
+  return root;
 };
 
 export const parseXmlTree = (doc: ManifestXmlDocument): ResourceXmlTreeNode | null => {
