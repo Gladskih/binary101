@@ -15,12 +15,13 @@ const readU32 = (view: DataView, offset: number): number => view.getUint32(offse
 
 const estimateBitmapHeaderExtras = (
   headerSize: number,
-  compression: number,
-  bitCount: number
+  compression: number
 ): number => {
   if (headerSize !== 40) return 0;
   if (compression !== BI_BITFIELDS && compression !== BI_ALPHABITFIELDS) return 0;
-  return bitCount === 32 ? 16 : 12;
+  // BI_BITFIELDS has RGB masks regardless of pixel depth; BI_ALPHABITFIELDS adds alpha.
+  // https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfoheader#remarks
+  return compression === BI_ALPHABITFIELDS ? 16 : 12;
 };
 
 const estimatePaletteBytes = (
@@ -28,26 +29,18 @@ const estimatePaletteBytes = (
   bitCount: number,
   colorsUsed: number
 ): number => {
-  if (bitCount > 8) return 0;
-  const entryCount = colorsUsed > 0 ? colorsUsed : (1 << bitCount);
+  const entryCount = colorsUsed > 0 ? colorsUsed : bitCount <= 8 ? (1 << bitCount) : 0;
   const entrySize = headerSize === 12 ? 3 : 4;
   return entryCount * entrySize;
 };
 
 const buildBitmapFile = (data: Uint8Array): Uint8Array | null => {
-  if (data.length < 16) return null;
+  if (data.length < 4) return null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const headerSize = readU32(view, 0);
   // DIB header size is the first DWORD; these accepted sizes mirror the BMP analyzer's supported
   // header kinds in analyzers/bmp/bmp-parsing.ts and Win32 bitmap-header docs.
-  if (
-    headerSize !== 12 &&
-    headerSize !== 40 &&
-    headerSize !== 52 &&
-    headerSize !== 56 &&
-    headerSize !== 108 &&
-    headerSize !== 124
-  ) {
+  if (![12, 40, 52, 56, 108, 124].includes(headerSize) || headerSize > data.length) {
     return null;
   }
   const bitCount = headerSize === 12 ? readU16(view, 10) : readU16(view, 14);
@@ -56,7 +49,7 @@ const buildBitmapFile = (data: Uint8Array): Uint8Array | null => {
   const pixelOffset =
     BMP_FILE_HEADER_SIZE +
     headerSize +
-    estimateBitmapHeaderExtras(headerSize, compression, bitCount) +
+    estimateBitmapHeaderExtras(headerSize, compression) +
     estimatePaletteBytes(headerSize, bitCount, colorsUsed);
   if (pixelOffset > BMP_FILE_HEADER_SIZE + data.length) return null;
   const fileBytes = new Uint8Array(BMP_FILE_HEADER_SIZE + data.length);
