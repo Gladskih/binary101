@@ -21,9 +21,9 @@ import {
   formatBigByteSize,
   formatPointerHex,
   formatWordListHex,
-  linkerVersionHint,
-  winVersionName
+  linkerVersionHint
 } from "./header-format.js";
+import { renderHeaderVersions } from "./header-versions.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderDosHeader } from "./dos-header.js";
 import { renderMachineRows } from "./machine-rows.js";
@@ -224,9 +224,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     out.push(renderDefinitionRow("ImageBase", formatPointerHex(oh.ImageBase, pointerWidth), "Preferred load address."));
     out.push(renderDefinitionRow("SectionAlignment", humanSize(oh.SectionAlignment), "Alignment of sections in memory."));
     out.push(renderDefinitionRow("FileAlignment", humanSize(oh.FileAlignment), "Alignment of sections in the file."));
-    out.push(renderDefinitionRow("OperatingSystemVersion", winVersionName(oh.OSVersionMajor, oh.OSVersionMinor), "Minimum required OS version."));
-    out.push(renderDefinitionRow("ImageVersion", `${oh.ImageVersionMajor}.${oh.ImageVersionMinor}`, "Image version (informational)."));
-    out.push(renderDefinitionRow("SubsystemVersion", `${oh.SubsystemVersionMajor}.${oh.SubsystemVersionMinor}`, "Minimum subsystem version."));
+    out.push(renderHeaderVersions(oh));
     out.push(renderDefinitionRow("Subsystem", renderOptionChips(oh.Subsystem, SUBSYSTEMS), "Required subsystem (GUI, CUI, etc.)."));
     out.push(renderDefinitionRow("DllCharacteristics", renderFlagChips(oh.DllCharacteristics, DLL_FLAGS), "DLL characteristics (ASLR, DEP, etc.)."));
     out.push(renderDefinitionRow("SizeOfImage", humanSize(oh.SizeOfImage), "Size of image in memory, including all headers and sections."));

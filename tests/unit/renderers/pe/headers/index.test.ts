@@ -51,6 +51,8 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes("64-bit"));
   assert.ok(html.includes("14.2 - VS2019 era"));
   assert.ok(html.includes("Windows 7"));
+  assert.ok(html.includes(`>Subsystem</dt><dd><div class="optionsRow">`));
+  assert.ok(html.includes(`title="Required subsystem (GUI, CUI, etc.)."`));
   assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("DOS stub: stub - hello"));
   assert.ok(html.includes("Rich header"));
@@ -109,7 +111,7 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
 
   assert.ok(html.includes("32-bit"));
   assert.ok(html.includes("13.0 - MSVC (pre-VS2015)"));
-  assert.ok(html.includes("11.0 (11.0)"));
+  assert.ok(html.includes("<dd>11.0</dd>"));
   assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("Rich header: not present"));
 });

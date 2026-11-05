@@ -47,18 +47,3 @@ export const linkerVersionHint = (major: number, minor: number): string => {
     (major >= 14 ? "MSVC (VS2015+ era or lld-link)" : "MSVC (pre-VS2015)");
   return `${version} - ${hint}`;
 };
-
-export const winVersionName = (major: number, minor: number): string => {
-  const key = `${major}.${minor}`;
-  const names: Record<string, string> = {
-    "5.1": "Windows XP",
-    "5.2": "Windows Server 2003",
-    "6.0": "Windows Vista",
-    "6.1": "Windows 7",
-    "6.2": "Windows 8",
-    "6.3": "Windows 8.1",
-    "10.0": "Windows 10+"
-  };
-  const label = names[key] || key;
-  return `${label} (${key})`;
-};
