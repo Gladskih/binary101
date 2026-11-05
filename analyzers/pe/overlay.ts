@@ -2,7 +2,9 @@
 
 import type { FileRangeReader } from "../file-range-reader.js";
 import type { PeDataDirectory, PeSection } from "./types.js";
-import { normalizeFileRanges, type FileRange } from "./layout/file-ranges.js";
+import { normalizeFileRanges, subtractFileRanges, type FileRange } from "./layout/file-ranges.js";
+import { readPeCertificateAlignmentPadding } from "./certificate-padding.js";
+import type { ParsedSecurityDirectory } from "./security/index.js";
 import {
   COFF_SECTION_HEADER_BYTE_LENGTH,
   COFF_SYMBOL_RECORD_BYTE_LENGTH
@@ -153,8 +155,17 @@ export const getUnexplainedOverlayRanges = (inputs: PeOverlayInputs): FileRange[
   return unexplained;
 };
 
-export const analyzePeOverlay = async (inputs: PeOverlayInputs): Promise<PeOverlayAnalysis | null> => {
-  const ranges = getUnexplainedOverlayRanges(inputs).map(range => ({
+export const analyzePeOverlay = async (
+  inputs: PeOverlayInputs,
+  security?: ParsedSecurityDirectory | null
+): Promise<PeOverlayAnalysis | null> => {
+  const tail = computeCandidateTailRange(inputs);
+  if (!tail) return null;
+  const known = getKnownTailRanges(inputs, tail.start, tail.end);
+  const unexplained = subtractFileRanges([tail], known);
+  const padding = await readPeCertificateAlignmentPadding(inputs.reader, security, unexplained,
+    [{ start: 0, end: tail.start }, ...known]);
+  const ranges = (padding ? subtractFileRanges(unexplained, [padding]) : unexplained).map(range => ({
     ...range,
     size: range.end - range.start,
     findings: []

@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { subtractExplainedPeOverlay } from "../../../../analyzers/pe/payloads.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { createCertificatePaddingFixture } from "../../../fixtures/pe-certificate-padding.js";
+import { parseSecurityDirectory } from "../../../../analyzers/pe/security/index.js";
 
 const rarPayloads = {
   entries: [{
@@ -20,9 +22,10 @@ const rarPayloads = {
 };
 
 void test("subtractExplainedPeOverlay excludes certificate padding after a validated archive", async () => {
+  const fixture = await createCertificatePaddingFixture();
   const result = await subtractExplainedPeOverlay(
-    new MockFile(new Uint8Array(120), "signed-installer.exe"),
-    120,
+    fixture.file,
+    fixture.security,
     { ranges: [{ start: 100, end: 120, size: 20, findings: [] }] },
     null,
     rarPayloads
@@ -32,11 +35,11 @@ void test("subtractExplainedPeOverlay excludes certificate padding after a valid
 });
 
 void test("subtractExplainedPeOverlay keeps non-zero bytes before a certificate table", async () => {
-  const bytes = new Uint8Array(120);
-  bytes[119] = 1;
+  const fixture = await createCertificatePaddingFixture();
+  fixture.bytes[119] = 1;
   const result = await subtractExplainedPeOverlay(
-    new MockFile(bytes, "signed-installer.exe"),
-    120,
+    new MockFile(fixture.bytes),
+    fixture.security,
     { ranges: [{ start: 100, end: 120, size: 20, findings: [] }] },
     null,
     rarPayloads
@@ -45,4 +48,13 @@ void test("subtractExplainedPeOverlay keeps non-zero bytes before a certificate 
   assert.deepEqual(result, {
     ranges: [{ start: 118, end: 120, size: 2, findings: [] }]
   });
+});
+
+void test("subtractExplainedPeOverlay preserves zeros before an absent certificate table", async () => {
+  const file = new MockFile(new Uint8Array(120));
+  const security = await parseSecurityDirectory(file, [{ name: "SECURITY", rva: 120, size: 8 }]);
+  const result = await subtractExplainedPeOverlay(file, security,
+    { ranges: [{ start: 100, end: 120, size: 20, findings: [] }] }, null, rarPayloads);
+
+  assert.deepEqual(result?.ranges, [{ start: 118, end: 120, size: 2, findings: [] }]);
 });

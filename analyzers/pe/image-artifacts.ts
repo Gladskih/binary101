@@ -12,6 +12,7 @@ import type {
   PeDirectoryArtifacts,
   PeWindowsParseContext
 } from "./parse-windows.js";
+import type { ParsedSecurityDirectory } from "./security/index.js";
 
 export type PeImageArtifacts = {
   overlay: Awaited<ReturnType<typeof analyzePeOverlay>>;
@@ -22,16 +23,12 @@ export type PeImageArtifacts = {
   appHost: Awaited<ReturnType<typeof analyzePeAppHost>>;
 };
 
-const certificateTableStart = (directories: PeWindowsParseContext["core"]["dataDirs"]): number | null => {
-  const security = directories.find(directory => directory.name === "SECURITY");
-  return security?.size ? security.rva >>> 0 : null;
-};
-
 export const parsePeImageArtifacts = async (
   context: PeWindowsParseContext,
   debugResult: PeDebugArtifacts["debugResult"],
   resources: PeDirectoryArtifacts["resources"],
-  relocations: PeDirectoryArtifacts["reloc"]
+  relocations: PeDirectoryArtifacts["reloc"],
+  security: ParsedSecurityDirectory | null
 ): Promise<PeImageArtifacts> => {
   const { file, reader, core } = context;
   const overlay = await analyzePeOverlay({
@@ -52,7 +49,7 @@ export const parsePeImageArtifacts = async (
     ...(core.coffStringTableSize != null
       ? { coffStringTableSize: core.coffStringTableSize }
       : {})
-  });
+  }, security);
   const [packers, goRuntime, appHost, dRuntime] = await Promise.all([analyzePePackers({
     reader,
     sections: core.sections,
@@ -67,7 +64,7 @@ export const parsePeImageArtifacts = async (
   return {
     overlay: await subtractExplainedPeOverlay(
       reader,
-      certificateTableStart(core.dataDirs),
+      security,
       overlay,
       packers,
       payloads

@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { analyzePeOverlay, getUnexplainedOverlayRanges } from "../../../../analyzers/pe/overlay.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
+import { createCertificatePaddingFixture } from "../../../fixtures/pe-certificate-padding.js";
 
 // PKWARE APPNOTE, "Local file header": local headers start with 0x04034b50.
 // https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
@@ -72,4 +73,10 @@ void test("analyzePeOverlay returns null when no true overlay remains", async ()
     }),
     null
   );
+});
+
+void test("analyzePeOverlay excludes minimal zero padding after the image before validated certificates", async () => {
+  const fixture = await createCertificatePaddingFixture();
+
+  assert.equal(await analyzePeOverlay(fixture.inputs, fixture.security), null);
 });

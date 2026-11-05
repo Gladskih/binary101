@@ -121,7 +121,8 @@ export const parseWindowsPe = async (
     context,
     debugArtifacts.debugResult,
     directories.resources,
-    directories.reloc
+    directories.reloc,
+    security
   );
   const importLinking = analyzeImportLinking(
     directories.importResult,

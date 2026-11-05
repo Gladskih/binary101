@@ -14,6 +14,28 @@ import {
 } from "../../../fixtures/sample-files-pe.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { createDenseUnwindPe } from "../../../fixtures/pe-dense-unwind.js";
+import { createPeWithCertificatePadding } from "../../../fixtures/pe-certificate-padding.js";
+
+void test("parsePe excludes certificate alignment padding without suppressing section warnings", async () => {
+  const parsed = await parsePe(new MockFile(createPeWithCertificatePadding()));
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.equal(parsed.overlay, undefined);
+  assert.equal(parsed.security?.count, 1);
+  assert.equal(parsed.security?.warnings, undefined);
+  assert.ok(parsed.warnings?.some(warning => /SizeOfRawData .*not a multiple of FileAlignment/.test(warning)));
+});
+
+void test("parsePe preserves padding candidates before a corrupt certificate table", async () => {
+  const bytes = createPeWithCertificatePadding();
+  new DataView(bytes.buffer).setUint32(bytes.byteLength - 8, 7, true);
+  const parsed = await parsePe(new MockFile(bytes));
+
+  assert.ok(parsed && isPeWindowsParseResult(parsed));
+  assert.deepEqual(parsed.overlay?.ranges.map(({ start, end }) => ({ start, end })),
+    [{ start: bytes.byteLength - 12, end: bytes.byteLength - 8 }]);
+  assert.ok(parsed.security?.warnings?.some(warning => /length is smaller/.test(warning)));
+});
 
 void test("parsePe keeps dense unwind I/O bounded without omitting records", async context => {
   const file = createDenseUnwindPe(65536);

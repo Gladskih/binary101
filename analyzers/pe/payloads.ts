@@ -15,6 +15,8 @@ import type {
 import { subtractFileRanges, type FileRange } from "./layout/file-ranges.js";
 import type { PeResources } from "./resources/index.js";
 import type { ResourcePathNode } from "./resources/tree-types.js";
+import type { ParsedSecurityDirectory } from "./security/index.js";
+import { readPeCertificateAlignmentPadding } from "./certificate-padding.js";
 
 export type PePayloadFormat = "pe" | "rar" | "sevenzip";
 
@@ -167,31 +169,9 @@ const explainedRanges = (
   ...(payloads?.entries ?? []).map(payload => ({ start: payload.start, end: payload.end }))
 ];
 
-const readCertificateAlignmentPadding = async (
-  reader: FileRangeReader,
-  certificateTableStart: number | null,
-  ranges: FileRange[],
-  explained: FileRange[]
-): Promise<FileRange | null> => {
-  if (certificateTableStart == null || certificateTableStart % 8 !== 0 ||
-      certificateTableStart > reader.size) return null;
-  const tail = ranges.find(range => range.end === certificateTableStart);
-  if (!tail) return null;
-  const paddingStartLimit = Math.max(tail.start, certificateTableStart - 7);
-  const padding = await reader.read(paddingStartLimit, certificateTableStart - paddingStartLimit);
-  if (padding.byteLength !== certificateTableStart - paddingStartLimit) return null;
-  let paddingStart = certificateTableStart;
-  while (paddingStart > paddingStartLimit && padding.getUint8(paddingStart - paddingStartLimit - 1) === 0) {
-    paddingStart -= 1;
-  }
-  return explained.some(range => range.end === paddingStart)
-    ? { start: paddingStart, end: certificateTableStart }
-    : null;
-};
-
 export const subtractExplainedPeOverlay = async (
   reader: FileRangeReader,
-  certificateTableStart: number | null,
+  security: ParsedSecurityDirectory | null | undefined,
   overlay: PeOverlayAnalysis | null | undefined,
   packers: PePackerAnalysis | null | undefined,
   payloads: PePayloadAnalysis | null | undefined
@@ -199,9 +179,9 @@ export const subtractExplainedPeOverlay = async (
   if (!overlay) return null;
   const explained = explainedRanges(packers, payloads);
   const remaining = subtractFileRanges(overlay.ranges, explained);
-  const padding = await readCertificateAlignmentPadding(
+  const padding = await readPeCertificateAlignmentPadding(
     reader,
-    certificateTableStart,
+    security,
     remaining,
     explained
   );
