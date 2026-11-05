@@ -25,43 +25,143 @@ const propertyValue = (value: DfmValue): string => {
   return String(value.value);
 };
 
-const componentFace = (node: DfmComponent): string => {
-  const label = escapeHtmlText(textProperty(node, "Caption") || textProperty(node, "Text") || node.name);
-  if (node.className === "TCheckBox") return `${textProperty(node, "Checked") === "true" ? "☑" : "☐"} ${label}`;
-  if (node.className === "TRadioButton") return `◯ ${label}`;
-  if (node.className === "TProgressBar") return `<progress value="${numberProperty(node, "Position", 0)}" ` +
-    `max="${Math.max(1, numberProperty(node, "Max", 100))}"></progress>`;
-  if (node.className === "TComboBox") return `${label} ▾`;
-  return label;
+const controlKinds = new Map(Object.entries({
+  TLabel: "label", TStaticText: "label", TNewStaticText: "label",
+  TButton: "button", TNewButton: "button", TBitBtn: "button", TSpeedButton: "button",
+  TCheckBox: "checkbox", TNewCheckBox: "checkbox",
+  TRadioButton: "radio", TNewRadioButton: "radio",
+  TProgressBar: "progress", TNewProgressBar: "progress",
+  TComboBox: "combo", TNewComboBox: "combo",
+  TEdit: "edit", TNewEdit: "edit", TPanel: "panel", TGroupBox: "group",
+  TBevel: "bevel", TImage: "image", TBitmapImage: "image",
+  TNewNotebook: "notebook", TNewNotebookPage: "page"
+}));
+
+const controlKind = (node: DfmComponent): string => controlKinds.get(node.className) ??
+  (node.children.length ? "container" : property(node, "Width") || property(node, "Height")
+    ? "unknown" : "nonvisual");
+
+const caption = (node: DfmComponent): string =>
+  escapeHtmlText(textProperty(node, "Caption") || textProperty(node, "Text"));
+
+const progressFace = (node: DfmComponent): string => {
+  const minimum = numberProperty(node, "Min", 0);
+  const range = numberProperty(node, "Max", 100) - minimum;
+  const maximum = Number.isFinite(range) ? Math.max(1, range) : 1;
+  const position = Math.min(maximum, Math.max(0, numberProperty(node, "Position", 0) - minimum));
+  return `<progress value="${position}" max="${maximum}" aria-label="Progress"></progress>`;
 };
 
+const controlFaces: Readonly<Record<string, (node: DfmComponent) => string>> = {
+  button: caption, label: caption, panel: caption, edit: caption,
+  checkbox: node => `${textProperty(node, "Checked") === "true" ? "&#x2611;" : "&#x2610;"} ${caption(node)}`,
+  radio: node => `${textProperty(node, "Checked") === "true" ? "&#x25c9;" : "&#x25cb;"} ${caption(node)}`,
+  combo: node => `${caption(node)} <span class="peDfm__arrow">&#x25be;</span>`,
+  progress: progressFace,
+  group: node => `<span class="peDfm__legend">${caption(node)}</span>`,
+  image: () => `<span class="peDfm__image" aria-label="Image unavailable">&#x25a7;</span>`,
+  unknown: node => escapeHtmlText(node.name)
+};
+
+const cssString = (value: string): string => `"${value.replace(/["\\\n\r\f\0]/gu,
+  character => `\\${character.charCodeAt(0).toString(16)} `)}"`;
+
+// CSS absolute lengths: 96px = 72pt. https://www.w3.org/TR/css-values-4/#absolute-lengths
+const fontSize = (node: DfmComponent): number =>
+  Math.abs(numberProperty(node, "Font.Height", 0)) || numberProperty(node, "Font.Size", 0) * 4 / 3;
+
+const fontStyle = (node: DfmComponent): string => {
+  const family = textProperty(node, "Font.Name");
+  // Negative VCL Font.Height specifies character height in pixels; positive is cell height.
+  // https://docwiki.embarcadero.com/Libraries/en/Vcl.Graphics.TFont.Height
+  const size = fontSize(node);
+  const style = property(node, "Font.Style");
+  const values = style?.kind === "set" ? style.values : null;
+  return (family ? `font-family:${cssString(family)},sans-serif;` : "") +
+    (Number.isFinite(size) && size > 0 ? `font-size:${size}px;` : "") +
+    (values ? `font-weight:${values.includes("fsBold") ? "bold" : "normal"};` +
+      `font-style:${values.includes("fsItalic") ? "italic" : "normal"};` : "");
+};
+
+const textAlignments = new Map(Object.entries({
+  taCenter: "center", taRightJustify: "right", taLeftJustify: "left"
+}));
+const controlColors = new Map(Object.entries({
+  clWindow: "var(--bg)", clBtnFace: "var(--card)", clWhite: "var(--pe-dfm-white)",
+  clBlack: "var(--pe-dfm-black)"
+}));
+
+const controlStyle = (node: DfmComponent): string => {
+  const color = controlColors.get(textProperty(node, "Color"));
+  const align = textAlignments.get(textProperty(node, "Alignment"));
+  return fontStyle(node) + (color ? `background:${color};` : "") +
+    (align ? `text-align:${align};` : "") +
+    (textProperty(node, "WordWrap") === "true" ? "white-space:pre-wrap;" : "");
+};
+
+type DfmFrame = {
+  node: DfmComponent;
+  path: string;
+  kind: string;
+  width: number;
+  height: number;
+  activePage: string;
+};
+type DfmTask = DfmFrame | "close";
+
+const childFrame = (node: DfmComponent, parent: DfmFrame): DfmFrame => {
+  const kind = controlKind(node);
+  // Inno notebook pages are alClient and do not stream Left/Top/Width/Height/Visible.
+  // https://github.com/jrsoftware/issrc/blob/main/Components/NewNotebook.pas
+  return { node, path: `${parent.path}.${node.name}`, kind,
+    width: kind === "page" ? parent.width : Math.max(0,
+      numberProperty(node, "Width", kind === "notebook" ? 150 : 80)),
+    height: kind === "page" ? parent.height : Math.max(0,
+      numberProperty(node, "Height", kind === "notebook" ? 150 : 24)),
+    activePage: textProperty(parent.node, "ActivePage") };
+};
+
+const controlPosition = (frame: DfmFrame): string =>
+  frame.kind === "form" || frame.kind === "page" ? "left:0px;top:0px;" :
+    `left:${numberProperty(frame.node, "Left", 0)}px;top:${numberProperty(frame.node, "Top", 0)}px;`;
+
+const renderControl = (frame: DfmFrame): string => {
+  const { node, path, kind, width, height, activePage } = frame;
+  const hidden = textProperty(node, "Visible") === "false" || kind === "page" && activePage !== node.name;
+  const classes = kind === "form" ? "peDfm__form" : `peDfm__control peDfm__control--${kind}`;
+  const bevel = node.className === "TBevel" ? textProperty(node, "Shape") : "";
+  const style = `${controlPosition(frame)}width:${width}px;height:${height}px;${controlStyle(node)}`;
+  return `<div class="${classes}" data-pe-dfm-component="${escapeHtmlText(node.name)}" ` +
+    `data-pe-dfm-shape="${escapeHtmlText(bevel)}" title="${escapeHtmlText(`${path}: ${node.className}`)}" ` +
+    `style="${escapeHtmlText(style)}"${hidden ? " hidden" : ""}` +
+    `${textProperty(node, "Enabled") === "false" ? ' aria-disabled="true"' : ""}>` +
+    (controlFaces[kind]?.(node) ?? "");
+};
+
+const propertyRow = (node: DfmComponent, path: string): string =>
+  `<tr><td>${escapeHtmlText(path)}</td><td>${escapeHtmlText(node.className)}</td><td>` +
+  node.properties.map(prop => `<div><b>${escapeHtmlText(prop.name)}</b>: ` +
+    `${escapeHtmlText(propertyValue(prop.value))}</div>`).join("") + `</td></tr>`;
+
 export const renderDfmPreview = (root: DfmComponent): string => {
-  const stack = [{ node: root, x: 0, y: 0, parent: "" }];
+  const stack: DfmTask[] = [{ node: root, path: root.name, kind: "form", activePage: "",
+    width: Math.max(1, numberProperty(root, "ClientWidth", numberProperty(root, "Width", 400))),
+    height: Math.max(1, numberProperty(root, "ClientHeight", numberProperty(root, "Height", 240))) }];
   const rows: string[] = [];
   const controls: string[] = [];
   while (stack.length) {
     const item = stack.pop()!;
-    const node = item.node;
-    const x = item.x + numberProperty(node, "Left", 0);
-    const y = item.y + numberProperty(node, "Top", 0);
-    const path = item.parent ? `${item.parent}.${node.name}` : node.name;
-    rows.push(`<tr><td>${escapeHtmlText(path)}</td><td>${escapeHtmlText(node.className)}</td><td>` +
-      node.properties.map(prop => `<div><b>${escapeHtmlText(prop.name)}</b>: ` +
-        `${escapeHtmlText(propertyValue(prop.value))}</div>`).join("") + `</td></tr>`);
-    if (node !== root) controls.push(`<div class="peDfm__control" ` +
-      `title="${escapeHtmlText(`${path}: ${node.className}`)}" style="left:${x}px;top:${y}px;` +
-      `width:${Math.max(0, numberProperty(node, "Width", 80))}px;` +
-      `height:${Math.max(0, numberProperty(node, "Height", 24))}px">${componentFace(node)}</div>`);
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push({ node: node.children[index]!, x: node === root ? 0 : x,
-        y: node === root ? 0 : y, parent: path });
+    if (item === "close") { controls.push("</div>"); continue; }
+    rows.push(propertyRow(item.node, item.path));
+    controls.push(renderControl(item));
+    stack.push("close");
+    for (let index = item.node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(childFrame(item.node.children[index]!, item));
     }
   }
   return `<p>DFM ${escapeHtmlText(root.name)} (${escapeHtmlText(root.className)}). ` +
-    `Saved geometry; custom components, inherited forms and runtime layout may differ.</p>` +
-    `<div class="peDfm"><div class="peDfm__form" style="width:${Math.max(1,
-      numberProperty(root, "ClientWidth", numberProperty(root, "Width", 400)))}px;` +
-    `height:${Math.max(1, numberProperty(root, "ClientHeight", numberProperty(root, "Height", 240)))}px">` +
-    `${controls.join("")}</div></div><table class="table"><thead><tr><th>Component</th><th>Class</th>` +
+    `Saved layout; inherited forms and runtime captions, images or custom controls may differ.</p>` +
+    `<div class="peDfm">${controls.join("")}</div>` +
+    `<table class="table"><thead><tr><th>Component</th><th>Class</th>` +
     `<th>Saved properties</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 };

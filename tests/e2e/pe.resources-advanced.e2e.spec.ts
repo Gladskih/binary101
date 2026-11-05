@@ -5,6 +5,7 @@ import { buildResourceSection } from "../fixtures/pe-resource-preview-section.js
 import { createPeResourceSpecs } from "../fixtures/pe-resource-preview-payloads.js";
 import { createAdvancedResourcePayloads } from "../fixtures/pe-resource-advanced-payloads.js";
 import { createInteractiveResourcePayloads } from "../fixtures/pe-resource-interactive-payloads.js";
+import { createNotebookDfmResource } from "../fixtures/pe-resource-dfm-payloads.js";
 
 const openGroup = async (page: Page, name: string) => {
   const details = page.locator("[data-pe-resource-group]").filter({
@@ -23,7 +24,9 @@ const advancedPayloads = () => createAdvancedResourcePayloads().map(spec => spec
 
 const loadResources = async (page: Page): Promise<void> => {
   const file = createPeResourcePreviewFile(buildResourceSection([
-    ...createPeResourceSpecs(), ...advancedPayloads(), ...createInteractiveResourcePayloads()
+    ...createPeResourceSpecs(), ...advancedPayloads(), ...createInteractiveResourcePayloads(),
+    { typeId: 10, entryId: 307, langId: 1033, codePage: 65001,
+      data: new TextEncoder().encode(createNotebookDfmResource()) }
   ]));
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
@@ -61,7 +64,7 @@ test("renders Ribbon tabs, DFM, vector drawings and an animated cursor", async (
   await ribbon.getByRole("tab", { name: "View", exact: true }).click();
   await expect(ribbon.locator('[data-pe-ribbon-panel]:visible')).toContainText("Scale");
   const raw = await openGroup(page, "RCDATA");
-  await expect(raw.locator(".peDfm__form")).toBeVisible();
+  await expect(raw.locator('.peDfm__form[data-pe-dfm-component="Main"]')).toBeVisible();
   await expect(raw.locator(".peVector svg")).toHaveCount(3);
   await expect(raw.locator(".peVector script,.peVector image,.peVector foreignObject")).toHaveCount(0);
   const animation = await openGroup(page, "ANICURSOR");
@@ -75,4 +78,31 @@ test("renders Ribbon tabs, DFM, vector drawings and an animated cursor", async (
   expect(await page.evaluate(() => "__peResourceExecuted" in globalThis)).toBe(false);
   await ribbon.screenshot({ path: "reports/pe-resource-ribbon.png" });
   await page.screenshot({ path: "reports/pe-resource-previews.png", fullPage: true });
+});
+
+test("DFM pages inherit bounds and fonts, hide inactive content and draw native progress", async ({ page }) => {
+  await loadResources(page);
+  const raw = await openGroup(page, "RCDATA");
+  const form = raw.locator('.peDfm__form[data-pe-dfm-component="NotebookPreview"]');
+  const notebook = form.locator('[data-pe-dfm-component="Pages"]');
+  const active = notebook.locator(':scope > [data-pe-dfm-component="Installing"]');
+  await expect(active).toHaveCSS("width", "389px");
+  await expect(active).toHaveCSS("height", "170px");
+  await expect(active).toHaveCSS("border-top-width", "0px");
+  await expect(active).toHaveCSS("font-size", "11px");
+  await expect(form.locator('[data-pe-dfm-component="Other"]')).toBeHidden();
+  await expect(form.locator('[data-pe-dfm-component="HiddenText"]')).toBeHidden();
+  await expect(form.locator('[data-pe-dfm-component="HiddenLabel"]')).toBeHidden();
+  const progress = active.locator('[data-pe-dfm-component="Progress"]');
+  await expect(progress.locator("progress")).toHaveAttribute("value", "150");
+  await expect(progress.locator("progress")).toHaveAttribute("max", "300");
+  const parentBox = (await active.boundingBox())!;
+  const progressBox = (await progress.boundingBox())!;
+  expect(progressBox.x - parentBox.x).toBe(36);
+  expect(progressBox.y - parentBox.y).toBe(56);
+  await expect(active.locator('[data-pe-dfm-component="Status"]')).toHaveText("*");
+  const evidence = raw.locator(".peDfm + table").filter({ hasText: "NotebookPreview" });
+  await expect(evidence.locator("thead th")).toHaveText(["Component", "Class", "Saved properties"]);
+  await expect(evidence.locator("tbody > tr")).toHaveCount(8);
+  await expect(evidence).toContainText("NotebookPreview.Pages.Other.HiddenText");
 });

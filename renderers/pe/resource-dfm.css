@@ -1,0 +1,109 @@
+.peDfm {
+  --pe-dfm-white: #fff;
+  --pe-dfm-black: #000;
+  --pe-dfm-font: "Segoe UI", tahoma, arial, sans-serif;
+
+  max-width: 100%;
+  overflow: auto;
+}
+
+.peDfm__form {
+  position: relative;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  font: 12px/normal var(--pe-dfm-font);
+}
+
+.peDfm__control {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  white-space: pre;
+}
+
+.peDfm__control[hidden],
+.peDfm__control--nonvisual {
+  display: none;
+}
+
+.peDfm__control[aria-disabled="true"] {
+  opacity: .6;
+}
+
+.peDfm__control--button,
+.peDfm__control--edit,
+.peDfm__control--combo,
+.peDfm__control--group,
+.peDfm__control--unknown {
+  border: 1px solid var(--border2);
+}
+
+.peDfm__control--button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: var(--chip-bg-light);
+}
+
+.peDfm__control--edit,
+.peDfm__control--combo {
+  padding: 2px 4px;
+  background: var(--bg);
+}
+
+.peDfm__control--unknown {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.peDfm__control--bevel {
+  border: 1px solid var(--border2);
+}
+
+.peDfm__control--bevel[data-pe-dfm-shape="bsTopLine"] {
+  border-width: 1px 0 0;
+}
+
+.peDfm__control--bevel[data-pe-dfm-shape="bsBottomLine"] {
+  border-width: 0 0 1px;
+}
+
+.peDfm__control--bevel[data-pe-dfm-shape="bsLeftLine"] {
+  border-width: 0 0 0 1px;
+}
+
+.peDfm__control--bevel[data-pe-dfm-shape="bsRightLine"] {
+  border-width: 0 1px 0 0;
+}
+
+.peDfm__control--progress progress {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+.peDfm__control--image {
+  border: 1px dashed var(--border2);
+}
+
+.peDfm__image {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--muted);
+}
+
+.peDfm__arrow {
+  float: right;
+}
+
+.peDfm__legend {
+  padding: 0 3px;
+  background: var(--card);
+}

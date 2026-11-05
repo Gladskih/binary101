@@ -1,3 +1,5 @@
+@import url("./resource-dfm.css");
+
 .peDialog {
   --pe-dlu-x: 1.5px;
   --pe-dlu-y: 1.5px;
@@ -226,25 +228,6 @@
   align-self: stretch;
   border-left: 1px solid var(--border2);
   margin: 0 .25rem;
-}
-
-.peDfm {
-  max-width: 100%;
-  overflow: auto;
-}
-.peDfm__form {
-  position: relative;
-  background: var(--card);
-  border: 1px solid var(--border2);
-}
-.peDfm__control {
-  position: absolute;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--border2);
-  color: var(--text);
-  background: var(--bg);
-  font: inherit;
 }
 
 .peVector {
