@@ -32,7 +32,9 @@ const controlKinds = new Map(Object.entries({
   TRadioButton: "radio", TNewRadioButton: "radio",
   TProgressBar: "progress", TNewProgressBar: "progress",
   TComboBox: "combo", TNewComboBox: "combo",
-  TEdit: "edit", TNewEdit: "edit", TPanel: "panel", TGroupBox: "group",
+  TEdit: "edit", TNewEdit: "edit", TNewPathEdit: "edit",
+  TMemo: "memo", TNewMemo: "memo", TRichEditViewer: "memo",
+  TPanel: "panel", TGroupBox: "group",
   TBevel: "bevel", TImage: "image", TBitmapImage: "image",
   TNewNotebook: "notebook", TNewNotebookPage: "page"
 }));
@@ -52,8 +54,15 @@ const progressFace = (node: DfmComponent): string => {
   return `<progress value="${position}" max="${maximum}" aria-label="Progress"></progress>`;
 };
 
+const memoFace = (node: DfmComponent): string => {
+  const lines = property(node, "Lines.Strings");
+  return lines?.kind === "list" ? lines.values.map(value =>
+    value.kind === "string" ? escapeHtmlText(value.value) : "").join("\n") : caption(node);
+};
+
 const controlFaces: Readonly<Record<string, (node: DfmComponent) => string>> = {
   button: caption, label: caption, panel: caption, edit: caption,
+  memo: memoFace,
   checkbox: node => `${textProperty(node, "Checked") === "true" ? "&#x2611;" : "&#x2610;"} ${caption(node)}`,
   radio: node => `${textProperty(node, "Checked") === "true" ? "&#x25c9;" : "&#x25cb;"} ${caption(node)}`,
   combo: node => `${caption(node)} <span class="peDfm__arrow">&#x25be;</span>`,
@@ -90,13 +99,16 @@ const controlColors = new Map(Object.entries({
   clWindow: "var(--bg)", clBtnFace: "var(--card)", clWhite: "var(--pe-dfm-white)",
   clBlack: "var(--pe-dfm-black)"
 }));
+const textWrapping = new Map([["true", "pre-wrap"], ["false", "pre"]]);
 
 const controlStyle = (node: DfmComponent): string => {
   const color = controlColors.get(textProperty(node, "Color"));
   const align = textAlignments.get(textProperty(node, "Alignment"));
+  const wrap = textWrapping.get(textProperty(node, "WordWrap"));
   return fontStyle(node) + (color ? `background:${color};` : "") +
     (align ? `text-align:${align};` : "") +
-    (textProperty(node, "WordWrap") === "true" ? "white-space:pre-wrap;" : "");
+    (wrap ? `white-space:${wrap};` : "") +
+    (textProperty(node, "BorderStyle") === "bsNone" ? "border:0;" : "");
 };
 
 type DfmFrame = {

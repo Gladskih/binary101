@@ -37,6 +37,7 @@
 .peDfm__control--button,
 .peDfm__control--edit,
 .peDfm__control--combo,
+.peDfm__control--memo,
 .peDfm__control--group,
 .peDfm__control--unknown {
   border: 1px solid var(--border2);
@@ -54,6 +55,12 @@
 .peDfm__control--combo {
   padding: 2px 4px;
   background: var(--bg);
+}
+
+.peDfm__control--memo {
+  overflow: auto;
+  background: var(--bg);
+  white-space: pre-wrap;
 }
 
 .peDfm__control--unknown {

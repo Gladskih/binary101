@@ -7,6 +7,13 @@ export const createNotebookDfmResource = (): string => `object NotebookPreview: 
   ClientHeight = 240
   Font.Name = 'Tahoma'
   Font.Height = -11
+  object PathEdit: TNewPathEdit
+    Left = 10
+    Top = 30
+    Width = 180
+    Height = 21
+    Text = 'Saved path'
+  end
   object Pages: TNewNotebook
     Left = 4
     Top = 64
@@ -27,6 +34,14 @@ export const createNotebookDfmResource = (): string => `object NotebookPreview: 
         Caption = '*'
         Width = 317
         Height = 16
+      end
+      object License: TRichEditViewer
+        Top = 90
+        Width = 317
+        Height = 64
+        Lines.Strings = ('License text' 'Second line')
+        BorderStyle = bsNone
+        WordWrap = False
       end
     end
     object Other: TNewNotebookPage

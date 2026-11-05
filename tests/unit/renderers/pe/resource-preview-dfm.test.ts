@@ -206,3 +206,43 @@ void test("uses saved outer bounds when a form does not stream client dimensions
 
   assert.match(renderDfmPreview(root), /width:320px;height:180px/);
 });
+
+void test("renders Inno path edits and plain memo contents without internal names or markup", () => {
+  // TNewPathEdit derives from TNewEdit; TRichEditViewer derives from TMemo.
+  // https://github.com/jrsoftware/issrc/blob/main/Components/NewCtrls.pas
+  // https://github.com/jrsoftware/issrc/blob/main/Components/RichEditViewer.pas
+  const root = expectDefined(addTextDfmPreview(`object Form: TForm
+    object PathEdit: TNewPathEdit
+      Width = 200
+      Height = 21
+      Text = 'Saved path'
+    end
+    object License: TRichEditViewer
+      Width = 200
+      Height = 80
+      BorderStyle = bsNone
+      Lines.Strings = ('First line' '<img src=x>' 42)
+      WordWrap = False
+    end
+    object EmptyMemo: TNewMemo
+      Width = 200
+      Height = 80
+    end
+    object TextMemo: TMemo
+      Width = 200
+      Height = 80
+      Text = 'Memo text'
+    end
+  end`)?.preview?.dfm);
+  const html = renderDfmPreview(root).split("<table")[0]!;
+
+  assert.match(html, /peDfm__control--edit[^>]*data-pe-dfm-component="PathEdit"[^>]*>Saved path/);
+  assert.match(html, /peDfm__control--memo[^>]*data-pe-dfm-component="License"/);
+  assert.match(html, /First line\n&lt;img src=x&gt;\n<\/div>/);
+  assert.match(html, /white-space:pre;border:0/);
+  assert.match(html, /peDfm__control--memo[^>]*data-pe-dfm-component="EmptyMemo"/);
+  assert.doesNotMatch(expectDefined(html.match(/<div[^>]*data-pe-dfm-component="PathEdit"[^>]*>/)?.[0]),
+    /border:0/);
+  assert.match(html, /data-pe-dfm-component="TextMemo"[^>]*>Memo text/);
+  assert.doesNotMatch(html, />PathEdit<|>License<|>EmptyMemo<|<img src=x>/);
+});

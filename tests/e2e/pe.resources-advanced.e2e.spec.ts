@@ -101,8 +101,17 @@ test("DFM pages inherit bounds and fonts, hide inactive content and draw native 
   expect(progressBox.x - parentBox.x).toBe(36);
   expect(progressBox.y - parentBox.y).toBe(56);
   await expect(active.locator('[data-pe-dfm-component="Status"]')).toHaveText("*");
+  const path = form.locator('[data-pe-dfm-component="PathEdit"]');
+  await expect(path).toHaveClass(/peDfm__control--edit/);
+  await expect(path).toHaveText("Saved path");
+  await expect(path).toHaveCSS("border-top-width", "1px");
+  const license = active.locator('[data-pe-dfm-component="License"]');
+  await expect(license).toHaveClass(/peDfm__control--memo/);
+  await expect(license).toHaveText("License text\nSecond line");
+  await expect(license).toHaveCSS("white-space", "pre");
+  await expect(license).toHaveCSS("border-top-width", "0px");
   const evidence = raw.locator(".peDfm + table").filter({ hasText: "NotebookPreview" });
   await expect(evidence.locator("thead th")).toHaveText(["Component", "Class", "Saved properties"]);
-  await expect(evidence.locator("tbody > tr")).toHaveCount(8);
+  await expect(evidence.locator("tbody > tr")).toHaveCount(10);
   await expect(evidence).toContainText("NotebookPreview.Pages.Other.HiddenText");
 });
