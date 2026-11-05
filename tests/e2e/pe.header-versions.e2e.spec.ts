@@ -28,6 +28,11 @@ void test("explains PE versions as wrapping text on a narrow screen", async ({ p
     buffer: Buffer.from(createVersionedPe(3))
   });
   await page.getByText("PE/COFF headers", { exact: true }).click();
+  await expect(page.locator("dt").filter({ hasText: /^LinkerVersion$/ }).locator("+ dd"))
+    .toHaveText(
+      "14.0 (possible: Microsoft LINK (Visual Studio 2015 toolset) / " +
+      "LLVM lld-link (compatibility value))"
+    );
   const osVersion = page.locator("dt").filter({ hasText: /^OperatingSystemVersion$/ })
     .locator("+ dd");
   const subsystemVersion = page.locator("dt").filter({ hasText: /^SubsystemVersion$/ })

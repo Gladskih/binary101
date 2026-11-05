@@ -20,10 +20,10 @@ import {
 import {
   formatBigByteSize,
   formatPointerHex,
-  formatWordListHex,
-  linkerVersionHint
+  formatWordListHex
 } from "./header-format.js";
 import { renderHeaderVersions } from "./header-versions.js";
+import { linkerVersionHint } from "./linker-version.js";
 import { renderCoffTailSummary } from "./coff-tail-summary.js";
 import { renderDosHeader } from "./dos-header.js";
 import { renderMachineRows } from "./machine-rows.js";
@@ -189,7 +189,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     renderDefinitionRow(
       "LinkerVersion",
       linkerVersionHint(oh.LinkerMajor, oh.LinkerMinor),
-      "Linker that produced this image (MSVC or lld-link version family)."
+      "Producer-written linker version. Names are possible matches; the field does not identify a tool uniquely."
     )
   );
   out.push(renderDefinitionRow("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code section bytes."));

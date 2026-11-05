@@ -13,7 +13,7 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   pe.opt = { ...pe.opt, Magic: 0x20b } as PeWindowsOptionalHeader;
   const windowsOpt = pe.opt as PeWindowsOptionalHeader;
   windowsOpt.LinkerMajor = 14;
-  windowsOpt.LinkerMinor = 2;
+  windowsOpt.LinkerMinor = 20;
   windowsOpt.OSVersionMajor = 6;
   windowsOpt.OSVersionMinor = 1;
   // Microsoft PE/COFF: IMAGE_FILE_DLL marks a DLL image.
@@ -49,7 +49,12 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   const html = out.join("");
 
   assert.ok(html.includes("64-bit"));
-  assert.ok(html.includes("14.2 - VS2019 era"));
+  assert.ok(html.includes(
+    ">LinkerVersion</dt><dd>14.20 (possible: Microsoft LINK (Visual Studio 2019 toolsets))</dd>"
+  ));
+  assert.ok(html.includes(
+    "Producer-written linker version. Names are possible matches; the field does not identify a tool uniquely."
+  ));
   assert.ok(html.includes("Windows 7"));
   assert.ok(html.includes(`>Subsystem</dt><dd><div class="optionsRow">`));
   assert.ok(html.includes(`title="Required subsystem (GUI, CUI, etc.)."`));
@@ -110,7 +115,7 @@ void test("renderHeaders handles fallbacks and missing optional parts", () => {
   const html = out.join("");
 
   assert.ok(html.includes("32-bit"));
-  assert.ok(html.includes("13.0 - MSVC (pre-VS2015)"));
+  assert.ok(html.includes(">LinkerVersion</dt><dd>13.0</dd>"));
   assert.ok(html.includes("<dd>11.0</dd>"));
   assert.ok(!html.includes("Portable Executable (PE) / COFF"));
   assert.ok(html.includes("Rich header: not present"));
