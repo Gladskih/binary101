@@ -37,14 +37,16 @@ export const createCmsDigestAlgorithmFixture = (
   createCmsDigestSignedDataSchema(declaredAlgorithms, signerAlgorithms)
 );
 
-export const wrapCmsDigestWinCertificate = (payload: Uint8Array): Uint8Array => {
+export const wrapCmsDigestWinCertificate = (
+  payload: Uint8Array, certificateType = 0x0002
+): Uint8Array => {
   // Microsoft PE format, "The Attribute Certificate Table": 8-byte WIN_CERTIFICATE header.
   // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-attribute-certificate-table-image-only
   const bytes = new Uint8Array(payload.length + 8);
   const header = new DataView(bytes.buffer);
   header.setUint32(0, bytes.length, true);
   header.setUint16(4, 0x0200, true); // WIN_CERT_REVISION_2_0.
-  header.setUint16(6, 0x0002, true); // WIN_CERT_TYPE_PKCS_SIGNED_DATA.
+  header.setUint16(6, certificateType, true); // Defaults to WIN_CERT_TYPE_PKCS_SIGNED_DATA.
   bytes.set(payload, 8);
   return bytes;
 };

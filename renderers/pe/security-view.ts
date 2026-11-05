@@ -1,22 +1,19 @@
 "use strict";
 import { humanSize, hex } from "../../binary-utils.js";
 import { renderDefinitionRow, renderOptionChips, escapeHtml } from "../../html-utils.js";
-import type { ParsedWinCertificate } from "../../analyzers/pe/authenticode/index.js";
+import {
+  WIN_CERTIFICATE_TYPES,
+  type ParsedWinCertificate
+} from "../../analyzers/pe/authenticode/index.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderAuthenticodeTree } from "./security-tree.js";
 
 type PeSecuritySection = NonNullable<PeWindowsParseResult["security"]>;
 
-const WIN_CERTIFICATE_TYPES: Array<[number, string, string]> = [
-  [0x0001, "X.509", "Individual X.509 certificate blob."],
-  [0x0002, "PKCS#7", "Authenticode SignedData / CMS signature."],
-  [0x0009, "TS stack", "Terminal Services stack signing certificate."],
-  [0x000a, "Catalog", "PKCS#7 catalog signature, often for drivers."],
-  [0x0ef0, "EFI PKCS1.5", "UEFI PKCS#1 v1.5 certificate format."],
-  [0x0ef1, "EFI GUID", "UEFI GUID-defined certificate format."],
-  [0x0ef2, "EFI signed", "UEFI signed-data certificate format."]
-];
+const WIN_CERTIFICATE_TYPE_OPTIONS = WIN_CERTIFICATE_TYPES.map<[number, string, string]>(
+  type => [type.code, type.label, type.description]
+);
 
 const renderWarningSection = (title: string, warnings: string[] | undefined): string =>
   warnings?.length
@@ -24,8 +21,8 @@ const renderWarningSection = (title: string, warnings: string[] | undefined): st
     : "";
 
 const renderCertificateType = (certificateType: number, typeName: string): string =>
-  WIN_CERTIFICATE_TYPES.some(([type]) => type === certificateType)
-    ? renderOptionChips(certificateType, WIN_CERTIFICATE_TYPES)
+  WIN_CERTIFICATE_TYPE_OPTIONS.some(([type]) => type === certificateType)
+    ? renderOptionChips(certificateType, WIN_CERTIFICATE_TYPE_OPTIONS)
     : `<span class="mono">${hex(certificateType, 4)}</span> (${escapeHtml(typeName)})`;
 
 const renderCertificateCard = (certificate: ParsedWinCertificate, index: number): string => {
@@ -60,7 +57,7 @@ export function renderSecurity(security: PeSecuritySection, out: string[]): void
     renderDefinitionRow(
       "Certificate records",
       String(security.count ?? 0),
-      "Number of certificate blobs present (Authenticode)."
+      "Number of parsed WIN_CERTIFICATE records; this does not establish signature validity."
     )
   );
   out.push(`</dl>`);

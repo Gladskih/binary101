@@ -9,6 +9,48 @@ import {
   wrapCmsDigestWinCertificate
 } from "../../../fixtures/cms-digest-algorithms.js";
 
+// Microsoft WIN_CERTIFICATE / WinTrust.h and UEFI 2.10 section 32.2.4 define these codes.
+// https://learn.microsoft.com/en-us/windows/win32/api/wintrust/ns-wintrust-win_certificate
+// https://uefi.org/specs/UEFI/2.10/32_Secure_Boot_and_Driver_Signing.html#win-certificate
+for (const [certificateType, label, explanation] of [
+  [0x0001, "X.509", "Individual X.509 certificate blob. Payload is not decoded or verified."],
+  [0x0002, "PKCS#7", "Authenticode SignedData / CMS signature."],
+  [0x0004, "TS stack", "Terminal Services stack signing certificate. Payload is not decoded or verified."],
+  [0x0009, "PKCS1_SIGN", "WIN_CERT_TYPE_PKCS1_SIGN, documented by Microsoft Learn. Payload is not decoded or verified."],
+  [0x0ef0, "EFI PKCS#1 v1.5", "UEFI RSASSA-PKCS1-v1_5 signature. Payload is not decoded or verified."],
+  [0x0ef1, "EFI GUID", "UEFI certificate with a GUID-defined payload format. Payload is not decoded or verified."]
+] as const) {
+  void test(`renderSecurity selects the declared certificate type ${certificateType}`, () => {
+    const bytes = wrapCmsDigestWinCertificate(
+      createCmsDigestAlgorithmFixture([], []), certificateType
+    );
+    const out: string[] = [];
+
+    renderSecurity({ count: 1, certs: [decodeWinCertificate(bytes, bytes.length, 0)] }, out);
+
+    assert.ok(out.join("").includes(
+      `class="opt sel" data-accessible-tooltip title="${label} - ${explanation} ` +
+      `(0x${certificateType.toString(16).padStart(4, "0")})">${label}</span>`
+    ));
+    assert.equal(out.join("").includes("Certificate tree"), certificateType === 0x0002);
+  });
+}
+
+for (const certificateType of [0x000a, 0x0ef2]) {
+  void test(`renderSecurity preserves unconfirmed certificate type ${certificateType} numerically`, () => {
+    const bytes = wrapCmsDigestWinCertificate(
+      createCmsDigestAlgorithmFixture([], []), certificateType
+    );
+    const out: string[] = [];
+
+    renderSecurity({ count: 1, certs: [decodeWinCertificate(bytes, bytes.length, 0)] }, out);
+
+    assert.ok(out.join("").includes(`Type 0x${certificateType.toString(16).padStart(4, "0")}`));
+    assert.ok(!out.join("").includes('class="opt '));
+    assert.ok(!out.join("").includes("Certificate tree"));
+  });
+}
+
 void test("renderSecurity displays parsed CMS digest consistency warnings", () => {
   // NIST CSOR: SHA-256 and SHA-512 hash algorithm OIDs.
   // https://csrc.nist.gov/projects/computer-security-objects-register/algorithm-registration
@@ -152,6 +194,9 @@ void test("renderSecurity renders count without certificate table", () => {
   renderSecurity(security, out);
   const html = out.join("");
   assert.ok(html.includes("Certificate records"));
+  assert.ok(html.includes(
+    "Number of parsed WIN_CERTIFICATE records; this does not establish signature validity."
+  ));
   assert.ok(!html.includes("<table"));
 });
 

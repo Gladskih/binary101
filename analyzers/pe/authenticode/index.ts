@@ -3,15 +3,46 @@
 import { decodePkcs7 } from "./pkcs7.js";
 import { readDerElement, TAG_SEQUENCE } from "./der.js";
 
-const CERT_TYPE_NAMES: Record<number, string> = {
-  0x0001: "X.509 (individual)",
-  0x0002: "PKCS#7 SignedData (Authenticode)",
-  0x0009: "TS stack signing",
-  0x000a: "PKCS#7 catalog (driver)",
-  0x0ef0: "EFI PKCS1.5",
-  0x0ef1: "EFI GUID",
-  0x0ef2: "EFI signed data"
-};
+// Share documented type codes with the renderer. A type name does not establish payload validity.
+// Microsoft WinTrust.h defines X509=1, PKCS_SIGNED_DATA=2 and TS_STACK_SIGNED=4:
+// https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/WinTrust.h
+export const WIN_CERTIFICATE_TYPES: ReadonlyArray<{
+  code: number;
+  name: string;
+  label: string;
+  description: string;
+}> = [
+  {
+    code: 0x0001, name: "X.509 (individual)", label: "X.509",
+    description: "Individual X.509 certificate blob. Payload is not decoded or verified."
+  },
+  {
+    code: 0x0002, name: "PKCS#7 SignedData (Authenticode)", label: "PKCS#7",
+    description: "Authenticode SignedData / CMS signature."
+  },
+  {
+    code: 0x0004, name: "TS stack signing", label: "TS stack",
+    description: "Terminal Services stack signing certificate. Payload is not decoded or verified."
+  },
+  // Microsoft Learn documents PKCS1_SIGN=9; the checked WinTrust.h does not define this name.
+  // https://learn.microsoft.com/en-us/windows/win32/api/wintrust/ns-wintrust-win_certificate
+  {
+    code: 0x0009, name: "PKCS1_SIGN", label: "PKCS1_SIGN",
+    description: "WIN_CERT_TYPE_PKCS1_SIGN, documented by Microsoft Learn. " +
+      "Payload is not decoded or verified."
+  },
+  // UEFI 2.10 section 32.2.4 defines EFI_PKCS115=0x0ef0 and EFI_GUID=0x0ef1.
+  // https://uefi.org/specs/UEFI/2.10/32_Secure_Boot_and_Driver_Signing.html#win-certificate
+  {
+    code: 0x0ef0, name: "EFI PKCS#1 v1.5", label: "EFI PKCS#1 v1.5",
+    description: "UEFI RSASSA-PKCS1-v1_5 signature. Payload is not decoded or verified."
+  },
+  {
+    code: 0x0ef1, name: "EFI GUID", label: "EFI GUID",
+    description: "UEFI certificate with a GUID-defined payload format. " +
+      "Payload is not decoded or verified."
+  }
+];
 
 const WIN_CERT_TYPE_RESERVED_1 = 0x0003; // Microsoft PE format: WIN_CERTIFICATE type 0x0003 is reserved.
 
@@ -21,7 +52,8 @@ const REVISION_NAMES: Record<number, string> = {
 };
 
 const describeType = (type: number): string =>
-  CERT_TYPE_NAMES[type] || `Type 0x${type.toString(16).padStart(4, "0")}`;
+  WIN_CERTIFICATE_TYPES.find(entry => entry.code === type)?.name ??
+    `Type 0x${type.toString(16).padStart(4, "0")}`;
 
 const describeRevision = (rev: number): string =>
   REVISION_NAMES[rev] || `Revision 0x${rev.toString(16).padStart(4, "0")}`;
