@@ -15,7 +15,8 @@ const attributePatterns = new Map<string, RegExp>([
   ["fill", /^(?:none|currentColor|transparent|[a-z]+|#[\da-f]{3,8}|(?:rgb|rgba|hsl|hsla)\([\d.% ,+-]+\))$/iu],
   ["d", /^[MmLlHhVvCcSsQqTtAaZz\d\s.,eE+-]*$/u],
   ["points", /^[\d\s.,eE+-]*$/u], ["stroke-dasharray", /^[\d\s.,eE+-]*$/u],
-  ["transform", /^(?:\s*(?:matrix|translate|scale|rotate|skewX|skewY)\([\d\s.,eE+-]+\)\s*)+$/u],
+  // Keep each inter-transform whitespace run in one repetition (CodeQL js/redos).
+  ["transform", /^\s*(?:(?:matrix|translate|scale|rotate|skewX|skewY)\([\d\s.,eE+-]+\)\s*)+$/u],
   ["font-family", /^[\p{L}\p{N} _,.-]+$/u], ["font-weight", /^(?:normal|bold|[1-9]00)$/u],
   ["font-style", /^(?:normal|italic|oblique)$/u], ["text-anchor", /^(?:start|middle|end)$/u],
   ["stroke-linecap", /^(?:butt|round|square)$/u], ["stroke-linejoin", /^(?:miter|round|bevel)$/u],

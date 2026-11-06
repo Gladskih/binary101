@@ -1,8 +1,29 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { addSvgTextPreview } from "../../../../../../analyzers/pe/resources/preview/svg.js";
 import { parseManifestTestXmlDocument } from "../../../../../helpers/manifest-test-parser.js";
 import { expectDefined } from "../../../../../helpers/expect-defined.js";
+
+void test("rejects long malformed transform lists without blocking SVG parsing", () => {
+  // Isolate the CodeQL #14 regression so a synchronous regexp hang can be terminated.
+  const child = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", `
+    import assert from "node:assert/strict";
+    import { addSvgTextPreview } from ${JSON.stringify(new URL(
+    "../../../../../../analyzers/pe/resources/preview/svg.ts", import.meta.url).href)};
+    import { parseManifestTestXmlDocument } from ${JSON.stringify(new URL(
+    "../../../../../helpers/manifest-test-parser.ts", import.meta.url).href)};
+    const transform = "scale(\\t) ".repeat(10000) + "!";
+    const result = addSvgTextPreview('<svg><g transform="' + transform +
+      '" style="transform:' + transform + '"/></svg>', parseManifestTestXmlDocument);
+    assert.deepEqual(result?.preview?.vector?.nodes[0]?.attributes, []);
+    assert.deepEqual(result?.issues, [
+      "SVG preview omits attribute transform, style declarations."
+    ]);
+  `], { timeout: 10000, encoding: "utf8" });
+
+  assert.equal(child.status, 0, child.error?.message ?? child.stderr);
+});
 
 void test("rebuilds a drawing from geometry and presentation attributes", () => {
   const result = addSvgTextPreview('<svg viewBox="-10 -20 100 200"><g transform="translate(1 2)">' +
@@ -46,3 +67,31 @@ void test("retains SVG mixed text order while omitting unsupported nodes and mal
   assert.deepEqual(vector.nodes[0]?.children[1]?.children.map(node=>node.text),["B"]);
   assert.match(result?.issues?.join(" ") ?? "",/attribute x.*style declarations/su);
 });
+
+for (const transform of [
+  "matrix(1 0 0 1 0 0)", "translate(1 2)", "scale(2)", "rotate(45)", "skewX(1)", "skewY(2)",
+  "translate(1)scale(2)", "translate(1) \t scale(2)", "scale(2)\t", "scale(\t)".repeat(10)
+]) {
+  void test(`retains allowed SVG transforms: ${JSON.stringify(transform)}`, () => {
+    const result = addSvgTextPreview(`<svg><g transform="${transform}"/></svg>`,
+      parseManifestTestXmlDocument);
+
+    assert.equal(result?.issues, undefined);
+    assert.deepEqual(result?.preview?.vector?.nodes[0]?.attributes,
+      [{ name: "transform", value: transform.trim().replaceAll("\t", " ") }]);
+  });
+}
+
+for (const transform of [
+  "", " ", "scale()", "Scale(1)", "unknown(1)", "scale(1", "scale(1))", "scale((1))",
+  "bad scale(1)", "scale(1) bad", "scale(1);rotate(2)",
+  `${"scale(\t) ".repeat(10)}!`
+]) {
+  void test(`omits malformed SVG transforms: ${JSON.stringify(transform)}`, () => {
+    const result = addSvgTextPreview(`<svg><g transform="${transform}"/></svg>`,
+      parseManifestTestXmlDocument);
+
+    assert.deepEqual(result?.preview?.vector?.nodes[0]?.attributes, []);
+    assert.deepEqual(result?.issues, ["SVG preview omits attribute transform."]);
+  });
+}
