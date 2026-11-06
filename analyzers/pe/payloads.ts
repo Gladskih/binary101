@@ -17,8 +17,10 @@ import type { PeResources } from "./resources/index.js";
 import type { ResourcePathNode } from "./resources/tree-types.js";
 import type { ParsedSecurityDirectory } from "./security/index.js";
 import { readPeCertificateAlignmentPadding } from "./certificate-padding.js";
+import { analyzeFlashProjector, isValidatedProjectorMovie, type FlashProjector } from "./flash-projector.js";
+import type { SwfParseResult } from "../swf/types.js";
 
-export type PePayloadFormat = "pe" | "rar" | "sevenzip";
+export type PePayloadFormat = "pe" | "rar" | "sevenzip" | "swf";
 
 export type PePayloadProvenance =
   | {
@@ -32,21 +34,50 @@ export type PePayloadProvenance =
     discovery: "resource-leaf";
     resourcePath: ResourcePathNode[];
     validation: "pe-signatures";
+  }
+  | {
+    location: "overlay";
+    discovery: "projector-footer";
+    association: "flash-projector";
+    validation: "projector-footer";
   };
 
-export interface PeExtractedPayload {
+export type PeExtractedPayload = {
   end: number;
-  format: PePayloadFormat;
-  provenance: PePayloadProvenance;
   start: number;
-}
+} & ({
+  format: "swf";
+  provenance: Extract<PePayloadProvenance, { discovery: "projector-footer" }>;
+  swf: SwfParseResult;
+} | {
+  format: Exclude<PePayloadFormat, "swf">;
+  provenance: Exclude<PePayloadProvenance, { discovery: "projector-footer" }>;
+});
 
 export interface PePayloadAnalysis {
   entries: PeExtractedPayload[];
+  projectorCandidate?: FlashProjector;
 }
+
+const projectorPayload = (projector: FlashProjector): Extract<PeExtractedPayload, { format: "swf" }> => ({
+  ...projector, format: "swf", provenance: { location: "overlay", discovery: "projector-footer",
+    association: "flash-projector", validation: "projector-footer" }
+});
+
+export const resolveProjectorCandidate = (
+  analysis: PePayloadAnalysis, swf: SwfParseResult
+): PePayloadAnalysis => {
+  const candidate = analysis.projectorCandidate;
+  if (!candidate) return analysis;
+  if (!isValidatedProjectorMovie(swf)) return {
+    ...analysis, projectorCandidate: { ...candidate, swf }
+  };
+  return { entries: [...analysis.entries, projectorPayload({ ...candidate, swf })] };
+};
 
 // Real installer inventory placed every validated 7z/RAR start within 180 KiB of its
 // overlay start. One MiB preserves a wide margin while bounding automatic reads.
+// This existing archive-only policy is independent of uncapped Projector/SWF inspection.
 const AUTOMATIC_PAYLOAD_SCAN_BYTES = 1024 * 1024;
 const DOS_E_LFANEW_OFFSET = 0x3c;
 const DOS_HEADER_BYTES = 0x40;
@@ -85,7 +116,7 @@ const findResourcePePayloads = async (
   return entries;
 };
 
-const payloadFormat = (finding: PeOverlayFinding): PePayloadFormat | null => {
+const payloadFormat = (finding: PeOverlayFinding): "rar" | "sevenzip" | null => {
   if (finding.detectedType === EMBEDDED_SEVEN_ZIP_LABEL) return "sevenzip";
   if (finding.detectedType === EMBEDDED_RAR_LABEL) return "rar";
   return null;
@@ -104,7 +135,7 @@ const innoFindings = (packers: PePackerAnalysis | null | undefined): PeInnoSetup
 const overlayPayloadProvenance = (
   finding: PeOverlayFinding,
   installers: PeNsisPackerFinding[]
-): Extract<PePayloadProvenance, { location: "overlay" }> =>
+): Extract<PePayloadProvenance, { discovery: "archive-scan" }> =>
   installers.some(installer =>
     finding.start >= installer.firstHeaderOffset &&
     finding.end <= installer.firstHeaderOffset + installer.followingDataSize
@@ -124,34 +155,44 @@ const overlayPayloadProvenance = (
         : "sevenzip-next-header"
     };
 
-export const analyzePePayloads = async (
-  file: File,
-  reader: FileRangeReader,
-  overlay: PeOverlayAnalysis | null | undefined,
-  packers: PePackerAnalysis | null | undefined,
-  resources?: PeResources | null
-): Promise<PePayloadAnalysis | null> => {
-  const entries = await findResourcePePayloads(reader, resources);
-  const installers = nsisFindings(packers);
-  for (const range of overlay?.ranges ?? []) {
-    const findings = await findEmbeddedPayloadsInRangePrefix(
-      file,
-      reader,
-      range,
-      AUTOMATIC_PAYLOAD_SCAN_BYTES
-    );
+const inspectProjectorPayload = async (
+  file: File, overlay: PeOverlayAnalysis | null | undefined
+): Promise<PePayloadAnalysis> => {
+  const firstRange = overlay?.ranges[0];
+  const projector = firstRange ? await analyzeFlashProjector(file, firstRange.start) : null;
+  if (!projector) return { entries: [] };
+  return isValidatedProjectorMovie(projector.swf)
+    ? { entries: [projectorPayload(projector)] } : { entries: [], projectorCandidate: projector };
+};
+
+const findOverlayArchives = async (
+  file: File, reader: FileRangeReader, ranges: FileRange[], installers: PeNsisPackerFinding[]
+): Promise<PeExtractedPayload[]> => {
+  const entries: PeExtractedPayload[] = [];
+  for (const range of ranges) {
+    const findings = await findEmbeddedPayloadsInRangePrefix(file, reader,
+      { ...range, size: range.end - range.start, findings: [] }, AUTOMATIC_PAYLOAD_SCAN_BYTES);
     for (const finding of findings) {
       const format = payloadFormat(finding);
       if (!format) continue;
-      entries.push({
-        end: finding.end,
-        format,
-        provenance: overlayPayloadProvenance(finding, installers),
-        start: finding.start
-      });
+      entries.push({ end: finding.end, format,
+        provenance: overlayPayloadProvenance(finding, installers), start: finding.start });
     }
   }
-  return entries.length ? { entries } : null;
+  return entries;
+};
+
+export const analyzePePayloads = async (
+  file: File, reader: FileRangeReader, overlay: PeOverlayAnalysis | null | undefined,
+  packers: PePackerAnalysis | null | undefined, resources?: PeResources | null
+): Promise<PePayloadAnalysis | null> => {
+  const projector = await inspectProjectorPayload(file, overlay);
+  // A confirmed SWF is already explained. Avoid scanning its media bytes again as archive data.
+  const ranges = subtractFileRanges(overlay?.ranges ?? [],
+    projector.entries.map(payload => ({ start: payload.start, end: payload.end + 8 })));
+  const entries = (await findResourcePePayloads(reader, resources)).concat(projector.entries,
+    await findOverlayArchives(file, reader, ranges, nsisFindings(packers)));
+  return entries.length || projector.projectorCandidate ? { ...projector, entries } : null;
 };
 
 const explainedRanges = (
@@ -166,7 +207,11 @@ const explainedRanges = (
     start: finding.firstHeaderOffset,
     end: finding.firstHeaderOffset + finding.followingDataSize
   })),
-  ...(payloads?.entries ?? []).map(payload => ({ start: payload.start, end: payload.end }))
+  ...(payloads?.entries ?? []).map(payload => ({
+    start: payload.start,
+    // The verified Projector footer immediately follows the SWF.
+    end: payload.end + (payload.format === "swf" ? 8 : 0)
+  }))
 ];
 
 export const subtractExplainedPeOverlay = async (

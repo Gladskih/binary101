@@ -38,6 +38,7 @@ import {
 import type { PreviewRender } from "./preview.js";
 import { renderElfLazy } from "../renderers/elf/lazy-sections.js";
 import { renderWasm } from "../renderers/wasm/index.js";
+import { renderSwf } from "../renderers/swf.js";
 
 type RenderContext = {
   buildPreview: () => PreviewRender | null;
@@ -53,6 +54,9 @@ const renderExecutableAnalysis = (
   show: AnalysisPresenter
 ): boolean => {
   switch (result.analyzer) {
+    case "swf":
+      show("Flash SWF details", renderSwf(result.parsed));
+      return true;
     case "wasm":
       show("WebAssembly details", renderWasm(result.parsed));
       return true;

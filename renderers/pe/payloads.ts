@@ -11,13 +11,24 @@ import type {
 import { knownResourceType } from "../../analyzers/pe/resources/type-names.js";
 import { renderDownloadButton } from "../download-button.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { renderSwf } from "../swf.js";
 
 type PePayloadSection = "appended" | "resource";
+
+export const renderPeProjectorStatus = (analysis: PePayloadAnalysis | null | undefined): string => {
+  const candidate = analysis?.projectorCandidate;
+  if (!candidate) return "";
+  if (candidate.bodyReadError) return `<p class="smallNote">Additional appended-data analysis failed: ` +
+    `${escapeHtml(candidate.bodyReadError)}</p>`;
+  return candidate.swf.tags == null && !candidate.swf.issues.length
+    ? `<p class="smallNote" data-swf-body-status>Additional appended-data analysis is running.</p>` : "";
+};
 
 const PAYLOAD_FORMAT_LABELS: Readonly<Record<PePayloadFormat, string>> = {
   pe: "PE-signature resource object",
   rar: "RAR archive",
-  sevenzip: "7z archive"
+  sevenzip: "7z archive",
+  swf: "Flash Projector SWF"
 };
 
 const resourcePathNode = (node: { id: number | null; name: string | null }, index: number): string => {
@@ -30,16 +41,19 @@ const resourcePath = (provenance: Extract<PePayloadProvenance, { location: "reso
   provenance.resourcePath.map(resourcePathNode).join(" / ");
 
 const payloadLocation = (payload: PeExtractedPayload): string =>
-  payload.provenance.location === "overlay"
+  payload.format === "swf" ? "Appended after the PE image" : payload.provenance.location === "overlay"
     ? "True PE overlay"
     : `PE resource leaf: ${resourcePath(payload.provenance)}`;
 
 const payloadDiscovery = (payload: PeExtractedPayload): string =>
-  payload.provenance.discovery === "archive-scan"
+  payload.provenance.discovery === "projector-footer"
+    ? "EOF Projector marker and payload length locate an SWF with a parsed movie header."
+    : payload.provenance.discovery === "archive-scan"
     ? "Bounded scan found an archive signature and its validated end boundary."
     : "The PE resource directory names this data leaf.";
 
 const payloadAssociation = (payload: PeExtractedPayload): string =>
+  payload.format === "swf" ? "The SWF is packaged with the PE player; its metadata describes the SWF." :
   payload.provenance.location === "overlay" &&
   payload.provenance.association === "nsis-installer-data"
     ? "The complete range lies inside the validated NSIS installer-data boundary."
@@ -48,7 +62,9 @@ const payloadAssociation = (payload: PeExtractedPayload): string =>
       : "This object is the exact byte range of the named resource leaf.";
 
 const payloadValidation = (payload: PeExtractedPayload): string =>
-  payload.provenance.validation === "rar-end-archive"
+  payload.format === "swf"
+    ? "Projector footer and SWF movie header checked. SWF details show the body inspection status."
+    : payload.provenance.validation === "rar-end-archive"
     ? "RAR structure and the end-of-archive header establish the exact range."
     : payload.provenance.validation === "sevenzip-next-header"
       ? "7z SignatureHeader and NextHeader bounds and checksums establish the exact range."
@@ -84,6 +100,27 @@ const isNsisPayload = (payload: PeExtractedPayload): boolean =>
   payload.provenance.location === "overlay" &&
   payload.provenance.association === "nsis-installer-data";
 
+const isScriptTag = (code: number): boolean => code === 12 || code === 59 || code === 82;
+
+const swfInspectionSummary = (pending: number, scriptTags: number, issues: number): string =>
+  [pending ? "SWF background analysis running" : "", scriptTags ? `${scriptTags} script tag(s)` : "",
+    issues ? `${issues} SWF issue(s)` : ""].filter(Boolean).join(", ");
+
+const swfPayloadSummary = (payloads: PeExtractedPayload[]): string => {
+  let issues = 0;
+  let pending = 0;
+  let scriptTags = 0;
+  for (const payload of payloads) {
+    if (payload.format !== "swf") continue;
+    issues += payload.swf.issues.length;
+    if (payload.swf.tags == null && !payload.swf.issues.length) pending++;
+    for (const tag of payload.swf.tags ?? []) {
+      if (isScriptTag(tag.code)) scriptTags += tag.count;
+    }
+  }
+  return swfInspectionSummary(pending, scriptTags, issues);
+};
+
 export const getStandalonePePayloads = (
   analysis: PePayloadAnalysis | null | undefined
 ): PeExtractedPayload[] => analysis?.entries.filter(payload =>
@@ -97,7 +134,13 @@ export const getResourcePePayloads = (
 export const getPePayloadSectionDescriptor = (
   analysis: PePayloadAnalysis | null | undefined
 ) => {
-  const count = getStandalonePePayloads(analysis).length;
+  const payloads = getStandalonePePayloads(analysis);
+  const count = payloads.length;
+  if (payloads.some(payload => payload.format === "swf")) return {
+    summary: [`${count} ${count === 1 ? "payload" : "payloads"}`, swfPayloadSummary(payloads)]
+      .filter(Boolean).join(", "),
+    title: count === 1 ? "Appended payload" : "Appended payloads"
+  };
   return count ? {
     summary: `${count} ${count === 1 ? "archive" : "archives"}`,
     title: count === 1 ? "Appended archive" : "Appended archives"
@@ -121,10 +164,6 @@ const payloadsForSection = (
   ? getStandalonePePayloads(analysis)
   : getResourcePePayloads(analysis);
 
-const payloadSectionTitle = (section: PePayloadSection): string => section === "appended"
-  ? "Appended archive"
-  : "PE-signature resource objects";
-
 export const renderPePayloads = (
   analysis: PePayloadAnalysis | null | undefined,
   section: PePayloadSection,
@@ -132,7 +171,12 @@ export const renderPePayloads = (
 ): void => {
   const payloads = payloadsForSection(analysis, section);
   if (!payloads.length) return;
-  out.push(renderPeSectionStart(payloadSectionTitle(section), `${payloads.length} detected`));
+  const descriptor = section === "appended"
+    ? getPePayloadSectionDescriptor(analysis) : getResourcePayloadSectionDescriptor(analysis);
+  out.push(renderPeSectionStart(descriptor!.title, `${payloads.length} detected`));
   out.push(renderPePayloadEntries(payloads));
+  for (const payload of payloads) {
+    if (payload.format === "swf") out.push(renderSwf(payload.swf, payload.start, payload.end));
+  }
   out.push(renderPeSectionEnd());
 };

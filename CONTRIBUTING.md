@@ -11,6 +11,9 @@
 - **No repeated expensive work within the same parse**: Don't rescan/redecode/rehash the same bytes multiple times while processing one file. Compute once and reuse when the result is used more than once.
 - **Variable declarations**: Use `const` by default, `let` only if reassignment is needed.
 - **String quotes**: Use double quotes (`"`).
+- **Type assertions**: Do not chain assertions (such as `as unknown as T`) to bypass incompatible types. Fix the types or validate unknown data; any unavoidable external-API adaptation must be isolated and explain the specific contract that requires it.
+- **Promises**: Use `async`/`await` instead of `.then()` when behavior is equivalent. Keep `.then()` only for a concrete reason that makes `await` unsuitable, and explain that reason.
+- **Purposeful code**: Every addition must serve a concrete purpose with an established reason; do not add code "just in case". Use `"use strict"` only where it is needed to enable strict mode, never in ES modules where strict mode is automatic.
 - **No empty lines in a function except AAA test structure**: Excessive empty lines usually indicate a function is doing too much.
 - **No single-use constants**: Do not introduce a named `const` that is referenced only once.
 - **Prefer expressions directly**: If a value is used once, prefer an in-place expression/early return over introducing an intermediate variable.

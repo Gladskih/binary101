@@ -13,7 +13,8 @@ type PePayloadDownloadDeps = {
 const FORMAT_DETAILS: Readonly<Record<PePayloadFormat, { extension: string; mediaType: string }>> = {
   pe: { extension: "bin", mediaType: "application/octet-stream" },
   rar: { extension: "rar", mediaType: "application/vnd.rar" },
-  sevenzip: { extension: "7z", mediaType: "application/x-7z-compressed" }
+  sevenzip: { extension: "7z", mediaType: "application/x-7z-compressed" },
+  swf: { extension: "swf", mediaType: "application/x-shockwave-flash" }
 };
 
 const parseOffset = (button: HTMLElement, name: string): number | null => {
@@ -25,7 +26,7 @@ const parseOffset = (button: HTMLElement, name: string): number | null => {
 
 const parseFormat = (button: HTMLElement): PePayloadFormat | null => {
   const format = button.getAttribute("data-payload-format");
-  return format === "pe" || format === "rar" || format === "sevenzip" ? format : null;
+  return format === "pe" || format === "rar" || format === "sevenzip" || format === "swf" ? format : null;
 };
 
 const sanitizeBaseName = (name: string): string =>

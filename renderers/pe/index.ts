@@ -10,11 +10,13 @@ import { renderPeLazySectionShells } from "./lazy-section-shells.js";
 import { renderGoRuntime } from "./go-runtime.js";
 import { renderDRuntime } from "./d-runtime.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
+import { renderPeProjectorStatus } from "./payloads.js";
 
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
   const out: string[] = [];
   if (isPeWindowsParseResult(pe)) {
+    out.push(renderPeProjectorStatus(pe.payloads));
     renderGoRuntime(pe, out);
     renderDRuntime(pe, out);
     renderInstructionSets(pe, out);

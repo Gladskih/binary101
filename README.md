@@ -14,12 +14,12 @@
 - **Windows resources.** Decode more than icons and version strings: MSFT/SLTG type libraries, MUI configuration, compiled Windows Event manifests (WEVT), Ribbon BML, dialogs, manifests and managed .NET resources.
 - **Authenticode verification.** Verify PE file digests and CMS signatures, inspect certificate chains and timestamps, and evaluate trust using a Windows CA snapshot exported in CI.
 - **Images and media.** Read JPEG markers, EXIF/JFIF metadata and comments; PNG chunks and metadata; MP4 boxes and tracks; WebM/Matroska tags, attachments and codec details. For VP8 video, compare dimensions declared by the container with those found in keyframes. Preview images, audio and video in formats supported by the browser.
-- **Embedded and unusual content.** Find RAR signatures inside JPEGs, scan PE overlays for embedded formats and archives, and extract validated archive payloads or PE files stored in resources. Recognize nested PE images in DOS stubs (including Intel TXT MLE), Valve integrity blocks, and UPX, Bun, NSIS and Inno Setup packaging.
+- **Embedded and unusual content.** Find RAR signatures inside JPEGs, scan PE overlays for embedded formats and archives, and extract validated archive payloads or PE files stored in resources. Recognize nested PE images in DOS stubs (including Intel TXT MLE), Valve integrity blocks, UPX, Bun, Flash Projector/SWF, NSIS and Inno Setup packaging.
 - **Archives and other files.** Inspect entries, sizes and compression methods in ZIP/ZIP64, 7z, RAR and TAR. Extract stored/Deflate/LZMA ZIP entries and supported LZMA/LZMA2 7z entries, including solid folders. Other analyzers cover packet captures, PDF, SQLite, ISO 9660, Windows shortcuts and more.
 
 ## Formats
 
-**Structured analysis:** PE/COFF, MZ, ELF, Mach-O, WebAssembly; PNG, BMP, TGA, JPEG, GIF, WebP; WAV, AVI, ANI, ASF (WMV/WMA), WebM/Matroska, MP4/QuickTime/3GP, MPEG-PS, MP3, FLAC; PCAP, PCAP-NG, gzip, PDF, TAR, ISO 9660, ZIP, 7z, RAR 4/5, FB2, SQLite and LNK.
+**Structured analysis:** PE/COFF, MZ, ELF, Mach-O, WebAssembly; PNG, BMP, TGA, JPEG, GIF, WebP; Flash SWF (FWS/CWS/ZWS), WAV, AVI, ANI, ASF (WMV/WMA), WebM/Matroska, MP4/QuickTime/3GP, MPEG-PS, MP3, FLAC; PCAP, PCAP-NG, gzip, PDF, TAR, ISO 9660, ZIP, 7z, RAR 4/5, FB2, SQLite and LNK.
 
 **Additional recognition:** TIFF, ICO/CUR, bzip2, XZ, LZ4, Zstandard, CAB, Ogg, AIFF, MIDI, FLV, MPEG-TS, Java class, Android DEX, PDB, Office/OpenXML, EPUB, APK, VSIX and other container-based formats.
 

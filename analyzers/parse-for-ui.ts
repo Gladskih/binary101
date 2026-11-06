@@ -45,15 +45,21 @@ import { parseGzip as parseGzipFile } from "./gzip/index.js";
 import { enrichPeImportMetadata } from "./pe/imports/winapi-metadata.js";
 import { probeCoffObject } from "./coff/probe.js";
 import { parseWasm } from "./wasm/index.js";
+import { parseSwf } from "./swf/index.js";
 
 type Fb2Parser = typeof parseFb2;
 
-const tryContainerHeaderFormats = async (
-  file: File,
-  dv: DataView
-): Promise<ParseForUiResult | null> => {
+const tryRuntimeHeaderFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
+  const swf = await parseSwf(file, dv);
+  if (swf) return { analyzer: "swf", parsed: swf };
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x0061736d)
     return { analyzer: "wasm", parsed: (await parseWasm(file))! };
+  return null;
+};
+
+const tryContainerHeaderFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
+  const runtime = await tryRuntimeHeaderFormats(file, dv);
+  if (runtime) return runtime;
   if (hasShellLinkSignature(dv)) {
     const lnk = await parseLnk(file);
     if (lnk) return { analyzer: "lnk", parsed: lnk };
@@ -94,9 +100,7 @@ const tryCoffObjectFormat = async (file: File, dv: DataView): Promise<ParseForUi
 };
 
 const tryArchiveFormats = async (
-  file: File,
-  dv: DataView,
-  parseFb2File: Fb2Parser
+  file: File, dv: DataView, parseFb2File: Fb2Parser
 ): Promise<ParseForUiResult | null> => {
   if (toAsciiFromWholeView(dv, 8192).toLowerCase().indexOf("<fictionbook") !== -1) {
     const fb2 = await parseFb2File(file);
@@ -224,10 +228,7 @@ const tryIsoMediaFormat = async (file: File, dv: DataView): Promise<ParseForUiRe
   return mp4 ? { analyzer: "mp4", parsed: mp4 } : null;
 };
 
-const tryStreamingMediaFormats = async (
-  file: File,
-  dv: DataView
-): Promise<ParseForUiResult | null> => {
+const tryStreamingMediaFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   const riff = await tryRiffFormat(file, dv);
   if (riff) return riff;
   if (dv.byteLength >= 16 && readAsfGuid(dv, 0) === ASF_HEADER_GUID) {
@@ -250,8 +251,7 @@ const tryStreamingMediaFormats = async (
 };
 
 const tryAudioAndDatabaseFormats = async (
-  file: File,
-  dv: DataView
+  file: File, dv: DataView
 ): Promise<ParseForUiResult | null> => {
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x664c6143) {
     const flac = await parseFlac(file);

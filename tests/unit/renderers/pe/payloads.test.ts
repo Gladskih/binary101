@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { PePayloadAnalysis } from "../../../../analyzers/pe/payloads.js";
 import {
   getStandalonePePayloads,
   getPePayloadSectionDescriptor,
@@ -9,6 +10,50 @@ import {
   renderPePayloadEntries,
   renderPePayloads
 } from "../../../../renderers/pe/payloads.js";
+import { renderPeProjectorStatus } from "../../../../renderers/pe/payloads.js";
+
+const projectorAnalysis = (): PePayloadAnalysis => ({ entries: [{ start: 128, end: 256,
+  format: "swf", provenance: { location: "overlay", discovery: "projector-footer",
+    association: "flash-projector", validation: "projector-footer" },
+  swf: { signature: "FWS", version: 9, fileLength: 128, tags: [], issues: [] } }] });
+
+void test("renderPePayloads presents Projector metadata and exact SWF download as a payload, not an archive", () => {
+  const out: string[] = [];
+  const analysis = projectorAnalysis();
+
+  renderPePayloads(analysis, "appended", out);
+
+  const html = out.join("");
+  assert.deepEqual(getPePayloadSectionDescriptor(analysis), { title: "Appended payload", summary: "1 payload" });
+  assert.match(html, /Flash Projector SWF/);
+  assert.match(html, /Flash SWF/);
+  assert.match(html, /data-payload-format="swf"/);
+  assert.match(html, /data-payload-start="128"/);
+  assert.match(html, /data-payload-end="256"/);
+  assert.match(html, /EOF Projector marker/);
+  assert.match(html, /SWF movie header checked/);
+  assert.ok(!html.includes("Appended archive"));
+});
+
+void test("mixed appended formats keep a payload summary", () => {
+  const mixed = { entries: [...projectorAnalysis().entries, ...analysis.entries] };
+
+  assert.deepEqual(getPePayloadSectionDescriptor(mixed), { title: "Appended payloads", summary: "2 payloads" });
+});
+
+void test("unverified Projector candidates show progress or infrastructure failure without claiming a found payload", () => {
+  const candidate = { start: 128, end: 200,
+    swf: { signature: "CWS" as const, version: 9, fileLength: 31, issues: [] } };
+  const pending = { entries: [], projectorCandidate: candidate };
+  const rejected = { entries: [], projectorCandidate: { ...candidate, swf: { ...candidate.swf, issues: ["bad body"] } } };
+
+  assert.equal(getPePayloadSectionDescriptor(pending), null);
+  assert.match(renderPeProjectorStatus(pending), /analysis is running/);
+  assert.match(renderPeProjectorStatus({ entries: [], projectorCandidate: {
+    ...candidate, bodyReadError: "<worker unavailable>" } }), /&lt;worker unavailable/);
+  assert.equal(renderPeProjectorStatus(rejected), "");
+  assert.equal(renderPeProjectorStatus(null), "");
+});
 
 const analysis = {
   entries: [

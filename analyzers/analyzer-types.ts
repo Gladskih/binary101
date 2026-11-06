@@ -33,8 +33,10 @@ import type { PcapClassicParseResult } from "./pcap/types.js";
 import type { PcapNgParseResult } from "./pcapng/types.js";
 import type { Iso9660ParseResult } from "./iso9660/types.js";
 import type { WasmParseResult } from "./wasm/types.js";
+import type { SwfParseResult } from "./swf/types.js";
 
 export type AnalyzerName =
+  | "swf"
   | "wasm"
   | "lnk"
   | "sqlite"
@@ -71,6 +73,7 @@ export type AnalyzerName =
   | "asf";
 
 type AnalyzerParseMap = {
+  swf: SwfParseResult;
   wasm: WasmParseResult;
   lnk: LnkParseResult;
   sqlite: SqliteParseResult;

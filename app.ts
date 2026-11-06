@@ -25,6 +25,7 @@ import { createFileInspectionContext } from "./ui/file-inspection-context.js";
 import { setFileBinaryTypeLabel, setFileSubtypeLabel } from "./ui/file-type-label.js";
 import { addAccessibleTooltip, addAccessibleTooltipToButton, enhanceAccessibleTooltips } from "./ui/accessible-tooltips.js";
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
+import { createSwfBodyAnalysis } from "./ui/swf-analysis.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -86,20 +87,19 @@ const renderResult = (result: ParseForUiResult): void => {
   restoreOpenDetails(analysisValueElement, openDetails, viewer => syncManifestTreeControls(viewer as Element));
   enhancePeLazySections(analysisValueElement, result.analyzer === "pe" && result.parsed ? result.parsed : null);
   enhanceElfLazySections(analysisValueElement, result.analyzer === "elf" ? result.parsed : null);
+  swfBodyAnalysis.start();
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
+const swfBodyAnalysis = createSwfBodyAnalysis(getCurrentFile, getCurrentParseResult, renderResult);
 const { peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly } =
   createAnalysisPanelActions(getCurrentFile, getCurrentParseResult, setStatusMessage);
 const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
-const cancelActiveAnalysis = (): void => {
-  peDisassembly.cancel();
-  peEntrypointDisassembly.cancel();
-  peOverlayScan.cancel();
-  elfDisassembly.cancel();
-};
+const cancelActiveAnalysis = (): void =>
+  [peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly, swfBodyAnalysis]
+    .forEach(panel => panel.cancel());
 const resetFileInspectionView = (): void => {
   fileInspectionGeneration += 1;
   cancelActiveAnalysis();

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { isPeWindowsParseResult } from "../../../../analyzers/pe/index.js";
 import type { ParseForUiResult } from "../../../../analyzers/index.js";
 import type { PeParseResult } from "../../../../analyzers/pe/index.js";
 import { createPePayloadDownloadClickHandler } from "../../../../ui/pe-payload-download.js";
@@ -185,6 +186,35 @@ void test("PE payload download reports a missing selected file", () => {
     handler({ target: dom.button } as unknown as Event);
 
     assert.deepEqual(messages, ["No file selected."]);
+  } finally {
+    dom.restore();
+  }
+});
+
+void test("PE payload download exports only the confirmed SWF range with its own extension", async () => {
+  const dom = installDownloadDom();
+  const result = createParseResult();
+  const messages: Array<string | null | undefined> = [];
+  assert.ok(result.analyzer === "pe");
+  assert.ok(isPeWindowsParseResult(result.parsed));
+  result.parsed.payloads = { entries: [{ start: 1, end: 4, format: "swf",
+    provenance: { location: "overlay", discovery: "projector-footer",
+      association: "flash-projector", validation: "projector-footer" },
+    swf: { signature: "FWS", version: 9, fileLength: 3, tags: [], issues: [] } }] };
+  try {
+    setPayloadAttributes(dom.button, 4, "swf");
+    const handler = createPePayloadDownloadClickHandler({
+      getFile: () => new MockFile(Uint8Array.of(0, 70, 87, 83, 99), "game.exe"),
+      getParseResult: () => result,
+      setStatusMessage: message => messages.push(message)
+    });
+
+    handler({ target: dom.button } as unknown as Event);
+
+    assert.equal(expectDefined(dom.getAnchor()).download, "game.exe.payload-1.swf");
+    assert.equal(expectDefined(dom.getBlob()).type, "application/x-shockwave-flash");
+    assert.deepEqual(new Uint8Array(await expectDefined(dom.getBlob()).arrayBuffer()), Uint8Array.of(70, 87, 83));
+    assert.deepEqual(messages, [null]);
   } finally {
     dom.restore();
   }

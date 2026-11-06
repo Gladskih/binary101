@@ -4,9 +4,15 @@ import type { ProbeResult } from "./probe-types.js";
 import { hasPdfHeader } from "./file-signatures.js";
 import { detectVirtualHardDiskHeader } from "../vhd/probe.js";
 import { detectCpioHeader } from "../cpio/probe.js";
+import { readSwfHeader } from "../swf/header.js";
 
 const detectPdf = (dv: DataView): ProbeResult => {
   return hasPdfHeader(dv) ? "PDF document" : null;
+};
+
+const detectSwf = (view: DataView): ProbeResult => {
+  const header = readSwfHeader(view);
+  return header ? `Flash SWF (v${header.version}, ${header.signature})` : null;
 };
 
 const detectCompoundFile = (dv: DataView): ProbeResult => {
@@ -271,6 +277,7 @@ const detectWindowsShimDatabase = (dv: DataView): ProbeResult => {
 };
 
 const miscProbes: Array<(dv: DataView) => ProbeResult> = [
+  detectSwf,
   detectPdf,
   detectCompoundFile,
   detectPdb,
