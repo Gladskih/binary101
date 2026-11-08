@@ -2,7 +2,7 @@
 
 > Technical reference extracted from the [project catalog](binary-analysis-landscape.md) on 2026-11-08. Concepts are relatively stable; individual tool capabilities remain release-dependent. [Evaluation protocol](binary-analysis-evaluation.md).
 
-## Code-analysis implementation matrix implementation matrix (code analysis)
+## Code-analysis implementation matrix
 
 This table is intentionally **not** a feature-score leaderboard. `?` means the implementation has not been traced far enough to make an assertion. “No” is only used for clear product scope. Reader/parser support, disassembler ISA support and decompiler-language support are different dimensions.
 
@@ -29,7 +29,7 @@ This table is intentionally **not** a feature-score leaderboard. `?` means the i
 
 **Qualifications.** Ghidra/IDA/Binary Ninja are extensible platforms: “yes” in a format column is not a promise of identical maturity across all subformats and architectures. Pyre's README calls itself **alpha** (primarily x86, AArch64, WebAssembly default specs). Peek-a-Bin's own README distinguishes its x86 decompiler from AArch64 disassembly. A plugin can substantially change an individual installation's abilities.
 
-## Technical pipeline pipeline: different questions, different tools
+## Technical pipeline: different questions, different tools
 
 A common mistake is to call all of the following "disassembly". They are substantially different inference problems, with distinct failure modes and mature solutions.
 
@@ -81,7 +81,7 @@ The term for the “authoritative mapping of assembler to instruction semantics�
 
 **binary101's recurring design principle:** keep the native file order and original fields visible, decode semantics where evidence permits, validate cross-references, and label unsupported/ambiguous cases rather than forcing an invented “function”. This is a design preference, not proof of accuracy against every competitor.
 
-## Feature-area map map: formats, language runtimes and resource types
+## Feature-area map: formats, runtimes and resources
 
 | Area | Standard mechanisms and families | Relevant projects | Specific binary101 angle / boundary |
 |---|---|---|---|
