@@ -1,6 +1,6 @@
-# Binary Analysis Landscape: Comparative Evaluation and Research Backlog
+# Binary Analysis Evaluation
 
-> Updated 2026-11-08. [Canonical catalog](binary-analysis-landscape.md) · [Technical approaches](binary-analysis-techniques.md).
+> Updated 2026-11-09. Comparison methodology and research backlog. [Canonical catalog](binary-analysis-landscape.md) · [Technical approaches](binary-analysis-techniques.md).
 >
 > **Do not turn README promises, file counts, stars, or tool labels into tested feature coverage.** No cross-tool executable corpus or performance benchmark was completed in this revision.
 
@@ -20,7 +20,7 @@
 
 For each capability record `claimed` (vendor/README), `code-observed` (file and commit), `test-observed` (specific test/run), `sample-verified` (known input/output), or `unknown`. These are **evidence types, not a score**; a single module can have multiple. Preserve explicit unsupported/non-goals separately.
 
-## Distinct product families / findings
+## Tool families and outstanding comparisons
 
 | Family | Representative tools (see catalog for canonical entries) | Relevance to binary101 | Verification still needed |
 |---|---|---|---|
@@ -32,9 +32,6 @@ For each capability record `claimed` (vendor/README), `code-observed` (file and 
 | Browser RE workbenches | RzWeb, SPECTRA, Pyre, Peek-a-Bin, Kuna | Code-first discovery and engine reuse | Distinguish WASM engine reuse from novel semantics/decompiler implementation |
 | Embedded/firmware recovery | unblob, Binwalk | Precise child ranges, extraction, unknown segments | Differential checks on nested/overlapping payloads |
 
-### Dissect: a checked example of depth mismatch
-
-The [Dissect repository](https://github.com/sammwyy/dissect) advertised browser PE/ELF/Mach-O parsing, disassembly, signature inspection and editing. At the 2026-11-08 check its visible history contained a [single initial commit](https://github.com/sammwyy/dissect/commit/7f5d3e6) and its tree had no separate test files or CI workflows. Source inspection shows actual parsers and editing UI, but the [Authenticode module](https://github.com/sammwyy/dissect/blob/main/src/formats/pe/authenticode.ts) uses OID/digest byte scanning and integrity-range comparison; it does **not** fully validate CMS signer cryptography or a trust chain. A checkmark called “Authenticode” would erase this difference. Changes after this snapshot are not assessed.
 
 ### Broad-format counts need decomposition
 
