@@ -143,7 +143,7 @@ Other resources from the same exploration: [uops.info](https://uops.info/) (meas
 
 **When updating this report:** add funding sources only when they appear in pricing, acknowledgements, official sponsor pages, grant announcements, foundation financials or direct author statements. Avoid guessing revenue from stars, LOC or activity.
 
-## Sources and reproducibility / reproducibility
+## Sources and reproducibility
 
 - Primary inspected project: [binary101 README](https://github.com/Gladskih/binary101/blob/main/README.md), [package.json](https://github.com/Gladskih/binary101/blob/main/package.json), [git tree](https://github.com/Gladskih/binary101/tree/main/analyzers), [Go metadata](https://github.com/Gladskih/binary101/blob/main/docs/go-runtime-metadata.md), [NativeAOT contract](https://github.com/Gladskih/binary101/blob/main/docs/native-aot-metadata.md), [MSVC RTTI contract](https://github.com/Gladskih/binary101/blob/main/docs/msvc-rtti.md), [AArch64 ISA documentation](https://github.com/Gladskih/binary101/blob/main/docs/elf-aarch64-isa.md), [PE import metadata](https://github.com/Gladskih/binary101/blob/main/docs/pe-import-metadata.md).
 - GitHub `GET /repos/{owner}/{repo}` `created_at`, `pushed_at`, `archived` for repository rows with exact dates. Example: [x86lint API](https://api.github.com/repos/gaul/x86lint), [Kuna API](https://api.github.com/repos/Noelo-Lab/kuna), [PE Tree API](https://api.github.com/repos/blackberry/pe_tree). An offline snapshot would be needed to reproduce the exact API state in the future.
