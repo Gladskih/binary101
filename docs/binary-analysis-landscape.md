@@ -1,4 +1,4 @@
-# Binary Analysis Landscape: Project and Engine Catalog
+# Binary Analysis Landscape
 
 > **Catalog revised 2026-11-08; historical metadata baseline 2026-10-24.** Some new rows were checked on 2026-11-08. Existing `created_at` and `pushed_at` cells have **not** all been re-fetched; do not interpret them as a live activity report.
 >

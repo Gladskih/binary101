@@ -1,4 +1,4 @@
-# Binary Analysis Techniques, Pipelines, and Engine Boundaries
+# Binary Analysis Techniques
 
 > Technical reference extracted from the [project catalog](binary-analysis-landscape.md) on 2026-11-08. Concepts are relatively stable; individual tool capabilities remain release-dependent. [Evaluation protocol](binary-analysis-evaluation.md).
 
