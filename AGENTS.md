@@ -14,7 +14,7 @@
   - clearly separate what is known from what is guessed
   - ask the user for clarification, references, or sample files when that can change the answer
 - Prefer a clearly documented "I am not sure because X" over a confident but incorrect guess
-- Avoid `npm run test:unit` when `npm run test:coverage` is enough
+- Do not run the full test suite. Test only affected code. Do not run the same unit tests both with and without coverage.
 - Tokens and your context are expensive, limit wordy output of tools by built-in options or commands and avoid redundant context bloating
 - When you see
   - anything suspicious in existing code
