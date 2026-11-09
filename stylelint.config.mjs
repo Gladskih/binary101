@@ -6,7 +6,6 @@ export default {
     "@stylistic/max-line-length": 100,
     // Keep the established compact layout while enforcing a readable maximum line length.
     "at-rule-empty-line-before": null,
-    "declaration-block-single-line-max-declarations": null,
     "rule-empty-line-before": null,
     // Components are independent, so global source order does not reflect their DOM relationship.
     "no-descending-specificity": null,
