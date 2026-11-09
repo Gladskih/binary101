@@ -1,9 +1,11 @@
 "use strict";
 
 import type { ResourceVersionFixedFileInfo } from "../../analyzers/pe/resources/preview/types.js";
+import { renderOptionChips } from "../../html-utils.js";
 
 // Win32 VS_FIXEDFILEINFO constants and subtype semantics (verrsrc.h):
 // https://learn.microsoft.com/en-us/windows/win32/api/verrsrc/ns-verrsrc-vs_fixedfileinfo
+// https://github.com/microsoft/win32metadata/blob/main/generation/WinSDK/RecompiledIdlHeaders/um/verrsrc.h
 const fileTypes = new Map([
   [0, "VFT_UNKNOWN"], [1, "VFT_APP"], [2, "VFT_DLL"], [3, "VFT_DRV"],
   [4, "VFT_FONT"], [5, "VFT_VXD"], [7, "VFT_STATIC_LIB"]
@@ -17,10 +19,11 @@ const fontTypes = new Map([[0, "UNKNOWN"], [1, "RASTER"], [2, "VECTOR"], [3, "TR
 const fileFlags = ["DEBUG", "PRERELEASE", "PATCHED", "PRIVATEBUILD", "INFOINFERRED", "SPECIALBUILD"];
 const operatingSystems = new Map([
   [0, "VOS_UNKNOWN"], [0x10000, "VOS_DOS"], [0x20000, "VOS_OS216"],
-  [0x30000, "VOS_OS232"], [0x40000, "VOS_NT"]
+  [0x30000, "VOS_OS232"], [0x40000, "VOS_NT"], [0x50000, "VOS_WINCE"]
 ]);
 const environments = new Map([
-  [1, "VOS__WINDOWS16"], [2, "VOS__PM16"], [3, "VOS__PM32"], [4, "VOS__WINDOWS32"]
+  [0, "VOS__BASE"], [1, "VOS__WINDOWS16"], [2, "VOS__PM16"],
+  [3, "VOS__PM32"], [4, "VOS__WINDOWS32"]
 ]);
 
 const hex = (value = 0): string => `0x${(value >>> 0).toString(16).padStart(8, "0")}`;
@@ -32,11 +35,10 @@ const describeFlags = (value: number): string => {
   return names.length ? `${hex(value)} (${names.join(" | ")})` : hex(value);
 };
 
-const describeOS = (value = 0): string => {
-  const names = [operatingSystems.get((value & 0xffff0000) >>> 0), environments.get(value & 0xffff)]
-    .filter(Boolean);
-  return `${hex(value)}${names.length ? ` (${names.join(" | ")})` : ""}`;
-};
+const renderOSChips = (value = 0): string =>
+  // These are two WORD-sized enum codes, not independent bits. UNKNOWN applies to zero.
+  renderOptionChips(value === 0 ? 0 : ((value & 0xffff0000) >>> 0) || Number.NaN,
+    [...operatingSystems]) + renderOptionChips(value & 0xffff, [...environments]);
 
 const describeSubtype = (info: ResourceVersionFixedFileInfo): string => {
   const value = info.fileSubtype ?? 0;
@@ -48,14 +50,16 @@ const describeSubtype = (info: ResourceVersionFixedFileInfo): string => {
 
 export const versionFixedRows = (
   info: ResourceVersionFixedFileInfo
-): Array<{ label: string; value: string }> => {
+): Array<{ label: string; value: string; chips?: string }> => {
   if (info.fileFlagsMask == null) return [];
   return [
     { label: "FileFlagsMask", value: hex(info.fileFlagsMask) },
     { label: "FileFlags", value: describeFlags(info.fileFlags ?? 0) },
     { label: "Effective flags", value: describeFlags((info.fileFlags ?? 0) & info.fileFlagsMask) },
-    { label: "FileOS", value: describeOS(info.fileOS) },
-    { label: "FileType", value: `${hex(info.fileType)} (${fileTypes.get(info.fileType ?? 0) ?? "reserved"})` },
+    { label: "FileOS", value: hex(info.fileOS), chips: renderOSChips(info.fileOS) },
+    { label: "FileType",
+      value: hex(info.fileType) + (fileTypes.has(info.fileType ?? 0) ? "" : " (reserved)"),
+      chips: renderOptionChips(info.fileType ?? 0, [...fileTypes]) },
     { label: "FileSubtype", value: describeSubtype(info) },
     // The specification gives a binary date without defining an epoch; preserve all 64 bits.
     { label: "FileDateMS / LS", value: `${hex(info.fileDateMS)} / ${hex(info.fileDateLS)}` }

@@ -10,12 +10,14 @@ const HEX_RADIX = 16;
 const HEX_DIGITS_PER_BYTE = 2;
 const DWORD_HEX_DIGITS = Uint32Array.BYTES_PER_ELEMENT * HEX_DIGITS_PER_BYTE;
 
-const renderDefinitionRows = (rows: Array<{ label: string; value: string }>): string => {
+const renderDefinitionRows = (
+  rows: Array<{ label: string; value: string; chips?: string }>
+): string => {
   if (!rows.length) return "";
   const cells = rows
     .map(row =>
       `<tr><td class="mono">${escapeHtml(row.label)}</td>` +
-      `<td style="overflow-wrap:anywhere">${escapeHtml(row.value)}</td></tr>`
+      `<td style="overflow-wrap:anywhere">${escapeHtml(row.value)}${row.chips ?? ""}</td></tr>`
     )
     .join("");
   return `<table class="table peResourceNestedTable"><thead><tr><th>Field</th><th>Value</th>` +
