@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { test } from "node:test";
@@ -31,14 +32,13 @@ void test("Vite emits local Rust/D loader bindings, upstream pins and license no
   assert.match(assets.get("vendor/lzma-sdk-decode/licenses/LZMA-SDK.txt")!, /ANSI-C LZMA Decoder/);
   assert.match(assets.get("vendor/lzma-sdk-decode/LICENSE")!, /MIT/);
   assert.match(assets.get("vendor/lzma-sdk-decode/THIRD_PARTY_NOTICES.md")!, /Igor Pavlov/);
-  assert.equal((JSON.parse(assets.get("vendor/lzma-sdk-decode/upstream.json")!) as
-    { commit: string }).commit, "b88c6bc09339de32f7d18bbab900686b244f42ba");
+  assert.equal(assets.get("vendor/lzma-sdk-decode/upstream.json"),
+    await readFile(resolve("node_modules/lzma-sdk-decode/upstream.json"), "utf8"));
   assert.match(assets.get("vendor/llvm-dlang-demangle/licenses/LLVM.txt")!, /Apache License/);
   assert.match(assets.get("vendor/llvm-rust-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);
   assert.match(assets.get("vendor/llvm-dlang-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);
-  // Published packages' LLVM 23.1.3 pin, independently checked against upstream.json.
-  assert.equal((JSON.parse(assets.get("vendor/llvm-rust-demangle/upstream.json")!) as
-    { llvmCommit: string }).llvmCommit, "0d261d1ca552c95a8f007e061c787ac7132fbcbc");
-  assert.equal((JSON.parse(assets.get("vendor/llvm-dlang-demangle/upstream.json")!) as
-    { llvmCommit: string }).llvmCommit, "0d261d1ca552c95a8f007e061c787ac7132fbcbc");
+  assert.equal(assets.get("vendor/llvm-rust-demangle/upstream.json"),
+    await readFile(resolve("node_modules/llvm-rust-demangle/upstream.json"), "utf8"));
+  assert.equal(assets.get("vendor/llvm-dlang-demangle/upstream.json"),
+    await readFile(resolve("node_modules/llvm-dlang-demangle/upstream.json"), "utf8"));
 });
