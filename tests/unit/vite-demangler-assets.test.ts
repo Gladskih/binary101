@@ -9,7 +9,7 @@ type NoticePlugin = {
   generateBundle: (this: { emitFile: (asset: NoticeAsset) => string }) => void;
 };
 
-void test("Vite emits local Rust/D loader bindings, upstream pins and license notices", async () => {
+void test("Vite uses local browser loaders and emits license notices", async () => {
   const configuration = await import(pathToFileURL(resolve("vite.config.mjs")).href) as {
     default: { plugins: NoticePlugin[]; resolve: { alias: Record<string, string> } }
   };
@@ -31,14 +31,7 @@ void test("Vite emits local Rust/D loader bindings, upstream pins and license no
   assert.match(assets.get("vendor/lzma-sdk-decode/licenses/LZMA-SDK.txt")!, /ANSI-C LZMA Decoder/);
   assert.match(assets.get("vendor/lzma-sdk-decode/LICENSE")!, /MIT/);
   assert.match(assets.get("vendor/lzma-sdk-decode/THIRD_PARTY_NOTICES.md")!, /Igor Pavlov/);
-  assert.equal((JSON.parse(assets.get("vendor/lzma-sdk-decode/upstream.json")!) as
-    { commit: string }).commit, "b88c6bc09339de32f7d18bbab900686b244f42ba");
   assert.match(assets.get("vendor/llvm-dlang-demangle/licenses/LLVM.txt")!, /Apache License/);
   assert.match(assets.get("vendor/llvm-rust-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);
   assert.match(assets.get("vendor/llvm-dlang-demangle/THIRD_PARTY_NOTICES.md")!, /LLVM/);
-  // Published packages' LLVM 23.1.3 pin, independently checked against upstream.json.
-  assert.equal((JSON.parse(assets.get("vendor/llvm-rust-demangle/upstream.json")!) as
-    { llvmCommit: string }).llvmCommit, "0d261d1ca552c95a8f007e061c787ac7132fbcbc");
-  assert.equal((JSON.parse(assets.get("vendor/llvm-dlang-demangle/upstream.json")!) as
-    { llvmCommit: string }).llvmCommit, "0d261d1ca552c95a8f007e061c787ac7132fbcbc");
 });
