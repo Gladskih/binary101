@@ -87,9 +87,8 @@ const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, o
   const seeds = disasm.seedSummary;
   const dimZero = (value: number): string => (value ? escapeHtml(String(value)) : `<span class="dim">0</span>`);
   const entryText = `0x${seeds.entrypointVaddr.toString(16)}`;
-  out.push(
-    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Seeds (${seeds.uniqueEntrypoints} unique entrypoint(s))</summary>`
-  );
+  out.push(renderCollectionStart(`Seeds (${seeds.uniqueEntrypoints} unique entrypoint(s))`,
+    Math.max(1, seeds.sources.length)));
   out.push(
     `<div class="smallNote dim">Seeds are candidate start addresses for control-flow guided sampling (entry point, constructor arrays, function symbols, unwind tables, etc.). Only seeds inside executable segments/sections are used.</div>`
   );
@@ -100,7 +99,7 @@ const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, o
   );
   if (!seeds.sources.length) {
     out.push(`<div class="smallNote dim">No seed sources were collected.</div>`);
-    out.push(`</details>`);
+    out.push(renderCollectionEnd(1));
     return;
   }
   out.push(
@@ -115,7 +114,7 @@ const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, o
       )}</td></tr>`
     );
   }
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>` + renderCollectionEnd(seeds.sources.length));
 };
 
 const renderKnownFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembly"]>, out: string[]): void => {

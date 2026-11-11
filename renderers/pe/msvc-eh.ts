@@ -1,6 +1,7 @@
 import type { MsvcEhAnalysis, MsvcEhRecord } from "../../analyzers/pe/msvc-eh/types.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/core/parse-result.js";
 import { escapeHtml } from "../../html-utils.js";
+import { renderCountedCollection } from "../counted-collection.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
@@ -35,11 +36,11 @@ const recordDetails = (record: MsvcEhRecord): string => {
   const rows = handlers.map(handler => `<tr><td class="peNumeric">${rvaText(handler.handlerRva)}</td>` +
     `<td class="peNumeric">${handler.typeDescriptorRva ? rvaText(handler.typeDescriptorRva) : "catch (...)"}</td>` +
     `<td class="peNumeric">${handler.continuationRvas.map(rvaText).join(", ") || "Not encoded"}</td></tr>`).join("");
-  return `<tr><td colspan="8"><details><summary>Verified catch handlers</summary>` +
+  return `<tr><td colspan="8">` + renderCountedCollection("Verified catch handlers",
     `<div class="tableWrap"><table><thead><tr><th class="peNumeric">Handler RVA</th>` +
     `<th class="peNumeric">TypeDescriptor RVA</th><th class="peNumeric">Continuation RVAs</th>` +
     `</tr></thead><tbody>${rows}</tbody></table>` +
-    `</div></details></td></tr>`;
+    `</div>`, handlers.length) + `</td></tr>`;
 };
 
 const createTable = (analysis: MsvcEhAnalysis): PagedSortableTableModel => ({

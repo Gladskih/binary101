@@ -7,6 +7,7 @@ import { formatElfHex } from "./value-format.js";
 import { createElfVersionedSymbolName } from "./symbol-versions.js";
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
+import { renderCountedCollection } from "../counted-collection.js";
 
 const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfParseResult): string => {
   if (!symbols.length) return `<div class="smallNote dim">${escapeHtml(title)}: none.</div>`;
@@ -28,20 +29,17 @@ const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfP
     })
     .join("");
 
-  return (
-    `<details style="margin-top:.35rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${escapeHtml(
-      caption
-    )}</summary>` +
+  return renderCountedCollection(escapeHtml(caption),
       `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
       `<th>Name</th><th>Bind</th><th title="Symbol type recorded in ELF, not inferred from its name.">ELF type</th><th>Vis</th><th>Value</th>` +
-      `</tr></thead><tbody>${rows}</tbody></table></div></details>`
+      `</tr></thead><tbody>${rows}</tbody></table></div>`, symbols.length
   );
 };
 
 const renderIssues = (info: ElfDynamicSymbolInfo): string => {
   if (!info.issues?.length) return "";
   const items = info.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-  return `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary><ul>${items}</ul></details>`;
+  return renderCountedCollection("Notes", `<ul>${items}</ul>`, info.issues.length);
 };
 
 export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {

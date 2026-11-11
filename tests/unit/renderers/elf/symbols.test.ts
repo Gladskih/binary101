@@ -19,5 +19,7 @@ void test("renderElfSymbols renders import/export tables", async () => {
   assert.ok(html.includes("Exported symbols"));
   assert.ok(html.includes(expected.importSymbol));
   assert.ok(html.includes(expected.exportSymbol));
+  assert.match(html, /<h5 class="collectionSummary">Imported symbols \(1\)<\/h5>/);
+  assert.match(html, /<h5 class="collectionSummary">Exported symbols \(1\)<\/h5>/);
 });
 

@@ -10,6 +10,7 @@ import type {
   ElfParseResult
 } from "../../analyzers/elf/types.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
+import { renderCountedCollection } from "../counted-collection.js";
 
 const formatAddrOrDash = (value: bigint | null | undefined): string => (value != null ? escapeHtml(formatElfHex(value)) : "-");
 
@@ -48,10 +49,8 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
   out.push(`</dl>`);
   const issues = collectIssues(interpreter, dynamic);
   if (issues.length) {
-    out.push(
-      `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary>` +
-      `<ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul></details>`
-    );
+    out.push(renderCountedCollection("Notes",
+      `<ul>${issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`, issues.length));
   }
   out.push(renderElfSectionEnd());
 }

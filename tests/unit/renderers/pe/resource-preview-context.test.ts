@@ -19,6 +19,8 @@ void test("indexes forward/back references once and resolves only confirmed lang
   assert.match(renderResourceConnections({...model,source:context.source}), /Dialog menu/);
   assert.match(renderResourceConnections({...model,source:{group:1,entry:0,language:0}}), /Used by/);
   assert.equal(renderResourceConnections({...model,source:{group:2,entry:0,language:0}}),"");
+  assert.match(renderResourceConnections({...model,source:{group:1,entry:0,language:0}}),
+    /^<section class="peResourceConnections"><h5 class="collectionSummary">Resource references/);
 });
 
 void test("escapes resource labels and preserves navigation coordinates", () => {

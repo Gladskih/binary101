@@ -675,9 +675,10 @@ details[data-analysis-origin="supplemental"] > summary {
 .workspaceContent table,#directoryInfoCard table {
   border: 1px solid var(--border2)
 }
-.workspaceContent :is(p,.smallNote,dl,.tableWrap):not([hidden])
+:is(p,.smallNote,dl,.tableWrap):not([hidden])
   + :is(table,.tableWrap,.pagedSortableTable,.peTlsFields) {
-  margin-block-start: 12px
+  /* Shared spacing takes precedence over legacy renderer inline margins. */
+  margin-block-start: 12px!important
 }
 .workspaceContent table caption {
   text-align: left
@@ -823,6 +824,7 @@ details[data-analysis-origin="supplemental"] > summary {
   overflow-wrap: anywhere
 }
 .reportSearchList pre {
+  max-inline-size: var(--reading-measure);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 6px 0;

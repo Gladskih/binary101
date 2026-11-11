@@ -2,6 +2,7 @@
 
 import { formatHumanSize } from "../../binary-utils.js";
 import { renderInstructionSetAction } from "../instruction-set-action.js";
+import { renderCollectionStart, renderCollectionEnd, renderCountedCollection } from "../counted-collection.js";
 import { escapeHtml } from "../../html-utils.js";
 import { IMAGE_FILE_MACHINE_ARM64 } from "../../analyzers/coff/machine.js";
 import { getCanonicalPeMachine } from "../../analyzers/pe/machine.js";
@@ -114,10 +115,7 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
 
   if (disasm.issues?.length) {
     const items = disasm.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-    out.push(
-      `<details style="margin-top:.35rem"><summary class="dim" ` +
-      `style="cursor:pointer">Notes</summary><ul>${items}</ul></details>`
-    );
+    out.push(renderCountedCollection("Notes", `<ul>${items}</ul>`, disasm.issues.length));
   }
 
   renderCodeStringReferences(pe, out);
@@ -141,10 +139,7 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
 
   const other = disasm.instructionSets.filter(set => !knownIds.has(set.id));
   if (other.length) {
-    out.push(
-      `<details style="margin-top:.35rem"><summary class="dim" ` +
-      `style="cursor:pointer">Other detected features (${other.length})</summary>`
-    );
+    out.push(renderCollectionStart(`Other detected features (${other.length})`, other.length));
     out.push(
       `<table class="table" style="margin-top:.35rem"><thead><tr>` +
       `<th>Set</th><th>Instr.</th><th>What it is</th></tr></thead><tbody>`
@@ -159,7 +154,7 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
         `<td>${count}</td><td>${description}</td></tr>`
       );
     }
-    out.push(`</tbody></table></details>`);
+    out.push(`</tbody></table>` + renderCollectionEnd(other.length));
   }
 
   out.push(renderInstructionPanelEnd());

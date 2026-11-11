@@ -7,6 +7,7 @@ import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.
 import { renderClrMetadataTables } from "./clr-metadata.js";
 import { renderReadyToRun, renderStrongName } from "./clr-advanced.js";
 import { renderManagedResources } from "./managed-resources.js";
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
@@ -129,11 +130,8 @@ const renderClrSubdirectories = (clrHeader: PeClrHeader, out: string[]): void =>
   });
   out.push(`</dl>`);
   if (clrHeader.vtableFixups?.length) {
-    out.push(
-      `<details style="margin-top:.35rem"><summary>` +
-        `VTableFixups entries (${clrHeader.vtableFixups.length})` +
-        `</summary>`
-    );
+    out.push(renderCollectionStart(`VTableFixups entries (${clrHeader.vtableFixups.length})`,
+      clrHeader.vtableFixups.length));
     out.push(
       `<table class="table" style="margin-top:.35rem">` +
         `<thead><tr><th>#</th><th>RVA</th><th>Count</th><th>Type</th></tr></thead>` +
@@ -145,7 +143,7 @@ const renderClrSubdirectories = (clrHeader: PeClrHeader, out: string[]): void =>
           `<td>${entry.Count}</td><td>${escapeHtml(formatVTableFixupType(entry.Type))}</td></tr>`
       );
     });
-    out.push(`</tbody></table></details>`);
+    out.push(`</tbody></table>` + renderCollectionEnd(clrHeader.vtableFixups.length));
   }
   out.push(`</details>`);
 };
@@ -186,11 +184,7 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
   }
   out.push(`</dl></details>`);
   if (!meta.streams?.length) return;
-  out.push(
-    `<details style="margin-top:.35rem"><summary>` +
-      `Metadata streams (${meta.streams.length})` +
-      `</summary>`
-  );
+  out.push(renderCollectionStart(`Metadata streams (${meta.streams.length})`, meta.streams.length));
   out.push(
     `<table class="table" style="margin-top:.35rem">` +
       `<thead><tr><th>#</th><th>Name</th><th>Type</th><th>Offset</th><th>End</th><th>Size</th></tr></thead>` +
@@ -203,7 +197,7 @@ const renderClrMetadata = (clrHeader: PeClrHeader, out: string[]): void => {
         `<td>${hex(stream.offset, 8)}</td><td>${hex(streamEnd, 8)}</td><td>${humanSize(stream.size)}</td></tr>`
     );
   });
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>` + renderCollectionEnd(meta.streams.length));
   renderClrMetadataTables(meta.tables, out);
 };
 

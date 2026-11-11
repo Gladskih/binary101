@@ -50,12 +50,30 @@ test("text cells and text blocks have a reading measure on a wide viewport", asy
     sample.id = "readingMeasureSample";
     const words = "A sentence with several words. ".repeat(30);
     sample.innerHTML = `<p>${words}</p><div class="smallNote">${words}</div>` +
+      `<ul><li>${words}</li></ul><dl><dd>${words}</dd></dl>` +
+      `<ol class="reportSearchList"><li><pre>${words}</pre></li></ol>` +
       `<table><tbody><tr><td>${words}</td></tr></tbody></table>`;
     main.append(sample);
   });
   await page.setViewportSize({ width: 2530, height: 1000 });
-  const widths = await page.locator("#readingMeasureSample :is(p,.smallNote,td)")
+  const widths = await page.locator("#readingMeasureSample :is(p,.smallNote,td,li,dd,pre)")
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect().width));
-  expect(widths).toHaveLength(3);
+  expect(widths).toHaveLength(7);
   for (const width of widths) expect(width).toBeLessThan(900);
+});
+
+test("legacy inline margins cannot attach text to the next table", async ({ page }) => {
+  const file = createPePlusFile();
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
+    buffer: Buffer.from(file.data) });
+  await openInspectionSection(page, "DOS header");
+  const gaps = await page.locator('[data-pe-lazy-section="dos-header"] table')
+    .evaluateAll(tables => tables.flatMap(table => {
+      const note = table.previousElementSibling;
+      return note?.matches(".smallNote") ?
+        [table.getBoundingClientRect().top - note.getBoundingClientRect().bottom] : [];
+    }));
+  expect(gaps.length).toBeGreaterThan(0);
+  for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(12);
 });

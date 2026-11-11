@@ -1,4 +1,5 @@
 import type { ResourceCatalog, ResourceLocation } from "../../analyzers/pe/resources/resource-index.js";
+import { renderCountedCollection } from "../counted-collection.js";
 import { resolveResourceAlternatives, resourceAt } from "../../analyzers/pe/resources/resource-index.js";
 import type { ResourceLink } from "../../analyzers/pe/resources/resource-links.js";
 import { resolveImageGroupTarget } from "../../analyzers/pe/resources/preview/image-group-links.js";
@@ -93,7 +94,8 @@ export const renderResourceConnections = (context: ResourcePreviewContext): stri
   rows.push(...incoming.map(link => `<tr><td>Used by: ${escapeHtmlText(link.relation)}</td>` +
     `<td>${resourceNavigationLink(context.catalog, link.source)}</td>` +
     `<td>${escapeHtmlText(link.resolution.kind)}</td></tr>`));
-  return `<details class="peResourceConnections"><summary>Resource references</summary>` +
+  return renderCountedCollection("Resource references",
     `<table class="table"><thead><tr><th>Relation</th><th>Resource</th><th>Resolution</th>` +
-    `</tr></thead><tbody>${rows.join("")}</tbody></table></details>`;
+    `</tr></thead><tbody>${rows.join("")}</tbody></table>`, rows.length,
+    ' class="peResourceConnections"');
 };

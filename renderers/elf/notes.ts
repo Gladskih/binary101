@@ -3,6 +3,7 @@ import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { renderElfGnuProperties } from "./gnu-properties.js";
 import { renderElfCoreNotes } from "./core-notes.js";
+import { renderCountedCollection } from "../counted-collection.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
@@ -55,7 +56,7 @@ export const createElfNotesTableModel = (notes: ElfNotesInfo): PagedSortableTabl
 const renderIssues = (notes: ElfNotesInfo): string => {
   if (!notes.issues?.length) return "";
   const items = notes.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-  return `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary><ul>${items}</ul></details>`;
+  return renderCountedCollection("Notes", `<ul>${items}</ul>`, notes.issues.length);
 };
 
 export function renderElfNotes(elf: ElfParseResult, out: string[]): void {

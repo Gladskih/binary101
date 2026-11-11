@@ -60,7 +60,9 @@ body {
   display: flex;
   flex-direction: column
 }
-p,blockquote,div.smallNote,.peDiagnosticText {
+p,blockquote,.smallNote,.peDiagnosticText,
+dd:not(:has(table,.tableWrap,.optionsRow,dl,details)),
+li:not(:has(table,.tableWrap,ul,ol,dl,details)) {
   max-inline-size: var(--reading-measure)
 }
 .sectionEntropyControl {

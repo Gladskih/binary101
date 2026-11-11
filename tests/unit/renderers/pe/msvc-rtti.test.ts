@@ -169,7 +169,7 @@ void test("RTTI table models preserve preorder rows and ordered duplicate slots"
 
   assert.equal(main?.rowCount, 1);
   assert.equal(main?.pageSize, 250);
-  assert.match(main?.rowAt(0)?.additionalRowsHtml ?? "", /Show inheritance and 3 vftable slot/);
+  assert.match(main?.rowAt(0)?.additionalRowsHtml ?? "", /Base classes \(2\) and vftable slots \(3\)/);
   assert.equal(bases?.rowCount, 2);
   assert.equal(bases?.sortValueAt(0, 1), "0");
   assert.equal(bases?.sortValueAt(1, 1), "1");

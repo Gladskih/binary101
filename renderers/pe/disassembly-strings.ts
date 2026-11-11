@@ -1,6 +1,7 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
+import { renderCountedCollection } from "../counted-collection.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import { peSectionNameValue } from "../../analyzers/pe/sections/name.js";
 import type {
@@ -217,7 +218,7 @@ export const renderCodeStringReferences = (pe: PeWindowsParseResult, out: string
     `Code-referenced strings (${references.length})`,
     references.length > PE_DISASSEMBLY_STRING_INLINE_LIMIT && model
       ? renderPagedSortableTable(model)
-      : renderCodeStringTable(pe, references)
+      : renderCodeStringTable(pe, references), references.length
   );
 };
 
@@ -236,19 +237,17 @@ export const renderApiStringReferences = (pe: PeWindowsParseResult, out: string[
     `WinAPI/UCRT string arguments (${references.length})`,
     references.length > PE_DISASSEMBLY_STRING_INLINE_LIMIT && model
       ? renderPagedSortableTable(model)
-      : renderApiStringTable(pe, references)
+      : renderApiStringTable(pe, references), references.length
   );
 };
 
 const renderStringReferenceDetails = (
   out: string[],
   summary: string,
-  body: string
+  body: string,
+  count: number
 ): void => {
-  out.push(
-    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">` +
-    `${escapeHtml(summary)}</summary>${body}</details>`
-  );
+  out.push(renderCountedCollection(escapeHtml(summary), body, count));
 };
 
 const renderCodeStringTable = (

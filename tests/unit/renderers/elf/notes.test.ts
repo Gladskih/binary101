@@ -146,6 +146,7 @@ void test("empty note tables retain escaped warnings without fabricating rows", 
   renderElfNotes(elf, out);
   assert.match(out.join(""), /&lt;warning>/);
   assert.doesNotMatch(out.join(""), /<tbody><tr>/);
+  assert.match(out.join(""), /<h5 class="collectionSummary">Notes<\/h5><ul>/);
   out.length = 0;
   delete elf.notes;
   renderElfNotes(elf, out);
