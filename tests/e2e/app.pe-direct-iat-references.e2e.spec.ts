@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -16,18 +17,18 @@ test("updates direct IAT reference counts without losing import table state", as
 
   const detailsValue = page.locator("#analysisValue");
   const importsSection = detailsValue.locator("#peImportsPanel > details");
-  await importsSection.locator(":scope > summary").click();
+  await toggleInspectionSection(importsSection.locator(":scope > summary"));
   const moduleDetails = importsSection.locator("details").filter({
     has: page.locator("summary", { hasText: /KERNEL32\.dll/ })
   });
-  await moduleDetails.locator(":scope > summary").click();
+  await toggleInspectionSection(moduleDetails.locator(":scope > summary"));
   await expect(moduleDetails.locator("[data-paged-sortable-table-root]")).toHaveCount(0);
   const sortButton = moduleDetails.getByRole("button", { name: "Sort by Direct CALL refs" });
   await sortButton.click();
   await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
 
   const instructionSection = detailsValue.locator("#peInstructionSetsPanel > details");
-  await instructionSection.locator(":scope > summary").click();
+  await toggleInspectionSection(instructionSection.locator(":scope > summary"));
   await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
   await expect(detailsValue).toContainText("Disassembly sample");
 

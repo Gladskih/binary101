@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createNtRiscPe, createNtRiscSecondaryPe, createAlphaRiscPe,
   createPowerPcCodeSignificancePe } from "../fixtures/pe-risc-exception.js";
@@ -9,9 +10,9 @@ for (const width of [390, 1280]) {
     await page.goto("/");
     await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
     const panel = page.locator('[data-pe-lazy-section="debug"]');
-    await panel.locator(":scope > details > summary").click();
-    await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
-    await panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }).click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }));
     await expect(panel).toContainText("full virtual addresses");
     await expect(panel).toContainText("Inline function descriptions");
     await expect(panel).toContainText("Longest prolog (bytes)");
@@ -28,13 +29,13 @@ test("NT RISC secondary metadata remains visibly unresolved instead of becoming 
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
-  await panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }));
   const unresolved = panel.locator("dt").filter({ hasText: /^Ranges with unresolved inline metadata$/ });
   await expect(unresolved).toBeVisible();
   await expect(unresolved.locator("+ dd")).toHaveText("1");
-  await panel.locator("summary").filter({ hasText: /^Exception directory warnings/ }).click();
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory warnings/ }));
   await expect(panel.getByText(/indirect prolog metadata is not decoded/)).toBeVisible();
   await expect(panel).not.toContainText("handler data VA could not be mapped");
 });
@@ -45,9 +46,9 @@ test("Alpha debug copy summarizes exception modes and resolved secondary ranges"
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
-  await panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }));
   await expect(panel.locator("dt").filter({ hasText: /^Exception mode 7$/ }).locator("+ dd")).toHaveText("1");
   await expect(panel.locator("dt").filter({ hasText: /^Secondary ranges with known primary procedures$/ })
     .locator("+ dd")).toHaveText("1");
@@ -62,9 +63,9 @@ test("PowerPC debug copy summarizes code markers without false handler-data warn
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
-  await panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }));
   await expect(panel.locator("dt").filter({ hasText: /^PowerPC glue-code markers$/ }).locator("+ dd"))
     .toHaveText("1");
   await expect(panel.locator("dt").filter({ hasText: /^PowerPC register-save millicode markers$/ }))

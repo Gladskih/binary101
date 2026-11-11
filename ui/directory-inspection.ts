@@ -1,10 +1,6 @@
-"use strict";
 import { collectDirectoryRows, formatAccessError, getDroppedFileSystemHandles } from "./directory-handles.js";
 import { scanDirectoryFileRows } from "./directory-file-scanning.js";
-import {
-  createDirectoryRootForFiles,
-  createDirectoryRootForHandles
-} from "./directory-virtual-roots.js";
+import { createDirectoryRootForFiles, createDirectoryRootForHandles } from "./directory-virtual-roots.js";
 import { clearDirectoryTables, renderDirectoryTables } from "./directory-table-rendering.js";
 import { renderInspectionContext } from "./inspection-context.js";
 import {
@@ -14,12 +10,7 @@ import {
   createRootDirectoryLocation
 } from "./directory-inspection-route.js";
 import { enhanceSortableTables, handleSortableTableClick } from "./sortable-tables.js";
-import type {
-  DirectoryDropItemList,
-  DirectoryFileRow,
-  DirectoryFolderRow,
-  DirectoryRow
-} from "./directory-handles.js";
+import type { DirectoryDropItemList, DirectoryFileRow, DirectoryFolderRow, DirectoryRow } from "./directory-handles.js";
 import type { DirectoryTableElements } from "./directory-table-rendering.js";
 import type {
   DirectInspectionSource,

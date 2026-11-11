@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { MsvcRttiPeFixtureBuilder } from "../fixtures/pe-msvc-rtti-fixture.js";
 
@@ -23,13 +24,13 @@ test("MSVC RTTI loads local LLVM WASM and keeps type names through remount", asy
   const section = page.locator("section.peSection").filter({
     has: page.locator("summary", { hasText: "Microsoft C++ RTTI" })
   });
-  await section.locator("summary").first().click();
+  await toggleInspectionSection(section.locator("summary").first());
   await expect(section).toContainText("class demo::Box<int>");
   await expect(section).toContainText(".?AV?$Box@H@demo@@");
   await section.getByText("Show inheritance and 1 vftable slot(s)", { exact: true }).click();
   await expect(section).toContainText("struct demo::Base");
-  await section.locator("summary").first().click();
-  await section.locator("summary").first().click();
+  await toggleInspectionSection(section.locator("summary").first());
+  await toggleInspectionSection(section.locator("summary").first());
   await expect(section).toContainText("class demo::Box<int>");
   expect(wasmUrls).toHaveLength(1);
   expect(new URL(wasmUrls[0]!).origin).toBe(new URL(page.url()).origin);
@@ -43,10 +44,10 @@ test("MSVC RTTI reports a failed WASM load and recovers on the next file", async
   const section = page.locator("section.peSection").filter({
     has: page.locator("summary", { hasText: "Microsoft C++ RTTI" })
   });
-  await section.locator("summary").first().click();
+  await toggleInspectionSection(section.locator("summary").first());
   await expect(section).toContainText("MSVC RTTI name analysis failed:");
   await page.unroute("**/*llvm-msvc-demangle*.wasm");
   await page.setInputFiles("#fileInput", file);
-  await section.locator("summary").first().click();
+  await toggleInspectionSection(section.locator("summary").first());
   await expect(section).toContainText("class demo::Box<int>");
 });

@@ -50,15 +50,27 @@
         <button type="button" class="fileHeader__back" id="fileBackButton" hidden>← Back to files</button>
         <h2 id="fileNameDetail" tabindex="-1"></h2>
         <div id="fileBinaryTypeDetail" class="fileHeader__type"></div>
-        <span class="fileHeader__size" id="workspaceFileSize"></span>
+        <span class="fileHeader__size" id="fileSizeDetail"></span>
         <span id="fileAnalysisProgress" class="fileHeader__progress" hidden>
           <progress max="100" aria-label="Matroska/WebM scan progress" title="Scanning Matroska/WebM">
           </progress>
           <span id="fileAnalysisPercent" aria-hidden="true"></span>
         </span>
+    <dl id="fileProperties" class="fileProperties" aria-label="File properties">
+            <div class="fileProperty"><dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd></div>
+            <div class="fileProperty"><dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd></div>
+            <div class="fileProperty"><dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd></div>
+            <div class="fileProperty"><dt>Source</dt><dd id="fileSourceDetail" class="optionsRow"></dd></div>
+            <div class="fileProperty"><dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd></div>
+            <div class="fileProperty"><dt id="fileRelativePathTerm" hidden>Relative path</dt><dd id="fileRelativePathDetail" hidden></dd></div>
+            <div class="fileProperty"><dt id="fileSubtypeTerm" hidden>Subtype</dt><dd id="fileSubtypeDetail" hidden></dd></div>
+
+    </dl>
       </div>
     </div>
+
     <div class="appHeader__actions">
+      <button type="button" class="secondaryButton" id="fileHashesButton">File hashes</button>
       <button type="button" class="secondaryButton" id="directoryOpenButton">Open folder</button>
       <button type="button" class="actionButton" id="fileOpenButton">Open files</button>
       <a class="appHeader__repository" href="https://github.com/Gladskih/binary101">GitHub</a>
@@ -168,48 +180,28 @@
               <select id="workspaceMobileView"></select>
             </label>
             <label class="workspaceSidebar__search">
-              <span class="visuallyHidden">Find a section</span>
-              <input id="workspaceFilter" type="search" placeholder="Find a section…" autocomplete="off">
+              <span class="workspaceSearchLabel">Search</span>
+              <input id="workspaceFilter" type="search" placeholder="Search report…" autocomplete="off">
             </label>
             <nav id="workspaceNavigation" aria-label="File sections"></nav>
             <p id="workspaceNavigationEmpty" class="smallNote" hidden>No matching sections.</p>
           </aside>
           <div class="workspaceContent" id="workspaceContent" tabindex="-1">
             <div class="workspaceHeading" id="workspaceHeading">
-              <h3 id="workspaceTitle">Overview</h3>
+              <h3 id="workspaceTitle">File hashes</h3>
               <p id="workspaceDescription"></p>
             </div>
             <div id="workspaceViewport" class="workspaceViewport" tabindex="0"
-              role="region" aria-labelledby="workspaceTitle">
-            <section id="workspaceOverview" aria-label="File overview">
+              role="region" aria-label="Report contents">
+            <section id="workspaceOverview" aria-label="File tools">
               <div id="workspaceNotice" class="workspaceNotice" hidden></div>
-              <h4 class="workspaceSectionHeading">File properties</h4>
-              <div class="filePrimaryInfo">
-          <dl>
-            <dt>Size</dt><dd id="fileSizeDetail"></dd>
-            <dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd>
-            <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
-            <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
-            <dt>Source</dt><dd id="fileSourceDetail" class="optionsRow"></dd>
-            <dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd>
-            <dt id="fileRelativePathTerm" hidden>Relative path</dt>
-            <dd id="fileRelativePathDetail" hidden></dd>
-            <dt id="fileSubtypeTerm" hidden>Subtype</dt><dd id="fileSubtypeDetail" hidden></dd>
-          </dl>
-                <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
-                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
-                </div>
-              </div>
               <p id="workspaceUnsupported" class="smallNote" hidden>
                 No format-specific analysis is available for this file.
               </p>
-            </section>
-
-        <details id="hashDetails" class="hashDetails" hidden>
-          <summary>
-            <span class="detailsSummaryTitle">File hashes</span>
-            <span class="hashDetailsCount">8 algorithms</span>
-          </summary>
+        <section id="hashDetails" class="hashDetails" aria-label="File hashes">
+<div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+                </div>
           <dl>
           <dt>MD5</dt>
           <dd class="hashRow">
@@ -332,7 +324,9 @@
             </div>
           </dd>
           </dl>
-        </details>
+        </section>
+            </section>
+            <section id="reportSearchResults" aria-label="Report search results" hidden></section>
 
             <h3 id="analysisTerm" hidden>Analysis details</h3>
             <div id="analysisValue" hidden></div>

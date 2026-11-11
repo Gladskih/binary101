@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 
 test("real R2R debug data explains mappings and variable lifetimes without address tables", async ({ page }) => {
@@ -6,8 +7,8 @@ test("real R2R debug data explains mappings and variable lifetimes without addre
   await page.goto("/");
   await page.setInputFiles("#fileInput", path!);
   const panel = page.locator("[data-pe-lazy-section=clr]");
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^ReadyToRun \/ managed native header$/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^ReadyToRun \/ managed native header$/ }));
 
   await expect(panel.getByRole("row").filter({ hasText: "Functions with debug records" }))
     .toContainText("Runtime functions whose compressed IL mappings");

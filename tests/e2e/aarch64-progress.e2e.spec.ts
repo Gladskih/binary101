@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { aarch64Code } from "../fixtures/aarch64-code.js";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
@@ -46,7 +47,7 @@ for (const [format, executable] of [["elf", elfExecutable], ["pe", peExecutable]
     await page.setInputFiles("#fileInput", { name: `live.${format}`,
       mimeType: "application/octet-stream", buffer: executable() });
     const panel = page.locator(`#${format}InstructionSetsPanel`);
-    await panel.locator(":scope > details > summary").click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
     const rows = panel.locator(".aarch64IsaTable tbody tr");
     await expect(rows).toHaveCount(0);
     await page.locator(`#${format}InstructionSetsAnalyzeButton`).click();

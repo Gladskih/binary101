@@ -37,6 +37,19 @@ const ROOT_SELECTOR = "[data-paged-sortable-table-root]";
 const runtimeByElement = new WeakMap<HTMLElement, PagedSortableTableRuntime>();
 const snapshotsByProvider = new WeakMap<PagedSortableTableProvider, Map<string, PagedSortableTableState>>();
 
+export const revealPagedSortableTableText = (root: ParentNode, text: string): boolean => {
+  for (const element of root.querySelectorAll<HTMLElement>(ROOT_SELECTOR)) {
+    const model = runtimeByElement.get(element)?.sourceModel;
+    if (!model) continue;
+    for (let index = 0; index < model.rowCount; index++) {
+      const value = model.searchValueAt?.(index) ?? model.columns.map((_, column) =>
+        model.sortValueAt(index, column)).join(" ");
+      if (value.includes(text)) return revealPagedSortableTableRow(element, index);
+    }
+  }
+  return false;
+};
+
 export const revealPagedSortableTableRow = (element: HTMLElement, rowIndex: number): boolean => {
   const runtime = runtimeByElement.get(element);
   if (!runtime || !Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= runtime.sourceModel.rowCount) return false;

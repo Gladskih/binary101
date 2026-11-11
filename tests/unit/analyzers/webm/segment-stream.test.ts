@@ -91,9 +91,9 @@ void test("scanSegmentClusters continues after an unknown-sized Cluster", async 
   assert.deepEqual(scanned.streamSizes, [scanned.expectedStreamSize]);
 });
 
-void test("large Segment scan skips padding and cancels after reporting a cluster", async () => {
+void test("Segment scan skips padding and cancels after reporting a cluster", async () => {
   const cluster = createStreamTestCluster(createSingleKeyframeClusterPayload());
-  // EBML Void (RFC 8794 § 4.9.2). Padding larger than the scan window exercises bounded reads.
+  // EBML Void (RFC 8794 § 4.9.2) between two clusters.
   const padding = ebmlElement(0xec, new Uint8Array(2 * 1024 * 1024));
   const file = createSegmentFile(concatParts([cluster, padding, cluster]));
   const issues: string[] = [];

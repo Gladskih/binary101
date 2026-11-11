@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithDebugPayloads } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacySymbol, legacyU16, legacyU32 } from "../fixtures/pe-legacy-codeview.js";
@@ -19,8 +20,8 @@ test(`CodeView index tables show readable statistics at width ${width}`, async (
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   await expect(panel).toContainText("Symbol index statistics (declared counts)");
   const summary = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-indexes"]');
   const buckets = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-buckets"]');
@@ -46,8 +47,8 @@ test("CodeView index distributions retain rows after the first page", async ({ p
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   const buckets = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-buckets"]');
   await expect(buckets.getByRole("cell", { name: "99", exact: true })).toBeVisible();
   await buckets.getByRole("button", { name: "Next", exact: true }).click();

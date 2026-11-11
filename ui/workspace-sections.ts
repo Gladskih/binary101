@@ -43,11 +43,20 @@ export const collectWorkspaceSections = (root: HTMLElement): WorkspaceSection[] 
   wrapLooseContent(root);
   return Array.from(root.children).filter((element): element is HTMLElement =>
     element instanceof HTMLElement
-  ).map((element, index) => {
+  ).filter(element => {
+    // Renderers can put a format title before their individual sections.
+    // With the workspace heading visible, a title alone is an empty destination.
+    if (sectionDetails(element) || element.children.length !== 1 ||
+      !element.firstElementChild?.matches("h2, h3, h4") ||
+      element.textContent?.trim() !== element.firstElementChild.textContent?.trim()) return true;
+    element.hidden = true;
+    return false;
+  }).map((element, index) => {
     const title = sectionTitle(element);
     const key = element.dataset["peLazySection"] ?? element.dataset["elfLazySection"] ??
       (element.id || `${index}-${title}`);
     element.classList.add("workspacePanel");
+    element.setAttribute("aria-label", title);
     return {
       key: `analysis-${key}`,
       title,

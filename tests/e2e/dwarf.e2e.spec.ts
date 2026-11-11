@@ -1,3 +1,4 @@
+import { openInspectionContent, toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -51,7 +52,7 @@ void test("renders PE DWARF analysis lazily from long COFF section names", async
   const summary = page.locator('[data-pe-lazy-section="dwarf"] > details > summary');
   await expect(summary).toContainText("DWARF debug information");
   await expect(page.getByText("main.c", { exact: true })).toHaveCount(0);
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
   await expect(page.getByText("DW_TAG_subprogram", { exact: true })).toBeAttached();
@@ -64,7 +65,7 @@ void test("renders ELF DWARF analysis in the build/debug section", async ({ page
   await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
 });
@@ -75,8 +76,9 @@ void test("decompresses and renders GNU zlib DWARF from PE", async ({ page }) =>
 
   const summary = page.locator('[data-pe-lazy-section="dwarf"] > details > summary');
   await expect(summary).toContainText("DWARF debug information");
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
+  await openInspectionContent(page, "Line programs");
   await expect(page.getByRole("heading", { name: "Line programs" })).toBeVisible();
   await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
 });
@@ -88,8 +90,9 @@ void test("decompresses and renders ELF64 SHF_COMPRESSED DWARF", async ({ page }
   await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
+  await openInspectionContent(page, "Line programs");
   await expect(page.getByRole("heading", { name: "Line programs" })).toBeVisible();
   await expect(page.getByText("decompressed; decoded", { exact: true }).first()).toBeVisible();
 });
@@ -97,7 +100,7 @@ void test("decompresses and renders ELF64 SHF_COMPRESSED DWARF", async ({ page }
 void test("PE DWARF shows function types, source declarations, and parameter storage", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createPeSemanticDwarfFile()));
-  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="dwarf"] > details > summary'));
 
   const entities = page.getByRole("heading", { name: "Program entities" }).locator("+ div");
   await expect(entities.getByRole("cell", { name: "calculate::input", exact: true })).toBeVisible();
@@ -120,7 +123,7 @@ void test("ELF DWARF shows complete program entities without address arithmetic"
 void test("PE DWARF page navigation reaches every entity", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createPeSemanticDwarfFile(201)));
-  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="dwarf"] > details > summary'));
   const table = page.locator('[data-paged-sortable-table-id="dwarf-entities"]');
 
   await expect(table.getByRole("cell", { name: "calculate::input200", exact: true })).toHaveCount(0);
@@ -144,7 +147,7 @@ void test("ELF DWARF page navigation reaches every entity", async ({ page }) => 
 void test("PE macros show definitions and their original source lines", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createPeMacroDwarfFile()));
-  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="dwarf"] > details > summary'));
   await page.getByText("Macro sequence 1: 5 directives", { exact: true }).click();
 
   await expect(page.getByRole("cell", { name: "LIMIT 42", exact: true })).toBeVisible();
@@ -165,7 +168,7 @@ void test("ELF macros show compiler definitions without exposing address-only da
 void test("PE frame recovery shows function names and caller register rules", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createPeFrameDwarfFile()));
-  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="dwarf"] > details > summary'));
   await page.getByText("Stack and caller recovery (1 regions)", { exact: true }).click();
 
   await expect(page.locator('[data-sort-state-key="dwarf-frames"]').getByText("calculate", { exact: true })).toBeVisible();
@@ -187,7 +190,7 @@ void test("ELF DWARF shares decoded frame records with the unwind analyzer", asy
 void test("PE split DWARF resolves program names and indexed macro definitions", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createPeSplitDwarfFile()));
-  await page.locator('[data-pe-lazy-section="dwarf"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="dwarf"] > details > summary'));
   await expect(page.getByRole("cell", { name: "calculate", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "src/main.c:7", exact: true })).toBeVisible();
   await page.getByText("Macro sequence 1: 3 directives", { exact: true }).click();

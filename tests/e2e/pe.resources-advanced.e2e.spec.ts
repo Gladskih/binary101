@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
@@ -10,7 +11,7 @@ import { createNotebookDfmResource } from "../fixtures/pe-resource-dfm-payloads.
 const openGroup = async (page: Page, name: string) => {
   const details = page.locator("[data-pe-resource-group]").filter({
     has: page.locator(":scope > summary", { hasText: new RegExp(`^${name}\\b`) }) }).first();
-  await details.locator(":scope > summary").click();
+  await toggleInspectionSection(details.locator(":scope > summary"));
   return details;
 };
 
@@ -30,7 +31,7 @@ const loadResources = async (page: Page): Promise<void> => {
   ]));
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
-  await page.locator("[data-pe-lazy-section='resources'] > details > summary").click();
+  await toggleInspectionSection(page.locator("[data-pe-lazy-section='resources'] > details > summary"));
 };
 
 test("dialog geometry, initial strings, layout, selection and resource navigation", async ({ page }) => {
@@ -49,7 +50,7 @@ test("dialog geometry, initial strings, layout, selection and resource navigatio
     element.style.height = `${element.clientHeight + 40}px`;
   });
   await expect.poll(async () => (await control.boundingBox())!.x - before!.x).toBeCloseTo(80, 0);
-  await group.locator(".peResourceConnections").last().locator(":scope > summary").click();
+  await toggleInspectionSection(group.locator(".peResourceConnections").last().locator(":scope > summary"));
   await group.locator(".peResourceConnections").last().locator("a").first().click();
   await expect(page.locator('[data-pe-resource-group][open]').first()).toBeVisible();
 });

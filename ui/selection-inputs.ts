@@ -31,23 +31,24 @@ const openFileSelection = async (
 
 const attachFilePicker = (config: SelectionInputConfig): void => {
   const input = config.fileInputElement;
-  let current: Promise<void> | null = null;
-  const openSelection = async (files: FileList): Promise<void> => {
-    const inspection = openFileSelection(config, snapshotFileList(files), "selection");
-    current = inspection;
-    try {
-      await inspection;
-    } finally {
-      if (current === inspection) {
-        input.value = "";
-        current = null;
-      }
-    }
+  let inspectedFile: File | null = null;
+  const inspectSelection = (files: FileList): void => {
+    inspectedFile = files.length === 1 ? files.item(0) : null;
+    void openFileSelection(config, snapshotFileList(files), "selection");
   };
   // Retain the selection so the native picker can recognize a repeat selection as a dismissal.
   // https://html.spec.whatwg.org/multipage/input.html#file-upload-state-(type=file)
   input.addEventListener("change", () => {
-    if (input.files?.length) void openSelection(input.files);
+    if (input.files?.length) inspectSelection(input.files);
+  });
+  input.addEventListener("cancel", () => {
+    const files = input.files;
+    const file = files?.length === 1 ? files.item(0) : null;
+    // Some browsers return a fresh snapshot even when the path stays the same.
+    if (files && file && inspectedFile && file !== inspectedFile &&
+      (file.size !== inspectedFile.size || file.lastModified !== inspectedFile.lastModified)) {
+      inspectSelection(files);
+    }
   });
 };
 

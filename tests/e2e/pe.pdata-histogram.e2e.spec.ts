@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -10,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   await page.setInputFiles("#fileInput", {
     name: file.name, mimeType: file.type, buffer: Buffer.from(file.data)
   });
-  await page.locator('[data-pe-lazy-section="exception"] > details > summary').click();
+  await toggleInspectionSection(page.locator('[data-pe-lazy-section="exception"] > details > summary'));
 });
 
 void test("pdata histogram renders parsed byte ranges and survives reopening the lazy section", async ({
@@ -26,9 +27,9 @@ void test("pdata histogram renders parsed byte ranges and survives reopening the
     "8–15 bytes: 1 ranges", "16–31 bytes: 1 ranges"
   ]);
 
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(histogram).toHaveCount(0);
-  await summary.click();
+  await toggleInspectionSection(summary);
 
   await expect(histogram).toContainText("5 measured ranges");
 });

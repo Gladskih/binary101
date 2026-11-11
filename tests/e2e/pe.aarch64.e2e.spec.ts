@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { llvmVersion } from "llvm-aarch64-disasm";
 import { createPePlusWithSection } from "../fixtures/sample-files-pe.js";
@@ -23,7 +24,7 @@ test("PE ARM64 analyzes with local WASM and displays architecture requirements",
     name: "arm64.exe", mimeType: "application/octet-stream", buffer: Buffer.from(bytes)
   });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await expect(panel).toContainText("AArch64 instruction-set requirements");
   expect(requests.filter(url => url.endsWith(".wasm"))).toHaveLength(0);
   await page.locator("#peInstructionSetsAnalyzeButton").click();
@@ -36,7 +37,7 @@ test("PE ARM64 analyzes with local WASM and displays architecture requirements",
   const row = panel.getByRole("row").filter({ hasText: "MRS SCTLR_EL1" });
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");
   await expect(row.getByRole("cell").nth(3)).toHaveText("0x1004 0x1008");
-  await row.locator("summary").click();
+  await toggleInspectionSection(row.locator("summary"));
   await expect(row).toContainText("administrator rights alone do not suffice");
   await expect(panel).toContainText("Configured EL0 access");
   await expect(panel).not.toContainText("MRS TPIDR_EL0");

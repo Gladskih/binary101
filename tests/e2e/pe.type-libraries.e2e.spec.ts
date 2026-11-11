@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeTypeLibraryFile } from "../fixtures/pe-type-library-file.js";
 
@@ -11,11 +12,11 @@ void test("TYPELIB analysis mounts through its resource link and restores expand
   await expect(section).toBeVisible();
   await expect(body).toHaveJSProperty("childElementCount", 0);
   const resources = page.locator('[data-pe-lazy-section="resources"]');
-  await resources.locator(":scope > details > summary").click();
+  await toggleInspectionSection(resources.locator(":scope > details > summary"));
   const group = resources.locator("details").filter({
     has: page.locator("summary", { hasText: /^TYPELIB\b/ })
   }).last();
-  await group.locator(":scope > summary").click();
+  await toggleInspectionSection(group.locator(":scope > summary"));
   await group.getByRole("link", { name: "Detailed analysis in Type libraries (COM)." }).first().click();
   await expect(section.locator(":scope > details")).toHaveJSProperty("open", true);
   await expect(body).toContainText("Imported libraries");
@@ -23,10 +24,10 @@ void test("TYPELIB analysis mounts through its resource link and restores expand
   const type = body.locator("details").filter({
     has: page.locator("summary", { hasText: /^interface ITest/ })
   }).first();
-  await type.locator(":scope > summary").click();
+  await toggleInspectionSection(type.locator(":scope > summary"));
   await expect(type).toContainText("Run");
-  await section.locator(":scope > details > summary").click();
+  await toggleInspectionSection(section.locator(":scope > details > summary"));
   await expect(body).toHaveJSProperty("childElementCount", 0);
-  await section.locator(":scope > details > summary").click();
+  await toggleInspectionSection(section.locator(":scope > details > summary"));
   await expect(type).toHaveJSProperty("open", true);
 });

@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -25,11 +26,11 @@ test("shows additional CLR metadata from an installed assembly in the browser", 
   const clr = page.locator("section.peSection").filter({
     has: page.locator("summary", { hasText: /^CLR\b/ })
   });
-  await clr.locator(":scope > details > summary").click();
+  await toggleInspectionSection(clr.locator(":scope > details > summary"));
   const properties = clr.locator("details").filter({
     has: page.locator(":scope > summary", { hasText: /^Property \(/ })
   });
-  await properties.locator(":scope > summary").click();
+  await toggleInspectionSection(properties.locator(":scope > summary"));
   await expect(properties.getByRole("button", { name: "Sort by Name", exact: true })).toBeVisible();
   await expect(properties.getByRole("button", { name: "Sort by Type", exact: true })).toBeVisible();
   await expect(properties.locator("tbody tr").first()).toContainText("ResourceManager");
@@ -38,7 +39,7 @@ test("shows additional CLR metadata from an installed assembly in the browser", 
   const specifications = clr.locator("details").filter({
     has: page.locator(":scope > summary", { hasText: /^TypeSpec \(/ })
   });
-  await specifications.locator(":scope > summary").click();
+  await toggleInspectionSection(specifications.locator(":scope > summary"));
   await expect(specifications.locator("tbody tr").first().locator("td").first()).toHaveText("1");
   await specifications.getByRole("button", { name: "Next", exact: true }).click();
   await expect(specifications.locator("tbody tr").first().locator("td").first()).toHaveText("81");
@@ -57,11 +58,11 @@ test("resolves external enum values from a locally selected dependency assembly"
   const clr = page.locator("section.peSection").filter({
     has: page.locator("summary", { hasText: /^CLR\b/ })
   });
-  await clr.locator(":scope > details > summary").click();
+  await toggleInspectionSection(clr.locator(":scope > details > summary"));
   const security = clr.locator("details").filter({
     has: page.locator(":scope > summary", { hasText: /^DeclSecurity \(/ })
   });
-  await security.locator(":scope > summary").click();
+  await toggleInspectionSection(security.locator(":scope > summary"));
   await expect(security).toContainText("underlying type is unresolved");
   await page.getByLabel("Load assembly dependencies").setInputFiles(dependency);
   await expect(page.locator("#statusMessage")).toHaveText("Loaded 1 local assembly dependencies.");

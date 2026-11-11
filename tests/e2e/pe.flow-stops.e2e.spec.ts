@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -9,7 +10,7 @@ test("PE ISA stops fallthrough before demangled exported data", async ({ page })
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: "application/octet-stream",
     buffer: Buffer.from(await file.arrayBuffer()) });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   await expect(panel).toContainText("20 instruction(s) decoded");
@@ -23,7 +24,7 @@ test("PE ISA uses shipped import metadata to stop after ExitProcess", async ({ p
   await page.setInputFiles("#fileInput", { name: "exit-process.exe", mimeType: "application/octet-stream",
     buffer: Buffer.from(createPeNoReturnFile()) });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   await expect(panel).toContainText("1 instruction(s) decoded");

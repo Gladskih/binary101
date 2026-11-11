@@ -1,3 +1,4 @@
+import { openInspectionElement, openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { createGzipFile } from "../fixtures/gzip-fixtures.js";
@@ -30,6 +31,7 @@ const readDownloadText = async (
   page: Page,
   locator: Locator
 ): Promise<{ name: string; content: string }> => {
+  await openInspectionElement(locator);
   const [download] = await Promise.all([page.waitForEvent("download"), locator.click()]);
   const stream = await download.createReadStream();
   if (!stream) throw new Error("Download stream unavailable");
@@ -125,6 +127,7 @@ test.describe("download actions", () => {
 
     const expand = page.locator("button.isoDirToggleButton");
     await expect(expand).toHaveCount(1);
+    await openInspectionElement(expand);
     await expand.click();
 
     const nestedButton = page.locator('tr:has-text("INNER.TXT") button.isoExtractButton');
@@ -151,7 +154,7 @@ test.describe("PE analysis actions", () => {
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Instruction-set, imports and strings analysis\b/ })
     }).first();
-    await instructionSection.locator(":scope > summary").click();
+    await toggleInspectionSection(instructionSection.locator(":scope > summary"));
     await expect(instructionSection).toHaveJSProperty("open", true);
     await expect(detailsValue).toContainText("Instruction-set, imports and strings analysis");
     await expect(detailsValue.locator("#peInstructionSetsAnalyzeButton")).toBeVisible();
@@ -173,7 +176,7 @@ test.describe("PE analysis actions", () => {
     const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
     }).first();
-    await entrypointSection.locator(":scope > summary").click();
+    await toggleInspectionSection(entrypointSection.locator(":scope > summary"));
     await expect(entrypointSection).toHaveJSProperty("open", true);
     await expect(detailsValue.locator("#peEntrypointDisassembleButton")).toBeVisible();
 
@@ -221,7 +224,7 @@ test.describe("PE analysis actions", () => {
     const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
     }).first();
-    await instructionSection.locator(":scope > summary").click();
+    await toggleInspectionSection(instructionSection.locator(":scope > summary"));
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
     await expect(instructionSection).toContainText("Disassembly sample");
 
@@ -229,9 +232,10 @@ test.describe("PE analysis actions", () => {
     await sortSetButton.click();
     await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
 
-    await entrypointSection.locator(":scope > summary").click();
+    await toggleInspectionSection(entrypointSection.locator(":scope > summary"));
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(entrypointSection).toContainText("Disassembly preview:");
+    await openInspectionSection(page, "Instruction-set, imports and strings analysis");
     await expect(sortSetButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
   });
 });
@@ -251,14 +255,14 @@ test.describe("large PE string tables", () => {
     const instructionSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Instruction-set, imports and strings analysis\b/ })
     }).first();
-    await instructionSection.locator(":scope > summary").click();
+    await toggleInspectionSection(instructionSection.locator(":scope > summary"));
     await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
     await expect(instructionSection).toContainText("Code-referenced strings (1005)");
 
     const stringDetails = instructionSection.locator("details").filter({
       has: page.locator("summary", { hasText: /^Code-referenced strings \(1005\)/ })
     }).first();
-    await stringDetails.locator(":scope > summary").click();
+    await toggleInspectionSection(stringDetails.locator(":scope > summary"));
     const pagedTable = stringDetails.locator("[data-paged-sortable-table-root]").first();
     await expect(pagedTable.getByText("Showing 1-500 of 1005")).toBeVisible();
     await expect(pagedTable.locator("tbody tr")).toHaveCount(500);

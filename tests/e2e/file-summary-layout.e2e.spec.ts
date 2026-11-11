@@ -1,137 +1,90 @@
-"use strict";
-
-import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
-import { createGzipFile } from "../fixtures/gzip-fixtures.js";
-import { createPngFile } from "../fixtures/image-sample-files.js";
+﻿import { expect, test, type Page } from "@playwright/test";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
-import { createPeFile } from "../fixtures/sample-files-pe.js";
-import type { MockFile } from "../helpers/mock-file.js";
-import { NARROW_LAYOUT_VIEWPORT } from "./viewports.js";
+import { openInspectionSection } from "./inspection-navigation.js";
 
-const toUpload = (file: MockFile) => ({
-  name: file.name,
-  mimeType: file.type,
-  buffer: Buffer.from(file.data)
-});
-
-const inspectFile = async (page: Page, file: MockFile): Promise<void> => {
+const inspectPe = async (page: Page): Promise<void> => {
+  const file = createPeResourcePreviewFile();
   await page.goto("/");
-  await page.setInputFiles("#fileInput", toUpload(file));
-  await expect(page.locator("#fileInfoCard")).toBeVisible();
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
+    buffer: Buffer.from(file.data) });
+  await expect(page.locator("#workspaceTitle")).toHaveText("DOS header");
 };
 
-const expectFullWidthDetails = async (page: Page): Promise<void> => {
-  const primary = page.locator(".filePrimaryInfo");
-  const primaryBox = await primary.boundingBox();
-  const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
-  const horizontalPadding = await primary.evaluate(element => {
-    const style = element.ownerDocument.defaultView!.getComputedStyle(element);
-    return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+test("file opens at its original first structure and retains all properties in the header", async ({ page }) => {
+  await inspectPe(page);
+  await expect(page.locator('[data-pe-lazy-section="dos-header"]')).toBeVisible();
+  await expect(page.locator("#workspaceNavigation")).not.toContainText("Overview");
+  await expect(page.locator("#workspaceNavigation")).not.toContainText("File hashes");
+  await expect(page.locator("#fileFormatSummary")).toHaveCount(0);
+  await expect(page.locator(".appHeader #fileMimeTypeDetail")).toBeVisible();
+  await expect(page.locator(".appHeader #fileTimestampDetail")).toBeVisible();
+  await expect(page.locator(".appHeader #fileAnalysisDurationDetail")).toBeVisible();
+  await expect(page.locator("#fileSourceDetail .opt.sel")).toHaveText("Selection");
+  await expect(page.locator("#fileObjectDetail .opt.sel")).toHaveText("File");
+  expect(await page.title()).toContain(createPeResourcePreviewFile().name);
+});
+
+test("file hashes are a header tool with no outer frame or disclosure and retain the file icon", async ({ page }) => {
+  await inspectPe(page);
+  await openInspectionSection(page, "File hashes");
+  await expect(page.locator("#fileIcon")).toBeVisible();
+  await expect(page.locator("#hashDetails summary")).toHaveCount(0);
+  await expect(page.locator("#md5ComputeButton")).toBeVisible();
+  await expect(page.locator("#hashDetails")).toHaveCSS("border-top-width", "0px");
+});
+
+test("wide screen uses one row for file properties and actions", async ({ page }) => {
+  await page.setViewportSize({ width: 2530, height: 1000 });
+  await inspectPe(page);
+  expect(await page.locator(".appHeader").evaluate(element => element.getBoundingClientRect().height))
+    .toBeLessThanOrEqual(50);
+  await expect(page.locator('.appHeader a[href*="github.com"]')).toBeVisible();
+});
+
+for (const width of [320, 500, 768]) {
+  test(`header and navigation fit a ${width}px viewport`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await inspectPe(page);
+    await expect(page.locator("#workspaceMobileView")).toBeVisible();
+    await expect(page.locator("#workspaceFilter")).toBeVisible();
+    const sectionBox = await page.locator(".workspaceMobileNavigation").boundingBox();
+    const searchBox = await page.locator(".workspaceSidebar__search").boundingBox();
+    expect(searchBox!.y - sectionBox!.y - sectionBox!.height).toBeGreaterThanOrEqual(12);
+    expect(await page.locator("html").evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(width);
+    await openInspectionSection(page, "Data directories");
+    await expect(page.locator('[data-pe-lazy-section="data-directories"]')).toBeVisible();
   });
-  expect(primaryBox).not.toBeNull();
-  expect(detailsBox).not.toBeNull();
-  expect(detailsBox!.width).toBeCloseTo(primaryBox!.width - horizontalPadding, 0);
-};
+}
 
-void test("uses full summary width without a PE icon", async ({ page }) => {
-  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
-  await inspectFile(page, createPngFile());
-
-  await expect(page.locator("#fileIconWrap")).toBeHidden();
-  await expectFullWidthDetails(page);
-
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await inspectFile(page, createPngFile());
-
-  await expect(page.locator("#fileIconWrap")).toBeHidden();
-  await expectFullWidthDetails(page);
+test("narrow header aligns wrapped actions with file identity", async ({ page }) => {
+  await page.setViewportSize({ width: 500, height: 900 });
+  await inspectPe(page);
+  const title = await page.locator("#fileNameDetail").boundingBox();
+  const actions = await page.locator(".appHeader__actions").boundingBox();
+  expect(actions!.x).toBeCloseTo(title!.x, 0);
+  expect(actions!.y).toBeGreaterThan(title!.y + title!.height);
 });
 
-void test("places a PE icon below the summary on phone-sized screens", async ({ page }) => {
-  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
-  await inspectFile(page, createPeResourcePreviewFile());
-
-  const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
-  const iconBox = await page.locator("#fileIcon").boundingBox();
-  expect(detailsBox).not.toBeNull();
-  expect(iconBox).not.toBeNull();
-  expect(iconBox!.y).toBeGreaterThan(detailsBox!.y + detailsBox!.height);
+test("table frames and introductions remain separate", async ({ page }) => {
+  await inspectPe(page);
+  await openInspectionSection(page, "Data directories");
+  const table = page.locator('[data-pe-lazy-section="data-directories"] table').first();
+  expect(await table.evaluate(element => Number.parseFloat(
+    element.ownerDocument.defaultView!.getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
+  expect(await table.evaluate(element => element.getBoundingClientRect().top -
+    element.closest('.tableWrap')!.previousElementSibling!.getBoundingClientRect().bottom))
+    .toBeGreaterThanOrEqual(10);
 });
 
-void test("places a PE icon to the right of the summary on wide screens", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await inspectFile(page, createPeResourcePreviewFile());
-
-  const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
-  const iconBox = await page.locator("#fileIcon").boundingBox();
-  expect(detailsBox).not.toBeNull();
-  expect(iconBox).not.toBeNull();
-  expect(iconBox!.x).toBeGreaterThan(detailsBox!.x + detailsBox!.width);
+test("welcome never displays empty file properties or file tools", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#fileProperties")).toBeHidden();
+  await expect(page.locator("#fileHashesButton")).toBeHidden();
+  await expect(page.locator("#dropZone")).toBeVisible();
 });
 
-void test("uses the full phone width for the PE result card and its sections", async ({ page }) => {
-  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
-  await inspectFile(page, createPeResourcePreviewFile());
-
-  const cardBox = await page.locator("#fileInfoCard").boundingBox();
-  const hashesBox = await page.locator("#hashDetails").boundingBox();
-  const sectionBox = await page.locator("#analysisValue > .peSection").first().boundingBox();
-  expect(cardBox).not.toBeNull();
-  expect(hashesBox).not.toBeNull();
-  expect(sectionBox).not.toBeNull();
-  expect(cardBox!.x).toBeCloseTo(0, 0);
-  expect(hashesBox!.x).toBeCloseTo(0, 0);
-  expect(sectionBox!.x).toBeCloseTo(0, 0);
-});
-
-void test("keeps collapsed action panels evenly spaced after file hashes", async ({ page }) => {
-  await inspectFile(page, createPeFile());
-
-  const hashBox = await page.locator("#hashDetails").boundingBox();
-  const instructionBox = await page.locator("#peInstructionSetsPanel > .analysisPanel").boundingBox();
-  const entrypointBox = await page.locator("#peEntrypointDisassemblyPanel > .analysisPanel").boundingBox();
-  const contentGap = await page.locator("#fileInfoCard").evaluate(element =>
-    parseFloat(
-      element.ownerDocument.defaultView!.getComputedStyle(element)
-        .getPropertyValue("--content-section-gap")
-    )
-  );
-  expect(hashBox).not.toBeNull();
-  expect(instructionBox).not.toBeNull();
-  expect(entrypointBox).not.toBeNull();
-  expect(instructionBox!.y - hashBox!.y - hashBox!.height).toBeCloseTo(contentGap, 0);
-  expect(entrypointBox!.y - instructionBox!.y - instructionBox!.height).toBeCloseTo(contentGap, 0);
-});
-
-void test("insets unsectioned analysis content on phone-sized screens", async ({ page }) => {
-  await page.setViewportSize(NARROW_LAYOUT_VIEWPORT);
-  await inspectFile(page, createGzipFile({ payload: Buffer.from("hello") }));
-
-  const details = page.locator("#analysisValue");
-  const headingBox = await details.locator(":scope > h3").boundingBox();
-  expect(await details.locator(":scope > section").count()).toBe(0);
-  expect(headingBox).not.toBeNull();
-  expect(headingBox!.x).toBeCloseTo(16, 0);
-});
-
-void test("shows a hover affordance for collapsible PE sections", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 720 });
-  await inspectFile(page, createPeResourcePreviewFile());
-
-  const sectionSummary = page.locator(".peSectionSummary").first();
-  const initialBorderColor = await sectionSummary.evaluate(element =>
-    element.ownerDocument.defaultView!.getComputedStyle(element).borderColor
-  );
-  await sectionSummary.hover();
-  const hoverBorderColor = await sectionSummary.evaluate(element =>
-    element.ownerDocument.defaultView!.getComputedStyle(element).borderColor
-  );
-
-  expect(
-    await sectionSummary.evaluate(element =>
-      element.ownerDocument.defaultView!.getComputedStyle(element).cursor
-    )
-  ).toBe("pointer");
-  expect(hoverBorderColor).not.toBe(initialBorderColor);
+test("analysis navigation has one separator without a padded background strip", async ({ page }) => {
+  await inspectPe(page);
+  await expect(page.locator(".workspaceAnalysis")).toHaveCSS("padding-top", "0px");
+  await expect(page.locator(".workspaceAnalysis")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
 });

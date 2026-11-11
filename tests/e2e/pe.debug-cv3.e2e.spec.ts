@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeCodeViewOverlay } from "../fixtures/pe-codeview-locations.js";
 import { createCv3CodeView, cv3Trailer } from "../fixtures/pe-codeview-cv3.js";
@@ -8,8 +9,8 @@ test("NB00 overlay retains names and source summaries on a narrow screen", async
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }));
   await expect(panel).toContainText("NB00");
   await expect(panel).toContainText("Modules (CV3)");
   await expect(panel).toContainText("wide.obj");

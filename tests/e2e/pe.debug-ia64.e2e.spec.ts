@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createIa64ExceptionPe } from "../fixtures/pe-ia64-exception.js";
 
@@ -8,9 +9,9 @@ for (const width of [390, 1280]) {
     await page.goto("/");
     await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
     const panel = page.locator('[data-pe-lazy-section="debug"]');
-    await panel.locator(":scope > details > summary").click();
-    await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
-    await panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }).click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory \(\.pdata\)/ }));
     const references = panel.locator("dt").filter({ hasText: /^Unique mapped unwind references$/ });
     await expect(references).toBeVisible();
     await expect(references.locator("+ dd")).toHaveText("1");

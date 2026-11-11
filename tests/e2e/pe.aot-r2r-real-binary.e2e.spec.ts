@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 
@@ -35,7 +36,7 @@ test("explains ReadyToRun methods and imports without dumping their encoded addr
   await page.setInputFiles("#fileInput", readyToRunFile!);
   await page.locator(".peSectionSummary").filter({ hasText: "CLR (.NET) header" }).click();
   const analysis = page.locator("#analysisValue");
-  await analysis.locator("summary").filter({ hasText: "ReadyToRun / managed native header" }).click();
+  await toggleInspectionSection(analysis.locator("summary").filter({ hasText: "ReadyToRun / managed native header" }));
 
   await expect(analysis).toContainText("Crossgen2");
   const statistics = analysis.locator('[data-sort-state-key="pe-r2r-statistics"]');

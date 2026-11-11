@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithEmbeddedCodeView } from "../fixtures/pe-codeview-embedded-symbols.js";
 
@@ -8,8 +9,8 @@ test(`CodeView embedded names and discard summaries remain readable at width ${w
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   const names = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-embeddedSymbols"]');
   await expect(names.getByRole("cell", { name: "<discarded_0>", exact: true })).toBeVisible();
   await names.getByRole("button", { name: "Next", exact: true }).click();

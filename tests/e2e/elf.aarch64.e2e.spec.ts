@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { llvmVersion } from "llvm-aarch64-disasm";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
@@ -29,7 +30,7 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   await page.setInputFiles("#fileInput", {
     name: "aarch64.elf", mimeType: "application/x-elf", buffer: executable()
   });
-  await page.locator("#elfInstructionSetsPanel > details > summary").click();
+  await toggleInspectionSection(page.locator("#elfInstructionSetsPanel > details > summary"));
   await expect(page.locator("#elfInstructionSetsPanel")).toContainText("AArch64");
   expect(requests.filter(url => url.endsWith(".wasm"))).toHaveLength(0);
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
@@ -45,7 +46,7 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   const address = 0x400000 + Math.ceil(createElfFile().data.length / 4) * 4;
   await expect(row.getByRole("cell").nth(3)).toHaveText(
     `0x${(address + 4).toString(16)} 0x${(address + 8).toString(16)}`);
-  await row.locator("summary").click();
+  await toggleInspectionSection(row.locator("summary"));
   await expect(row).toContainText("administrator rights alone do not suffice");
   await expect(panel).toContainText("Configured EL0 access");
   await expect(panel).not.toContainText("MRS TPIDR_EL0");

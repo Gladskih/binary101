@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,7 +20,7 @@ test("uses NativeAOT initializers as disassembly seeds in the browser", async ({
   });
   await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT initializer entry points");
-  await page.locator("#elfInstructionSetsPanel > details > summary").click();
+  await toggleInspectionSection(page.locator("#elfInstructionSetsPanel > details > summary"));
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
 
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT Eager class constructors");

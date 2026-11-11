@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 
@@ -15,7 +16,7 @@ void test("shows decoded ARM64X fixups from a real Windows DLL", async ({ page }
   const loadConfig = page.locator("#analysisValue > section > details").filter({
     has: page.locator("summary", { hasText: /^Load Config\b/ })
   }).first();
-  await loadConfig.locator(":scope > summary").click();
+  await toggleInspectionSection(loadConfig.locator(":scope > summary"));
   const fixups = loadConfig.locator(".loadConfigDynamicDetail").filter({
     has: page.getByRole("heading", { name: "ARM64X fixups" })
   });

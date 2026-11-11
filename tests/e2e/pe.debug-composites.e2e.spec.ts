@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithCodeViewComposites } from "../fixtures/pe-codeview-composites.js";
 
@@ -8,8 +9,8 @@ for (const width of [390, 1280]) {
     await page.goto("/");
     await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
     const panel = page.locator('[data-pe-lazy-section="debug"]');
-    await panel.locator(":scope > details > summary").click();
-    await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
     const types = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-types"]');
     const members = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-members"]');
     await expect(types.getByRole("cell", { name: "<Packet>&amp;", exact: true })).toBeVisible();
@@ -37,8 +38,8 @@ test("CodeView incomplete overload lists retain recovered signatures and display
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   await expect(panel).toContainText("read: declared variants 3; recovered variants 2");
   const members = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-members"]');
   await expect(members.getByRole("cell", { name: "3 declared overloads", exact: true })).toBeVisible();

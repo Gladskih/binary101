@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeReadyToRunSeedFile, createPeReadyToRunInstanceSeedFile } from "../fixtures/pe-ready-to-run-seed-file.js";
 
@@ -7,7 +8,7 @@ test("R2R MethodDef seeds reveal code unreachable from the PE entrypoint without
   await page.setInputFiles("#fileInput", { name: file.name,
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   const syscall = panel.getByRole("row").filter({ has: page.locator("summary", { hasText: /^SYSCALL$/ }) });
@@ -22,7 +23,7 @@ test("R2R generic instance roots reveal code absent from MethodDef entrypoints a
   await page.setInputFiles("#fileInput", { name: file.name,
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   const syscall = panel.getByRole("row").filter({ has: page.locator("summary", { hasText: /^SYSCALL$/ }) });
@@ -36,7 +37,7 @@ test("R2R index warnings stay visible while valid runtime rows still seed instru
   await page.setInputFiles("#fileInput", { name: file.name,
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
 
   await expect(panel).toContainText(

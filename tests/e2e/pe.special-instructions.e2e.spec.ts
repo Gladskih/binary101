@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPePlusWithSection } from "../fixtures/sample-files-pe.js";
 
@@ -16,7 +17,7 @@ test("PE ISA explains special instructions and disassembles a selected RVA", asy
     name: "special.exe", mimeType: "application/octet-stream", buffer: Buffer.from(bytes)
   });
   const panel = page.locator("#peInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
   const table = panel.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Sites" }) });
   await expect(table.getByRole("columnheader"))
@@ -29,7 +30,7 @@ test("PE ISA explains special instructions and disassembles a selected RVA", asy
   await vmxon.locator("summary", { hasText: /^VMXON$/ }).focus();
   await page.keyboard.press("Enter");
   await expect(vmxon.getByText(/identifies hypervisor initialization code/)).toBeVisible();
-  await vmxon.locator("summary", { hasText: /^Kernel privilege$/ }).click();
+  await toggleInspectionSection(vmxon.locator("summary", { hasText: /^Kernel privilege$/ }));
   await expect(vmxon.getByText(/administrator rights alone do not suffice/)).toBeVisible();
   await expect(table.locator("summary", { hasText: /^CPU capabilities$/ })).toBeVisible();
   await expect(table.locator("summary", { hasText: /^Timing \/ counters$/ })).toBeVisible();

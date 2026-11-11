@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 
@@ -23,7 +24,7 @@ test("ELF ISA displays privileges, explanations and exact virtual addresses", as
     name: "special.elf", mimeType: "application/x-elf", buffer: executable()
   });
   const panel = page.locator("#elfInstructionSetsPanel");
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await panel.getByRole("button", { name: "Analyze instruction sets", exact: true }).click();
   const table = panel.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Sites" }) });
   await expect(table.getByRole("columnheader"))
@@ -34,7 +35,7 @@ test("ELF ISA displays privileges, explanations and exact virtual addresses", as
     `0x${(0xffff800000000000n + BigInt(createElfFile().data.length)).toString(16)} ` +
     `0x${(0xffff800000000002n + BigInt(createElfFile().data.length)).toString(16)}`
   );
-  await rdmsr.locator("summary", { hasText: /^Kernel privilege$/ }).click();
+  await toggleInspectionSection(rdmsr.locator("summary", { hasText: /^Kernel privilege$/ }));
   await expect(rdmsr.getByText(/administrator rights alone do not suffice/)).toBeVisible();
   await expect(table.locator("summary", { hasText: /^I\/O privilege$/ })).toBeVisible();
   await expect(table.locator("summary", { hasText: /^MOV CR$/ })).toBeVisible();

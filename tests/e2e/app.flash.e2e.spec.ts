@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createSwf, createCws, createZws, createFlashProjectorPe, createSwfTag } from "../fixtures/swf-fixtures.js";
 
@@ -13,7 +14,7 @@ test("standalone SWF and PE Projector show bounded metadata and extract the exac
   await page.setInputFiles("#fileInput", { name: pe.name, mimeType: "application/octet-stream",
     buffer: Buffer.from(pe.data) });
   const payloadSection = page.locator("details").filter({ has: page.locator("summary", { hasText: "Appended payload" }) });
-  await payloadSection.locator("summary").click();
+  await toggleInspectionSection(payloadSection.locator("summary"));
   await expect(payloadSection.getByText("Flash Projector SWF", { exact: true })).toBeVisible();
   await expect(payloadSection.getByText("640 × 480 pixels", { exact: true })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
@@ -37,7 +38,7 @@ test("compressed Projector body findings appear automatically while its details 
   const section = page.locator("[data-pe-lazy-section='appended-payloads']");
   await expect(section.locator("summary")).toContainText("1 script tag(s)");
   await expect(section.locator("details")).not.toHaveAttribute("open");
-  await section.locator("summary").click();
+  await toggleInspectionSection(section.locator("summary"));
   await expect(section.getByRole("table", { name: "Top-level SWF tags" })).toBeVisible();
   await expect(section.getByText("DoABC", { exact: true })).toBeVisible();
   await expect(section.locator("[data-swf-body-status]")).toHaveCount(0);
@@ -60,7 +61,7 @@ test("ZWS Projector appears only after automatic body validation", async ({ page
     buffer: Buffer.from(file.data) });
   const section = page.locator("[data-pe-lazy-section='appended-payloads']");
   await expect(section.locator("summary")).toContainText("1 payload");
-  await section.locator("summary").click();
+  await toggleInspectionSection(section.locator("summary"));
   await expect(section.getByText("Flash Projector SWF", { exact: true })).toBeVisible();
   await expect(section.getByText("640 × 480 pixels", { exact: true })).toBeVisible();
   await expect(section.getByRole("table", { name: "Top-level SWF tags" })).toBeVisible();

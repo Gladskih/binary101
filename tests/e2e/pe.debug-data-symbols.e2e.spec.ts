@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithCodeViewDataSymbols } from "../fixtures/pe-codeview-data-symbols-file.js";
 
@@ -8,8 +9,8 @@ test("CodeView data and public symbol metadata stay readable in the PE debug tab
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   const table = panel.getByRole("heading", { name: "Data, public, block and label symbols" })
     .locator("xpath=following-sibling::div[1]");
   await expect(table.getByRole("cell", { name: "global_value", exact: true })).toBeVisible();

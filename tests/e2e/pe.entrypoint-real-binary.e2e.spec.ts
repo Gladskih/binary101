@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { createPePlusLongEntrypointFile } from "../fixtures/pe-long-entrypoint-file.js";
@@ -34,7 +35,7 @@ test.describe("PE entrypoint disassembly on a real C drive binary", () => {
       const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
         has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
       }).first();
-      await entrypointSection.locator(":scope > summary").click();
+      await toggleInspectionSection(entrypointSection.locator(":scope > summary"));
       await expect(entrypointSection).toHaveJSProperty("open", true);
 
       await detailsValue.locator("#peEntrypointDisassembleButton").click();
@@ -60,7 +61,7 @@ test.describe("PE entrypoint disassembly on a real C drive binary", () => {
     const entrypointSection = detailsValue.locator("details.analysisPanel").filter({
       has: page.locator("summary", { hasText: /^Entrypoint disassembly\b/ })
     }).first();
-    await entrypointSection.locator(":scope > summary").click();
+    await toggleInspectionSection(entrypointSection.locator(":scope > summary"));
     await detailsValue.locator("#peEntrypointDisassembleButton").click();
     await expect(entrypointSection).toContainText("Instructions 1-120 of 121");
     await expect(entrypointSection.locator(

@@ -1,13 +1,11 @@
 "use strict";
 
 import { DEFAULT_FILE_READ_WINDOW_BYTES } from "../file-range-reader.js";
+import { readByobChunk } from "../stream-byob.js";
 import { MAX_ELEMENT_HEADER } from "./constants.js";
 import { readElementHeader } from "./ebml.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues } from "./types.js";
-
-export type EbmlScanReader = Pick<EbmlStreamReader, "offset" | "readElementHeader" | "readBytes" | "skip"> &
-  { cancel?: () => Promise<void> };
 
 const EMPTY_BYTES: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
 
@@ -120,7 +118,9 @@ export class EbmlStreamReader {
   async #fill(minimum: number): Promise<void> {
     while (this.#availableBytes() < minimum && !this.#done) {
       this.signal?.throwIfAborted();
-      const result = await this.#reader.read(new Uint8Array(DEFAULT_FILE_READ_WINDOW_BYTES));
+      const result = await readByobChunk(
+        this.#reader, new Uint8Array(DEFAULT_FILE_READ_WINDOW_BYTES)
+      );
       if (result.done) {
         this.#done = true;
         break;

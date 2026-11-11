@@ -1,3 +1,4 @@
+import { openInspectionContent, openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
@@ -35,7 +36,6 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 };
 const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise<void> => {
   const fileBytes = Buffer.from(file.data);
-  await page.locator("#hashDetails > summary").click();
   for (const { label, id, nodeDigestName } of hashExpectations) {
     const expectedDigest = createHash(nodeDigestName).update(fileBytes).digest("hex");
     await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
@@ -55,7 +55,7 @@ const happyCases = [
     name: "gzip",
     file: () => createGzipFile({ payload: Buffer.from("hello"), extra: null, comment: null, includeHeaderCrc16: false }),
     expectedKind: "gzip compressed data",
-    detailText: "gzip compressed data"
+    detailText: "Header"
   },
   { name: "Windows shortcut (.lnk)", file: createLnkFile, expectedKind: "Windows shortcut (.lnk)", detailText: "Shell link header" },
   { name: "ZIP", file: createZipFile, expectedKind: "ZIP archive", detailText: "ZIP overview" },
@@ -105,7 +105,6 @@ test.describe("file type detection", () => {
     }, fileContent);
     await expectBaseDetails(page, "sample.txt", "Text file");
     await expect(page.locator("#analysisValue")).toBeHidden();
-    await page.locator("#hashDetails > summary").click();
     await page.getByRole("button", { name: "Compute SHA-256" }).click();
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
   });
@@ -204,7 +203,7 @@ test.describe("file hash actions", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toBeHidden();
     await expect(page.locator("#analysisValue .accessibleTooltipButton")).toHaveCount(0);
-    await page.locator('[data-pe-lazy-section="pe-headers"] > details > summary').click();
+    await toggleInspectionSection(page.locator('[data-pe-lazy-section="pe-headers"] > details > summary'));
     await expect.poll(async () => await page.locator("#analysisValue .accessibleTooltipButton").count())
       .toBeGreaterThan(0);
 
@@ -212,16 +211,14 @@ test.describe("file hash actions", () => {
     const nativeHashLabels = page.locator(".nativeHashLabel");
     const nativeHashBadges = page.locator(".nativeHashBadge");
     const nativeHashTooltip = page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup");
-    const detailsBox = await page.locator("#analysisValue").boundingBox();
-    await expect(hashDetails).not.toHaveAttribute("open", "");
+    await openInspectionSection(page, "Overview");
+    await expect(hashDetails).toBeVisible();
     await expect(nativeHashLabels).toHaveCount(4);
     await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);
     await expect(page.locator("#sha256NativeBadge")).toHaveAttribute(
       "title",
       "Native crypto is tried first."
     );
-    const hashSummaryBox = await hashDetails.locator("summary").boundingBox();
-    expect(hashSummaryBox?.y).toBeLessThan(detailsBox?.y ?? 0);
 
     await expectEveryHashCanBeComputed(page, file);
     await page.locator("#sha256NativeBadge").click();
@@ -244,6 +241,7 @@ test.describe("file type rendering", () => {
       await page.setInputFiles("#fileInput", toUpload(mockFile));
       await expectBaseDetails(page, mockFile.name, expectedKind);
 
+      await openInspectionContent(page, detailText);
       const detailsValue = page.locator("#analysisValue");
       await expect(detailsValue).toBeVisible();
       await expect(detailsValue).toContainText(detailText);
@@ -279,6 +277,7 @@ test.describe("file type rendering", () => {
     await expectBaseDetails(page, file.name, "MPEG audio stream (MP3/AAC)");
     await expect(page.locator("#analysisValue")).toContainText("MPEG audio stream");
     await expect(page.locator("#analysisValue")).toContainText("Summary");
+    await openInspectionSection(page, "Preview");
     await expect(page.locator(".audioPreview audio")).toBeVisible();
   });
 

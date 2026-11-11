@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithC6CodeView } from "../fixtures/pe-codeview-c6.js";
 
@@ -8,8 +9,8 @@ test(`C6 names and statistics remain readable and pageable at width ${width}`, a
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   await expect(panel).toContainText("NB02");
   await expect(panel).toContainText("legacy.obj");
   await expect(panel).toContainText("legacy.lib");

@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPagedPeExportsFile } from "../fixtures/pe-export-table-file.js";
 import { createElfItaniumFile } from "../fixtures/elf-itanium-file.js";
@@ -13,13 +14,13 @@ test("PE Itanium exports use same-origin WASM and survive lazy remount", async (
       "_Z1fi", "_ZTVN4demo6WidgetE"
     ])) });
   const section = page.locator('[data-pe-lazy-section="exports"] > details');
-  await section.locator(":scope > summary").click();
+  await toggleInspectionSection(section.locator(":scope > summary"));
   await section.getByRole("button", { name: "Next", exact: true }).click();
   await expect(section).toContainText("f(int)");
   await expect(section).toContainText("_Z1fi");
   await expect(section).toContainText("vtable for demo::Widget");
-  await section.locator(":scope > summary").click();
-  await section.locator(":scope > summary").click();
+  await toggleInspectionSection(section.locator(":scope > summary"));
+  await toggleInspectionSection(section.locator(":scope > summary"));
   await expect(section).toContainText("f(int)");
   expect(assets).toHaveLength(1);
   expect(new URL(assets[0]!).origin).toBe(new URL(page.url()).origin);
@@ -32,7 +33,7 @@ test("ELF dynamic symbols show decoded and linker names", async ({ page }) => {
   const section = page.locator("details").filter({
     has: page.locator(":scope > summary", { hasText: "Imports / exports" })
   });
-  await section.locator("summary").first().click();
+  await toggleInspectionSection(section.locator("summary").first());
   await section.getByText("Exported symbols (1)", { exact: true }).click();
   await expect(section).toContainText("f(int)");
   await expect(section).toContainText("_Z1fi");
@@ -45,14 +46,14 @@ test("a failed Itanium loader preserves PE names and the next file recovers", as
     buffer: Buffer.from(createPagedPeExportsFile(["_Z1fi", "_ZTVN4demo6WidgetE"])) };
   await page.setInputFiles("#fileInput", file);
   const section = page.locator('[data-pe-lazy-section="exports"] > details');
-  await section.locator(":scope > summary").click();
+  await toggleInspectionSection(section.locator(":scope > summary"));
   await expect(section).toContainText("Export name demangling unavailable:");
   await section.getByRole("button", { name: "Next", exact: true }).click();
   await expect(section).toContainText("_Z1fi");
   await expect(section).not.toContainText("f(int)");
   await page.unroute("**/*llvm-itanium-demangle*.wasm");
   await page.setInputFiles("#fileInput", file);
-  await section.locator(":scope > summary").click();
+  await toggleInspectionSection(section.locator(":scope > summary"));
   await section.getByRole("button", { name: "Next", exact: true }).click();
   await expect(section).toContainText("f(int)");
 });

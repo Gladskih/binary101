@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -20,7 +21,7 @@ void test("PE diagnostic warning bullets stay inside the panel and wrapped text 
       ]) +
       `</div></details></section></dd></dl></main>`
   );
-  await page.locator(".peDiagnosticDetails > summary").click();
+  await toggleInspectionSection(page.locator(".peDiagnosticDetails > summary"));
 
   const layout = await page.locator(".peDiagnosticItem").evaluate(item => {
     const bullet = item.querySelector("span[aria-hidden='true']");

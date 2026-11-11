@@ -94,6 +94,36 @@ const createPreventableEvent = (type: string): Event => {
   } as Event;
 };
 
+void test("file picker keeps an unchanged selection and opens an updated snapshot", () => {
+  const browser = installFakeBrowser();
+  const input = new FakeInputElement();
+  const opened: File[] = [];
+  const initial = new File(["a"], "sample.bin", { lastModified: 10 });
+  const updated = new File(["ab"], initial.name, { lastModified: initial.lastModified });
+  try {
+    attachSelectionInputs({
+      directoryInspection: createDirectoryInspection(async () => false, async files => {
+        opened.push(...files);
+        return true;
+      }),
+      dropZoneElement: new FakeElement() as unknown as HTMLElement,
+      fileInputElement: input as unknown as HTMLInputElement,
+      openFile: async () => undefined,
+      setStatusMessage: () => undefined
+    });
+    input.files = fileListFor([initial]);
+    input.dispatch("change", new Event("change"));
+    input.dispatch("cancel", new Event("cancel"));
+    assert.deepEqual(opened, [initial]);
+    assert.equal(input.value, "selected");
+    input.files = fileListFor([updated]);
+    input.dispatch("cancel", new Event("cancel"));
+    assert.deepEqual(opened, [initial, updated]);
+  } finally {
+    browser.restore();
+  }
+});
+
 void test("selection inputs route dropped files through directory inspection", async () => {
   const browser = installFakeBrowser();
   const dropZone = new FakeElement();

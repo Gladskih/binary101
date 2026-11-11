@@ -1,3 +1,4 @@
+import { openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -18,25 +19,22 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 };
 
 const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
+  await openInspectionSection(page, "File hashes");
   const icon = page.locator("#fileIcon");
   await expect(icon).toBeVisible();
   await expect(icon).toHaveAttribute("alt", `Icon embedded in ${fileName}`);
   await expect(icon).toHaveAttribute("src", /^data:image\/png;base64,/);
-  const detailsBox = await page.locator(".filePrimaryInfo > dl").boundingBox();
   const iconBox = await icon.boundingBox();
-  expect(detailsBox).not.toBeNull();
   expect(iconBox).not.toBeNull();
-  expect(iconBox!.x).toBeGreaterThan(detailsBox!.x + detailsBox!.width);
-  // Keep the icon visually comparable to the seven-row primary-details block.
-  expect(iconBox!.height / detailsBox!.height).toBeGreaterThan(0.7);
-  expect(iconBox!.height / detailsBox!.height).toBeLessThan(1.3);
+  expect(iconBox!.height).toBeGreaterThan(0);
+  expect(iconBox!.height).toBeLessThanOrEqual(176);
 };
 
 const openTopLevelSection = async (page: Page, title: string) => {
   const details = page.locator("#analysisValue > section > details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${title}\\b`) })
   }).first();
-  await details.locator(":scope > summary").click();
+  await toggleInspectionSection(details.locator(":scope > summary"));
   return details;
 };
 
@@ -44,7 +42,7 @@ const openResourceGroup = async (page: Page, typeName: string) => {
   const details = page.locator("#analysisValue details details").filter({
     has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
   }).first();
-  await details.locator(":scope > summary").click();
+  await toggleInspectionSection(details.locator(":scope > summary"));
   return details;
 };
 
@@ -185,7 +183,7 @@ test.describe("PE resource previews", () => {
     await expect(expandButton).toBeEnabled();
     await expect(collapseButton).toBeDisabled();
 
-    await treeDetails.nth(0).locator(":scope > summary").click();
+    await toggleInspectionSection(treeDetails.nth(0).locator(":scope > summary"));
     await expect(expandButton).toBeEnabled();
     await expect(collapseButton).toBeEnabled();
   });

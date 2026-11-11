@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createEhFixture, addFh4, buildEhPeImage } from "../fixtures/pe-msvc-eh.js";
 
@@ -10,7 +11,7 @@ for (const width of [390, 1280]) {
     await page.goto("/");
     await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
     const panel = page.locator('[data-pe-lazy-section="msvc-eh"]');
-    await panel.locator(":scope > details > summary").click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
     await expect(panel.getByRole("cell", { name: "FH4", exact: true })).toBeVisible();
     await expect(panel.getByRole("cell", { name: /import lookup table/ })).toBeVisible();
     await expect(panel.locator("table").first()).toHaveCSS("min-width", "1120px");
@@ -31,7 +32,7 @@ test("empty FH4 IP maps show an informational count without EH diagnostics", asy
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="msvc-eh"]');
-  await panel.locator(":scope > details > summary").click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
   await expect(panel.getByRole("cell", { name: "FH4", exact: true })).toBeVisible();
   await expect(panel.getByText("1 verified FH4 record(s) have empty IP-to-state maps.",
     { exact: true })).toBeVisible();

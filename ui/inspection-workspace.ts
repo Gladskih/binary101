@@ -1,4 +1,3 @@
-import { formatHumanSize } from "../binary-utils.js";
 import { collectWorkspaceSections, type WorkspaceSection } from "./workspace-sections.js";
 import {
   filterWorkspaceNavigation,
@@ -7,6 +6,8 @@ import {
 } from "./workspace-navigation.js";
 import type { InspectionContext } from "./inspection-context.js";
 import { createWorkspaceReflow } from "./workspace-reflow.js";
+import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
+import { ReportSearch, revealReportText } from "./report-search.js";
 
 interface WorkspaceScrollPosition {
   page: number;
@@ -18,6 +19,7 @@ class InspectionWorkspace {
   private sections: WorkspaceSection[] = [];
   private selected = "overview";
   private analysisComplete = false;
+  private initialSectionPending = true;
   private readonly scrollPositions = new Map<string, WorkspaceScrollPosition>();
   private pendingScroll: string | null = null;
   private readonly viewport: HTMLElement;
@@ -27,6 +29,9 @@ class InspectionWorkspace {
   private readonly mobileView: HTMLSelectElement;
   private readonly appTitle: string;
   private readonly reflow: ReturnType<typeof createWorkspaceReflow>;
+  private result: ParseForUiResult | null = null;
+  private readonly search: ReportSearch;
+  private previousSection = "overview";
   constructor(private readonly root: Document) {
     this.appTitle = root.title;
     this.analysis = this.element("analysisValue");
@@ -35,21 +40,26 @@ class InspectionWorkspace {
     this.mobileView = this.element("workspaceMobileView") as HTMLSelectElement;
     this.viewport = this.element("workspaceViewport");
     this.reflow = createWorkspaceReflow(this.viewport);
+    this.search = new ReportSearch(root, () => this.result, () => this.sections,
+      (key, value) => this.revealSearchResult(key, value));
     this.attachEvents();
     this.observeChanges();
   }
   private element(id: string): HTMLElement {
     return this.root.getElementById(id)!;
   }
-  begin(file: File, context: InspectionContext): void {
+  begin(context: InspectionContext): void {
     this.selected = "overview";
+    this.previousSection = "overview";
     this.analysisComplete = false;
+    this.initialSectionPending = true;
     this.scrollPositions.clear();
     this.pendingScroll = null;
     this.reflow.reset();
     this.filter.value = "";
+    this.search.reset();
+    this.result = null;
     this.element("fileBackButton").hidden = context.source !== "navigation";
-    this.element("workspaceFileSize").textContent = formatHumanSize(file.size);
     this.viewport.scrollTo({ top: 0, left: 0, behavior: "instant" });
     window.scrollTo({ top: 0, behavior: "instant" });
     this.refresh();
@@ -57,24 +67,31 @@ class InspectionWorkspace {
   revealFile(): void {
     this.element("fileNameDetail").focus({ preventScroll: true });
   }
-  completeAnalysis(): void {
+  completeAnalysis(result: ParseForUiResult): void {
+    this.result = result;
+    const firstResult = !this.analysisComplete;
     this.analysisComplete = true;
     this.refresh();
+    if (firstResult && this.initialSectionPending && !this.filter.value) {
+      this.activate(this.sections.find(section => !section.origin && section.title !== "Preview")?.key ??
+        this.sections[0]?.key ?? "overview");
+    }
+    if (this.filter.value.trim()) this.search.update(this.filter.value);
   }
   refresh(): void {
     this.sections = collectWorkspaceSections(this.analysis);
     renderWorkspaceNavigation(this.navigation, this.sections);
-    renderWorkspaceSelect(this.mobileView, this.sections);
+    renderWorkspaceSelect(this.mobileView, this.sections, this.filter.value);
     this.element("workspaceUnsupported").hidden = !this.analysisComplete || this.sections.length > 0;
     this.updateNotices();
-    this.select(this.sections.some(section => section.key === this.selected) ? this.selected :
-      this.selected === "hashes" ? "hashes" : "overview");
+    this.select(this.selected === "search" || this.sections.some(section => section.key === this.selected)
+      ? this.selected : "overview");
     this.filterNavigation();
     this.syncLayout();
   }
   private select(key: string): void {
     const section = this.sections.find(item => item.key === key);
-    if (!section && key !== "overview" && key !== "hashes") return;
+    if (!section && key !== "overview" && key !== "search") return;
     if (this.selected !== key) {
       this.scrollPositions.set(this.selected, {
         page: window.scrollY, top: this.viewport.scrollTop, left: this.viewport.scrollLeft
@@ -83,9 +100,8 @@ class InspectionWorkspace {
     }
     this.selected = key;
     this.element("workspaceOverview").hidden = key !== "overview";
-    const hashes = this.element("hashDetails") as HTMLDetailsElement;
-    hashes.hidden = key !== "hashes";
-    hashes.open = key === "hashes";
+    this.element("reportSearchResults").hidden = key !== "search";
+    this.element("hashDetails").hidden = false;
     this.analysis.hidden = !section;
     for (const item of this.sections) {
       item.element.hidden = item !== section;
@@ -100,10 +116,10 @@ class InspectionWorkspace {
   }
   private updateHeading(section: WorkspaceSection | undefined): void {
     this.element("workspaceTitle").textContent = section?.title ??
-      (this.selected === "hashes" ? "File hashes" : "Overview");
+      (this.selected === "search" ? "Search results" : "File hashes");
     this.element("workspaceDescription").textContent = section?.description ?? "";
     const heading = this.element("workspaceHeading");
-    if (section?.origin === "supplemental" || this.selected === "hashes") {
+    if (section?.origin === "supplemental") {
       heading.dataset["analysisOrigin"] = "supplemental";
       heading.title = "Supplemental analysis";
     } else {
@@ -126,11 +142,38 @@ class InspectionWorkspace {
     notice.append(text, button);
   }
   private activate(key: string): boolean {
+    this.initialSectionPending = false;
     if (key === this.selected) return false;
     this.pendingScroll = key;
     this.select(key);
     if (!this.sections.find(section => section.key === key)?.details) this.restoreScroll(key);
     return true;
+  }
+  private revealSearchResult(key: string, value: string): void {
+    this.clearSearch();
+    const section = this.sections.find(item => item.key === key);
+    const reveal = () => requestAnimationFrame(() => {
+      if (section && this.selected === key) revealReportText(section.element, value);
+    });
+    // toggle mounts lazy tables in a later task, potentially after the next frame.
+    if (section?.details && !section.details.open) {
+      section.details.addEventListener("toggle", reveal, { once: true });
+    } else reveal();
+    this.activate(key);
+  }
+  private clearSearch(): void {
+    this.filter.value = "";
+    this.search.reset();
+    renderWorkspaceSelect(this.mobileView, this.sections);
+    this.filterNavigation();
+  }
+  private searchReport(): void {
+    if (this.selected !== "search") this.previousSection = this.selected;
+    const query = this.filter.value.trim();
+    this.search.update(query);
+    renderWorkspaceSelect(this.mobileView, this.sections, query);
+    this.activate(query ? "search" : this.previousSection);
+    this.filterNavigation();
   }
   private restoreScroll(key: string): void {
     requestAnimationFrame(() => {
@@ -179,20 +222,39 @@ class InspectionWorkspace {
   private attachEvents(): void {
     this.element("fileInfoCard").addEventListener("click", event => {
       const button = event.target instanceof Element ?
-        event.target.closest<HTMLElement>("[data-workspace-target]") : null;
-      if (!button || !this.activate(button.dataset["workspaceTarget"] ?? "overview")) return;
+        event.target.closest<HTMLElement>("[data-workspace-target], [data-workspace-source]") : null;
+      if (!button) return;
+      const source = button.dataset["workspaceSource"];
+      const key = source ? this.sections.find(item => item.key === `analysis-${source}`)?.key :
+        button.dataset["workspaceTarget"];
+      if (key) this.clearSearch();
+      if (!key || !this.activate(key)) return;
       if (event.detail === 0 || this.viewport.contains(button)) {
         this.viewport.focus({ preventScroll: true });
       }
     });
-    this.mobileView.addEventListener("change", () => this.activate(this.mobileView.value));
-    this.filter.addEventListener("input", () => this.filterNavigation());
+    this.mobileView.addEventListener("change", () => {
+      const key = this.mobileView.value;
+      if (key !== "search") this.clearSearch();
+      this.activate(key);
+    });
+    this.filter.addEventListener("input", () => this.searchReport());
+    this.filter.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      this.filter.value = "";
+      this.searchReport();
+    });
     this.analysis.addEventListener("toggle", event => this.followToggle(event), true);
     this.analysis.addEventListener("click", event => this.followLink(event), true);
     this.element("fileOpenButton").addEventListener("click", () => {
       (this.element("fileInput") as HTMLInputElement).click();
     });
     this.element("fileBackButton").addEventListener("click", () => window.history.back());
+    this.element("fileHashesButton").addEventListener("click", () => {
+      this.clearSearch();
+      this.activate("overview");
+      this.viewport.focus({ preventScroll: true });
+    });
   }
   private observeChanges(): void {
     new MutationObserver(records => {

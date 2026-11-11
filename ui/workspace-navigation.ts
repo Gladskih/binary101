@@ -28,25 +28,37 @@ const navigationButton = (
 
 export const renderWorkspaceSelect = (
   select: HTMLSelectElement,
-  sections: WorkspaceSection[]
+  sections: WorkspaceSection[],
+  query = ""
 ): void => {
-  select.replaceChildren(
-    new Option("Overview", "overview"),
-    new Option("File hashes", "hashes"),
-    ...sections.map(section => new Option(section.title, section.key))
-  );
+  select.replaceChildren(new Option("File hashes", "overview"));
+  if (query.trim()) select.append(new Option("Search results", "search"));
+  for (const [label, items] of [
+    ["File structure", sections.filter(section => !section.origin)],
+    ["Analysis", sections.filter(section => section.origin)]
+  ] as const) {
+    if (!items.length) continue;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    group.append(...items.map(section => new Option(section.title, section.key)));
+    select.append(group);
+  }
 };
 
 export const renderWorkspaceNavigation = (
   navigation: HTMLElement,
   sections: WorkspaceSection[]
 ): void => {
-  navigation.replaceChildren(
-    navigationButton("overview", "Overview", ""),
-    navigationButton("hashes", "File hashes", "8 algorithms", "supplemental"),
-    ...sections.map(section =>
-      navigationButton(section.key, section.title, section.description, section.origin))
-  );
+  const buttons = (items: WorkspaceSection[]) => items.map(section =>
+    navigationButton(section.key, section.title, section.description, section.origin));
+  navigation.replaceChildren(...buttons(sections.filter(section => !section.origin)));
+  if (!sections.some(section => section.origin)) return;
+  const analysis = document.createElement("div");
+  analysis.className = "workspaceAnalysis";
+  analysis.setAttribute("role", "group");
+  analysis.setAttribute("aria-label", "Supplemental analysis");
+  analysis.append(...buttons(sections.filter(section => section.origin)));
+  navigation.append(analysis);
 };
 
 export const filterWorkspaceNavigation = (navigation: HTMLElement, query: string): number => {

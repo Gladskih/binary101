@@ -1,5 +1,3 @@
-"use strict";
-
 import { isPeWindowsParseResult, parsePe } from "./pe/index.js";
 import { parseCoffObject } from "./coff/index.js";
 import { parseJpeg } from "./jpeg/index.js";
@@ -48,7 +46,6 @@ import { parseWasm } from "./wasm/index.js";
 import { parseSwf } from "./swf/index.js";
 
 type Fb2Parser = typeof parseFb2;
-
 const tryRuntimeHeaderFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   const swf = await parseSwf(file, dv);
   if (swf) return { analyzer: "swf", parsed: swf };
@@ -56,7 +53,6 @@ const tryRuntimeHeaderFormats = async (file: File, dv: DataView): Promise<ParseF
     return { analyzer: "wasm", parsed: (await parseWasm(file))! };
   return null;
 };
-
 const tryContainerHeaderFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   const runtime = await tryRuntimeHeaderFormats(file, dv);
   if (runtime) return runtime;
@@ -74,7 +70,6 @@ const tryContainerHeaderFormats = async (file: File, dv: DataView): Promise<Pars
   }
   return null;
 };
-
 const tryMzFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   const mzKind = await probeMzFormat(file, dv);
   if (!mzKind) return null;
@@ -92,13 +87,11 @@ const tryMzFormats = async (file: File, dv: DataView): Promise<ParseForUiResult 
   if (mzKind.kind && mzKind.kind !== "mz") mz.nextHeader = mzKind.kind;
   return { analyzer: "mz", parsed: mz };
 };
-
 const tryCoffObjectFormat = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   if (!probeCoffObject(dv, file.size)) return null;
   const coffObject = await parseCoffObject(file);
   return coffObject && { analyzer: "coff", parsed: coffObject };
 };
-
 const tryArchiveFormats = async (
   file: File, dv: DataView, parseFb2File: Fb2Parser
 ): Promise<ParseForUiResult | null> => {
@@ -153,7 +146,6 @@ const hasTgaFooterSignature = async (file: File): Promise<boolean> => {
     tail.getUint8(25) === 0x00
   );
 };
-
 const tryImageFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   if (dv.byteLength >= 5 && detectPdfVersion(dv)) {
     const pdf = await parsePdf(file);
@@ -177,7 +169,6 @@ const tryImageFormats = async (file: File, dv: DataView): Promise<ParseForUiResu
   }
   return null;
 };
-
 const tryRiffFormat = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   if (dv.byteLength < 12) return null;
   const riff = dv.getUint32(0, false);
@@ -198,7 +189,6 @@ const tryRiffFormat = async (file: File, dv: DataView): Promise<ParseForUiResult
   }
   return null;
 };
-
 const tryPacketCaptureFormat = async (
   file: File,
   dv: DataView
@@ -219,7 +209,6 @@ const tryPacketCaptureFormat = async (
   }
   return null;
 };
-
 const tryIsoMediaFormat = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
   if (dv.byteLength < 12 || dv.getUint32(4, false) !== 0x66747970) return null;
   const brand = dv.getUint32(8, false);
@@ -227,7 +216,6 @@ const tryIsoMediaFormat = async (file: File, dv: DataView): Promise<ParseForUiRe
   const mp4 = await parseMp4(file);
   return mp4 ? { analyzer: "mp4", parsed: mp4 } : null;
 };
-
 const tryStreamingMediaFormats = async (
   file: File,
   dv: DataView,
@@ -253,7 +241,6 @@ const tryStreamingMediaFormats = async (
   }
   return null;
 };
-
 const tryAudioAndDatabaseFormats = async (
   file: File, dv: DataView
 ): Promise<ParseForUiResult | null> => {
@@ -277,7 +264,6 @@ const tryAudioAndDatabaseFormats = async (
   }
   return null;
 };
-
 const createParseForUi = (
   parseFb2File: typeof parseFb2 = parseFb2,
   parseEbmlFile: typeof parseWebm = parseWebm

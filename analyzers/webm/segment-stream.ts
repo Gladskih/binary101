@@ -3,8 +3,7 @@
 import { CLUSTER_ID } from "./constants.js";
 import { scanCluster } from "./cluster.js";
 import type { OnClusterBlock } from "./cluster-block.js";
-import { createEbmlStreamReader, type EbmlScanReader } from "./ebml-stream.js";
-import { EBML_SCAN_WINDOW_BYTES, EbmlRangeReader } from "./ebml-range.js";
+import { createEbmlStreamReader, type EbmlStreamReader } from "./ebml-stream.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues, WebmScanControl } from "./types.js";
 
@@ -16,7 +15,7 @@ export type SegmentClusterScan = {
 };
 
 const skipTopLevelElement = async (
-  reader: EbmlScanReader,
+  reader: EbmlStreamReader,
   header: EbmlElementHeader,
   segmentEnd: number,
   issues: Issues
@@ -48,16 +47,14 @@ export const scanSegmentClusters = async (
 ): Promise<SegmentClusterScan> => {
   const available = Math.max(0, file.size - segmentHeader.dataOffset);
   const segmentEnd = segmentHeader.dataOffset + Math.min(Math.max(0, segmentSize), available);
-  let reader: EbmlScanReader | null = null;
+  let reader: EbmlStreamReader | null = null;
   let pendingHeader: EbmlElementHeader | null = null;
   let clusterCount = 0;
   let blockCount = 0;
   let keyframeCount = 0;
   let firstClusterOffset: number | null = null;
   try {
-    reader = segmentEnd - segmentHeader.dataOffset > EBML_SCAN_WINDOW_BYTES
-      ? new EbmlRangeReader(file, segmentHeader.dataOffset, segmentEnd, control?.signal)
-      : createEbmlStreamReader(file, segmentHeader.dataOffset, segmentEnd, control?.signal);
+    reader = createEbmlStreamReader(file, segmentHeader.dataOffset, segmentEnd, control?.signal);
     while (reader.offset < segmentEnd) {
       const header = pendingHeader ?? await reader.readElementHeader(segmentEnd, issues);
       pendingHeader = null;
@@ -80,7 +77,7 @@ export const scanSegmentClusters = async (
     control?.signal.throwIfAborted();
     issues.push(`Sequential Segment scan failed: ${describeError(error)}.`);
   } finally {
-    await reader?.cancel?.();
+    await reader?.cancel();
   }
   return { clusterCount, blockCount, keyframeCount, firstClusterOffset };
 };

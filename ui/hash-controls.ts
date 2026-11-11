@@ -4,7 +4,7 @@ import { md5, sha1 } from "@noble/hashes/legacy.js";
 import { sha224, sha256, sha384, sha512, sha512_224, sha512_256 } from "@noble/hashes/sha2.js";
 import type { CHash } from "@noble/hashes/utils.js";
 import { bufferToHex } from "../binary-utils.js";
-import { updateAccessibleTooltipButton } from "./accessible-tooltips.js";
+import { addAccessibleTooltipToButton, updateAccessibleTooltipButton } from "./accessible-tooltips.js";
 
 type HashAlgorithmId =
   "md5" | "sha1" | "sha224" | "sha256" | "sha384" | "sha512" |
@@ -48,6 +48,18 @@ const HASH_ALGORITHMS: readonly HashAlgorithmOption[] = [
   { id: "sha512224", label: "SHA-512/224" },
   { id: "sha512256", label: "SHA-512/256" }
 ] as const;
+
+export const createHashControls = (root: Document) => HASH_ALGORITHMS.map(algorithm => {
+  const badge = root.getElementById(`${algorithm.id}NativeBadge`) as HTMLButtonElement | null;
+  if (badge) addAccessibleTooltipToButton(badge, badge.title);
+  return {
+    algorithm, label: algorithm.label,
+    valueElement: root.getElementById(`${algorithm.id}Value`)!,
+    buttonElement: root.getElementById(`${algorithm.id}ComputeButton`) as HTMLButtonElement,
+    copyButtonElement: root.getElementById(`${algorithm.id}CopyButton`) as HTMLButtonElement,
+    nativeHashBadgeElement: badge ?? undefined
+  };
+});
 
 const FALLBACK_HASHES: Readonly<Record<FallbackHashId, CHash>> = {
   md5,

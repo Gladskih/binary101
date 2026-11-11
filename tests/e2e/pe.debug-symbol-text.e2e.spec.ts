@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithDebugPayloads } from "../fixtures/pe-debug-file.js";
 import { createLegacyCodeView, legacyU32 } from "../fixtures/pe-legacy-codeview.js";
@@ -16,8 +17,8 @@ test("CodeView annotation and environment text stays readable and paginated", as
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
   const strings = panel.locator('[data-paged-sortable-table-id="pe-debug-entry-0-legacy-symbolStrings"]');
   await expect(panel).toContainText("Stored symbol strings");
   await expect(strings.getByRole("cell", { name: "<annotation_0>", exact: true })).toBeVisible();

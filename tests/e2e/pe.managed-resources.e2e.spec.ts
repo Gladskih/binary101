@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -18,8 +19,8 @@ for (const width of [1280, 390]) {
     const clr = page.locator("section.peSection").filter({
       has: page.locator("summary", { hasText: /^CLR\b/ })
     });
-    await clr.locator(":scope > details > summary").click();
-    await clr.locator("summary").filter({ hasText: /^Managed resources \(51\)/ }).click();
+    await toggleInspectionSection(clr.locator(":scope > details > summary"));
+    await toggleInspectionSection(clr.locator("summary").filter({ hasText: /^Managed resources \(51\)/ }));
     const resources = clr.locator('[data-paged-sortable-table-id="pe-clr-managed-resources"]');
     const values = resources.locator('[data-paged-sortable-table-id="pe-clr-managed-resource-values-1"]');
     await expect(resources.locator(".clrManagedResourcesTable__row")).toHaveCount(50);
@@ -57,10 +58,10 @@ test("large managed resources and tables are fully available in the browser", as
   const clr = page.locator("section.peSection").filter({
     has: page.locator("summary", { hasText: /^CLR\b/ })
   });
-  await clr.locator(":scope > details > summary").click();
+  await toggleInspectionSection(clr.locator(":scope > details > summary"));
   const resources = clr.locator(".clrManagedResources");
   const many = resources.locator('[data-paged-sortable-table-id="pe-clr-managed-resource-values-2"]');
-  await clr.locator("summary").filter({ hasText: /^Managed resources \(3\)/ }).click();
+  await toggleInspectionSection(clr.locator("summary").filter({ hasText: /^Managed resources \(3\)/ }));
   await expect(resources).toContainText("8388609 bytes");
   await expect(many).toContainText("of 10001");
   await many.locator(":scope > .pagedSortableTableToolbar").getByRole("button", { name: "Last" }).click();

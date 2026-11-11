@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createHllInspection, createHllSourceInspection } from "../fixtures/pe-hll.js";
 import { createPeCodeViewOverlay, createPeDirectHll } from "../fixtures/pe-codeview-locations.js";
@@ -10,8 +11,8 @@ test(`HLL source ${create.name} keeps names and statistics readable at ${width}`
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
   await expect(panel).toContainText("CodeView sources: 1");
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }));
   await expect(panel).toContainText("NB04");
   await expect(panel).toContainText("HL (version 4.0)");
   await expect(panel).toContainText("<Alias>");
@@ -37,8 +38,8 @@ test(`HLL ${version} source names and line summaries remain available`, async ({
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
   const panel = page.locator('[data-pe-lazy-section="debug"]');
-  await panel.locator(":scope > details > summary").click();
-  await panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^CodeView source #1:/ }));
   await expect(panel).toContainText(`HL (version ${version >> 8}.0)`);
   await expect(panel).toContainText("<source.c>");
   await expect(panel).toContainText("Source lines");

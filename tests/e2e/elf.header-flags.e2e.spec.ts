@@ -1,3 +1,4 @@
+import { openInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 
@@ -16,7 +17,7 @@ for (const width of [390, 1280]) {
     await page.setInputFiles("#fileInput", {
       name: "riscv-flags.elf", mimeType: "application/x-elf", buffer: Buffer.from(bytes)
     });
-    await page.locator("summary").filter({ hasText: /^ELF header$/ }).click();
+    await openInspectionSection(page, "ELF header");
     const term = page.locator("dt").filter({ hasText: /^Flags \(e_flags\)/ });
     await expect(term).toBeVisible();
     const flags = term.locator("+ dd");

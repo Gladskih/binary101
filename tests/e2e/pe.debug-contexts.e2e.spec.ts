@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeWithCodeViewContexts } from "../fixtures/pe-codeview-contexts.js";
 
@@ -8,8 +9,8 @@ for (const width of [390, 1280]) {
     await page.goto("/");
     await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(file.data) });
     const panel = page.locator('[data-pe-lazy-section="debug"]');
-    await panel.locator(":scope > details > summary").click();
-    await panel.locator("summary").filter({ hasText: /^Entry #1:/ }).click();
+    await toggleInspectionSection(panel.locator(":scope > details > summary"));
+    await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Entry #1:/ }));
     const scopes = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-lexicalScopes"]');
     const locals = panel.locator('[data-sort-state-key="pe-debug-entry-0-legacy-localVariables"]');
     await expect(scopes).toContainText("thunk: adjustor");

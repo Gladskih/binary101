@@ -28,7 +28,6 @@ void test("hashes every algorithm for a real empty file", async ({ page }) => {
   ]);
   await expect(page.locator("#fileSourceDetail .opt.sel")).toHaveText("Selection");
   await expect(page.locator("#fileObjectDetail .opt.sel")).toHaveText("File");
-  await page.locator("#hashDetails > summary").click();
   for (const [label, id, nodeName] of hashAlgorithms) {
     await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
     await expect(page.locator(`#${id}Value`)).toHaveText(

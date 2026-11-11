@@ -25,7 +25,7 @@ import {
   WEBM_BLOCK_FLAGS
 } from "./cluster-block.js";
 import type { OnClusterBlock, WebmBlockHeader } from "./cluster-block.js";
-import type { EbmlScanReader } from "./ebml-stream.js";
+import type { EbmlStreamReader } from "./ebml-stream.js";
 import { readUnsigned } from "./ebml.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues } from "./types.js";
@@ -64,7 +64,7 @@ const boundedSize = (
 };
 
 const readUnsignedElement = async (
-  reader: EbmlScanReader,
+  reader: EbmlStreamReader,
   header: EbmlElementHeader,
   endOffset: number,
   issues: Issues,
@@ -98,7 +98,7 @@ const readUnsignedElement = async (
 };
 
 const skipElement = async (
-  reader: EbmlScanReader,
+  reader: EbmlStreamReader,
   header: EbmlElementHeader,
   endOffset: number,
   issues: Issues
@@ -108,7 +108,7 @@ const skipElement = async (
 };
 
 const scanBlockGroup = async (
-  reader: EbmlScanReader,
+  reader: EbmlStreamReader,
   header: EbmlElementHeader,
   clusterEnd: number,
   issues: Issues,
@@ -163,7 +163,7 @@ const scanBlockGroup = async (
 };
 
 export const scanCluster = async (
-  reader: EbmlScanReader,
+  reader: EbmlStreamReader,
   clusterHeader: EbmlElementHeader,
   segmentEnd: number,
   issues: Issues,

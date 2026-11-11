@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { embeddedResourceFixture } from "../fixtures/embedded-resource-builders.js";
@@ -13,7 +14,7 @@ for (const [name, width] of [["qt-glib.dll", 1280], ["qt-glib.so", 1280],
       buffer: Buffer.from(embeddedResourceFixture(name)) });
     const section = page.locator("section.peSection").filter({ has:
       page.locator("summary", { hasText: /^Qt \/ GLib embedded resources$/ }) });
-    await section.locator(":scope > details > summary").click();
+    await toggleInspectionSection(section.locator(":scope > details > summary"));
     await expect(section.getByRole("heading", { name: /^Qt RCC/ })).toHaveCount(2);
     await expect(section.getByRole("heading", { name: /^GLib GResource/ })).toHaveCount(2);
     await expect(section).toContainText("Binary101 resource oracle");

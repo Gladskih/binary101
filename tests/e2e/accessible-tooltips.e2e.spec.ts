@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -38,8 +39,8 @@ void test("keeps an import-table tooltip visible above surrounding content", asy
     mimeType: file.type,
     buffer: Buffer.from(file.data)
   });
-  await page.locator("#peImportsPanel > details > summary").click();
-  await page.locator("#peImportsPanel details details > summary").first().click();
+  await toggleInspectionSection(page.locator("#peImportsPanel > details > summary"));
+  await toggleInspectionSection(page.locator("#peImportsPanel details details > summary").first());
   const button = page.getByRole("button", { name: /JMP instructions/ });
   await button.click();
   const popup = button.locator("~ .accessibleTooltipPopup");

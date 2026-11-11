@@ -1,3 +1,4 @@
+import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -29,22 +30,22 @@ test.describe("PE lazy sections", () => {
     await expect(body).toHaveJSProperty("childElementCount", 0);
     await expect(page.locator("[data-manifest-tree-viewer]")).toHaveCount(0);
 
-    await section.locator(":scope > details > summary").click();
+    await toggleInspectionSection(section.locator(":scope > details > summary"));
     await expect(body).not.toHaveJSProperty("childElementCount", 0);
 
     const manifest = page.locator("#analysisValue details details").filter({
       has: page.locator("summary", { hasText: /^MANIFEST\b/ })
     }).first();
-    await manifest.locator(":scope > summary").click();
+    await toggleInspectionSection(manifest.locator(":scope > summary"));
     const firstTreeDetails = manifest.locator("[data-manifest-tree] details").first();
-    await firstTreeDetails.locator(":scope > summary").click();
+    await toggleInspectionSection(firstTreeDetails.locator(":scope > summary"));
     await expect(firstTreeDetails).toHaveJSProperty("open", true);
 
-    await section.locator(":scope > details > summary").click();
+    await toggleInspectionSection(section.locator(":scope > details > summary"));
     await expect(body).toHaveJSProperty("childElementCount", 0);
     await expect(page.locator("[data-manifest-tree-viewer]")).toHaveCount(0);
 
-    await section.locator(":scope > details > summary").click();
+    await toggleInspectionSection(section.locator(":scope > details > summary"));
     await expect(manifest).toHaveJSProperty("open", true);
     await expect(firstTreeDetails).toHaveJSProperty("open", true);
   });
@@ -59,7 +60,7 @@ test.describe("PE lazy sections", () => {
     await expect(section).toContainText("251 symbol-table records");
     await expect(body).toHaveJSProperty("childElementCount", 0);
 
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
     const table = body.locator('[data-paged-sortable-table-id="pe-coff-symbols-symbols"]');
     const symbolNameCells = table.locator("tbody td:nth-child(2)");
     await expect(table).toContainText("Showing 1-250 of 251");
@@ -71,12 +72,12 @@ test.describe("PE lazy sections", () => {
     await expect(table.locator("tbody tr")).toHaveCount(1);
     await expect(symbolNameCells.filter({ hasText: /^sym250$/ })).toHaveCount(1);
 
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
     await expect(body).toHaveJSProperty("childElementCount", 0);
     await expect(page.locator('[data-paged-sortable-table-id="pe-coff-symbols-symbols"]'))
       .toHaveCount(0);
 
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
     await expect(table).toContainText("Showing 251-251 of 251");
     await expect(table.locator("tbody tr")).toHaveCount(1);
     await expect(symbolNameCells.filter({ hasText: /^sym250$/ })).toHaveCount(1);
@@ -89,7 +90,7 @@ test.describe("PE lazy sections", () => {
     const section = page.locator('[data-pe-lazy-section="data-directories"]');
     const details = section.locator(":scope > details");
     const body = section.locator("[data-pe-lazy-section-body]");
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
 
     const sortButton = body.getByRole("button", { name: "Sort by Directory" });
     const firstDirectoryCell = body.locator(".peDataDirectoryTable tbody tr").first()
@@ -98,10 +99,10 @@ test.describe("PE lazy sections", () => {
     await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
     await expect(firstDirectoryCell).toHaveText("ARCHITECTURE");
 
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
     await expect(body).toHaveJSProperty("childElementCount", 0);
 
-    await details.locator(":scope > summary").click();
+    await toggleInspectionSection(details.locator(":scope > summary"));
     await expect(sortButton.locator("..")).toHaveAttribute("aria-sort", "ascending");
     await expect(firstDirectoryCell).toHaveText("ARCHITECTURE");
   });
@@ -118,7 +119,7 @@ test.describe("PE section entropy", () => {
     await page.setInputFiles("#fileInput", toUpload(file));
 
     const section = page.locator('[data-pe-lazy-section="section-headers"]');
-    await section.locator(":scope > details > summary").click();
+    await toggleInspectionSection(section.locator(":scope > details > summary"));
     const entropyValue = section.locator('[data-section-entropy-index="0"]');
     await expect(entropyValue).toHaveText("Not calculated");
 
@@ -143,14 +144,14 @@ void test("keeps a partial TLS callback list marked across lazy remounts", async
   await expect(summary).toContainText("1 callback (incomplete list)");
   await expect(body).toHaveJSProperty("childElementCount", 0);
 
-  await summary.click();
+  await toggleInspectionSection(summary);
 
   await expect(body).toContainText("TLS callback table is truncated or unmapped");
   await expect(body.getByRole("cell", { name: "0x00001100", exact: true })).toBeVisible();
   await expect(body.getByRole("cell", { name: "0x00001180", exact: true })).toHaveCount(0);
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(body).toHaveJSProperty("childElementCount", 0);
   await expect(summary).toContainText("1 callback (incomplete list)");
-  await summary.click();
+  await toggleInspectionSection(summary);
   await expect(body.getByRole("cell", { name: "0x00001100", exact: true })).toBeVisible();
 });

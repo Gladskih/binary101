@@ -1,4 +1,3 @@
-"use strict";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createDirectoryInspectionController } from "../../../../ui/directory-inspection.js";
@@ -157,7 +156,6 @@ const fileRow = (path: string, mimeType: string, detectedType: string): string[]
   STABLE_FILE_MODIFIED_ISO,
   detectedType
 ];
-
 void test("directory inspection lists nested entries and shallow-scans file rows", async () => {
   const root = new FakeDirectoryHandle("fixture", [
     new FakeDirectoryHandle("docs", [
@@ -181,9 +179,7 @@ void test("directory inspection lists nested entries and shallow-scans file rows
       now: () => clockMs,
       yieldToBrowser: async () => undefined
     });
-
     await controller.open();
-
     assert.equal(resetCount, 1);
     assert.equal(elements.cardElement.hidden, false);
     assert.match(elements.contextElements.sourceElement.innerHTML, />Selection<\/span>/);
@@ -204,7 +200,6 @@ void test("directory inspection lists nested entries and shallow-scans file rows
     browser.restore();
   }
 });
-
 void test("directory inspection reports unsupported browsers and per-file read failures", async () => {
   new FakeElement().click();
   const unsupportedBrowser = installFakeBrowser(null);
@@ -252,7 +247,6 @@ void test("directory inspection reports unsupported browsers and per-file read f
     warningBrowser.restore();
   }
 });
-
 void test("directory inspection opens dropped folder handles without the native picker", async () => {
   const root = new FakeDirectoryHandle("drop-root", [
     new FakeDirectoryHandle("bin", [
@@ -285,7 +279,6 @@ void test("directory inspection opens dropped folder handles without the native 
     browser.restore();
   }
 });
-
 void test("directory inspection leaves regular file drops to the file picker path", async () => {
   const browser = installFakeBrowser(null);
   const elements = createElements();

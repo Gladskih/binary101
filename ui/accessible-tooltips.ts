@@ -1,11 +1,13 @@
 "use strict";
 
 const enhancedDocuments = new WeakSet<Document>();
+const tooltipAnchors = new WeakMap<HTMLElement, DOMRect>();
 const accessibleTooltipSelector = "[data-accessible-tooltip][title]";
 
 const closeTooltip = (control: HTMLElement): void => {
   control.classList.remove("accessibleTooltip--open");
   control.classList.remove("accessibleTooltip--above");
+  tooltipAnchors.delete(control);
   const button = control.querySelector<HTMLButtonElement>(".accessibleTooltipButton");
   const popup = control.querySelector<HTMLElement>(".accessibleTooltipPopup");
   if (button) button.setAttribute("aria-expanded", "false");
@@ -26,6 +28,7 @@ const positionTooltip = (
   control.classList.remove("accessibleTooltip--above");
   popup.style.right = "auto";
   const buttonBounds = button.getBoundingClientRect();
+  tooltipAnchors.set(control, buttonBounds);
   popup.style.left = `${buttonBounds.left}px`;
   popup.style.top = `${buttonBounds.bottom}px`;
   const bounds = popup.getBoundingClientRect();
@@ -48,6 +51,18 @@ const closeOtherTooltips = (document: Document, keep: HTMLElement | null): void 
   });
 };
 
+const closeMovedTooltips = (document: Document): void => {
+  document.querySelectorAll<HTMLElement>(".accessibleTooltip--open").forEach(control => {
+    const before = tooltipAnchors.get(control);
+    const after = control.querySelector("button")?.getBoundingClientRect();
+    // A click can deliver an earlier scroll-into-view event after the popup opens.
+    // Dismiss only when its anchor actually moved, including either scroll axis.
+    if (!before || !after || before.top !== after.top || before.left !== after.left) {
+      closeTooltip(control);
+    }
+  });
+};
+
 const ensureTooltipDismissal = (document: Document): void => {
   if (enhancedDocuments.has(document)) return;
   enhancedDocuments.add(document);
@@ -59,7 +74,7 @@ const ensureTooltipDismissal = (document: Document): void => {
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeOtherTooltips(document, null);
   });
-  document.addEventListener("scroll", () => closeOtherTooltips(document, null), true);
+  document.addEventListener("scroll", () => closeMovedTooltips(document), true);
 };
 
 const createTooltipPopup = (document: Document, text: string): HTMLElement => {

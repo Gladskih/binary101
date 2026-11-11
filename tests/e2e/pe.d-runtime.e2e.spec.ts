@@ -1,4 +1,5 @@
-﻿import { expect, test } from "@playwright/test";
+import { toggleInspectionSection } from "./inspection-navigation.js";
+import { expect, test } from "@playwright/test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +17,7 @@ test("D runtime module and reference tables work in the browser", async ({ page 
     const section = page.locator("section.peSection").filter({
       has: page.locator("summary", { hasText: "D runtime metadata" })
     });
-    await section.locator("summary").click();
+    await toggleInspectionSection(section.locator("summary"));
     const modules = section.locator('[data-paged-sortable-table-id="pe-d-runtime-modules"]');
     await expect(modules).toContainText("sample");
     await expect(modules.locator("tbody tr")).toHaveCount(D_TEST_PAGE_SIZE);

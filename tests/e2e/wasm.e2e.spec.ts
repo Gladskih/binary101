@@ -1,3 +1,4 @@
+import { openInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createWasmFile, wasmModule, wasmSection, wasmString, wasmUnsigned } from "../fixtures/wasm-fixtures.js";
 
@@ -9,9 +10,13 @@ test("WebAssembly displays deep local analysis and executable sample results", a
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: "analysis-demo.wasm", mimeType: "application/wasm",
     buffer: Buffer.from(await createWasmFile().arrayBuffer()) });
+  await openInspectionSection(page, "WebAssembly module");
   await expect(page.getByRole("heading", { name: "WebAssembly module" })).toBeVisible();
+  await openInspectionSection(page, "Imports");
   await expect(page.getByRole("heading", { name: "Imports", exact: true })).toBeVisible();
+  await openInspectionSection(page, "Data");
   await expect(page.getByRole("heading", { name: "Data", exact: true })).toBeVisible();
+  await openInspectionSection(page, "Functions");
   await page.getByText("Instructions (4)", { exact: true }).click();
   await expect(page.getByRole("cell", { name: "i32.add", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "analysis-demo", exact: true })).toHaveCount(0);
@@ -26,6 +31,7 @@ test("instruction pagination exposes every instruction without an analysis cap",
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: "many.wasm", mimeType: "application/wasm",
     buffer: Buffer.from(await file.arrayBuffer()) });
+  await openInspectionSection(page, "Functions");
   await page.getByText("Instructions (152)", { exact: true }).click();
   const table = page.locator('[data-paged-sortable-table-id="wasm-code-0"]');
   await expect(table.getByRole("cell", { name: "nop", exact: true })).toHaveCount(50);
@@ -38,6 +44,7 @@ test("malformed WebAssembly displays visible warnings", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: "broken.wasm", mimeType: "application/wasm",
     buffer: Buffer.from(await wasmModule([10, 100, 0]).arrayBuffer()) });
+  await openInspectionSection(page, "Issues");
   await expect(page.getByRole("heading", { name: "Issues", exact: true })).toBeVisible();
   await expect(page.locator(".issueList")).toContainText("truncated");
 });
@@ -51,6 +58,7 @@ test("function pagination enhances nested instruction tables on later pages", as
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: "functions.wasm", mimeType: "application/wasm",
     buffer: Buffer.from(await file.arrayBuffer()) });
+  await openInspectionSection(page, "Functions");
   const functions = page.locator('[data-paged-sortable-table-id="wasm-functions"]');
   await functions.getByRole("button", { name: "Last", exact: true }).first().click();
   const instructions = page.locator('[data-paged-sortable-table-id="wasm-code-60"]');
@@ -67,7 +75,9 @@ test("preserves entity-like names literally and right-aligns numeric cells", asy
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: "names.wasm", mimeType: "application/wasm",
     buffer: Buffer.from(await file.arrayBuffer()) });
+  await openInspectionSection(page, "WebAssembly module");
   await expect(page.getByText("&lt;module&gt;", { exact: true })).toBeVisible();
+  await openInspectionSection(page, "Exports");
   const exports = page.locator('[data-sort-state-key="wasm-exports"]');
   await expect(exports.getByRole("cell", { name: "&lt;entry&gt;", exact: true })).toBeVisible();
   await expect(exports.getByRole("cell", { name: "0", exact: true })).toHaveCSS("text-align", "right");
