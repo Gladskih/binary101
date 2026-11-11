@@ -31,6 +31,7 @@ test("updates direct IAT reference counts without losing import table state", as
   await toggleInspectionSection(instructionSection.locator(":scope > summary"));
   await detailsValue.locator("#peInstructionSetsAnalyzeButton").click();
   await expect(detailsValue).toContainText("Disassembly sample");
+  await toggleInspectionSection(importsSection.locator(":scope > summary"));
 
   await expect(importsSection).toHaveJSProperty("open", true);
   await expect(moduleDetails).toHaveJSProperty("open", true);

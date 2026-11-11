@@ -1,4 +1,4 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { toggleInspectionSection, expandInspectionCollection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeRegistryFile } from "../fixtures/pe-registry-file.js";
 
@@ -12,10 +12,10 @@ void test("ATL REGISTRY deep analysis displays COM, typed values and diagnostics
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const resources = page.locator('[data-pe-lazy-section="resources"]');
   await toggleInspectionSection(resources.locator(":scope > details > summary"));
-  const group = resources.locator("details").filter({
-    has: page.locator("summary", { hasText: /^REGISTRY\b/ })
+  const group = resources.locator("[data-pe-resource-group]").filter({
+    has: page.locator(".collectionSummary", { hasText: /^REGISTRY\b/ })
   }).last();
-  await toggleInspectionSection(group.locator(":scope > summary"));
+  await expandInspectionCollection(group);
   await expect(group).toContainText("ATL registry script");
   await expect(group).toContainText("COM class (CLSID)");
   await expect(group).toContainText("In-process COM server");
@@ -37,10 +37,10 @@ void test("ATL table pagination reaches the last declaration and survives lazy r
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const resources = page.locator('[data-pe-lazy-section="resources"]');
   await toggleInspectionSection(resources.locator(":scope > details > summary"));
-  const group = resources.locator("details").filter({
-    has: page.locator("summary", { hasText: /^REGISTRY\b/ })
+  const group = resources.locator("[data-pe-resource-group]").filter({
+    has: page.locator(".collectionSummary", { hasText: /^REGISTRY\b/ })
   }).last();
-  await toggleInspectionSection(group.locator(":scope > summary"));
+  await expandInspectionCollection(group);
   const table = group.locator('[data-paged-sortable-table-id="pe-registry-0-0"]');
   await expect(table.locator("tbody > tr")).toHaveCount(50);
   await table.getByRole("button", { name: "Last", exact: true }).click();
@@ -60,10 +60,10 @@ void test("nested registry pagination works after changing the resource page", a
     mimeType: "application/octet-stream", buffer: Buffer.from(file.data) });
   const resources = page.locator('[data-pe-lazy-section="resources"]');
   await toggleInspectionSection(resources.locator(":scope > details > summary"));
-  const group = resources.locator("details").filter({
-    has: page.locator("summary", { hasText: /^REGISTRY\b/ })
+  const group = resources.locator("[data-pe-resource-group]").filter({
+    has: page.locator(".collectionSummary", { hasText: /^REGISTRY\b/ })
   }).last();
-  await toggleInspectionSection(group.locator(":scope > summary"));
+  await expandInspectionCollection(group);
   const outer = group.locator('[data-paged-sortable-table-id="pe-resource-detail-0"]');
   const first = group.locator('[data-paged-sortable-table-id="pe-registry-0-0"]');
   await first.getByRole("button", { name: "Last", exact: true }).click();

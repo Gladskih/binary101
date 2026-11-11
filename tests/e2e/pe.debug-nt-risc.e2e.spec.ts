@@ -1,4 +1,4 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { toggleInspectionSection, expandInspectionCollection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createNtRiscPe, createNtRiscSecondaryPe, createAlphaRiscPe,
   createPowerPcCodeSignificancePe } from "../fixtures/pe-risc-exception.js";
@@ -35,7 +35,7 @@ test("NT RISC secondary metadata remains visibly unresolved instead of becoming 
   const unresolved = panel.locator("dt").filter({ hasText: /^Ranges with unresolved inline metadata$/ });
   await expect(unresolved).toBeVisible();
   await expect(unresolved.locator("+ dd")).toHaveText("1");
-  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory warnings/ }));
+  await expandInspectionCollection(panel.locator(".peDiagnosticDetails").filter({ hasText: /^Exception directory warnings/ }));
   await expect(panel.getByText(/indirect prolog metadata is not decoded/)).toBeVisible();
   await expect(panel).not.toContainText("handler data VA could not be mapped");
 });

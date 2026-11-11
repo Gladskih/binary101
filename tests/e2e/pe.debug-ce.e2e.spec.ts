@@ -1,4 +1,4 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { toggleInspectionSection, expandInspectionCollection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createCeExceptionPe, ceFunctionWord } from "../fixtures/pe-ce-exception.js";
 
@@ -33,6 +33,6 @@ test("CE extended lengths remain visibly unresolved without fabricated ranges", 
   const unknown = panel.locator("dt").filter({ hasText: /^Entries with unresolved extended lengths$/ });
   await expect(unknown).toBeVisible();
   await expect(unknown.locator("+ dd")).toHaveText("1");
-  await toggleInspectionSection(panel.locator("summary").filter({ hasText: /^Exception directory warnings/ }));
+  await expandInspectionCollection(panel.locator(".peDiagnosticDetails").filter({ hasText: /^Exception directory warnings/ }));
   await expect(panel.getByText(/CE extended function-length metadata is not decoded/)).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import { openInspectionElement } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { lzmaZipFile } from "../fixtures/lzma-zip-file.js";
@@ -16,6 +17,7 @@ test("ZIP downloads real LZMA entries with one lazy same-origin WASM load", asyn
   await page.setInputFiles("#fileInput", archive());
   await expect(page.locator("[data-zip-entry='0']")).toBeEnabled();
   expect(assets).toHaveLength(0);
+  await openInspectionElement(page.locator("[data-zip-entry='0']"));
   const payloadDownload = page.waitForEvent("download");
   await page.locator("[data-zip-entry='0']").click();
   const payload = await payloadDownload;
@@ -36,6 +38,7 @@ test("ZIP reports LZMA integrity errors and restores the extract button", async 
   await page.goto("/");
   await page.setInputFiles("#fileInput", fixture);
   const button = page.locator("[data-zip-entry='0']");
+  await openInspectionElement(button);
   await button.click();
   await expect(page.locator("body")).toContainText("Extract failed:");
   await expect(button).toBeEnabled();
@@ -46,6 +49,7 @@ test("ZIP retries LZMA initialization after a failed local WASM load", async ({ 
   await page.goto("/");
   await page.setInputFiles("#fileInput", archive());
   const button = page.locator("[data-zip-entry='0']");
+  await openInspectionElement(button);
   await button.click();
   await expect(page.locator("body")).toContainText("Extract failed:");
   await expect(button).toBeEnabled();

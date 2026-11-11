@@ -38,7 +38,8 @@ test("file hashes remain a header tool with no outer frame or disclosure", async
 });
 
 test("wide screen uses one row for file properties and actions", async ({ page }) => {
-  await page.setViewportSize({ width: 2530, height: 1000 });
+  // Leave room for a complete row across different system font metrics.
+  await page.setViewportSize({ width: 3200, height: 1000 });
   await inspectPe(page);
   expect(await page.locator(".appHeader").evaluate(element => element.getBoundingClientRect().height))
     .toBeLessThanOrEqual(50);

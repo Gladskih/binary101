@@ -1,4 +1,4 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { toggleInspectionSection, expandInspectionCollection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
@@ -10,8 +10,8 @@ import { createNotebookDfmResource } from "../fixtures/pe-resource-dfm-payloads.
 
 const openGroup = async (page: Page, name: string) => {
   const details = page.locator("[data-pe-resource-group]").filter({
-    has: page.locator(":scope > summary", { hasText: new RegExp(`^${name}\\b`) }) }).first();
-  await toggleInspectionSection(details.locator(":scope > summary"));
+    has: page.locator(":scope > .collectionSummary", { hasText: new RegExp(`^${name}\\b`) }) }).first();
+  await expandInspectionCollection(details);
   return details;
 };
 
@@ -50,9 +50,11 @@ test("dialog geometry, initial strings, layout, selection and resource navigatio
     element.style.height = `${element.clientHeight + 40}px`;
   });
   await expect.poll(async () => (await control.boundingBox())!.x - before!.x).toBeCloseTo(80, 0);
-  await toggleInspectionSection(group.locator(".peResourceConnections").last().locator(":scope > summary"));
-  await group.locator(".peResourceConnections").last().locator("a").first().click();
-  await expect(page.locator('[data-pe-resource-group][open]').first()).toBeVisible();
+  await expandInspectionCollection(group.locator(".peResourceConnections").last());
+  const link = group.locator(".peResourceConnections").last().locator("a").first();
+  const target = await link.getAttribute("href");
+  await link.click();
+  await expect(page.locator(target!).locator("..")).toBeVisible();
 });
 
 test("renders Ribbon tabs, DFM, vector drawings and an animated cursor", async ({ page }) => {
@@ -77,8 +79,8 @@ test("renders Ribbon tabs, DFM, vector drawings and an animated cursor", async (
   await page.waitForLoadState("networkidle");
   expect(externalRequests).toEqual([]);
   expect(await page.evaluate(() => "__peResourceExecuted" in globalThis)).toBe(false);
-  await ribbon.screenshot({ path: "reports/pe-resource-ribbon.png" });
-  await page.screenshot({ path: "reports/pe-resource-previews.png", fullPage: true });
+  await ribbon.screenshot({ path: test.info().outputPath("pe-resource-ribbon.png") });
+  await page.screenshot({ path: test.info().outputPath("pe-resource-previews.png"), fullPage: true });
 });
 
 test("DFM pages inherit bounds and fonts, hide inactive content and draw native progress", async ({ page }) => {

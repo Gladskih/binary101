@@ -27,7 +27,7 @@ test("MSVC RTTI loads local LLVM WASM and keeps type names through remount", asy
   await toggleInspectionSection(section.locator("summary").first());
   await expect(section).toContainText("class demo::Box<int>");
   await expect(section).toContainText(".?AV?$Box@H@demo@@");
-  await section.getByText("Show inheritance and 1 vftable slot(s)", { exact: true }).click();
+  await section.locator(".collectionSummary").filter({ hasText: /^Base classes/ }).click();
   await expect(section).toContainText("struct demo::Base");
   await toggleInspectionSection(section.locator("summary").first());
   await toggleInspectionSection(section.locator("summary").first());

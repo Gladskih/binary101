@@ -1,3 +1,4 @@
+import { openInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -27,7 +28,7 @@ void test("explains PE versions as wrapping text on a narrow screen", async ({ p
     name: "versions.exe", mimeType: "application/octet-stream",
     buffer: Buffer.from(createVersionedPe(3))
   });
-  await page.getByText("PE/COFF headers", { exact: true }).click();
+  await openInspectionSection(page, "PE/COFF headers");
   await expect(page.locator("dt").filter({ hasText: /^LinkerVersion$/ }).locator("+ dd"))
     .toHaveText(
       "14.0 (possible: Microsoft LINK (Visual Studio 2015 toolset) / " +
@@ -59,7 +60,7 @@ void test("uses the selected EFI subsystem without desktop Windows labels", asyn
     name: "versions.efi", mimeType: "application/octet-stream",
     buffer: Buffer.from(createVersionedPe(10))
   });
-  await page.getByText("PE/COFF headers", { exact: true }).click();
+  await openInspectionSection(page, "PE/COFF headers");
   await expect(page.locator("dt").filter({ hasText: /^OperatingSystemVersion$/ })
     .locator("+ dd")).toHaveText("10.0");
   await expect(page.locator("dt").filter({ hasText: /^SubsystemVersion$/ })

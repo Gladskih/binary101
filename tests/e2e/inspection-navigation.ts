@@ -1,6 +1,15 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+export const expandInspectionCollection = async (collection: Locator): Promise<void> => {
+  await expect(collection).toBeVisible();
+  if (await collection.evaluate(element =>
+    element.tagName === "DETAILS" && !element.hasAttribute("open"))) {
+    await collection.locator(":scope > summary").click();
+  }
+};
+
 export const openInspectionSection = async (page: Page, title: string): Promise<void> => {
+  await expect(page.locator("#fileInfoCard")).toBeVisible();
   if (title === "File hashes") {
     await page.locator("#fileHashesButton").click();
     await expect(page.locator("#workspaceTitle")).toHaveText("File hashes");

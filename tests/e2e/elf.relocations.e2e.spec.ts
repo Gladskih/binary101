@@ -1,3 +1,4 @@
+import { openInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createElfNativeAotFixture } from "../helpers/elf-native-aot-fixture.js";
 
@@ -25,7 +26,7 @@ test("ELF relocations show aggregated statistics instead of raw address rows", a
   await page.setInputFiles("#fileInput", {
     name: "relocations.elf", mimeType: "application/x-elf", buffer: pagedRelocations()
   });
-  await page.locator(".peSectionSummary").filter({ hasText: "Relocations" }).click();
+  await openInspectionSection(page, "Relocations (201)");
   const table = page.locator('[data-sort-state-key="elf-relocations"]');
   await expect(table).toContainText("R_X86_64_RELATIVE");
   await expect(table.locator("tbody tr")).toHaveCount(1);

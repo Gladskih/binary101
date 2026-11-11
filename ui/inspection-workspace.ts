@@ -1,6 +1,5 @@
 import { collectWorkspaceSections, type WorkspaceSection } from "./workspace-sections.js";
 import {
-  filterWorkspaceNavigation,
   renderWorkspaceNavigation,
   renderWorkspaceSelect
 } from "./workspace-navigation.js";
@@ -90,7 +89,7 @@ class InspectionWorkspace {
     this.updateNotices();
     this.select(["overview", "hashes", "search"].includes(this.selected) ||
       this.sections.some(section => section.key === this.selected) ? this.selected : "hashes");
-    this.filterNavigation();
+    this.updateNavigationEmpty();
     this.syncLayout();
   }
   private overviewSection(): WorkspaceSection | null {
@@ -179,7 +178,7 @@ class InspectionWorkspace {
     this.filter.value = "";
     this.search.reset();
     renderWorkspaceSelect(this.mobileView, this.navigationSections());
-    this.filterNavigation();
+    this.updateNavigationEmpty();
   }
   private searchReport(): void {
     if (this.selected !== "search") this.previousSection = this.selected;
@@ -187,7 +186,7 @@ class InspectionWorkspace {
     this.search.update(query);
     renderWorkspaceSelect(this.mobileView, this.navigationSections(), query);
     this.activate(query ? "search" : this.previousSection);
-    this.filterNavigation();
+    this.updateNavigationEmpty();
   }
   private restoreScroll(key: string): void {
     requestAnimationFrame(() => {
@@ -202,9 +201,9 @@ class InspectionWorkspace {
       this.reflow.capture();
     });
   }
-  private filterNavigation(): void {
+  private updateNavigationEmpty(): void {
     this.element("workspaceNavigationEmpty").hidden =
-      filterWorkspaceNavigation(this.navigation, this.filter.value) > 0;
+      this.navigation.querySelector("[data-workspace-target]") !== null;
   }
   private syncLayout(): void {
     const fileVisible = !this.element("fileInfoCard").hidden;

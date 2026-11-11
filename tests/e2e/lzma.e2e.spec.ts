@@ -1,3 +1,4 @@
+import { openInspectionElement } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createLzmaSevenZipFile } from "../fixtures/lzma-sevenzip-file.js";
 import { readFile } from "node:fs/promises";
@@ -21,6 +22,9 @@ for (const [name, fixture] of [["plain", lzma2SevenZipPlain],
     await page.setInputFiles("#fileInput", { name: "lzma2.7z",
       mimeType: "application/x-7z-compressed", buffer: Buffer.from(fixture()) });
     await expect(page.locator("body")).toContainText("payload.bin");
+    await openInspectionElement(page.getByRole("button", {
+      name: "Extract", exact: true, includeHidden: true
+    }));
     const downloadEvent = page.waitForEvent("download");
     await page.getByRole("button", { name: "Extract", exact: true }).click();
     const download = await downloadEvent;

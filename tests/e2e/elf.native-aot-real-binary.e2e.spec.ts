@@ -1,4 +1,4 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { toggleInspectionSection, openInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +18,7 @@ test("uses NativeAOT initializers as disassembly seeds in the browser", async ({
   await page.setInputFiles("#fileInput", {
     name: "initializers.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
   });
-  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
+  await openInspectionSection(page, "NativeAOT metadata");
   await expect(page.locator("#analysisValue")).toContainText("NativeAOT initializer entry points");
   await toggleInspectionSection(page.locator("#elfInstructionSetsPanel > details > summary"));
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
@@ -39,7 +39,7 @@ test("renders relocation-confirmed NativeAOT from ELF in the browser", async ({ 
   await expect(page.locator("#fileBinaryTypeDetail")).toContainText("ELF 64-bit LSB");
   const analysis = page.locator("#analysisValue");
   await expect(analysis).toContainText("NativeAOT metadata");
-  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
+  await openInspectionSection(page, "NativeAOT metadata");
   await expect(analysis).toContainText("relative REL/RELA relocations");
   await expect(analysis.locator(".nativeAotSectionsTable tbody tr")).toHaveCount(2);
   await expect(analysis).toContainText("Embedded reflection metadata");
@@ -55,7 +55,7 @@ test("renders and sorts reflected NativeAOT fields", async ({ page }) => {
     name: "fields.elf", mimeType: "application/x-elf", buffer: Buffer.from(fixture.bytes)
   });
 
-  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
+  await openInspectionSection(page, "NativeAOT metadata");
   const table = page.locator(".nativeAotTypesTable");
   await expect(table.getByRole("button", { name: "Sort by Fields", exact: true })).toBeVisible();
   await expect(table.locator(".nativeAotTypesTable__fields").filter({
@@ -80,7 +80,7 @@ test("renders NativeAOT metadata from a real ELF binary in the browser", async (
   await expect(page.locator("#fileBinaryTypeDetail")).toContainText("ELF 64-bit LSB");
   const analysis = page.locator("#analysisValue");
   await expect(analysis).toContainText("NativeAOT metadata");
-  await page.locator(".peSectionSummary").filter({ hasText: "NativeAOT metadata" }).click();
+  await openInspectionSection(page, "NativeAOT metadata");
   await expect(analysis).toContainText("relative REL/RELA relocations");
   await expect(analysis.locator(".nativeAotSectionsTable tbody tr")).toHaveCount(34);
   await expect(analysis.locator(".nativeAotScopesTable tbody tr")).toHaveCount(6);

@@ -61,12 +61,3 @@ export const renderWorkspaceNavigation = (
   analysis.append(...buttons(sections.filter(section => section.origin)));
   navigation.append(analysis);
 };
-
-export const filterWorkspaceNavigation = (navigation: HTMLElement, query: string): number => {
-  let count = 0;
-  navigation.querySelectorAll<HTMLElement>("[data-workspace-target]").forEach(button => {
-    button.hidden = !button.textContent?.toLowerCase().includes(query.trim().toLowerCase());
-    if (!button.hidden) count += 1;
-  });
-  return count;
-};

@@ -1,4 +1,4 @@
-import { openInspectionContent, toggleInspectionSection } from "./inspection-navigation.js";
+import { openInspectionContent, toggleInspectionSection, openInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -21,6 +21,7 @@ const toUpload = (file: ReturnType<typeof createPeDwarfFile>) => ({
 
 void test("decodes Zstandard DWARF in the browser without external requests", async ({ page }) => {
   const externalRequests: string[] = [];
+  const appOrigin = new URL(test.info().project.use.baseURL!).origin;
   const browserErrors: string[] = [];
   const wasmRequests: string[] = [];
   page.on("console", message => {
@@ -28,13 +29,13 @@ void test("decodes Zstandard DWARF in the browser without external requests", as
   });
   page.on("request", request => {
     if (request.url().includes("zstddec") && request.url().endsWith(".wasm")) wasmRequests.push(request.url());
-    if (!request.url().startsWith("http://127.0.0.1:4173/")) {
+    if (new URL(request.url()).origin !== appOrigin) {
       externalRequests.push(request.url());
     }
   });
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfZstdDwarfFile()));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
   await expect(page.getByText("main.c", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("fixture compiler", { exact: true })).toBeVisible();
@@ -62,7 +63,7 @@ void test("renders ELF DWARF analysis in the build/debug section", async ({ page
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfDwarfFile()));
 
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await toggleInspectionSection(summary);
@@ -87,7 +88,7 @@ void test("decompresses and renders ELF64 SHF_COMPRESSED DWARF", async ({ page }
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfCompressedDwarfFile()));
 
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   const summary = page.getByText("DWARF debug information (1 unit)", { exact: true });
   await expect(summary).toBeVisible();
   await toggleInspectionSection(summary);
@@ -113,7 +114,7 @@ void test("PE DWARF shows function types, source declarations, and parameter sto
 void test("ELF DWARF shows complete program entities without address arithmetic", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfSemanticDwarfFile()));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
 
   await expect(page.getByRole("cell", { name: "calculate::input", exact: true })).toBeVisible();
@@ -136,7 +137,7 @@ void test("PE DWARF page navigation reaches every entity", async ({ page }) => {
 void test("ELF DWARF page navigation reaches every entity", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfSemanticDwarfFile(201)));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
   const table = page.locator('[data-paged-sortable-table-id="dwarf-entities"]');
 
@@ -157,7 +158,7 @@ void test("PE macros show definitions and their original source lines", async ({
 void test("ELF macros show compiler definitions without exposing address-only data", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfMacroDwarfFile()));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
   await page.getByText("Macro sequence 1: 5 directives", { exact: true }).click();
 
@@ -179,7 +180,7 @@ void test("PE frame recovery shows function names and caller register rules", as
 void test("ELF DWARF shares decoded frame records with the unwind analyzer", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfFrameDwarfFile()));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (1 unit)", { exact: true }).click();
   await page.getByText("Stack and caller recovery (1 regions)", { exact: true }).click();
 
@@ -200,7 +201,7 @@ void test("PE split DWARF resolves program names and indexed macro definitions",
 void test("ELF DWP keeps names, types and source files of different units separate", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", toUpload(createElfPackageDwarfFile()));
-  await page.locator(".peSectionSummary").filter({ hasText: "Build / debug" }).click();
+  await openInspectionSection(page, "Build / debug");
   await page.getByText("DWARF debug information (2 units)", { exact: true }).click();
   await expect(page.getByRole("cell", { name: "calculate", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "otherFunction", exact: true })).toBeVisible();
