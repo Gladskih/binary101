@@ -45,10 +45,18 @@ const markActionRow = (
   title: string
 ): void => {
   row.className = "directoryActionRow";
-  row.tabIndex = 0;
   row.dataset["directoryActionKind"] = kind;
   row.dataset["directoryActionPath"] = path;
   row.title = title;
+};
+
+const appendPathAction = (row: HTMLTableRowElement, path: string): void => {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "directoryPathButton";
+  button.textContent = path;
+  button.setAttribute("aria-label", row.title);
+  appendCell(row, "", "directoryPathCell").append(button);
 };
 
 const formatBrowserTimestamp = (timestamp: number): string => {
@@ -67,7 +75,7 @@ const renderFolderRow = (row: DirectoryFolderRow): HTMLTableRowElement => {
   const tableRow = document.createElement("tr");
   const displayPath = displayPathForDirectory(row.path);
   markActionRow(tableRow, "directory", row.path, `Open ${displayPath}`);
-  appendCell(tableRow, displayPath, "directoryPathCell").title = displayPath;
+  appendPathAction(tableRow, displayPath);
   appendCell(tableRow, String(row.childCounts.directFolderCount), "directoryNumericCell");
   appendCell(tableRow, String(row.childCounts.directFileCount), "directoryNumericCell");
   appendCell(tableRow, String(row.childCounts.totalFolderCount), "directoryNumericCell");
@@ -81,7 +89,7 @@ const renderFileRow = (
 ): HTMLTableRowElement => {
   const tableRow = document.createElement("tr");
   markActionRow(tableRow, "file", row.path, `Analyze ${row.path}`);
-  appendCell(tableRow, row.path, "directoryPathCell").title = row.path;
+  appendPathAction(tableRow, row.path);
   const sizeCell = appendCell(tableRow, "Queued", "directoryNumericCell");
   const mimeTypeCell = appendCell(tableRow, "Queued");
   const modifiedCell = appendCell(tableRow, "Queued");

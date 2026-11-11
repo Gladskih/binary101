@@ -73,21 +73,21 @@ const renderTlsAlignmentChips = (characteristics: number): string =>
       `${escapeHtml(name)}</span>`;
   }).join("") + renderTlsUnknownAlignmentChip(characteristics);
 
-const renderTlsCharacteristicsValue = (characteristics: number): string =>
-  `<div class="mono">${hex(characteristics, 8)}</div>` +
-  `<div class="optionsRow" style="display:flex;flex-direction:column;align-items:flex-start;gap:.18rem">` +
-  `${renderTlsAlignmentChips(characteristics)}` +
-  `${renderTlsReservedBitsChip(characteristics)}</div>`;
+const renderTlsCharacteristicsOptions = (characteristics: number): string =>
+  `<div class="peTlsFields__options"><div class="optionsRow" ` +
+  `role="group" aria-label="TLS Characteristics values">` +
+  `${renderTlsAlignmentChips(characteristics)}${renderTlsReservedBitsChip(characteristics)}</div></div>`;
 
 const renderTlsCharacteristics = (tls: PeTlsSection, out: string[]): void => {
   out.push(`<tr><th scope="row">${escapeHtml("Characteristics")}</th>`);
-  out.push(`<td style="white-space:nowrap">${renderTlsCharacteristicsValue(tls.Characteristics || 0)}</td>`);
+  out.push(`<td class="peNumeric">${hex(tls.Characteristics || 0, 8)}</td>`);
   out.push(`<td class="smallNote">${escapeHtml(TLS_CHARACTERISTICS_MEANING)}</td></tr>`);
 };
 
 const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
   out.push(
-    `<div class="tableWrap"><table class="table" data-sortable="false"><colgroup>` +
+    `<div class="peTlsFields"><div class="tableWrap">` +
+    `<table class="table" data-sortable="false"><colgroup>` +
     `<col style="width:11rem"><col style="width:1%"><col></colgroup><thead><tr>` +
     `<th>Field</th><th>Value</th><th>Meaning</th></tr></thead><tbody>`
   );
@@ -137,6 +137,8 @@ const renderTlsFields = (tls: PeTlsSection, out: string[]): void => {
   });
   renderTlsCharacteristics(tls, out);
   out.push(`</tbody></table></div>`);
+  out.push(renderTlsCharacteristicsOptions(tls.Characteristics || 0));
+  out.push(`</div>`);
 };
 
 export function renderExports(

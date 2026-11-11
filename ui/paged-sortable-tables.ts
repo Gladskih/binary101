@@ -1,9 +1,6 @@
 "use strict";
 
-import {
-  renderPagedSortableTableRows,
-  renderPagedSortableToolbar
-} from "../renderers/paged-sortable-table.js";
+import { renderPagedSortableTableRows } from "../renderers/paged-sortable-table.js";
 import {
   DEFAULT_PAGED_SORTABLE_TABLE_STATE,
   movePagedSortableTablePage,
@@ -14,6 +11,8 @@ import {
   type PagedSortableTableState,
   type PagedSortableSortDirection
 } from "./paged-sortable-table-state.js";
+import { filterPagedTable } from "./paged-table-filter.js";
+import { updatePagedTableToolbar } from "./paged-table-toolbar.js";
 
 export type PagedSortableTableProvider = (
   tableId: string
@@ -26,6 +25,7 @@ export type PagedSortableTableSnapshot = {
 
 type PagedSortableTableRuntime = {
   model: PagedSortableTableModel;
+  sourceModel: PagedSortableTableModel;
   state: PagedSortableTableState;
   sortedIndexes: number[] | null;
   sortedKey: string;
@@ -39,7 +39,8 @@ const snapshotsByProvider = new WeakMap<PagedSortableTableProvider, Map<string, 
 
 export const revealPagedSortableTableRow = (element: HTMLElement, rowIndex: number): boolean => {
   const runtime = runtimeByElement.get(element);
-  if (!runtime || !Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= runtime.model.rowCount) return false;
+  if (!runtime || !Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= runtime.sourceModel.rowCount) return false;
+  runtime.model = runtime.sourceModel;
   runtime.state = { pageIndex: Math.floor(rowIndex / runtime.model.pageSize),
     sortColumnIndex: null, sortDirection: null };
   runtime.sortedIndexes = null;
@@ -70,7 +71,8 @@ export const enhancePagedSortableTables = (
     const state = states.get(model.id) ??
       readPagedSortableTableState(element);
     const runtime = {
-      model,
+      model: filterPagedTable(model, state.filterQuery ?? ""),
+      sourceModel: model,
       state: normalizePagedSortableTableState(state, model),
       sortedIndexes: null,
       sortedKey: "",
@@ -81,7 +83,22 @@ export const enhancePagedSortableTables = (
     renderRuntime(element, runtime);
     element.addEventListener("click", event => handleClick(element, event));
     element.addEventListener("change", event => handleChange(element, event));
+    element.addEventListener("input", event => handleSearch(element, event));
   });
+};
+
+const handleSearch = (element: HTMLElement, event: Event): void => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) ||
+    !target.matches("[data-paged-sortable-filter]") ||
+    target.closest(ROOT_SELECTOR) !== element) return;
+  const runtime = runtimeByElement.get(element);
+  if (!runtime) return;
+  runtime.model = filterPagedTable(runtime.sourceModel, target.value);
+  runtime.state = { ...runtime.state, pageIndex: 0, filterQuery: target.value };
+  runtime.sortedKey = "";
+  runtime.sortedIndexes = null;
+  renderRuntime(element, runtime);
 };
 
 export const capturePagedSortableTableState = (
@@ -154,6 +171,14 @@ const renderRuntime = (
   runtime: PagedSortableTableRuntime
 ): void => {
   runtime.state = normalizePagedSortableTableState(runtime.state, runtime.model);
+  const search = element.querySelector<HTMLInputElement>("[data-paged-sortable-filter]");
+  if (search && search.value !== (runtime.state.filterQuery ?? "")) {
+    search.value = runtime.state.filterQuery ?? "";
+  }
+  const feedback = element.querySelector<HTMLElement>("[data-paged-sortable-filter-feedback]");
+  if (feedback) feedback.textContent = runtime.state.filterQuery?.trim() ?
+    `${runtime.model.rowCount} matching ${runtime.model.rowCount === 1 ? "row" : "rows"}` +
+    ` of ${runtime.sourceModel.rowCount}` : "";
   updatePagedSortableTableStateAttributes(element, runtime.state);
   runtime.nestedSnapshots.set(runtime.model.id, runtime.state);
   const body = element.querySelector<HTMLElement>("[data-paged-sortable-table-body]");
@@ -166,8 +191,7 @@ const renderRuntime = (
     enhancePagedSortableTables(element, runtime.provider);
     body.dispatchEvent?.(new Event("analysis-content-rendered", { bubbles: true }));
   }
-  const toolbar = element.querySelector<HTMLElement>(".pagedSortableTableToolbar");
-  if (toolbar) toolbar.outerHTML = renderPagedSortableToolbar(runtime.model, runtime.state);
+  updatePagedTableToolbar(element, runtime.model, runtime.state);
   updateHeaderState(element, runtime.state);
 };
 
@@ -179,6 +203,7 @@ const updatePagedSortableTableStateAttributes = (
   element.dataset["pagedSortableSortColumn"] =
     state.sortColumnIndex == null ? "" : String(state.sortColumnIndex);
   element.dataset["pagedSortableSortDirection"] = state.sortDirection ?? "";
+  element.dataset["pagedSortableFilterQuery"] = state.filterQuery ?? "";
 };
 
 const sortedIndexes = (runtime: PagedSortableTableRuntime): number[] | null => {
@@ -211,7 +236,9 @@ const updateHeaderState = (
 const readPagedSortableTableState = (element: HTMLElement): PagedSortableTableState => ({
   pageIndex: Number(element.dataset["pagedSortablePageIndex"] ?? 0),
   sortColumnIndex: readSortColumn(element.dataset["pagedSortableSortColumn"]),
-  sortDirection: readSortDirection(element.dataset["pagedSortableSortDirection"])
+  sortDirection: readSortDirection(element.dataset["pagedSortableSortDirection"]),
+  ...(element.dataset["pagedSortableFilterQuery"] ?
+    { filterQuery: element.dataset["pagedSortableFilterQuery"] } : {})
 });
 
 const readSortColumn = (value: string | undefined): number | null => {

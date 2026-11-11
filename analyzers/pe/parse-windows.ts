@@ -1,4 +1,5 @@
 "use strict";
+import { analyzePeSanitizers } from "./sanitizers.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import { computePeAuthenticodeDigest, verifyAuthenticodeWithBundledTrust } from "./authenticode/verify.js";
 import { parseCoffDebugInfoFromFileHeader } from "../coff/debug.js";
@@ -136,6 +137,7 @@ export const parseWindowsPe = async (
   const result = await withPeMsvcEh(reader, core,
     buildWindowsPeResult(context, debugArtifacts, directories, imageArtifacts, security, importLinking));
   await decodeReadyToRunThunks(reader, result);
+  result.sanitizerEvidence = analyzePeSanitizers(result);
   return withWindowsPeLayoutWarnings(result, file.size);
 };
 const parsePeDebugArtifacts = async (

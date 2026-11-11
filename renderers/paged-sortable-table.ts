@@ -28,12 +28,21 @@ export const renderPagedSortableTable = (
   return `<div class="pagedSortableTable" data-paged-sortable-table-root ` +
     `data-paged-sortable-table-id="${escapeHtml(model.id)}" ` +
     renderStateAttributes(normalized) +
-    `>${renderPagedSortableToolbar(model, normalized)}` +
+    `>${renderPagedTableSearch(model, normalized)}${renderPagedSortableToolbar(model, normalized)}` +
     `<div class="tableWrap"><table class="${tableClassName(model)}" data-sortable="false" ` +
     `data-paged-sortable-table><thead>${renderHeader(model, normalized)}</thead>` +
     `<tbody data-paged-sortable-table-body>` +
     `${renderPagedSortableTableRows(model, normalized)}</tbody></table></div></div>`;
 };
+
+const renderPagedTableSearch = (
+  model: PagedSortableTableModel,
+  state: PagedSortableTableState
+): string => model.searchValueAt ?
+  `<label class="pagedTableSearch"><span>Search all rows</span>` +
+  `<input type="search" data-paged-sortable-filter placeholder="Name, ordinal or RVA…" ` +
+  `value="${escapeHtml(state.filterQuery ?? "")}" autocomplete="off"></label>` +
+  `<div class="pagedTableSearch__feedback" role="status" data-paged-sortable-filter-feedback></div>` : "";
 
 export const renderAutoPagedSortableTable = (
   model: PagedSortableTableModel,
@@ -146,7 +155,8 @@ const renderPageButton = (
 const renderStateAttributes = (state: PagedSortableTableState): string =>
   `data-paged-sortable-page-index="${state.pageIndex}" ` +
   `data-paged-sortable-sort-column="${state.sortColumnIndex ?? ""}" ` +
-  `data-paged-sortable-sort-direction="${state.sortDirection ?? ""}"`;
+  `data-paged-sortable-sort-direction="${state.sortDirection ?? ""}" ` +
+  `data-paged-sortable-filter-query="${escapeHtml(state.filterQuery ?? "")}"`;
 
 const tableClassName = (model: PagedSortableTableModel): string =>
   model.tableClassName ? `table ${escapeHtml(model.tableClassName)}` : "table";

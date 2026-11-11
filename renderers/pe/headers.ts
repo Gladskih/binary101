@@ -108,7 +108,7 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
 };
 
 const renderInlineHeaderTitle = (title: string): string =>
-  `<h4 style="margin:0 0 .5rem 0;font-size:.9rem">${title}</h4>`;
+  `<h4 class="peHeaderTitle">${title}</h4>`;
 
 const renderHeadersTail = (pe: PeParseResult, out: string[]): void => {
   renderDataDirectories(pe, out);

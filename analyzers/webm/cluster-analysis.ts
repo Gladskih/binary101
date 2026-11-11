@@ -4,6 +4,7 @@ import { scanSegmentForComputedDuration } from "./duration.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type {
   Issues,
+  WebmScanControl,
   WebmSegment,
   WebmTrack,
   WebmTrackBitstreamFrameStats
@@ -61,7 +62,8 @@ export const enrichSegmentWithClusterScan = async (
   file: File,
   segmentHeader: EbmlElementHeader,
   segment: WebmSegment,
-  issues: Issues
+  issues: Issues,
+  control?: WebmScanControl
 ): Promise<void> => {
   const segmentSize = segment.dataSize ?? Math.max(0, file.size - segmentHeader.dataOffset);
   const timecodeScaleNs = segment.info?.timecodeScale ?? 1000000;
@@ -71,7 +73,8 @@ export const enrichSegmentWithClusterScan = async (
     segmentSize,
     timecodeScaleNs,
     segment.tracks,
-    issues
+    issues,
+    control
   );
   segment.clusterCount = clusters.clusterCount;
   segment.blockCount = clusters.blockCount;

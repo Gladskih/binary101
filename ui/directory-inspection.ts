@@ -97,7 +97,8 @@ const updateSummary = (
 const inspectDirectoryLocation = async (
   config: DirectoryInspectionConfig,
   state: DirectoryViewState,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  onContentsRendered: () => void
 ): Promise<void> => {
   if (!isCurrent()) return;
   const location = state.locations.at(-1);
@@ -106,7 +107,8 @@ const inspectDirectoryLocation = async (
   config.cardElement.hidden = false;
   config.nameElement.textContent = location.name;
   renderInspectionContext(config.contextElements, state.context);
-  config.summaryElement.textContent = "Listing folder...";
+  config.summaryElement.textContent = "Listing contents...";
+  config.setStatusMessage(null);
   clearDirectoryTables(config);
   config.progressWrapElement.hidden = true;
   const rows = await collectDirectoryRows(location.handle, isCurrent);
@@ -115,15 +117,15 @@ const inspectDirectoryLocation = async (
   state.folderRows = createRowMap<DirectoryFolderRow>(rows, "directory");
   const fileCells = renderDirectoryTables(config, rows);
   enhanceSortableTables(config.cardElement);
+  onContentsRendered();
   updateSummary(config.summaryElement, rows, null);
-  config.setStatusMessage("Scanning file types...");
   const scannedFiles = await scanDirectoryFileRows(config, rows, fileCells, isCurrent);
-  if (scannedFiles == null) return;
+  if (scannedFiles == null || !isCurrent()) return;
   updateSummary(config.summaryElement, rows, scannedFiles);
-  config.setStatusMessage(`Folder scan complete: ${scannedFiles} file${scannedFiles === 1 ? "" : "s"}.`);
 };
 class DirectoryInspectionControllerImpl implements DirectoryInspectionController {
   private generation = 0;
+  private readonly focusByDirectory = new WeakMap<BrowserDirectoryHandle, string>();
   private readonly state: DirectoryViewState = {
     context: null,
     fileRows: new Map(),
@@ -164,17 +166,21 @@ class DirectoryInspectionControllerImpl implements DirectoryInspectionController
       this.config.setStatusMessage("Folder picker is not supported by this browser.");
       return;
     }
-    const currentGeneration = this.startFolderSelection();
+    let currentGeneration = this.generation;
     try {
-      this.config.setStatusMessage("Opening folder...");
       const root = await picker();
       if (this.generation !== currentGeneration) return;
       const context: InspectionContext = { source: "selection", object: "directory" };
-      this.state.context = context; this.state.locations = [createRootDirectoryLocation(root, context)];
+      currentGeneration = this.resetToRoot(root, context);
       this.config.openDirectory(createDirectoryInspectionRoute(context, this.state.locations));
+      this.config.setStatusMessage("Opening folder...");
       await this.inspectCurrentLocation(currentGeneration);
     } catch (error) {
-      this.reportFolderPickerError(error);
+      // A dismissed picker and a rejected permission both surface as AbortError.
+      // https://wicg.github.io/file-system-access/#api-showdirectorypicker
+      if (this.generation === currentGeneration && !isAbortError(error)) {
+        this.config.setStatusMessage(`Unable to open folder: ${formatAccessError(error)}`);
+      }
     }
   }
   async openFiles(files: readonly File[], source: DirectInspectionSource): Promise<boolean> {
@@ -222,12 +228,31 @@ class DirectoryInspectionControllerImpl implements DirectoryInspectionController
     const row = target?.closest<HTMLTableRowElement>("[data-directory-action-kind]");
     const path = row?.dataset["directoryActionPath"];
     if (!row || !path) return false;
+    const directory = this.state.locations.at(-1)?.handle;
+    if (directory) this.focusByDirectory.set(directory, path);
     if (row.dataset["directoryActionKind"] === "file") void this.openFileRow(path);
     else if (row.dataset["directoryActionKind"] === "directory") void this.openFolderRow(path);
     return true;
   }
   private async inspectCurrentLocation(currentGeneration: number): Promise<void> {
-    await inspectDirectoryLocation(this.config, this.state, () => this.generation === currentGeneration);
+    await inspectDirectoryLocation(this.config, this.state,
+      () => this.generation === currentGeneration, () => this.restoreDirectoryFocus());
+  }
+  private restoreDirectoryFocus(): void {
+    const owner = this.config.cardElement.ownerDocument;
+    const active = owner.activeElement;
+    if (active && active instanceof HTMLElement && active !== owner.body &&
+      active.getClientRects().length) return;
+    const directory = this.state.locations.at(-1)?.handle;
+    const path = directory && this.focusByDirectory.get(directory);
+    if (!path) {
+      this.config.nameElement.focus({ preventScroll: true });
+      return;
+    }
+    (Array.from(this.config.cardElement.querySelectorAll<HTMLElement>("[data-directory-action-path]"))
+      .find(row => row.dataset["directoryActionPath"] === path)
+      ?.querySelector<HTMLElement>(".directoryPathButton") ?? this.config.nameElement)
+      .focus({ preventScroll: true });
   }
   private async openFileRow(path: string): Promise<void> {
     const row = this.state.fileRows.get(path);
@@ -272,25 +297,10 @@ class DirectoryInspectionControllerImpl implements DirectoryInspectionController
     this.config.setStatusMessage(statusMessage);
     await this.inspectCurrentLocation(currentGeneration);
   }
-  private reportFolderPickerError(error: unknown): void {
-    if (isAbortError(error)) {
-      this.config.setStatusMessage(
-        "Folder selection cancelled or blocked by browser. Drop the folder onto the page instead."
-      );
-    } else {
-      this.config.setStatusMessage(`Unable to open folder: ${formatAccessError(error)}`);
-    }
-  }
   private resetToRoot(handle: BrowserDirectoryHandle, context: InspectionContext): number {
     const currentGeneration = this.generation + 1;
     this.generation = currentGeneration; this.state.context = context;
     this.state.locations = [createRootDirectoryLocation(handle, context)];
-    return currentGeneration;
-  }
-  private startFolderSelection(): number {
-    const currentGeneration = this.generation + 1;
-    this.generation = currentGeneration;
-    this.state.locations = []; this.state.context = null;
     return currentGeneration;
   }
 }

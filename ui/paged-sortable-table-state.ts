@@ -8,6 +8,7 @@ export type PagedSortableTableState = {
   pageIndex: number;
   sortColumnIndex: number | null;
   sortDirection: PagedSortableSortDirection | null;
+  filterQuery?: string;
 };
 
 export type PagedSortableTableModel = {
@@ -17,6 +18,7 @@ export type PagedSortableTableModel = {
   columns: PagedSortableTableColumn[];
   rowAt: (rowIndex: number) => PagedSortableTableRow | null;
   sortValueAt: (rowIndex: number, columnIndex: number) => string;
+  searchValueAt?: (rowIndex: number) => string;
   tableClassName?: string;
 };
 
@@ -63,7 +65,8 @@ export const normalizePagedSortableTableState = (
   return {
     pageIndex: clampPageIndex(state.pageIndex, pageCount),
     sortColumnIndex,
-    sortDirection
+    sortDirection,
+    ...(state.filterQuery ? { filterQuery: state.filterQuery } : {})
   };
 };
 
@@ -107,7 +110,7 @@ export const togglePagedSortableTableSort = (
     state.sortColumnIndex === columnIndex && state.sortDirection === "ascending"
       ? "descending"
       : "ascending";
-  return { pageIndex: 0, sortColumnIndex: columnIndex, sortDirection: direction };
+  return { ...state, pageIndex: 0, sortColumnIndex: columnIndex, sortDirection: direction };
 };
 
 export const movePagedSortableTablePage = (

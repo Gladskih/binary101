@@ -6,6 +6,9 @@ import { readElementHeader } from "./ebml.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import type { Issues } from "./types.js";
 
+export type EbmlScanReader = Pick<EbmlStreamReader, "offset" | "readElementHeader" | "readBytes" | "skip"> &
+  { cancel?: () => Promise<void> };
+
 const EMPTY_BYTES: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
 
 export class EbmlStreamReader {
@@ -17,7 +20,12 @@ export class EbmlStreamReader {
   #done: boolean;
   #released: boolean;
 
-  constructor(stream: ReadableStream<Uint8Array>, startOffset: number, endOffset: number) {
+  constructor(
+    stream: ReadableStream<Uint8Array>,
+    startOffset: number,
+    endOffset: number,
+    private readonly signal?: AbortSignal
+  ) {
     // File API requires Blob streams to support byte reading, so a BYOB reader
     // keeps the incremental parser bounded even if an implementation would
     // otherwise emit a very large chunk.
@@ -36,6 +44,7 @@ export class EbmlStreamReader {
   }
 
   async readElementHeader(endOffset: number, issues: Issues): Promise<EbmlElementHeader | null> {
+    this.signal?.throwIfAborted();
     const available = Math.max(0, Math.min(endOffset, this.#endOffset) - this.#currentOffset);
     if (available === 0) return null;
     await this.#fill(Math.min(MAX_ELEMENT_HEADER, available));
@@ -110,6 +119,7 @@ export class EbmlStreamReader {
 
   async #fill(minimum: number): Promise<void> {
     while (this.#availableBytes() < minimum && !this.#done) {
+      this.signal?.throwIfAborted();
       const result = await this.#reader.read(new Uint8Array(DEFAULT_FILE_READ_WINDOW_BYTES));
       if (result.done) {
         this.#done = true;
@@ -138,7 +148,8 @@ export class EbmlStreamReader {
 export const createEbmlStreamReader = (
   file: File,
   startOffset: number,
-  endOffset: number
+  endOffset: number,
+  signal?: AbortSignal
 ): EbmlStreamReader => {
   const start = Number.isFinite(startOffset)
     ? Math.max(0, Math.min(file.size, Math.floor(startOffset)))
@@ -146,5 +157,5 @@ export const createEbmlStreamReader = (
   const end = Number.isFinite(endOffset)
     ? Math.max(start, Math.min(file.size, Math.floor(endOffset)))
     : start;
-  return new EbmlStreamReader(file.slice(start, end).stream(), start, end);
+  return new EbmlStreamReader(file.slice(start, end).stream(), start, end, signal);
 };

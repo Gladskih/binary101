@@ -71,7 +71,9 @@ const renderEntrypointDisassemblyContent = (pe: PeWindowsParseResult, out: strin
 export const renderEntrypointDisassemblyPanel = (pe: PeWindowsParseResult): string => {
   const out: string[] = [];
   renderEntrypointDisassemblyContent(pe, out);
-  return out.length ? `<section id="${PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID}">${out.join("")}</section>` : "";
+  return out.length ?
+    `<section id="${PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID}" data-analysis-origin="supplemental">` +
+      `${out.join("")}</section>` : "";
 };
 
 export const renderEntrypointDisassembly = (pe: PeWindowsParseResult, out: string[]): void => {

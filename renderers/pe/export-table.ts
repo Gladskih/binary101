@@ -41,6 +41,14 @@ export const createExportTableModel = (
   }
   return {
   id: EXPORT_TABLE_ID,
+  tableClassName: "peExportTable",
+  searchValueAt: index => {
+    const entry = entries[index];
+    if (!entry) return "";
+    return [String(entry.ordinal), hex(entry.rva, 8), entry.forwarder ?? "",
+      ...entry.names.flatMap((name, nameIndex) => [name,
+        getPeExportDisplayName(entry.names, nameIndex)])].join("\n");
+  },
   pageSize: 250,
   rowCount: entries.length,
   columns: [

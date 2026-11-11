@@ -11,6 +11,7 @@ import { renderGoRuntime } from "./go-runtime.js";
 import { renderDRuntime } from "./d-runtime.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
 import { renderPeProjectorStatus } from "./payloads.js";
+import { renderChecksWithoutFindings } from "../checks-without-findings.js";
 
 export function renderPe(pe: PeParseResult | null | undefined): string {
   if (!pe) return "";
@@ -24,5 +25,6 @@ export function renderPe(pe: PeParseResult | null | undefined): string {
   }
   renderPeLazySectionShells(pe, out);
   out.push(renderEmbeddedResources(pe.embeddedResources));
+  out.push(renderChecksWithoutFindings(pe));
   return out.join("");
 }

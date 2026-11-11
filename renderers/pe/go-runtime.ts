@@ -8,6 +8,7 @@ import {
   type PagedSortableTableModel
 } from "../paged-sortable-table.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 
 const GO_FUNCTION_TABLE_ID = "pe-go-runtime-functions";
 
@@ -68,10 +69,10 @@ const locationHtml = (pe: PeWindowsParseResult, address: bigint): string => {
 export const renderGoRuntime = (pe: PeWindowsParseResult, out: string[]): void => {
   const runtime = pe.goRuntime;
   if (!runtime) return;
-  out.push(renderPeSectionStart(
+  out.push(markSupplementalAnalysis(renderPeSectionStart(
     "Go runtime metadata",
     `${runtime.layout}, ${runtime.functions.length} functions`
-  ));
+  )));
   out.push(`<dl>`);
   out.push(`<dt>Layout</dt><dd>${escapeHtml(runtime.layout)}</dd>`);
   out.push(`<dt>pcHeader</dt><dd>${locationHtml(pe, runtime.pcHeaderAddress)}</dd>`);

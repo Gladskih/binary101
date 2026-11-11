@@ -6,6 +6,7 @@ import { resolveResourcePayload } from "../analyzers/embedded-resources/payload.
 import { renderPreviewCell } from "./pe/resource-preview-cell.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./elf/collapsible-section.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "./paged-sortable-table.js";
+import { markSupplementalAnalysis } from "./supplemental-analysis.js";
 
 const notices = (issues: string[]): string => issues.length ?
   `<ul class="smallNote">${issues.map(issue => `<li>${escapeHtmlText(issue)}</li>`).join("")}</ul>` : "";
@@ -61,15 +62,16 @@ export const createEmbeddedResourceTableModel = (analysis: EmbeddedResourceAnaly
   };
 };
 
-export const getEmbeddedResourceTableModel = (analysis: EmbeddedResourceAnalysis | undefined,
+export const getEmbeddedResourceTableModel = (analysis: EmbeddedResourceAnalysis | null | undefined,
   id: string): PagedSortableTableModel | null => {
   const match = /^embedded-resources-(\d+)$/u.exec(id);
   return analysis?.bundles[Number(match?.[1])] ? createEmbeddedResourceTableModel(analysis, Number(match![1])) : null;
 };
 
-export const renderEmbeddedResources = (analysis: EmbeddedResourceAnalysis | undefined): string => {
+export const renderEmbeddedResources = (analysis: EmbeddedResourceAnalysis | null | undefined): string => {
   if (!analysis) return "";
-  return renderElfSectionStart("Qt / GLib embedded resources") + notices(analysis.issues) +
+  return markSupplementalAnalysis(renderElfSectionStart("Qt / GLib embedded resources")) +
+    notices(analysis.issues) +
     `<div class="embeddedResources">` +
     analysis.bundles.map((bundle, index) => `<h3>${escapeHtmlText(bundle.resource.format)} at ${hex(bundle.offset)}</h3>` +
       `<p>${escapeHtmlText(bundle.evidence.join("; "))}</p>` + notices(bundle.issues) +

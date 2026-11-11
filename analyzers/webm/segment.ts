@@ -10,13 +10,11 @@ import {
   TAGS_ID,
   TRACKS_ID
 } from "./constants.js";
-import {
-  readElementAt,
-  readElementHeader,
-} from "./ebml.js";
-import type { EbmlElementHeader } from "./ebml.js";
+import { readElementAt, type EbmlElementHeader } from "./ebml.js";
+import { EbmlRangeReader } from "./ebml-range.js";
 import type {
   Issues,
+  WebmScanControl,
   WebmSeekHead,
   WebmSegment
 } from "./types.js";
@@ -42,11 +40,13 @@ const scanSegment = async (
   file: File,
   segment: EbmlElementHeader,
   issues: Issues,
-  scanLimit: number
+  scanLimit: number,
+  signal?: AbortSignal
 ): Promise<SegmentScanResult> => {
   const maxAvailable = Math.max(0, file.size - segment.dataOffset);
-  const readLength = Math.min(scanLimit, segment.size ?? maxAvailable);
-  const dv = new DataView(await file.slice(segment.dataOffset, segment.dataOffset + readLength).arrayBuffer());
+  const readLength = Math.min(scanLimit, segment.size ?? maxAvailable, maxAvailable);
+  const end = segment.dataOffset + readLength;
+  const reader = new EbmlRangeReader(file, segment.dataOffset, end, signal);
   const result: SegmentScanResult = {
     infoHeader: null,
     tracksHeader: null,
@@ -56,19 +56,15 @@ const scanSegment = async (
     bytesScanned: readLength,
     hitLimit: segment.size != null ? readLength < segment.size : readLength < maxAvailable
   };
-  let cursor = 0;
-  const limit = Math.min(readLength, segment.size ?? readLength);
-  while (cursor < limit) {
-    const header = readElementHeader(dv, cursor, segment.dataOffset + cursor, result.issues);
+  while (reader.offset < end) {
+    const header = await reader.readElementHeader(end, result.issues);
     if (!header || header.headerSize === 0) break;
     result.scanned.push({ id: header.id, offset: header.offset, size: header.size });
     if (header.id === INFO_ID && !result.infoHeader) result.infoHeader = header;
     if (header.id === TRACKS_ID && !result.tracksHeader) result.tracksHeader = header;
     if (header.id === SEEK_HEAD_ID) result.seekHeaders.push(header);
     if (header.size == null || header.sizeUnknown) break;
-    const next = cursor + header.headerSize + header.size;
-    if (next <= cursor) break;
-    cursor = next;
+    await reader.skip(header.size);
   }
   issues.push(...result.issues);
   return result;
@@ -211,7 +207,8 @@ const parseSegmentCore = async (
   file: File,
   segmentHeader: EbmlElementHeader,
   issues: Issues,
-  docTypeLower: string
+  docTypeLower: string,
+  signal?: AbortSignal
 ): Promise<WebmSegment> => {
   const segmentSize = segmentHeader.size ?? Math.max(0, file.size - segmentHeader.dataOffset);
   const segment: WebmSegment = {
@@ -234,10 +231,10 @@ const parseSegmentCore = async (
   };
 
   const initialLimit = Math.min(INITIAL_SCAN_BYTES, segmentSize);
-  const initialScan = await scanSegment(file, segmentHeader, issues, initialLimit);
+  const initialScan = await scanSegment(file, segmentHeader, issues, initialLimit, signal);
   let scan = initialScan;
   if ((!initialScan.infoHeader || !initialScan.tracksHeader) && segmentSize > initialLimit) {
-    const fullScan = await scanSegment(file, segmentHeader, issues, segmentSize);
+    const fullScan = await scanSegment(file, segmentHeader, issues, segmentSize, signal);
     scan = fullScan;
     segment.scanLimit = fullScan.bytesScanned;
   } else {
@@ -276,9 +273,11 @@ export const parseSegment = async (
   file: File,
   segmentHeader: EbmlElementHeader,
   issues: Issues,
-  docTypeLower: string
+  docTypeLower: string,
+  control?: WebmScanControl
 ): Promise<WebmSegment> => {
-  const segment = await parseSegmentCore(file, segmentHeader, issues, docTypeLower);
-  await enrichSegmentWithClusterScan(file, segmentHeader, segment, issues);
+  const segment = await parseSegmentCore(file, segmentHeader, issues, docTypeLower, control?.signal);
+  control?.signal.throwIfAborted();
+  await enrichSegmentWithClusterScan(file, segmentHeader, segment, issues, control);
   return segment;
 };

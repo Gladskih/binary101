@@ -103,8 +103,9 @@ void test("renderTls explains TLS Characteristics alignment and reserved bits", 
 
   assert.ok(html.includes("0x00500001"));
   assert.ok(html.includes("<th scope=\"row\">Characteristics</th>"));
-  assert.ok(html.includes('<td style="white-space:nowrap"><div class="mono">0x00500001</div>'));
-  assert.ok(html.includes("flex-direction:column"));
+  assert.ok(html.includes('<td class="peNumeric">0x00500001</td>'));
+  assert.match(html, /<div class="peTlsFields"><div class="tableWrap"><table/);
+  assert.match(html, /<\/table><\/div><div class="peTlsFields__options">/);
   assert.ok(
     html.includes(
       'class="opt dim" style="white-space:nowrap" data-accessible-tooltip title="Align TLS data copied for each thread to 1 byte.'

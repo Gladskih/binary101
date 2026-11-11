@@ -27,6 +27,7 @@ import { parseElfArmEhabi } from "./arm-ehabi.js";
 import { parseGoBuildInfo } from "./go-build-info.js";
 import { decodeElfSymbolNames } from "./symbol-names.js";
 import { analyzeElfEmbeddedResources } from "./embedded-resources.js";
+import { analyzeElfSanitizers } from "./sanitizers.js";
 
 const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult,
   key: Key, value: ElfParseResult[Key] | null): void => {
@@ -60,7 +61,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
   validateElfHashSymbols(hashes, symbols, result.is64 ? 64 : 32);
   await parseLinkingTables(file, result, entries, cache, layout, logicalSizes);
   await decodeElfSymbolNames(result);
-  retainMetadata(result, "embeddedResources", await analyzeElfEmbeddedResources(file, result));
+  result.embeddedResources = await analyzeElfEmbeddedResources(file, result);
   if (result.relocations) result.relocations.issues.unshift(...issues);
   else result.issues.push(...issues);
   if (!issues.length) retainMetadata(result, "nativeAot", await analyzeElfNativeAot(
@@ -99,4 +100,5 @@ export const parseElfMetadata = async (file: File, result: ElfParseResult,
     result.is64 ? "elf64" : "elf32", result.littleEndian, result.issues, result, result.relocations, prepared));
   retainMetadata(result, "unwind", await parseElfUnwind(file, result));
   retainMetadata(result, "lsdas", await parseElfLsda(file, result, await readElfNativeAotGc(file, result)));
+  result.sanitizerEvidence = analyzeElfSanitizers(result);
 };

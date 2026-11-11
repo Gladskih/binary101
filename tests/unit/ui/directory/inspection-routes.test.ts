@@ -15,6 +15,8 @@ type FakeBrowserGlobals = {
 
 class FakeElement {
   readonly children: FakeElement[] = [];
+  readonly attributes = new Map<string, string>();
+  readonly ownerDocument = { activeElement: null };
   className = "";
   dataset: Record<string, string> = {};
   hidden = false;
@@ -30,6 +32,10 @@ class FakeElement {
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
   }
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+  focus(): void { /* Focus is covered in browser checks. */ }
   replaceChildren(...nodes: FakeElement[]): void {
     this.children.splice(0, this.children.length, ...nodes);
   }
@@ -121,7 +127,8 @@ const installFakeBrowser = (root: FakeDirectoryHandle): { restore: () => void } 
 };
 
 const rowTexts = (body: FakeElement): string[][] =>
-  body.children.map(row => row.children.map(cell => cell.textContent ?? ""));
+  body.children.map(row => row.children.map(cell =>
+    cell.children[0]?.textContent ?? cell.textContent ?? ""));
 
 void test("directory inspection emits and restores browser history routes", async () => {
   const docs = new FakeDirectoryHandle("docs", [

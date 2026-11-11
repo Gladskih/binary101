@@ -192,3 +192,7 @@ export interface WebmParseResult {
 }
 
 export type Issues = string[];
+export interface WebmScanControl {
+  signal: AbortSignal;
+  onProgress: (position: number, total: number) => void;
+}

@@ -5,4 +5,4 @@ import { renderPeSectionStart, renderPeSectionEnd } from "./collapsible-section.
 
 export const renderPeSanitizers = (pe: PeWindowsParseResult): string =>
   renderPeSectionStart("Sanitizer evidence") +
-  renderSanitizerEvidence(analyzePeSanitizers(pe)) + renderPeSectionEnd();
+  renderSanitizerEvidence(pe.sanitizerEvidence ?? analyzePeSanitizers(pe)) + renderPeSectionEnd();

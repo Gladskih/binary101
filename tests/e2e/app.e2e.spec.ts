@@ -159,7 +159,7 @@ test.describe("file type detection", () => {
     await expect(page.locator("#directoryFolderListingBody tr")).toHaveCount(1);
     await expect(page.locator("#directoryFileListingBody tr")).toHaveCount(1);
     await expect(page.locator("#directoryFileListingBody")).toContainText("2024-01-02T03:04:05.000Z");
-    await expect(page.locator("#statusMessage")).toHaveText("Folder scan complete: 1 file.");
+    await expect(page.locator("#statusMessage")).toBeEmpty();
     await page.locator("#directoryFolderListingBody tr").click();
     await expect(page.locator("#directoryName")).toHaveText("docs");
     await expect(page.locator("#directorySourceDetail .opt.sel")).toHaveText("Navigation");

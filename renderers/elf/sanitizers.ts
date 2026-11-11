@@ -5,6 +5,6 @@ import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-sectio
 
 export const renderElfSanitizers = (elf: ElfParseResult, out: string[]): void => {
   out.push(renderElfSectionStart("Sanitizer evidence"));
-  out.push(renderSanitizerEvidence(analyzeElfSanitizers(elf)));
+  out.push(renderSanitizerEvidence(elf.sanitizerEvidence ?? analyzeElfSanitizers(elf)));
   out.push(renderElfSectionEnd());
 };

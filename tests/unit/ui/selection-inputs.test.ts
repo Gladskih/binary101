@@ -6,6 +6,8 @@ import { attachSelectionInputs } from "../../../ui/selection-inputs.js";
 import type { DirectoryInspectionController } from "../../../ui/directory-inspection.js";
 
 type FakeBrowserGlobals = {
+  document?: unknown;
+  Element?: unknown;
   HTMLInputElement?: unknown;
   window?: unknown;
 };
@@ -46,14 +48,20 @@ class FakeWindow {
 
 const installFakeBrowser = (): { restore: () => void; targetWindow: FakeWindow } => {
   const globals = globalThis as unknown as FakeBrowserGlobals;
+  const originalDocument = globals.document;
+  const originalElement = globals.Element;
   const originalInput = globals.HTMLInputElement;
   const originalWindow = globals.window;
   const targetWindow = new FakeWindow();
+  globals.document = new FakeElement();
+  globals.Element = FakeElement;
   globals.HTMLInputElement = FakeInputElement;
   globals.window = targetWindow;
   return {
     targetWindow,
     restore: () => {
+      globals.document = originalDocument;
+      globals.Element = originalElement;
       globals.HTMLInputElement = originalInput;
       globals.window = originalWindow;
     }
@@ -115,7 +123,7 @@ void test("selection inputs route dropped files through directory inspection", a
   }
 });
 
-void test("selection inputs handle keyboard selection and pasted text", async () => {
+void test("selection inputs handle activation of the file picker and pasted text", async () => {
   const browser = installFakeBrowser();
   const dropZone = new FakeElement();
   const input = new FakeInputElement();
@@ -128,7 +136,7 @@ void test("selection inputs handle keyboard selection and pasted text", async ()
       openFile: async file => { openedFiles.push(file); },
       setStatusMessage: () => undefined
     });
-    dropZone.dispatch("keydown", { key: "Enter", preventDefault: () => undefined } as KeyboardEvent);
+    dropZone.dispatch("click", new Event("click"));
     browser.targetWindow.dispatch("paste", {
       clipboardData: {
         files: fileListFor([]),

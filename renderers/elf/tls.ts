@@ -5,6 +5,14 @@ import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult, ElfTlsInfo } from "../../analyzers/elf/types.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
 
+const renderTlsTable = (label: string, count: number, headers: string[], rows: string): string => {
+  const caption = count === 1 ? `<caption>${label}</caption>` : "";
+  const table = `<div class="tableWrap"><table class="table">${caption}<thead><tr>` +
+    headers.map(header => `<th scope="col">${header}</th>`).join("") +
+    `</tr></thead><tbody>${rows}</tbody></table></div>`;
+  return count === 1 ? table : `<details><summary>Show ${label} (${count})</summary>${table}</details>`;
+};
+
 const renderSegmentsTable = (tls: ElfTlsInfo): string => {
   if (!tls.segments.length) return `<div class="smallNote dim">No PT_TLS program headers present.</div>`;
   const rows = tls.segments
@@ -17,12 +25,8 @@ const renderSegmentsTable = (tls: ElfTlsInfo): string => {
       );
     })
     .join("");
-  return (
-    `<details style="margin-top:.35rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show PT_TLS segments (${tls.segments.length})</summary>` +
-      `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>#</th><th>Offset</th><th>VirtAddr</th><th>FileSz</th><th>MemSz</th><th>Align</th>` +
-      `</tr></thead><tbody>${rows}</tbody></table></div></details>`
-  );
+  return renderTlsTable("PT_TLS segments", tls.segments.length,
+    ["#", "Offset", "VirtAddr", "FileSz", "MemSz", "Align"], rows);
 };
 
 const renderSectionsTable = (tls: ElfTlsInfo): string => {
@@ -37,12 +41,8 @@ const renderSectionsTable = (tls: ElfTlsInfo): string => {
       );
     })
     .join("");
-  return (
-    `<details style="margin-top:.35rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show TLS sections (${tls.sections.length})</summary>` +
-      `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>#</th><th>Name</th><th>Offset</th><th>Size</th><th>Addr</th><th>Flags</th>` +
-      `</tr></thead><tbody>${rows}</tbody></table></div></details>`
-  );
+  return renderTlsTable("TLS sections", tls.sections.length,
+    ["#", "Name", "Offset", "Size", "Addr", "Flags"], rows);
 };
 
 export function renderElfTls(elf: ElfParseResult, out: string[]): void {

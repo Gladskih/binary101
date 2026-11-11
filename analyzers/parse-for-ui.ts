@@ -228,7 +228,11 @@ const tryIsoMediaFormat = async (file: File, dv: DataView): Promise<ParseForUiRe
   return mp4 ? { analyzer: "mp4", parsed: mp4 } : null;
 };
 
-const tryStreamingMediaFormats = async (file: File, dv: DataView): Promise<ParseForUiResult | null> => {
+const tryStreamingMediaFormats = async (
+  file: File,
+  dv: DataView,
+  parseEbmlFile: typeof parseWebm
+): Promise<ParseForUiResult | null> => {
   const riff = await tryRiffFormat(file, dv);
   if (riff) return riff;
   if (dv.byteLength >= 16 && readAsfGuid(dv, 0) === ASF_HEADER_GUID) {
@@ -244,7 +248,7 @@ const tryStreamingMediaFormats = async (file: File, dv: DataView): Promise<Parse
     if (mpegps) return { analyzer: "mpegps", parsed: mpegps };
   }
   if (dv.byteLength >= 4 && dv.getUint32(0, false) === 0x1a45dfa3) {
-    const webm = await parseWebm(file);
+    const webm = await parseEbmlFile(file);
     if (webm) return { analyzer: webm.isWebm ? "webm" : "mkv", parsed: webm };
   }
   return null;
@@ -274,7 +278,10 @@ const tryAudioAndDatabaseFormats = async (
   return null;
 };
 
-const createParseForUi = (parseFb2File: typeof parseFb2 = parseFb2) =>
+const createParseForUi = (
+  parseFb2File: typeof parseFb2 = parseFb2,
+  parseEbmlFile: typeof parseWebm = parseWebm
+) =>
   async (file: File): Promise<ParseForUiResult> => {
     const dv = new DataView(
       await file.slice(0, Math.min(file.size, DEFAULT_FILE_READ_WINDOW_BYTES)).arrayBuffer()
@@ -289,7 +296,7 @@ const createParseForUi = (parseFb2File: typeof parseFb2 = parseFb2) =>
     if (archiveFormat) return archiveFormat;
     const imageFormat = await tryImageFormats(file, dv);
     if (imageFormat) return imageFormat;
-    const streamingMediaFormat = await tryStreamingMediaFormats(file, dv);
+    const streamingMediaFormat = await tryStreamingMediaFormats(file, dv, parseEbmlFile);
     if (streamingMediaFormat) return streamingMediaFormat;
     const audioOrDatabaseFormat = await tryAudioAndDatabaseFormats(file, dv);
     if (audioOrDatabaseFormat) return audioOrDatabaseFormat;

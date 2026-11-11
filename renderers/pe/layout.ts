@@ -85,13 +85,9 @@ export function renderReloc(reloc: PeRelocSection, out: string[]): void {
       `${reloc.totalEntries ?? 0} entr${(reloc.totalEntries ?? 0) === 1 ? "y" : "ies"}`
     )
   );
-  out.push(`<div class="smallNote">Relocation blocks are used when the image cannot be loaded at its preferred base address.</div>`);
   if (reloc.warnings?.length) {
     out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
   }
-  out.push(`<dl>`);
-  out.push(`<dt>Total entries</dt><dd>${reloc.totalEntries ?? 0}</dd>`);
-  out.push(`</dl>`);
   if (reloc.blocks?.length) {
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
     reloc.blocks.forEach((block, index) => {

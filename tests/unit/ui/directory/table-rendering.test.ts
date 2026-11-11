@@ -20,6 +20,7 @@ type FakeBrowserGlobals = { document?: unknown };
 
 class FakeElement {
   readonly children: FakeElement[] = [];
+  readonly attributes = new Map<string, string>();
   className = "";
   dataset: Record<string, string> = {};
   hidden = false;
@@ -28,6 +29,9 @@ class FakeElement {
   title = "";
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
+  }
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
   }
   replaceChildren(...nodes: FakeElement[]): void {
     this.children.splice(0, this.children.length, ...nodes);
@@ -76,7 +80,8 @@ const installFakeDocument = (): { restore: () => void } => {
 };
 
 const rowTexts = (body: FakeElement): string[][] =>
-  body.children.map(row => row.children.map(cell => cell.textContent ?? ""));
+  body.children.map(row => row.children.map(cell =>
+    cell.children[0]?.textContent ?? cell.textContent ?? ""));
 
 void test("renderDirectoryTables separates folders, files, and warnings", () => {
   const browser = installFakeDocument();

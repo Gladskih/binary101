@@ -1,6 +1,8 @@
 "use strict";
 import { nowIsoString, formatHumanSize } from "./binary-utils.js";
-import { detectBinaryType, parseForUi, type ParseForUiResult } from "./analyzers/index.js";
+import { detectBinaryType, type ParseForUiResult } from "./analyzers/index.js";
+import { createParseForUi } from "./analyzers/parse-for-ui.js";
+import { parseWebm } from "./analyzers/webm/index.js";
 import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis.js";
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
 import { HASH_ALGORITHMS, computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
@@ -26,6 +28,7 @@ import { setFileBinaryTypeLabel, setFileSubtypeLabel } from "./ui/file-type-labe
 import { addAccessibleTooltip, addAccessibleTooltipToButton, enhanceAccessibleTooltips } from "./ui/accessible-tooltips.js";
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 import { createSwfBodyAnalysis } from "./ui/swf-analysis.js";
+import { createInspectionWorkspace } from "./ui/inspection-workspace.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const html = (id: string): HTMLElement => getElement(id) as HTMLElement;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
@@ -36,6 +39,9 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileSizeDetailElement = getElement("fileSizeDetail") as HTMLElement,
   fileTimestampDetailElement = getElement("fileTimestampDetail") as HTMLElement,
   fileAnalysisDurationDetailElement = getElement("fileAnalysisDurationDetail") as HTMLElement,
+  fileAnalysisProgressElement = html("fileAnalysisProgress"),
+  fileAnalysisPercentElement = html("fileAnalysisPercent"),
+  webmScanProgress = fileAnalysisProgressElement.querySelector("progress")!,
   fileBinaryTypeDetailElement = getElement("fileBinaryTypeDetail") as HTMLElement,
   fileSubtypeTermElement = getElement("fileSubtypeTerm") as HTMLElement,
   fileSubtypeDetailElement = getElement("fileSubtypeDetail") as HTMLElement,
@@ -47,6 +53,7 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
   hashDetailsElement = getElement("hashDetails") as HTMLDetailsElement;
 attachPeFileIconGuard(fileIconElement, fileIconWrapElement);
 const fileInspectionContext = createFileInspectionContext(html);
+const inspectionWorkspace = createInspectionWorkspace(document);
 const hashControls = HASH_ALGORITHMS.map(algorithm => ({
   algorithm,
   label: algorithm.label,
@@ -63,11 +70,33 @@ hashControls.forEach(control => {
 let currentFile: File | null = null; let currentPreviewUrl: string | null = null;
 let currentTypeLabel = ""; let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
 let fileInspectionGeneration = 0;
+let activeParseController: AbortController | null = null;
 const setPreviewUrl = (url: string | null): void => {
   if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
   currentPreviewUrl = url;
 };
 const setStatusMessage = (message: string | null | undefined): void => { statusElement.textContent = message || ""; };
+const parseFileForInspection = (file: File): Promise<ParseForUiResult> => {
+  const controller = new AbortController();
+  activeParseController = controller;
+  return createParseForUi(undefined, ebmlFile => {
+    controller.signal.throwIfAborted();
+    setStatusMessage(null);
+    webmScanProgress.removeAttribute("value");
+    fileAnalysisPercentElement.textContent = "";
+    fileAnalysisProgressElement.hidden = false;
+    return parseWebm(ebmlFile, {
+      signal: controller.signal,
+      onProgress: (position, total) => {
+        const percent = Math.floor(position / total * 100);
+        if (webmScanProgress.value !== percent || !webmScanProgress.hasAttribute("value")) {
+          webmScanProgress.value = percent;
+          fileAnalysisPercentElement.textContent = `${percent}%`;
+        }
+      }
+    });
+  })(file);
+};
 const formatAnalysisDuration = (durationMs: number): string =>
   durationMs < 1000 ? `${Math.max(0, Math.round(durationMs))} ms` : `${(durationMs / 1000).toFixed(2)} s`;
 const renderResult = (result: ParseForUiResult): void => {
@@ -88,6 +117,7 @@ const renderResult = (result: ParseForUiResult): void => {
   enhancePeLazySections(analysisValueElement, result.analyzer === "pe" && result.parsed ? result.parsed : null);
   enhanceElfLazySections(analysisValueElement, result.analyzer === "elf" ? result.parsed : null);
   swfBodyAnalysis.start();
+  inspectionWorkspace.completeAnalysis();
 };
 const getCurrentFile = (): File | null => currentFile;
 const getCurrentParseResult = (): ParseForUiResult => currentParseResult;
@@ -97,9 +127,13 @@ const { peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly } 
 const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
-const cancelActiveAnalysis = (): void =>
+const cancelActiveAnalysis = (): void => {
+  activeParseController?.abort();
+  activeParseController = null;
+  fileAnalysisProgressElement.hidden = true;
   [peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly, swfBodyAnalysis]
     .forEach(panel => panel.cancel());
+};
 const resetFileInspectionView = (): void => {
   fileInspectionGeneration += 1;
   cancelActiveAnalysis();
@@ -235,6 +269,7 @@ analysisValueElement.addEventListener("toggle", syncToggledManifestTree, true);
 async function showFileInfo(file: File, context: Parameters<typeof fileInspectionContext.render>[0]): Promise<void> {
   const currentGeneration = fileInspectionGeneration + 1;
   fileInspectionGeneration = currentGeneration;
+  fileAnalysisDurationDetailElement.textContent = "";
   cancelActiveAnalysis();
   directoryInspection.hide();
   currentFile = file;
@@ -248,6 +283,7 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     analysisTermElement.hidden = true;
     analysisValueElement.hidden = true;
     analysisValueElement.innerHTML = "";
+    inspectionWorkspace.begin(file, context);
     setStatusMessage("Detecting file type...");
     const typeLabel = await detectBinaryType(file);
     if (fileInspectionGeneration !== currentGeneration) return;
@@ -263,9 +299,10 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, currentParseResult);
     fileMimeTypeDetailElement.textContent = mimeType;
     fileInfoCardElement.hidden = false;
+    inspectionWorkspace.revealFile();
     setStatusMessage("Parsing file details...");
     const analysisStart = performance.now();
-    const parsedResult = await parseForUi(file);
+    const parsedResult = await parseFileForInspection(file);
     if (fileInspectionGeneration !== currentGeneration) return;
     setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, parsedResult);
     fileAnalysisDurationDetailElement.textContent = formatAnalysisDuration(performance.now() - analysisStart);
@@ -285,6 +322,11 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     analysisTermElement.hidden = true;
     analysisValueElement.hidden = true;
     analysisValueElement.innerHTML = "";
+  } finally {
+    if (fileInspectionGeneration === currentGeneration) {
+      activeParseController = null;
+      fileAnalysisProgressElement.hidden = true;
+    }
   }
 }
 hashControls.forEach(control => {

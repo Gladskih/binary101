@@ -3,9 +3,10 @@
 import { CLUSTER_ID } from "./constants.js";
 import { scanCluster } from "./cluster.js";
 import type { OnClusterBlock } from "./cluster-block.js";
-import { createEbmlStreamReader } from "./ebml-stream.js";
+import { createEbmlStreamReader, type EbmlScanReader } from "./ebml-stream.js";
+import { EBML_SCAN_WINDOW_BYTES, EbmlRangeReader } from "./ebml-range.js";
 import type { EbmlElementHeader } from "./ebml.js";
-import type { Issues } from "./types.js";
+import type { Issues, WebmScanControl } from "./types.js";
 
 export type SegmentClusterScan = {
   clusterCount: number;
@@ -15,7 +16,7 @@ export type SegmentClusterScan = {
 };
 
 const skipTopLevelElement = async (
-  reader: ReturnType<typeof createEbmlStreamReader>,
+  reader: EbmlScanReader,
   header: EbmlElementHeader,
   segmentEnd: number,
   issues: Issues
@@ -42,18 +43,21 @@ export const scanSegmentClusters = async (
   segmentHeader: EbmlElementHeader,
   segmentSize: number,
   issues: Issues,
-  onBlock: OnClusterBlock
+  onBlock: OnClusterBlock,
+  control?: WebmScanControl
 ): Promise<SegmentClusterScan> => {
   const available = Math.max(0, file.size - segmentHeader.dataOffset);
   const segmentEnd = segmentHeader.dataOffset + Math.min(Math.max(0, segmentSize), available);
-  let reader: ReturnType<typeof createEbmlStreamReader> | null = null;
+  let reader: EbmlScanReader | null = null;
   let pendingHeader: EbmlElementHeader | null = null;
   let clusterCount = 0;
   let blockCount = 0;
   let keyframeCount = 0;
   let firstClusterOffset: number | null = null;
   try {
-    reader = createEbmlStreamReader(file, segmentHeader.dataOffset, segmentEnd);
+    reader = segmentEnd - segmentHeader.dataOffset > EBML_SCAN_WINDOW_BYTES
+      ? new EbmlRangeReader(file, segmentHeader.dataOffset, segmentEnd, control?.signal)
+      : createEbmlStreamReader(file, segmentHeader.dataOffset, segmentEnd, control?.signal);
     while (reader.offset < segmentEnd) {
       const header = pendingHeader ?? await reader.readElementHeader(segmentEnd, issues);
       pendingHeader = null;
@@ -65,15 +69,18 @@ export const scanSegmentClusters = async (
       clusterCount++;
       if (firstClusterOffset == null) firstClusterOffset = header.offset;
       const cluster = await scanCluster(reader, header, segmentEnd, issues, onBlock);
+      control?.signal.throwIfAborted();
+      control?.onProgress(reader.offset - segmentHeader.dataOffset, segmentEnd - segmentHeader.dataOffset);
       blockCount += cluster.blocks;
       keyframeCount += cluster.keyframes;
       pendingHeader = cluster.nextHeader;
       if (cluster.stopSegment) break;
     }
   } catch (error) {
+    control?.signal.throwIfAborted();
     issues.push(`Sequential Segment scan failed: ${describeError(error)}.`);
   } finally {
-    if (reader) await reader.cancel();
+    await reader?.cancel?.();
   }
   return { clusterCount, blockCount, keyframeCount, firstClusterOffset };
 };

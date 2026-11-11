@@ -3,7 +3,10 @@
 import { VP8_KEYFRAME_HEADER_BYTES } from "./cluster-block.js";
 import type { EbmlElementHeader } from "./ebml.js";
 import { scanSegmentClusters } from "./segment-stream.js";
-import type { Issues, WebmComputedDuration, WebmComputedTrackDuration, WebmTrack, WebmTrackBitstreamFrameStats } from "./types.js";
+import type {
+  Issues, WebmComputedDuration, WebmComputedTrackDuration, WebmScanControl,
+  WebmTrack, WebmTrackBitstreamFrameStats
+} from "./types.js";
 
 type TrackTimingState = { startsNs: number[]; maxEndNs: number | null; blockCount: number };
 
@@ -227,7 +230,8 @@ export const scanSegmentForComputedDuration = async (
   segmentSize: number,
   timecodeScaleNs: number,
   tracks: WebmTrack[],
-  issues: Issues
+  issues: Issues,
+  control?: WebmScanControl
 ): Promise<{
   clusterCount: number;
   blockCount: number;
@@ -271,7 +275,8 @@ export const scanSegmentForComputedDuration = async (
         timing.lacingMode,
         timing.payload
       );
-    }
+    },
+    control
   );
   return {
     ...clusters,

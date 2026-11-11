@@ -15,6 +15,7 @@ import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-section
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
 import { getPeSanityIssues } from "./layout.js";
 import { getPeDebugSectionDescriptor } from "./debug-section-descriptor.js";
+import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 export const PE_LAZY_SECTION_KEYS = {
   architecture: "architecture",
   appHost: "apphost",
@@ -57,7 +58,12 @@ export const PE_LAZY_SECTION_KEYS = {
 } as const;
 export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_SECTION_KEYS];
 export type PeLazySectionDescriptor =
-  { id?: string; key: PeLazySectionKey; summary?: string; title: string };
+  { id?: string; key: PeLazySectionKey; summary?: string; title: string; origin?: "supplemental" };
+const supplementalSections = new Set<PeLazySectionKey>([
+  "apphost", "appended-payloads", "bun-standalone", "import-linking", "inno-setup",
+  "itanium-rtti", "linux-boot", "msvc-eh", "msvc-rtti", "native-aot", "nsis-installer",
+  "overlay", "resource-payloads", "sanity", "sanitizers", "type-libraries", "upx"
+]);
 const plural = (count: number, one: string, many: string): string =>
   `${count} ${count === 1 ? one : many}`;
 const coffTailSummary = (pe: PeParseResult): string =>
@@ -268,7 +274,8 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
   const descriptors: PeLazySectionDescriptor[] = [];
   addHeaderDescriptors(pe, descriptors);
   if (isPeWindowsParseResult(pe)) {
-    descriptors.push({ key: PE_LAZY_SECTION_KEYS.sanitizers, title: "Sanitizer evidence" });
+    pushIf(descriptors, pe.sanitizerEvidence?.length,
+      { key: PE_LAZY_SECTION_KEYS.sanitizers, title: "Sanitizer evidence" });
     addWindowsDescriptors(pe, descriptors);
     descriptors.push(...getPePayloadLazySectionDescriptors(pe.payloads));
   }
@@ -287,6 +294,7 @@ export const getPeLazySectionDescriptors = (pe: PeParseResult): PeLazySectionDes
 };
 export const renderPeLazySectionShells = (pe: PeParseResult, out: string[]): void => {
   getPeLazySectionDescriptors(pe).forEach(section => {
-    out.push(renderPeSectionShell(section.key, section.title, section.summary, section.id));
+    const html = renderPeSectionShell(section.key, section.title, section.summary, section.id);
+    out.push(section.origin || supplementalSections.has(section.key) ? markSupplementalAnalysis(html) : html);
   });
 };

@@ -18,5 +18,8 @@ void test("renderElfTls renders TLS segments and sections", async () => {
   assert.ok(html.includes("TLS"));
   assert.ok(html.includes(".tdata"));
   assert.ok(html.includes("PT_TLS"));
+  assert.match(html, /<caption>PT_TLS segments<\/caption>/);
+  assert.match(html, /<caption>TLS sections<\/caption>/);
+  assert.doesNotMatch(html, /<summary[^>]*>Show (?:PT_TLS segments|TLS sections)/);
 });
 

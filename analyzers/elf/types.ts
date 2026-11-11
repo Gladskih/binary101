@@ -17,6 +17,7 @@ import type { ElfUnwindSection } from "./unwind-types.js";
 import type { ElfHashTable } from "./hash-types.js";
 import type { GoBuildInfo } from "./go-build-info.js";
 import type { EmbeddedResourceAnalysis } from "../embedded-resources/types.js";
+import type { SanitizerEvidence } from "../sanitizers/types.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -78,7 +79,8 @@ export interface ElfSectionHeader {
 }
 
 export interface ElfParseResult {
-  embeddedResources?: EmbeddedResourceAnalysis;
+  embeddedResources?: EmbeddedResourceAnalysis | null;
+  sanitizerEvidence?: SanitizerEvidence[];
   goBuildInfo?: GoBuildInfo;
   lsdas?: ElfLsda[];
   armEhabi?: ArmEhabiTable[];

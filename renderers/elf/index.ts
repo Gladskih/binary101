@@ -1,5 +1,6 @@
 "use strict";
 import { renderElfSanitizers } from "./sanitizers.js";
+import { renderChecksWithoutFindings } from "../checks-without-findings.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
@@ -263,7 +264,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderHeader(elf, out);
   renderElfLinking(elf, out);
   renderElfSymbols(elf, out);
-  renderElfSanitizers(elf, out);
+  if (elf.sanitizerEvidence?.length) renderElfSanitizers(elf, out);
   renderElfSymbolVersions(elf, out);
   renderElfSymbolTables(elf, out);
   renderElfSectionGroups(elf, out);
@@ -282,5 +283,6 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderProgramHeaders(elf, out);
   renderSectionHeaders(elf, out);
   renderIssues(elf, out);
+  out.push(renderChecksWithoutFindings(elf));
   return out.join("");
 }

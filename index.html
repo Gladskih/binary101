@@ -29,6 +29,7 @@
   <link rel="manifest" href="./site.webmanifest">
   <link rel="icon" href="./favicon.svg" sizes="any" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./ui/inspection-workspace.css">
 </head>
 <body>
   <svg class="iconSprite" aria-hidden="true">
@@ -38,29 +39,53 @@
       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
     </symbol>
   </svg>
-  <header>
-    <h1>Local File Inspector</h1>
-    <p>All analysis runs locally in your browser. Nothing is uploaded.</p>
+  <a class="skipLink" href="#mainContent">Skip to inspection</a>
+  <header class="appHeader">
+    <div class="appBrand">
+      <img class="appBrand__mark" src="./favicon.svg" alt="" width="32" height="32">
+      <h1>Local File Inspector</h1>
+    </div>
+    <div class="fileHeader">
+      <div class="fileHeader__identity">
+        <button type="button" class="fileHeader__back" id="fileBackButton" hidden>← Back to files</button>
+        <h2 id="fileNameDetail" tabindex="-1"></h2>
+        <div id="fileBinaryTypeDetail" class="fileHeader__type"></div>
+        <span class="fileHeader__size" id="workspaceFileSize"></span>
+        <span id="fileAnalysisProgress" class="fileHeader__progress" hidden>
+          <progress max="100" aria-label="Matroska/WebM scan progress" title="Scanning Matroska/WebM">
+          </progress>
+          <span id="fileAnalysisPercent" aria-hidden="true"></span>
+        </span>
+      </div>
+    </div>
+    <div class="appHeader__actions">
+      <button type="button" class="secondaryButton" id="directoryOpenButton">Open folder</button>
+      <button type="button" class="actionButton" id="fileOpenButton">Open files</button>
+      <a class="appHeader__repository" href="https://github.com/Gladskih/binary101">GitHub</a>
+    </div>
   </header>
 
-  <main>
-    <label id="dropZone" for="fileInput" tabindex="0" aria-describedby="zoneHelp">
-      <div id="dropZoneInner">
-        <div class="zoneTitle">Drop file or folder / Paste / Click to browse</div>
-        <div class="zoneHint" id="zoneHelp">One or more files, or folders.</div>
-        <div id="statusMessage" aria-live="polite" aria-atomic="true"></div>
-      </div>
-    </label>
-    <div class="pickerActions">
-      <button type="button" class="actionButton" id="directoryOpenButton">Open folder</button>
-    </div>
-    <input id="fileInput" type="file" multiple />
+  <main id="mainContent" tabindex="-1">
+    <div id="statusMessage" role="status" aria-atomic="true"></div>
+    <button id="dropZone" type="button" aria-labelledby="zoneTitle zoneHelp">
+      <span id="dropZoneInner">
+        <svg class="dropZoneIcon" aria-hidden="true" viewBox="0 0 32 32" fill="none"
+          stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 3H8a2 2 0 0 0-2 2v22a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V10z"/>
+          <path d="M19 3v7h7M16 23V14m-4 4 4-4 4 4"/>
+        </svg>
+        <span class="zoneTitle" id="zoneTitle">Open files</span>
+        <span class="zoneHint" id="zoneHelp">Drop files or folders here, or paste from clipboard.</span>
+      </span>
+    </button>
+    <p class="selectionPrivacy">Files stay in your browser.</p>
+    <input id="fileInput" type="file" multiple hidden>
 
     <section id="resultsSection">
-      <article id="directoryInfoCard" hidden aria-live="polite" aria-atomic="true">
+      <article id="directoryInfoCard" hidden>
         <div class="directoryHeader">
           <div>
-            <h2 id="directoryName">Folder</h2>
+            <h2 id="directoryName" tabindex="-1">Folder</h2>
             <div class="inspectionContext" aria-label="Inspection context">
               <div class="inspectionContext__field">
                 <span class="inspectionContext__label">Source</span>
@@ -74,7 +99,7 @@
             <p id="directoryRelativePathTerm" class="inspectionRelativePath" hidden>
               Relative path: <span id="directoryRelativePathDetail"></span>
             </p>
-            <p id="directorySummary" class="smallNote"></p>
+            <p id="directorySummary" class="smallNote" role="status"></p>
           </div>
           <div id="directoryProgressWrap" hidden>
             <progress
@@ -135,10 +160,32 @@
           </div>
         </section>
       </article>
-      <article id="fileInfoCard" hidden aria-live="polite" aria-atomic="true">
-        <div class="filePrimaryInfo">
+      <article id="fileInfoCard" aria-labelledby="fileNameDetail" hidden>
+        <div class="inspectionWorkspace">
+          <aside class="workspaceSidebar">
+            <label class="workspaceMobileNavigation">
+              <span>Section</span>
+              <select id="workspaceMobileView"></select>
+            </label>
+            <label class="workspaceSidebar__search">
+              <span class="visuallyHidden">Find a section</span>
+              <input id="workspaceFilter" type="search" placeholder="Find a section…" autocomplete="off">
+            </label>
+            <nav id="workspaceNavigation" aria-label="File sections"></nav>
+            <p id="workspaceNavigationEmpty" class="smallNote" hidden>No matching sections.</p>
+          </aside>
+          <div class="workspaceContent" id="workspaceContent" tabindex="-1">
+            <div class="workspaceHeading" id="workspaceHeading">
+              <h3 id="workspaceTitle">Overview</h3>
+              <p id="workspaceDescription"></p>
+            </div>
+            <div id="workspaceViewport" class="workspaceViewport" tabindex="0"
+              role="region" aria-labelledby="workspaceTitle">
+            <section id="workspaceOverview" aria-label="File overview">
+              <div id="workspaceNotice" class="workspaceNotice" hidden></div>
+              <h4 class="workspaceSectionHeading">File properties</h4>
+              <div class="filePrimaryInfo">
           <dl>
-            <dt>File name</dt><dd id="fileNameDetail"></dd>
             <dt>Size</dt><dd id="fileSizeDetail"></dd>
             <dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd>
             <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
@@ -147,15 +194,18 @@
             <dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd>
             <dt id="fileRelativePathTerm" hidden>Relative path</dt>
             <dd id="fileRelativePathDetail" hidden></dd>
-            <dt>Binary type</dt><dd id="fileBinaryTypeDetail"></dd>
             <dt id="fileSubtypeTerm" hidden>Subtype</dt><dd id="fileSubtypeDetail" hidden></dd>
           </dl>
-          <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
-            <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
-          </div>
-        </div>
+                <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+                </div>
+              </div>
+              <p id="workspaceUnsupported" class="smallNote" hidden>
+                No format-specific analysis is available for this file.
+              </p>
+            </section>
 
-        <details id="hashDetails" class="hashDetails">
+        <details id="hashDetails" class="hashDetails" hidden>
           <summary>
             <span class="detailsSummaryTitle">File hashes</span>
             <span class="hashDetailsCount">8 algorithms</span>
@@ -284,20 +334,19 @@
           </dl>
         </details>
 
-        <dl>
-          <dt id="analysisTerm" hidden>Analysis details</dt>
-          <dd id="analysisValue" hidden></dd>
-        </dl>
+            <h3 id="analysisTerm" hidden>Analysis details</h3>
+            <div id="analysisValue" hidden></div>
+            </div>
+          </div>
+        </div>
       </article>
     </section>
   </main>
 
-  <footer>
+  <footer class="appFooter">
     <nav aria-label="Project links">
       <a class="footerLink" href="https://github.com/Gladskih/binary101">GitHub repository</a>
     </nav>
-    <div>Inspection is client-side only.</div>
-    <div><span>No upload.</span> <span>No tracking.</span></div>
   </footer>
 
   <script type="module" src="./app.ts"></script>

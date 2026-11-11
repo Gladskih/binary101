@@ -20,6 +20,8 @@ import { renderElfNotes } from "./notes.js";
 import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfDebug } from "./debug.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
+import { markSupplementalAnalysis } from "../supplemental-analysis.js";
+import { renderChecksWithoutFindings } from "../checks-without-findings.js";
 
 export interface ElfLazySection {
   key: string;
@@ -44,7 +46,7 @@ export const getElfLazySections = (elf: ElfParseResult): ElfLazySection[] => {
     return out.join("");
   } });
   add("header", "ELF header", renderHeader);
-  add("sanitizers", "Sanitizer evidence", renderElfSanitizers);
+  if (elf.sanitizerEvidence?.length) add("sanitizers", "Sanitizer evidence", renderElfSanitizers);
   if (elf.interpreter || elf.dynamic) add("linking", "Dynamic linking", renderElfLinking);
   if (elf.dynSymbols) add("symbols", "Imports / exports", renderElfSymbols);
   if (elf.symbolVersions) add("versions", "Symbol versions", renderElfSymbolVersions);
@@ -96,9 +98,16 @@ const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
   if (elf.comment || elf.debugLink || elf.dwarf || elf.goBuildInfo) add("debug", "Build / debug", renderElfDebug);
 };
 
+const supplementalSections = new Set([
+  "embedded-resources", "instruction-sets", "issues", "native-aot", "sanitizers"
+]);
+
 export const renderElfLazy = (elf: ElfParseResult | null): string => elf
-  ? getElfLazySections(elf).map(section => (section.key === "instruction-sets"
-    ? renderInstructionSetsShell()
-    : renderElfSectionStart(section.title) + renderElfSectionEnd())
-    .replace("<section ", `<section data-elf-lazy-section="${section.key}" `)).join("")
+  ? getElfLazySections(elf).map(section => {
+    const html = (section.key === "instruction-sets"
+      ? renderInstructionSetsShell()
+      : renderElfSectionStart(section.title) + renderElfSectionEnd())
+      .replace("<section ", `<section data-elf-lazy-section="${section.key}" `);
+    return supplementalSections.has(section.key) ? markSupplementalAnalysis(html) : html;
+  }).join("") + renderChecksWithoutFindings(elf)
   : "";

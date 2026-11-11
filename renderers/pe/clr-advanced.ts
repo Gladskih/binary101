@@ -33,7 +33,8 @@ export const renderStrongName = (clrHeader: PeClrHeader, out: string[]): void =>
 export const renderReadyToRun = (clrHeader: Pick<PeClrHeader, "readyToRun">, out: string[]): void => {
   const readyToRun = clrHeader.readyToRun;
   if (!readyToRun || readyToRun.status === "absent") return;
-  out.push(`<details style="margin-top:.35rem" open><summary>ReadyToRun / managed native header</summary><dl>`);
+  out.push(`<details data-analysis-origin="supplemental" style="margin-top:.35rem" open>` +
+    `<summary>ReadyToRun / managed native header</summary><dl>`);
   out.push(renderDefinitionRow("Status", escapeHtml(readyToRun.status), "ManagedNativeHeader format classification."));
   out.push(renderDefinitionRow("Signature", readyToRun.signature == null ? "-" : hex(readyToRun.signature, 8), "ManagedNativeHeader signature."));
   if (readyToRun.status === "ready-to-run") {

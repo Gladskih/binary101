@@ -9,6 +9,8 @@ type FakeBrowserGlobals = {
 };
 class FakeElement {
   readonly children: FakeElement[] = [];
+  readonly attributes = new Map<string, string>();
+  readonly ownerDocument = { activeElement: null };
   className = "";
   dataset: Record<string, string> = {};
   hidden = false;
@@ -24,6 +26,10 @@ class FakeElement {
   append(...nodes: FakeElement[]): void {
     this.children.push(...nodes);
   }
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+  focus(): void { /* Focus is covered in browser checks. */ }
   click(): void {
     (this.#listeners.get("click") ?? []).forEach(listener => listener({ target: this } as unknown as Event));
   }
@@ -127,7 +133,8 @@ const installFakeBrowser = (
   };
 };
 const rowTexts = (body: FakeElement): string[][] =>
-  body.children.map(row => row.children.map(cell => cell.textContent ?? ""));
+  body.children.map(row => row.children.map(cell =>
+    cell.children[0]?.textContent ?? cell.textContent ?? ""));
 const createDropItems = (...items: FakeDropItem[]) => ({
   length: items.length,
   item: (index: number): FakeDropItem | null => items[index] ?? null
@@ -192,7 +199,7 @@ void test("directory inspection lists nested entries and shallow-scans file rows
     assert.equal(elements.progressElement.max, 1);
     assert.equal(elements.progressElement.value, 1);
     assert.equal(elements.progressTextElement.textContent, "Scanned 1 / 1 files");
-    assert.equal(messages.at(-1), "Folder scan complete: 1 file.");
+    assert.equal(messages.at(-1), null);
   } finally {
     browser.restore();
   }

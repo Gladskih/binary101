@@ -170,12 +170,13 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
 
 export const renderInstructionSetsPanel = (pe: PeWindowsParseResult): string => {
   if (getCanonicalPeMachine(pe.coff.Machine) === IMAGE_FILE_MACHINE_ARM64) {
-    return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}">` +
+    return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}" data-analysis-origin="supplemental">` +
       renderPeAarch64InstructionSets(pe.disassembly) + `</section>`;
   }
   const out: string[] = [];
   renderInstructionSetsContent(pe, out);
-  return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}">${out.join("")}</section>`;
+  return `<section id="${PE_INSTRUCTION_SETS_PANEL_ID}" data-analysis-origin="supplemental">` +
+    `${out.join("")}</section>`;
 };
 
 export const renderInstructionSets = (pe: PeWindowsParseResult, out: string[]): void => {

@@ -5,6 +5,7 @@ import {
   renderAutoPagedSortableTable, type PagedSortableTableModel
 } from "../paged-sortable-table.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
+import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 import { createDRuntimeReferenceTableModel } from "./d-runtime-references.js";
 
 export const D_MODULE_TABLE_ID = "pe-d-runtime-modules";
@@ -59,7 +60,9 @@ export const createDRuntimeModuleTableModel = (modules: DModuleInfo[]): PagedSor
 export const renderDRuntime = (pe: PeWindowsParseResult, out: string[]): void => {
   const runtime = pe.dRuntime;
   if (!runtime) return;
-  out.push(renderPeSectionStart("D runtime metadata", `${runtime.modules.length} validated modules`));
+  out.push(markSupplementalAnalysis(renderPeSectionStart(
+    "D runtime metadata", `${runtime.modules.length} validated modules`
+  )));
   for (const warning of runtime.warnings) out.push(`<p class="smallNote">${escapeHtml(warning)}</p>`);
   if (runtime.modules.length) {
     out.push(renderAutoPagedSortableTable(createDRuntimeModuleTableModel(runtime.modules)));

@@ -51,5 +51,5 @@ export async function parsePe(
   const dwarf = await analyzePeDwarf(reader, parsed.sections,
     parsed.opt?.Magic === 0x20b ? 8 : 4, parsed.coff.Machine === 0xaa64 ? 183 : 0);
   const embeddedResources = await analyzePeEmbeddedResources(file, parsed);
-  return { ...parsed, ...(dwarf ? { dwarf } : {}), ...(embeddedResources ? { embeddedResources } : {}) };
+  return { ...parsed, ...(dwarf ? { dwarf } : {}), embeddedResources };
 }

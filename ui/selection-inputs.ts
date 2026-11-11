@@ -17,28 +17,49 @@ interface SelectionInputConfig {
 const snapshotFileList = (files: FileList): File[] =>
   Array.from({ length: files.length }, (_, index) => files.item(index)).filter((file): file is File => file != null);
 
-const openFileSelection = (
+const openFileSelection = async (
   config: SelectionInputConfig,
   files: readonly File[],
   source: DirectInspectionSource
-): void => {
+): Promise<void> => {
   if (files.length === 0) {
     config.setStatusMessage("No file selected.");
     return;
   }
-  void config.directoryInspection.openFiles(files, source);
+  await config.directoryInspection.openFiles(files, source);
 };
 
-const handleDroppedFiles = (config: SelectionInputConfig, event: Event): void => {
+const attachFilePicker = (config: SelectionInputConfig): void => {
+  const input = config.fileInputElement;
+  let current: Promise<void> | null = null;
+  const openSelection = async (files: FileList): Promise<void> => {
+    const inspection = openFileSelection(config, snapshotFileList(files), "selection");
+    current = inspection;
+    try {
+      await inspection;
+    } finally {
+      if (current === inspection) {
+        input.value = "";
+        current = null;
+      }
+    }
+  };
+  // Retain the selection so the native picker can recognize a repeat selection as a dismissal.
+  // https://html.spec.whatwg.org/multipage/input.html#file-upload-state-(type=file)
+  input.addEventListener("change", () => {
+    if (input.files?.length) void openSelection(input.files);
+  });
+};
+
+const handleDroppedFiles = async (config: SelectionInputConfig, event: Event): Promise<void> => {
   const dataTransfer = (event as DragEvent).dataTransfer;
   if (!dataTransfer) {
     config.setStatusMessage("Drop: cannot access data.");
     return;
   }
   const droppedFiles = snapshotFileList(dataTransfer.files);
-  void config.directoryInspection.openDroppedItems(dataTransfer.items, "drop").then(openedItems => {
-    if (!openedItems) openFileSelection(config, droppedFiles, "drop");
-  });
+  const openedItems = await config.directoryInspection.openDroppedItems(dataTransfer.items, "drop");
+  if (!openedItems) await openFileSelection(config, droppedFiles, "drop");
 };
 
 const handlePaste = async (
@@ -82,7 +103,32 @@ const handlePaste = async (
   );
 };
 
+const attachDocumentFileDrop = (config: SelectionInputConfig): void => {
+  let dragDepth = 0;
+  document.addEventListener("dragenter", event => {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    dragDepth += 1;
+    document.body.classList.add("draggingFiles");
+  });
+  document.addEventListener("dragleave", () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) document.body.classList.remove("draggingFiles");
+  });
+  document.addEventListener("dragover", event => {
+    if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+  });
+  document.addEventListener("drop", event => {
+    dragDepth = 0;
+    document.body.classList.remove("draggingFiles");
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    if (event.target instanceof Node && config.dropZoneElement.contains(event.target)) return;
+    void handleDroppedFiles(config, event);
+  });
+};
+
 const attachSelectionInputs = (config: SelectionInputConfig): void => {
+  attachDocumentFileDrop(config);
   ["dragenter", "dragover"].forEach(eventName =>
     config.dropZoneElement.addEventListener(eventName, event => {
       event.preventDefault();
@@ -92,22 +138,17 @@ const attachSelectionInputs = (config: SelectionInputConfig): void => {
   ["dragleave", "drop"].forEach(eventName =>
     config.dropZoneElement.addEventListener(eventName, event => {
       event.preventDefault();
-      if (event.type === "drop") handleDroppedFiles(config, event);
+      if (event.type === "drop") void handleDroppedFiles(config, event);
       config.dropZoneElement.classList.remove("dragover");
     })
   );
-  config.dropZoneElement.addEventListener("keydown", event => {
-    if (event.key !== " " && event.key !== "Enter") return;
-    event.preventDefault();
-    config.fileInputElement.click();
+  config.dropZoneElement.addEventListener("click", () => config.fileInputElement.click());
+  attachFilePicker(config);
+  window.addEventListener("paste", event => {
+    if (event.target instanceof Element &&
+      event.target.closest("input, textarea, [contenteditable]")) return;
+    void handlePaste(config, event as ClipboardEvent);
   });
-  config.fileInputElement.addEventListener("change", event => {
-    const input = event.currentTarget;
-    if (!(input instanceof HTMLInputElement)) return;
-    openFileSelection(config, input.files ? snapshotFileList(input.files) : [], "selection");
-    input.value = "";
-  });
-  window.addEventListener("paste", event => { void handlePaste(config, event as ClipboardEvent); });
 };
 
 export { attachSelectionInputs };

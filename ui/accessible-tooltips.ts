@@ -59,6 +59,7 @@ const ensureTooltipDismissal = (document: Document): void => {
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeOtherTooltips(document, null);
   });
+  document.addEventListener("scroll", () => closeOtherTooltips(document, null), true);
 };
 
 const createTooltipPopup = (document: Document, text: string): HTMLElement => {

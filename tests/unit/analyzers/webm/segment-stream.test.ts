@@ -7,7 +7,7 @@ import { scanSegmentClusters } from "../../../../analyzers/webm/segment-stream.j
 import { readElementAt } from "../../../../analyzers/webm/ebml.js";
 import { createOneByteChunkedStreamFile } from "../../../helpers/chunked-stream-file.js";
 import { MockFile } from "../../../helpers/mock-file.js";
-import { concatParts } from "../../../fixtures/webm-fixture-helpers.js";
+import { concatParts, ebmlElement } from "../../../fixtures/webm-fixture-helpers.js";
 import {
   createBlockGroupWithUnknownSizedChild,
   createBlockGroupWithUnknownSizedReference,
@@ -89,6 +89,30 @@ void test("scanSegmentClusters continues after an unknown-sized Cluster", async 
   assert.strictEqual(scanned.result.keyframeCount, clusters.length);
   assert.deepEqual(scanned.issues, []);
   assert.deepEqual(scanned.streamSizes, [scanned.expectedStreamSize]);
+});
+
+void test("large Segment scan skips padding and cancels after reporting a cluster", async () => {
+  const cluster = createStreamTestCluster(createSingleKeyframeClusterPayload());
+  // EBML Void (RFC 8794 § 4.9.2). Padding larger than the scan window exercises bounded reads.
+  const padding = ebmlElement(0xec, new Uint8Array(2 * 1024 * 1024));
+  const file = createSegmentFile(concatParts([cluster, padding, cluster]));
+  const issues: string[] = [];
+  const header = await readElementAt(file, 0, issues);
+  assert.ok(header?.size != null);
+  const progress: number[] = [];
+  const controller = new AbortController();
+  const result = await scanSegmentClusters(file, header, header.size, issues, () => undefined, {
+    signal: controller.signal,
+    onProgress: position => progress.push(position)
+  });
+  assert.equal(result.clusterCount, 2);
+  assert.equal(result.blockCount, 2);
+  assert.deepEqual(progress, [cluster.length, header.size]);
+  await assert.rejects(scanSegmentClusters(file, header, header.size, issues, () => undefined, {
+    signal: controller.signal,
+    onProgress: () => controller.abort()
+  }), { name: "AbortError" });
+  assert.deepEqual(issues, []);
 });
 
 void test("scanSegmentClusters warns when a Block exceeds its Cluster", async () => {
