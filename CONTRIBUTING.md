@@ -85,9 +85,9 @@
 - Do not collapse a one-record collection.
 - Keep layout stable during analysis. Show progress and errors beside the relevant action.
 - Disable completed actions for unchanged input; allow retry after failure or cancellation.
-- Preserve native field names, raw values, unknown states, option chips and embedded icons.
+- Show only recorded data or mathematically derived facts; avoid invented terms and judgments.
 - Keep overviews factual and link to source structures. Avoid duplicate facts.
-- Distinguish format structures from supplemental analysis without changing their order.
+- Visually distinguish format structures from supplemental analysis.
 - Align header groups consistently. Do not shrink text to make the layout fit.
 - Keep normal text contrast at least 4.5:1 in both themes.
 - Verify shared UI changes in the browser across representative formats, states, viewport sizes,
