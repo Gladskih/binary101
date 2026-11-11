@@ -80,6 +80,18 @@
 - Right-align numeric columns when users compare numbers down a column.
 - Use horizontal scrolling for wide data tables rather than wrapping cells into unreadable blocks.
 - Do not use disclosure controls when there is no meaningful hidden detail to reveal.
+- Apply shared table styles to all data tables. Size tables to content; keep controls nearby.
+- Limit line length in text blocks, including table cells, independently of workspace width.
+- Do not collapse a one-record collection.
+- Keep layout stable during analysis. Show progress and errors beside the relevant action.
+- Disable completed actions for unchanged input; allow retry after failure or cancellation.
+- Preserve native field names, raw values, unknown states, option chips and embedded icons.
+- Keep overviews factual and link to source structures. Avoid duplicate facts.
+- Distinguish format structures from supplemental analysis without changing their order.
+- Align header groups consistently. Do not shrink text to make the layout fit.
+- Keep normal text contrast at least 4.5:1 in both themes.
+- Verify shared UI changes in the browser across representative formats, states, viewport sizes,
+  both themes and 200% zoom. Check scrolling, keyboard access and geometry, not just DOM text.
 
 ## Tests
 

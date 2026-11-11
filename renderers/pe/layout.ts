@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
@@ -106,7 +107,7 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
   }
   if (bi.entries?.length) {
     out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Show bound imports (${bi.entries.length})</summary>`
+      renderCollectionStart(`Show bound imports (${bi.entries.length})`, bi.entries.length)
     );
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Module</th><th>TimeDateStamp</th><th>ForwarderRefs</th></tr></thead><tbody>`);
     bi.entries.forEach((e, index) => {
@@ -117,7 +118,7 @@ export function renderBoundImports(bi: PeBoundImportsSection, out: string[]): vo
         `<tr><td>${index + 1}</td><td>${escapeHtml(e.name || "")}</td><td>${hex(e.TimeDateStamp, 8)}</td><td>${forwarderLabel}</td></tr>`
       );
     });
-    out.push(`</tbody></table></details>`);
+    out.push(`</tbody></table>${renderCollectionEnd(bi.entries.length)}`);
   }
   out.push(renderPeSectionEnd());
 }
@@ -131,7 +132,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
   for (const entry of di.entries) {
     const dll = escapeHtml(entry.name || "(unknown DLL)");
     const fnCount = entry.functions?.length || 0;
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> \u2014 ${fnCount} function(s)</summary>`);
+    out.push(renderCollectionStart(`<b>${dll}</b> \u2014 ${fnCount} function(s)`, Math.max(1, fnCount)));
     out.push(`<dl style="margin-top:.35rem">`);
     out.push(`<dt>Attributes</dt><dd>${renderDelayImportAttributes(entry.Attributes)}</dd>`);
     out.push(`<dt>ModuleHandleRVA</dt><dd>${hex(entry.ModuleHandleRVA >>> 0, 8)}</dd>`);
@@ -150,7 +151,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
       });
       out.push(`</tbody></table>`);
     }
-    out.push(`</details>`);
+    out.push(renderCollectionEnd(Math.max(1, fnCount)));
   }
   out.push(renderPeSectionEnd());
 }

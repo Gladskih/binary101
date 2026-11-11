@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { hex } from "../../binary-utils.js";
@@ -66,8 +67,8 @@ const createSimpleTableModel = (title: string, headers: string[], rows: string[]
   createClrTableModel(title, headers, rows.length, index => rows[index] ?? null);
 
 const renderSimpleTable = (title: string, headers: string[], rows: string[][]): string =>
-  rows.length ? `<details><summary>${escapeHtml(title)} (${rows.length})</summary>` +
-    renderAutoPagedSortableTable(createSimpleTableModel(title, headers, rows)) + "</details>" : "";
+  rows.length ? renderCollectionStart(`${escapeHtml(title)} (${rows.length})`, rows.length) +
+    renderAutoPagedSortableTable(createSimpleTableModel(title, headers, rows)) + renderCollectionEnd(rows.length) : "";
 
 const targetFrameworkAttribute = (
   metadata: PeClrMetadataTables
@@ -244,6 +245,6 @@ export const renderClrMetadataTables = (
   out.push(renderTableStreamSummary(metadata));
   out.push(createClrMetadataTableModels(metadata).filter(model =>
     model.rowCount && model.id !== "pe-clr-Metadata%20tables").map(model =>
-      `<details><summary>${escapeHtml(decodeURIComponent(model.id.slice(7)))} (${model.rowCount})</summary>` +
-      renderAutoPagedSortableTable(model) + "</details>").join(""));
+      renderCollectionStart(`${escapeHtml(decodeURIComponent(model.id.slice(7)))} (${model.rowCount})`,
+        model.rowCount) + renderAutoPagedSortableTable(model) + renderCollectionEnd(model.rowCount)).join(""));
 };

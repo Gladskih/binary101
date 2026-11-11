@@ -11,7 +11,8 @@ void test("exposes CLR-free composite headers and omits absent runtime metadata"
   assert.equal(getPeClrSectionDescriptor(pe), null);
   pe.readyToRun = createReadyToRunCompositeFixture().data;
   assert.deepEqual(getPeClrSectionDescriptor(pe),
-    { key: "clr", title: "ReadyToRun composite header", summary: "2 ReadyToRun sections" });
+    { key: "clr", title: "ReadyToRun composite header", summary: "2 ReadyToRun sections",
+      origin: "supplemental" });
 });
 
 void test("keeps CLR runtime summaries and compact metadata row counts", () => {

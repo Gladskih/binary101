@@ -38,7 +38,7 @@ void test("section entropy control summarizes all-section calculation state", ()
   assert.match(pending, /^<div/);
   assert.match(pending, /on demand/);
   assert.match(partial, /Calculate entropy for all sections/);
-  assert.match(calculated, /Recalculate entropy for all sections/);
+  assert.match(calculated, /disabled>Entropy calculated/);
   assert.match(calculated, /Calculated for 1 of 2 sections; 1 raw range unavailable/);
   assert.equal(
     sectionEntropySummary([{ entropy: 0 }, { entropy: null }, { entropy: null }]),

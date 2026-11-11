@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
@@ -131,13 +132,13 @@ export const renderCoffTailSummary = (pe: PeParseResult): string | null => {
   out.push(`</dl>`);
   if (recoveredLongSectionNames.length) {
     out.push(
-      `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">Recovered long section names (${recoveredLongSectionNames.length})</summary>`
+      `${renderCollectionStart(`Recovered long section names (${recoveredLongSectionNames.length})`, recoveredLongSectionNames.length)}`
     );
     out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>Raw</th><th>Resolved</th></tr></thead><tbody>`);
     for (const entry of recoveredLongSectionNames) {
       out.push(`<tr><td>${escapeHtml(entry.raw)}</td><td>${escapeHtml(entry.resolved)}</td></tr>`);
     }
-    out.push(`</tbody></table></details>`);
+    out.push(`</tbody></table>${renderCollectionEnd(recoveredLongSectionNames.length)}`);
   }
   renderParsedCoffDebugInfo(pe, out);
   out.push(renderPeSectionEnd());

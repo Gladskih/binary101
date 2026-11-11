@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { dwarfExpressionText } from "../dwarf/expressions.js";
 import { renderDwarfFrames } from "../dwarf/frames.js";
 import { escapeHtml } from "../../html-utils.js";
@@ -14,11 +15,11 @@ const pointerText = (pointer: ElfUnwindPointer | null): string => pointer
 
 const instructionsHtml = (instructions: ElfCfiInstruction[]): string => {
   if (!instructions.length) return "—";
-  return `<details><summary>${instructions.length} instructions</summary><table class="table">` +
+  return `${renderCollectionStart(`${instructions.length} instructions`, instructions.length)}<table class="table">` +
     `<thead><tr><th>Offset</th><th>Operation</th><th>Encoded operands</th></tr></thead><tbody>` +
     instructions.map(item => `<tr><td class="peNumeric">0x${item.offset.toString(16)}</td>` +
       `<td>${escapeHtml(item.operation)}</td><td>${escapeHtml(item.operands.map(operand => Array.isArray(operand) ? dwarfExpressionText(operand) : String(operand)).join(", "))}</td></tr>`)
-      .join("") + `</tbody></table></details>`;
+      .join("") + `</tbody></table>${renderCollectionEnd(instructions.length)}`;
 };
 
 export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSortableTableModel => {

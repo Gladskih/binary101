@@ -236,6 +236,9 @@ class SelectedDetails extends FakeHTMLElement {
 
 class SelectedPanel extends FakeHTMLElement {
   readonly details = new SelectedDetails();
+  readonly events: string[] = [];
+  readonly classList = { contains: (name: string) => this.className.split(" ").includes(name) };
+  dispatchEvent(event: Event): boolean { this.events.push(event.type); return true; }
   querySelector(): SelectedDetails { return this.details; }
 }
 
@@ -258,4 +261,29 @@ void test("selected-RVA disassembly opens and focuses its result panel", async c
   assert.equal(panel.details.open, true);
   assert.equal(panel.details.summary.focused, true);
   assert.equal(panel.details.summary.scrolled, true);
+  assert.deepEqual(panel.events, ["inspection-reveal"]);
+});
+
+void test("selected-RVA disassembly delegates workspace navigation without focusing a hidden summary", async context => {
+  const globals = globalThis as unknown as { HTMLDetailsElement?: unknown };
+  const previous = globals.HTMLDetailsElement;
+  globals.HTMLDetailsElement = SelectedDetails;
+  context.after(() => { globals.HTMLDetailsElement = previous; });
+  const panel = new SelectedPanel();
+  panel.className = "workspacePanel";
+  context.after(installFakeDom({ peEntrypointDisassemblyPanel: panel }).restore);
+  const pe = createMinimalPe();
+  const file = new MockFile(new Uint8Array(), "selected.exe");
+  const controller = createPeEntrypointDisassemblyController({
+    getCurrentFile: () => file,
+    getCurrentParseResult: () => ({ analyzer: "pe", parsed: pe }),
+    analyze: async () => createFakeReport()
+  });
+
+  controller.start(file, pe, 0x1234);
+  await flushTimers();
+
+  assert.deepEqual(panel.events, ["inspection-reveal"]);
+  assert.equal(panel.details.summary.focused, false);
+  assert.equal(panel.details.summary.scrolled, false);
 });

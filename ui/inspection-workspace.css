@@ -1,5 +1,5 @@
 :root {
-  --accent: #9d9fff;
+  --accent: #8bbcff;
   --bg: #141418;
   --card: #202026;
   --text: #eeeef0;
@@ -8,16 +8,16 @@
   --border2: rgb(255 255 255 / 17%);
   --workspace-rail: #1b1b20;
   --workspace-subtle: rgb(255 255 255 / 3%);
-  --workspace-selected: rgb(99 102 241 / 15%);
+  --workspace-selected: rgb(59 130 246 / 15%);
   --workspace-supplemental: rgb(255 255 255 / 4%);
-  --workspace-action: #5b5ee0;
+  --workspace-action: #2463ad;
   --workspace-action-text: #fff;
   --workspace-control-border: #777780;
   --selection-width: 600px;
 }
 @media (prefers-color-scheme:light) {
   :root {
-    --accent: #4448ad;
+    --accent: #1d5599;
     --bg: #f6f7f9;
     --card: #fff;
     --text: #232534;
@@ -26,9 +26,9 @@
     --border2: rgb(35 37 52 / 19%);
     --workspace-rail: #f9f9fa;
     --workspace-subtle: rgb(35 37 52 / 3%);
-    --workspace-selected: rgb(99 102 241 / 9%);
+    --workspace-selected: rgb(59 130 246 / 9%);
     --workspace-supplemental: rgb(0 0 0 / 3%);
-    --workspace-action: #5558d9;
+    --workspace-action: #2463ad;
     --workspace-control-border: #85858d;
   }
 }
@@ -242,6 +242,17 @@ body:not(.hasInspection) #statusMessage {
   margin: 8px auto;
   min-width: 0
 }
+.hasInspection #resultsSection {
+  width: 100%;
+  margin: 0
+}
+body.hasInspection {
+  background: var(--card)
+}
+.hasInspection #directoryInfoCard {
+  border: 0;
+  border-radius: 0
+}
 .hasInspection #dropZone,.hasInspection .selectionPrivacy,.hasInspection .appFooter {
   display: none
 }
@@ -257,8 +268,8 @@ body.draggingFiles #dropZone {
 }
 #fileInfoCard {
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 0;
   background: var(--card);
   min-width: 0;
   overflow: clip
@@ -312,6 +323,7 @@ body:has(#fileInfoCard:not([hidden])) #fileProperties {
 .fileProperty .optionsRow {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   margin: 0;
   padding: 0;
   gap: 3px
@@ -331,7 +343,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
 }
 .fileHeader__identity {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
   gap: 2px 12px;
   min-width: 0;
@@ -350,6 +362,10 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
 .fileHeader__type {
   font-size: 14px;
   color: var(--muted)
+}
+.fileHeader__type, .fileHeader__size {
+  border-left: 1px solid var(--workspace-control-border);
+  padding-left: 12px
 }
 .fileHeader__size {
   font-family: var(--mono);
@@ -519,7 +535,8 @@ details[data-analysis-origin="supplemental"] > summary {
   align-items: baseline;
   gap: 2px 12px;
   margin-bottom: 10px;
-  padding-bottom: 8px;
+  padding: 4px 8px;
+  margin-inline: -8px;
   border-bottom: 1px solid var(--border)
 }
 .workspaceHeading h3 {
@@ -650,7 +667,7 @@ details[data-analysis-origin="supplemental"] > summary {
     grid-column: 1 / -1
   }
 }
-.workspaceContent .table {
+.workspaceContent table {
   width: auto;
   border-radius: 0;
   overflow: visible
@@ -662,15 +679,15 @@ details[data-analysis-origin="supplemental"] > summary {
   + :is(table,.tableWrap,.pagedSortableTable,.peTlsFields) {
   margin-block-start: 12px
 }
-.workspaceContent .table caption {
+.workspaceContent table caption {
   text-align: left
 }
-.workspaceContent .table th {
+.workspaceContent table th {
   white-space: nowrap;
   background: var(--workspace-rail);
   font-weight: 500
 }
-.workspaceContent .table th,.workspaceContent .table td {
+.workspaceContent table th,.workspaceContent table td {
   padding: 6px 10px;
   line-height: 1.5
 }
@@ -703,7 +720,7 @@ details[data-analysis-origin="supplemental"] > summary {
 .workspaceContent .tableWrap {
   width: fit-content
 }
-.workspaceContent .tableWrap > .table {
+.workspaceContent .tableWrap > table {
   margin-top: 0
 }
 .workspaceContent .peTlsFields > .tableWrap {
@@ -725,11 +742,28 @@ details[data-analysis-origin="supplemental"] > summary {
   max-inline-size: 72rem;
   display: flow-root
 }
-#hashDetails .filePrimaryInfo__iconWrap {
-  float: right;
-  margin: 0 0 16px 24px;
+.nativeOverview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px
+}
+.nativeOverview > .filePrimaryInfo__iconWrap {
   width: 11rem;
-  max-width: 25%
+  margin: 0;
+  flex-shrink: 0
+}
+#fileOverviewContent {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 24rem
+}
+.nativeOverviewSection {
+  margin-bottom: 20px
+}
+.nativeOverviewSection h4 {
+  margin: 0 0 12px;
+  font-size: 14px
 }
 #hashDetails > dl {
   margin: 0;
@@ -919,7 +953,7 @@ details[data-analysis-origin="supplemental"] > summary {
   #dropZone {
     padding: 34px 24px
   }
-  #resultsSection,.hasInspection #statusMessage {
+  body:not(.hasInspection) #resultsSection,.hasInspection #statusMessage {
     width: calc(100% - 24px)
   }
 }

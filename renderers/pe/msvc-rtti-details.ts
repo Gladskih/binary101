@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { hex, hex64 } from "../../binary-utils.js";
@@ -216,9 +217,11 @@ export const renderMsvcRttiVftableDetails = (
     detailTableId(vftableIndex, "slots"),
     symbolNames
   );
-  return `<details><summary>Show inheritance and ${vftable.functionTargetRvas.length} vftable slot(s)</summary>` +
+  return renderCollectionStart(`Base classes (${bases.rowCount}) and vftable slots (${slots.rowCount})`,
+    bases.rowCount + slots.rowCount) +
     `<h4>Base classes (preorder)</h4>${renderAutoPagedSortableTable(bases)}` +
-    `<h4>vftable slots</h4>${renderAutoPagedSortableTable(slots)}</details>`;
+    `<h4>vftable slots</h4>${renderAutoPagedSortableTable(slots)}` +
+    renderCollectionEnd(bases.rowCount + slots.rowCount);
 };
 
 export const getMsvcRttiDetailTableModel = (

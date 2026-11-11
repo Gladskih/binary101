@@ -3,6 +3,7 @@ import { formatHumanSize } from "../../binary-utils.js";
 import type { PeInstructionSetReport } from "../../analyzers/pe/disassembly/types.js";
 import { renderAarch64RequirementTable } from "../aarch64-instruction-sets.js";
 import { renderAarch64SpecialInstructions } from "../aarch64-special-instructions.js";
+import { renderInstructionSetAction } from "../instruction-set-action.js";
 
 const renderResults = (report: PeInstructionSetReport): string => {
   const issues = report.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
@@ -21,8 +22,7 @@ export const renderPeAarch64InstructionSets = (report?: PeInstructionSetReport):
   `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
   `<span class="detailsSummaryTitle">Instruction sets</span></summary>` +
   `<div class="analysisPanelBody"><div class="analysisPanelActions">` +
-  `<button type="button" class="actionButton" id="peInstructionSetsAnalyzeButton">` +
-  `${report ? "Re-analyze" : "Analyze"} instruction sets</button>` +
+  renderInstructionSetAction("peInstructionSetsAnalyzeButton", report) +
   `<button type="button" class="actionButton" id="peInstructionSetsCancelButton" hidden>` +
   `Cancel</button></div><div class="smallNote">AArch64 instruction-set requirements</div>` +
   `<div class="smallNote dim">LLVM opcode feature gates preserve “and” / “or” alternatives. ` +

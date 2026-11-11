@@ -98,8 +98,9 @@ const attachPreviewGuards = (
       const removePreview = (): void => {
         if (!videoElement.isConnected) return;
         const wrapper = videoElement.closest(".videoPreview") as HTMLElement | null;
-        if (wrapper?.parentElement) wrapper.parentElement.removeChild(wrapper);
-        setStatusMessage("Preview not shown: browser cannot play this video format inline.");
+        if (wrapper) {
+          wrapper.textContent = "Preview not shown: browser cannot play this video format inline.";
+        } else setStatusMessage("Preview not shown: browser cannot play this video format inline.");
       };
       videoElement.addEventListener("error", removePreview, { once: true });
       const sourceElement = videoElement.querySelector("source") as HTMLSourceElement | null;
@@ -111,8 +112,9 @@ const attachPreviewGuards = (
       const removePreview = (): void => {
         if (!audioElement.isConnected) return;
         const wrapper = audioElement.closest(".audioPreview") as HTMLElement | null;
-        if (wrapper?.parentElement) wrapper.parentElement.removeChild(wrapper);
-        setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
+        if (wrapper) {
+          wrapper.textContent = "Preview not shown: browser cannot play this audio format inline.";
+        } else setStatusMessage("Preview not shown: browser cannot play this audio format inline.");
       };
       audioElement.addEventListener("error", removePreview, { once: true });
     }

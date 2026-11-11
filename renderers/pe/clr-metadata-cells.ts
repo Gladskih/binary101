@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
@@ -58,8 +59,8 @@ export const renderAdditionalMetadataTables = (metadata: PeClrMetadataTables): s
   )).join("");
 
 const renderTableModel = (rows: Record<string, PeClrAdditionalCell>[], name: string): string =>
-  rows.length ? `<details><summary>${escapeHtml(name)} (${rows.length})</summary>` +
-    renderAutoPagedSortableTable(additionalTableModel(rows, name)) + "</details>" : "";
+  rows.length ? renderCollectionStart(`${escapeHtml(name)} (${rows.length})`, rows.length) +
+    renderAutoPagedSortableTable(additionalTableModel(rows, name)) + renderCollectionEnd(rows.length) : "";
 
 export const renderFieldsAndMembers = (metadata: PeClrMetadataTables): string =>
   renderTableModel((metadata.fields ?? []).map(field => ({

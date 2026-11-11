@@ -7,13 +7,17 @@ const inspectPe = async (page: Page): Promise<void> => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
-  await expect(page.locator("#workspaceTitle")).toHaveText("DOS header");
+  await expect(page.locator("#workspaceTitle")).toHaveText("Overview");
 };
 
-test("file opens at its original first structure and retains all properties in the header", async ({ page }) => {
+test("native overview retains the icon, source fields and header properties", async ({ page }) => {
   await inspectPe(page);
-  await expect(page.locator('[data-pe-lazy-section="dos-header"]')).toBeVisible();
-  await expect(page.locator("#workspaceNavigation")).not.toContainText("Overview");
+  await expect(page.locator("#fileIcon")).toBeVisible();
+  await expect(page.locator("#fileOverviewContent")).toContainText("VERSION / 1 / LANGID 0x0409");
+  await expect(page.locator("#fileOverviewContent")).toContainText("FileDescription");
+  await expect(page.locator("#fileOverviewContent")).not.toContainText("Architecture");
+  await page.locator('[data-workspace-source="resources"]').click();
+  await expect(page.locator('[data-pe-lazy-section="resources"]')).toBeVisible();
   await expect(page.locator("#workspaceNavigation")).not.toContainText("File hashes");
   await expect(page.locator("#fileFormatSummary")).toHaveCount(0);
   await expect(page.locator(".appHeader #fileMimeTypeDetail")).toBeVisible();
@@ -24,10 +28,10 @@ test("file opens at its original first structure and retains all properties in t
   expect(await page.title()).toContain(createPeResourcePreviewFile().name);
 });
 
-test("file hashes are a header tool with no outer frame or disclosure and retain the file icon", async ({ page }) => {
+test("file hashes remain a header tool with no outer frame or disclosure", async ({ page }) => {
   await inspectPe(page);
   await openInspectionSection(page, "File hashes");
-  await expect(page.locator("#fileIcon")).toBeVisible();
+  await expect(page.locator("#fileIcon")).toBeHidden();
   await expect(page.locator("#hashDetails summary")).toHaveCount(0);
   await expect(page.locator("#md5ComputeButton")).toBeVisible();
   await expect(page.locator("#hashDetails")).toHaveCSS("border-top-width", "0px");
@@ -39,6 +43,21 @@ test("wide screen uses one row for file properties and actions", async ({ page }
   expect(await page.locator(".appHeader").evaluate(element => element.getBoundingClientRect().height))
     .toBeLessThanOrEqual(50);
   await expect(page.locator('.appHeader a[href*="github.com"]')).toBeVisible();
+  const baselines = await page.locator(".appHeader").evaluate(header =>
+    Array.from(header.querySelectorAll(
+      "#fileNameDetail,#fileBinaryTypeDetail,#fileSizeDetail,.fileProperty dt," +
+      ".fileProperty dd:not(:has(.opt)),.fileProperty .opt.sel"
+    )).filter(element => element.getClientRects().length).map(element => {
+      const marker = element.ownerDocument.createElement("span");
+      marker.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
+      element.append(marker);
+      const baseline = marker.getBoundingClientRect().y;
+      marker.remove();
+      return baseline;
+    }));
+  expect(Math.max(...baselines) - Math.min(...baselines)).toBeLessThan(1);
+  await expect(page.locator("#fileBinaryTypeDetail")).toHaveCSS("border-left-width", "1px");
+  await expect(page.locator("#fileSizeDetail")).toHaveCSS("border-left-width", "1px");
 });
 
 for (const width of [320, 500, 768]) {

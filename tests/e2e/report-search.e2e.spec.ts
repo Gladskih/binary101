@@ -30,6 +30,6 @@ test("section search and mobile navigation work without decoded string matches",
   await page.locator("#workspaceFilter").fill("DOS header");
   await page.locator("#reportSearchResults").getByRole("button", { name: "DOS header", exact: true }).click();
   await expect(page.locator("#workspaceTitle")).toHaveText("DOS header");
-  await openInspectionSection(page, "Overview");
+  await openInspectionSection(page, "File hashes");
   await expect(page.locator("#fileAnalysisDurationDetail")).not.toHaveText("");
 });

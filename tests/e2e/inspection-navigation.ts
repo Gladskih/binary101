@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 export const openInspectionSection = async (page: Page, title: string): Promise<void> => {
-  if (title === "Overview" || title === "File hashes") {
+  if (title === "File hashes") {
     await page.locator("#fileHashesButton").click();
     await expect(page.locator("#workspaceTitle")).toHaveText("File hashes");
     return;
@@ -27,7 +27,7 @@ export const toggleInspectionSection = async (summary: Locator): Promise<void> =
   });
   if (!title) { await summary.click(); return; }
   const heading = summary.page().locator("#workspaceTitle");
-  await openInspectionSection(summary.page(), await heading.textContent() === title ? "Overview" : title);
+  await openInspectionSection(summary.page(), await heading.textContent() === title ? "File hashes" : title);
 };
 
 export const openInspectionContent = async (page: Page, text: string | RegExp): Promise<void> => {

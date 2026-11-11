@@ -4,17 +4,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPeDiagnosticBody, renderPeDiagnostics } from "../../../../renderers/pe/diagnostics.js";
 
-void test("renderPeDiagnostics wraps even a single warning in details", () => {
+void test("renderPeDiagnostics shows a single warning directly without disclosure", () => {
   const html = renderPeDiagnostics("Resource warnings", [
     "Top-level resource type entry TYPE_1325421056 points directly to data."
   ]);
 
-  assert.match(html, /<details/);
-  assert.match(html, /<summary/);
+  assert.doesNotMatch(html, /<details/);
+  assert.doesNotMatch(html, /<summary/);
   assert.match(html, /Resource warnings/);
   assert.match(html, /1 message/);
   assert.match(html, /TYPE_1325421056 points directly to data/);
-  assert.match(html, /<details class="peDiagnosticDetails"/);
   assert.match(html, /<ul class="smallNote peDiagnosticList"/);
   assert.match(html, /class="peDiagnosticItem"/);
   assert.match(html, /class="peDiagnosticText"/);

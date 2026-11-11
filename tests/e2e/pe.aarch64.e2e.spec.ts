@@ -29,7 +29,7 @@ test("PE ARM64 analyzes with local WASM and displays architecture requirements",
   expect(requests.filter(url => url.endsWith(".wasm"))).toHaveLength(0);
   await page.locator("#peInstructionSetsAnalyzeButton").click();
   await expect(page.locator("#peInstructionSetsAnalyzeButton"))
-    .toHaveText("Re-analyze instruction sets");
+    .toHaveText("Instruction sets analyzed");
   await expect(panel).toContainText("6 instruction(s)");
   await expect(panel).toContainText("FEAT_SVE or FEAT_SME");
   await expect(panel).toContainText(`LLVM ${llvmVersion}`);
@@ -42,7 +42,7 @@ test("PE ARM64 analyzes with local WASM and displays architecture requirements",
   await expect(panel).toContainText("Configured EL0 access");
   await expect(panel).not.toContainText("MRS TPIDR_EL0");
   await expect(panel).not.toContainText("HVC");
-  await page.locator("#peInstructionSetsAnalyzeButton").click();
+  await expect(page.locator("#peInstructionSetsAnalyzeButton")).toBeDisabled();
   await expect(panel).toContainText("6 instruction(s)");
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");
   expect(requests.some(url => /llvm-aarch64.*\.wasm$/.test(url))).toBe(true);

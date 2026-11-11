@@ -33,13 +33,13 @@ for (const width of [390, 1280]) {
     await toggleInspectionSection(panel.locator("summary").first());
     await page.locator("#elfInstructionSetsAnalyzeButton").click();
     await expect(page.locator("#elfInstructionSetsAnalyzeButton"))
-      .toHaveText("Re-analyze instruction sets");
+      .toHaveText("Instruction sets analyzed");
     await expect(page.locator("#elfInstructionSetsPanel > details")).toHaveAttribute("open", "");
     await toggleInspectionSection(panel.locator("summary").first());
     await expect(panel.locator(".analysisPanelBody")).toBeEmpty();
     await toggleInspectionSection(panel.locator("summary").first());
     await expect(page.locator("#elfInstructionSetsAnalyzeButton"))
-      .toHaveText("Re-analyze instruction sets");
+      .toHaveText("Instruction sets analyzed");
     expect(errors).toEqual([]);
   });
 }

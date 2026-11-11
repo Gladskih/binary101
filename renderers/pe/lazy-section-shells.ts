@@ -101,7 +101,6 @@ const addHeaderDescriptors = (pe: PeParseResult, descriptors: PeLazySectionDescr
   });
   descriptors.push({
     key: PE_LAZY_SECTION_KEYS.peHeaders,
-    summary: `${plural(pe.coff.NumberOfSections, "section", "sections")}`,
     title: "PE/COFF headers"
   });
   pushIf(descriptors, pe.dirs?.length, {

@@ -42,9 +42,11 @@ test("PE ISA explains special instructions and disassembles a selected RVA", asy
   await table.getByRole("button", { name: "Disassemble at RVA 0x00001007", exact: true }).click();
   const disassembly = page.locator("#peEntrypointDisassemblyPanel");
   await expect(disassembly).toContainText("RVA 0x00001007");
-  await expect(disassembly.getByText("Disassembly from selected RVA", { exact: true })).toBeVisible();
+  await expect(page.locator("#workspaceTitle")).toHaveText("Disassembly from selected RVA");
   await expect(disassembly.locator(":scope > details")).toHaveJSProperty("open", true);
   await expect(disassembly).toContainText("cpuid");
-  await panel.getByRole("button", { name: "Re-analyze instruction sets", exact: true }).click();
+  await toggleInspectionSection(panel.locator(":scope > details > summary"));
+  await expect(panel.getByRole("button", { name: "Instruction sets analyzed", exact: true }))
+    .toBeDisabled();
   await expect(syscall.getByRole("cell").nth(2)).toHaveText("2");
 });

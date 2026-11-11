@@ -19,7 +19,7 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 };
 
 const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
-  await openInspectionSection(page, "File hashes");
+  await openInspectionSection(page, "Overview");
   const icon = page.locator("#fileIcon");
   await expect(icon).toBeVisible();
   await expect(icon).toHaveAttribute("alt", `Icon embedded in ${fileName}`);
@@ -39,10 +39,12 @@ const openTopLevelSection = async (page: Page, title: string) => {
 };
 
 const openResourceGroup = async (page: Page, typeName: string) => {
-  const details = page.locator("#analysisValue details details").filter({
-    has: page.locator("summary", { hasText: new RegExp(`^${typeName}\\b`) })
+  const details = page.locator("[data-pe-resource-group]").filter({
+    has: page.locator(".collectionSummary", { hasText: new RegExp(`^${typeName}\\b`) })
   }).first();
-  await toggleInspectionSection(details.locator(":scope > summary"));
+  if (await details.evaluate(element => element.tagName === "DETAILS")) {
+    await toggleInspectionSection(details.locator(":scope > summary"));
+  }
   return details;
 };
 

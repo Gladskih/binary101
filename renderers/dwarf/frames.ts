@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { escapeHtml } from "../../html-utils.js";
 import { evaluateDwarfCfi } from "../../analyzers/dwarf/cfi-state.js";
 import { dwarfAttributeValue } from "../../analyzers/dwarf/attribute-values.js";
@@ -59,8 +60,8 @@ export const createDwarfFrameTableModel = (dwarf: DwarfAnalysis): PagedSortableT
 };
 
 export const renderDwarfFrames = (dwarf: DwarfAnalysis): string => dwarf.frames?.fdes.length
-  ? `<details><summary>Stack and caller recovery (${dwarf.frames.fdes.length} regions)</summary>` +
-    renderAutoPagedSortableTable(createDwarfFrameTableModel(dwarf)) + "</details>" : "";
+  ? renderCollectionStart(`Stack and caller recovery (${dwarf.frames.fdes.length} regions)`, dwarf.frames.fdes.length) +
+    renderAutoPagedSortableTable(createDwarfFrameTableModel(dwarf)) + renderCollectionEnd(dwarf.frames.fdes.length) : "";
 
 export const getDwarfFrameTableModel = (dwarf: DwarfAnalysis, id: string): PagedSortableTableModel | null => {
   if (id === "dwarf-frames") return createDwarfFrameTableModel(dwarf);

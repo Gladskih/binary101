@@ -50,7 +50,7 @@ export const createSectionEntropyClickHandler = (deps: SectionEntropyDeps) =>
     const target = event.target;
     if (!(target instanceof Element)) return;
     const button = target.closest<HTMLButtonElement>("[data-section-entropy-action]");
-    if (!button) return;
+    if (!button || button.disabled) return;
     const root = button.closest<HTMLElement>("[data-section-entropy-root]");
     const file = deps.getFile();
     const parseResult = deps.getParseResult();
@@ -60,21 +60,19 @@ export const createSectionEntropyClickHandler = (deps: SectionEntropyDeps) =>
       return;
     }
     setButtonBusy(button);
-    deps.setStatusMessage("Calculating section entropy...");
+    const progress = root.querySelector<HTMLElement>("[data-section-entropy-status]");
+    if (progress) progress.textContent = "Calculating section entropy...";
     try {
       const entropies = await calculateSectionEntropies(file, sections);
       if (deps.getFile() !== file || deps.getParseResult().parsed !== parseResult.parsed) return;
       sections.forEach((section, index) => { section.entropy = entropies[index] ?? null; });
       updateRenderedEntropies(root, sections);
-      button.textContent = "Recalculate entropy for all sections";
-      deps.setStatusMessage(null);
+      button.textContent = "Entropy calculated";
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : String(error);
       const status = root.querySelector<HTMLElement>("[data-section-entropy-status]");
       if (status) status.textContent = `Entropy calculation failed: ${message}`;
       button.textContent = "Retry entropy";
-      deps.setStatusMessage(`Entropy calculation failed: ${message}`);
-    } finally {
       button.disabled = false;
     }
   };

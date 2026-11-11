@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { humanSize } from "../../binary-utils.js";
@@ -205,15 +206,15 @@ const renderResourceIntro = (resources: PeResources, out: string[]): void => {
 
 const renderResourceCrossChecks = (resources: PeResources, out: string[]): void => {
   if (!resources.crossChecks?.length) return;
-  out.push(`<details style="margin-top:.75rem"><summary><b>Resource cross-checks</b> - ` +
-    `${resources.crossChecks.length}</summary>`);
+  out.push(renderCollectionStart(`<b>Resource cross-checks</b> - ${resources.crossChecks.length}`,
+    resources.crossChecks.length));
   out.push(`<div style="overflow-x:auto"><table class="table"><thead><tr>` +
     `<th>Status</th><th>Resource</th><th>Finding</th></tr></thead><tbody>`);
   for (const check of resources.crossChecks) {
     out.push(`<tr><td>${check.status === "confirmed" ? "Confirmed" : check.status === "unresolved" ? "Unresolved" : "Warning"}</td>` +
       `<td>${escapeHtml(check.subject)}</td><td>${escapeHtml(check.detail)}</td></tr>`);
   }
-  out.push(`</tbody></table></div></details>`);
+  out.push(`</tbody></table></div>` + renderCollectionEnd(resources.crossChecks.length));
 };
 
 const renderTopResourceKinds = (resources: PeResources, out: string[]): void => {
@@ -239,7 +240,7 @@ const renderTopResourceKinds = (resources: PeResources, out: string[]): void => 
 const renderResourceDirectories = (resources: PeResources, out: string[]): void => {
   if (!resources.directories?.length) return;
   out.push(
-    `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}</summary>`
+    renderCollectionStart(`<b>IMAGE_RESOURCE_DIRECTORY</b> - ${resources.directories.length} table${resources.directories.length === 1 ? "" : "s"}`, resources.directories.length, ` style="margin-top:.75rem"`)
   );
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Offset</th><th>Timestamp</th><th>Version</th><th>Named</th><th>ID</th></tr></thead><tbody>`
@@ -249,7 +250,7 @@ const renderResourceDirectories = (resources: PeResources, out: string[]): void 
       `<tr><td class="mono">0x${directory.offset.toString(16)}</td><td class="mono">${formatDirectoryTimestamp(directory.timeDateStamp)}</td><td>${formatDirectoryVersion(directory.majorVersion, directory.minorVersion)}</td><td>${directory.namedEntries}</td><td>${directory.idEntries}</td></tr>`
     );
   }
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>${renderCollectionEnd(resources.directories.length)}`);
 };
 
 const renderResourceDetails = (resources: PeResources, out: string[]): void => {
@@ -258,12 +259,12 @@ const renderResourceDetails = (resources: PeResources, out: string[]): void => {
     const typeName = escapeHtml(group.typeName || "(unknown)");
     const entryCount = flattenResourcePreviewRows(group).length;
     out.push(
-      `<details data-pe-resource-group="${groupIndex}" style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}</summary>`
+      renderCollectionStart(`<b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}`, Math.max(1, entryCount), ` data-pe-resource-group="${groupIndex}" style="margin-top:.75rem"`)
     );
     if (entryCount) {
       out.push(renderAutoPagedSortableTable(createResourceDetailTableModel(group, groupIndex, resources)));
     }
-    out.push(`</details>`);
+    out.push(renderCollectionEnd(Math.max(1, entryCount)));
   });
 };
 
@@ -271,7 +272,7 @@ const renderAdditionalResourcePaths = (resources: PeResources, out: string[]): v
   const extraPaths = (resources.paths || []).filter(path => path.nodes.length !== 3);
   if (!extraPaths.length) return;
   out.push(
-    `<details style="margin-top:.75rem"><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>Additional resource paths</b> - ${extraPaths.length}</summary>`
+    renderCollectionStart(`<b>Additional resource paths</b> - ${extraPaths.length}`, extraPaths.length, ` style="margin-top:.75rem"`)
   );
   out.push(
     `<table class="table" style="margin-top:.35rem"><thead><tr><th>Path</th><th>Size</th><th>CodePage</th><th>Data RVA</th></tr></thead><tbody>`
@@ -281,7 +282,7 @@ const renderAdditionalResourcePaths = (resources: PeResources, out: string[]): v
       `<tr><td>${path.nodes.map(formatResourcePathNode).join(" / ")}</td><td>${humanSize(path.size)}</td><td>${formatCodePage(path.codePage)}</td><td class="mono">0x${path.dataRVA.toString(16)}</td></tr>`
     );
   }
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>${renderCollectionEnd(extraPaths.length)}`);
 };
 
 export function renderResources(resources: PeResources, out: string[]): void {

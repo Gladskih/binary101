@@ -50,6 +50,7 @@ const installPreviewEnvironment = (
 const createVideoGuardFixture = (): {
   container: HTMLElement;
   triggerSourceError: () => void;
+  message: () => string | null;
 } => {
   let sourceErrorListener: (() => void) | undefined;
   const parentElement = {
@@ -81,6 +82,7 @@ const createVideoGuardFixture = (): {
 
   return {
     container,
+    message: () => wrapper.textContent,
     triggerSourceError: () => {
       assert.ok(sourceErrorListener);
       sourceErrorListener();
@@ -94,6 +96,7 @@ const createAudioGuardFixture = (): {
   setStatusMessage: (message: string | null | undefined) => void;
   statusMessages: Array<string | null | undefined>;
   wasRemoved: () => boolean;
+  message: () => string | null;
 } => {
   const statusMessages: Array<string | null | undefined> = [];
   let removed = false;
@@ -131,6 +134,7 @@ const createAudioGuardFixture = (): {
       statusMessages.push(message);
     },
     statusMessages,
+    message: () => wrapper.textContent,
     wasRemoved: () => removed
   };
 };
@@ -248,7 +252,7 @@ void test("buildPreviewHtml returns null when the browser cannot play the candid
   }
 });
 
-void test("attachPreviewGuards removes broken video previews and sets a status message", () => {
+void test("attachPreviewGuards explains a broken video inside its preview", () => {
   const fixture = createVideoGuardFixture();
   const statusMessages: Array<string | null | undefined> = [];
   const preview: PreviewRender = { kind: "video", html: "" };
@@ -258,22 +262,20 @@ void test("attachPreviewGuards removes broken video previews and sets a status m
   });
   fixture.triggerSourceError();
 
-  assert.deepEqual(statusMessages, [
-    "Preview not shown: browser cannot play this video format inline."
-  ]);
+  assert.deepEqual(statusMessages, []);
+  assert.equal(fixture.message(), "Preview not shown: browser cannot play this video format inline.");
 });
 
-void test("attachPreviewGuards removes broken audio previews and sets a status message", () => {
+void test("attachPreviewGuards explains broken audio without changing the global status", () => {
   const fixture = createAudioGuardFixture();
   const preview: PreviewRender = { kind: "audio", html: "" };
 
   attachPreviewGuards(preview, fixture.container, fixture.setStatusMessage);
   fixture.triggerAudioError();
 
-  assert.equal(fixture.wasRemoved(), true);
-  assert.deepEqual(fixture.statusMessages, [
-    "Preview not shown: browser cannot play this audio format inline."
-  ]);
+  assert.equal(fixture.wasRemoved(), false);
+  assert.deepEqual(fixture.statusMessages, []);
+  assert.equal(fixture.message(), "Preview not shown: browser cannot play this audio format inline.");
 });
 
 void test("attachPreviewGuards tolerates missing media elements", () => {

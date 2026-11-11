@@ -96,10 +96,10 @@ void test("section entropy handler calculates and updates all rendered section v
     assert.deepEqual(values.map(value => value.textContent), ["0.00", "1.00"]);
     assert.deepEqual(values.map(value => value.className), ["", ""]);
     assert.deepEqual(cells.map(cell => cell.getAttribute("data-sort-value")), ["0", "1"]);
-    assert.equal(button.textContent, "Recalculate entropy for all sections");
-    assert.equal(button.disabled, false);
+    assert.equal(button.textContent, "Entropy calculated");
+    assert.equal(button.disabled, true);
     assert.equal(status.textContent, "Calculated for 2 of 2 sections.");
-    assert.deepEqual(messages, ["Calculating section entropy...", null]);
+    assert.deepEqual(messages, []);
   } finally {
     globals["Element"] = originalElement;
   }
@@ -193,10 +193,7 @@ void test("section entropy handler surfaces stream failures and enables retry", 
     assert.equal(status.textContent, "Entropy calculation failed: read failed");
     assert.equal(button.textContent, "Retry entropy");
     assert.equal(button.disabled, false);
-    assert.deepEqual(messages, [
-      "Calculating section entropy...",
-      "Entropy calculation failed: read failed"
-    ]);
+    assert.deepEqual(messages, []);
   } finally {
     globals["Element"] = originalElement;
   }
@@ -239,7 +236,7 @@ void test("section entropy handler exposes a busy state while the stream is pend
     streamController.enqueue(new Uint8Array(4));
     streamController.close();
     await pending;
-    assert.equal(button.disabled, false);
+    assert.equal(button.disabled, true);
   } finally {
     globals["Element"] = originalElement;
   }

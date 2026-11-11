@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import { escapeHtml } from "../../html-utils.js";
 import { DWARF_ATTRIBUTE, DWARF_TAG } from "../../analyzers/dwarf/constants.js";
@@ -85,10 +86,11 @@ const renderAttributes = (index: DwarfDieIndex, record: DwarfDieRecord): string 
       dwarfAttributeName(attribute.name).replace("DW_AT_", "").replaceAll("_", " ")
     )}</td>` +
       `<td>${escapeHtml(text)}</td></tr>`;
-  }).join("");
-  if (!rows) return "";
-  return `<details><summary>Attributes</summary><div class="tableWrap"><table class="table">` +
-    `<thead><tr><th>Attribute</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+  }).filter(Boolean);
+  if (!rows.length) return "";
+  return renderCollectionStart("Attributes", rows.length) + `<div class="tableWrap"><table class="table">` +
+    `<thead><tr><th>Attribute</th><th>Value</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>` +
+    renderCollectionEnd(rows.length);
 };
 
 const declarationFilePath = (dwarf: DwarfAnalysis, owner: DwarfDieRecord,

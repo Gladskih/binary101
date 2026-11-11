@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { hex, humanSize } from "../../binary-utils.js";
@@ -257,11 +258,11 @@ const renderDetailedLoadConfigAddressTable = (
     `table RVA ${table.tableRva == null ? "-" : escapeHtml(hex(table.tableRva, 8))}`,
     ...(hiddenCount ? [`showing first ${ADDRESS_TABLE_RENDER_LIMIT}; ${hiddenCount} hidden`] : [])
   ];
-  return `<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)">${escapeHtml(`${table.name} (${table.entries.length}/${table.declaredCount})`)}</summary>` +
+  return `${renderCollectionStart(`${escapeHtml(`${table.name} (${table.entries.length}/${table.declaredCount})`)}`, Math.max(1, table.entries.length))}` +
     `<div class="loadConfigAddressTableBody"><div class="smallNote" style="margin:.35rem 0 0 0">${details.join("; ")}.</div>` +
     renderAddressTableNote(table) +
     renderAddressTableWarning(table) +
-    `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div></details>`;
+    `<div class="tableWrap"><table class="table"><thead><tr><th>#</th><th>RVA</th><th>VA</th><th>Section</th><th>Metadata</th><th>Notes</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>${renderCollectionEnd(Math.max(1, table.entries.length))}`;
 };
 
 export const renderLoadConfigAddressTables = (

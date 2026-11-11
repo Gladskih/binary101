@@ -45,12 +45,13 @@ export const renderSectionEntropyControl = (
 ): string => {
   const calculated = sections.every(section => section.entropy !== undefined);
   const label = calculated
-    ? "Recalculate entropy for all sections"
+    ? "Entropy calculated"
     : "Calculate entropy for all sections";
   const status = calculated
     ? sectionEntropySummary(sections)
     : "Reads every complete raw section range on demand.";
-  return `<div style="margin:.35rem 0 .5rem 0">` +
-    `<button type="button" class="tableButton" data-section-entropy-action>${label}</button> ` +
+  return `<div class="sectionEntropyControl">` +
+    `<button type="button" class="tableButton" data-section-entropy-action` +
+    `${calculated ? " disabled" : ""}>${label}</button> ` +
     `<span class="smallNote dim" data-section-entropy-status>${status}</span></div>`;
 };

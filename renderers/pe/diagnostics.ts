@@ -1,6 +1,7 @@
 "use strict";
 
 import { escapeHtml } from "../../html-utils.js";
+import { renderCountedCollection } from "../counted-collection.js";
 
 type PeDiagnosticGroup = {
   pattern: string;
@@ -51,13 +52,10 @@ const renderDiagnosticSummary = (
   diagnostics: string[],
   groups: PeDiagnosticGroup[]
 ): string =>
-  `<summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);` +
-  `border-radius:6px;background:var(--chip-bg);color:var(--warning-text,#b45309)">` +
   `<b>${escapeHtml(summaryLabel)}</b> - ${diagnostics.length} message${diagnostics.length === 1 ? "" : "s"}` +
   (diagnostics.length > 8
     ? ` grouped into ${groups.length} pattern${groups.length === 1 ? "" : "s"}`
-    : "") +
-  `</summary>`;
+    : "");
 
 export const renderPeDiagnostics = (
   summaryLabel: string,
@@ -66,12 +64,8 @@ export const renderPeDiagnostics = (
   if (!diagnostics.length) return "";
   const groups = diagnostics.length > 8 ? collectDiagnosticGroups(diagnostics) : [];
   const body = renderPeDiagnosticBody(diagnostics);
-  return (
-    `<details class="peDiagnosticDetails" style="margin-top:.5rem">` +
-    renderDiagnosticSummary(summaryLabel, diagnostics, groups) +
-    body +
-    `</details>`
-  );
+  return renderCountedCollection(renderDiagnosticSummary(summaryLabel, diagnostics, groups),
+    body, diagnostics.length, ' class="peDiagnosticDetails"');
 };
 
 export const renderPeDiagnosticBody = (diagnostics: string[]): string => {

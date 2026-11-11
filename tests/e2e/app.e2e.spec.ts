@@ -179,7 +179,7 @@ test.describe("file hash actions", () => {
     await expect(page.getByRole("heading", { name: "Local File Inspector" })).toBeVisible();
   });
 
-  void test("keeps hash actions in a collapsed section before analysis details", async ({ page }) => {
+  void test("keeps hash actions in the file tool and retains accessible explanations", async ({ page }) => {
     const file = createPeFile();
     await page.setInputFiles("#fileInput", toUpload(file));
     await expectBaseDetails(page, "sample.exe", "PE32 executable for x86 (I386)");
@@ -211,7 +211,7 @@ test.describe("file hash actions", () => {
     const nativeHashLabels = page.locator(".nativeHashLabel");
     const nativeHashBadges = page.locator(".nativeHashBadge");
     const nativeHashTooltip = page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup");
-    await openInspectionSection(page, "Overview");
+    await openInspectionSection(page, "File hashes");
     await expect(hashDetails).toBeVisible();
     await expect(nativeHashLabels).toHaveCount(4);
     await expect(nativeHashBadges).toHaveText(["🍃", "🍃", "🍃", "🍃"]);

@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { dwarfExpressionText } from "../dwarf/expressions.js";
 import { escapeHtml } from "../../html-utils.js";
 import { evaluateElfCfi } from "../../analyzers/elf/cfi-state.js";
@@ -23,8 +24,8 @@ export const renderElfCfiState = (cie: ElfUnwindCie, fde: ElfUnwindFde): string 
     `<td>${row.returnAddressSigned ? "Signed" : "Unsigned"}</td>` +
     `<td class="peNumeric">${row.argumentSize}</td></tr>`).join("");
   const issues = evaluation.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-  return `<details><summary>${evaluation.rows.length} unwind rule rows</summary>` +
+  return renderCollectionStart(`${evaluation.rows.length} unwind rule rows`, evaluation.rows.length) +
     `<div class="tableWrap"><table class="table"><thead><tr><th>PC start</th><th>CFA</th>` +
     `<th>Register rules</th><th>Return address</th><th>Argument bytes</th></tr></thead>` +
-    `<tbody>${rows}</tbody></table></div>${issues ? `<ul>${issues}</ul>` : ""}</details>`;
+    `<tbody>${rows}</tbody></table></div>${issues ? `<ul>${issues}</ul>` : ""}${renderCollectionEnd(evaluation.rows.length)}`;
 };

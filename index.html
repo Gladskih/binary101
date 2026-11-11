@@ -188,20 +188,23 @@
           </aside>
           <div class="workspaceContent" id="workspaceContent" tabindex="-1">
             <div class="workspaceHeading" id="workspaceHeading">
-              <h3 id="workspaceTitle">File hashes</h3>
+              <h3 id="workspaceTitle">Overview</h3>
               <p id="workspaceDescription"></p>
             </div>
             <div id="workspaceViewport" class="workspaceViewport" tabindex="0"
               role="region" aria-label="Report contents">
-            <section id="workspaceOverview" aria-label="File tools">
+            <section id="workspaceOverview" aria-label="File overview" hidden>
               <div id="workspaceNotice" class="workspaceNotice" hidden></div>
+              <div class="nativeOverview"><div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+                </div><div id="fileOverviewContent"></div></div>
+            </section>
+            <section id="workspaceHashes" aria-label="File hash tools">
               <p id="workspaceUnsupported" class="smallNote" hidden>
                 No format-specific analysis is available for this file.
               </p>
         <section id="hashDetails" class="hashDetails" aria-label="File hashes">
-<div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
-                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
-                </div>
+
           <dl>
           <dt>MD5</dt>
           <dd class="hashRow">

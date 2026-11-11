@@ -1,4 +1,3 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
@@ -21,7 +20,8 @@ void test("PE diagnostic warning bullets stay inside the panel and wrapped text 
       ]) +
       `</div></details></section></dd></dl></main>`
   );
-  await toggleInspectionSection(page.locator(".peDiagnosticDetails > summary"));
+  await expect(page.locator(".peDiagnosticDetails > summary")).toHaveCount(0);
+  await expect(page.locator(".peDiagnosticItem")).toBeVisible();
 
   const layout = await page.locator(".peDiagnosticItem").evaluate(item => {
     const bullet = item.querySelector("span[aria-hidden='true']");
@@ -37,10 +37,6 @@ void test("PE diagnostic warning bullets stay inside the panel and wrapped text 
     const bulletRect = bullet.getBoundingClientRect();
     const textRect = text.getBoundingClientRect();
     const detailsRect = details.getBoundingClientRect();
-    const view = item.ownerDocument.defaultView;
-    if (!view) throw new Error("Expected a window for layout inspection.");
-    const detailsBeforeStyle = view.getComputedStyle(details, "::before");
-    const lineLeft = detailsRect.left + Number.parseFloat(detailsBeforeStyle.left);
     const range = item.ownerDocument.createRange();
     range.selectNodeContents(text);
     const textLineRects = [...range.getClientRects()].map(rect => ({
@@ -50,19 +46,14 @@ void test("PE diagnostic warning bullets stay inside the panel and wrapped text 
     return {
       bulletLeft: bulletRect.left,
       bulletRight: bulletRect.right,
-      detailsBeforeDisplay: detailsBeforeStyle.display,
       detailsRight: detailsRect.right,
       itemLeft: itemRect.left,
-      lineLeft,
       textLeft: textRect.left,
       textLineRects
     };
   });
 
-  expect(layout.detailsBeforeDisplay).not.toBe("none");
-  expect(layout.lineLeft).toBeLessThan(layout.bulletLeft);
   expect(layout.bulletLeft).toBeGreaterThanOrEqual(layout.itemLeft);
-  expect(layout.bulletLeft).toBeGreaterThan(layout.lineLeft);
   expect(layout.textLeft).toBeGreaterThan(layout.bulletRight);
   expect(layout.textLineRects.length).toBeGreaterThan(1);
   for (const rect of layout.textLineRects) {

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { openInspectionSection } from "./inspection-navigation.js";
 import { createMp4File } from "../fixtures/mp4-fixtures.js";
 
 const toUpload = () => {
@@ -95,11 +96,13 @@ test.describe("MP4 previews", () => {
     await page.setInputFiles("#fileInput", upload);
 
     await expectMp4Details(page, file.name);
+    await openInspectionSection(page, "Preview");
     const videoPreview = page.locator(".videoPreview video");
     await expect(videoPreview).toBeVisible();
     await triggerDeferredMediaError(page);
     await expect(videoPreview).toHaveCount(0);
-    await expect(page.locator("#statusMessage")).toHaveText(
+    await expect(page.locator("#statusMessage")).toHaveText("");
+    await expect(page.locator(".videoPreview")).toHaveText(
       "Preview not shown: browser cannot play this video format inline."
     );
   });

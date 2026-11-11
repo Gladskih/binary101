@@ -8,6 +8,7 @@ import type { InspectionContext } from "./inspection-context.js";
 import { createWorkspaceReflow } from "./workspace-reflow.js";
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
 import { ReportSearch, revealReportText } from "./report-search.js";
+import { renderNativeFileOverview } from "../renderers/native-file-overview.js";
 
 interface WorkspaceScrollPosition {
   page: number;
@@ -17,7 +18,7 @@ interface WorkspaceScrollPosition {
 
 class InspectionWorkspace {
   private sections: WorkspaceSection[] = [];
-  private selected = "overview";
+  private selected = "hashes";
   private analysisComplete = false;
   private initialSectionPending = true;
   private readonly scrollPositions = new Map<string, WorkspaceScrollPosition>();
@@ -31,7 +32,7 @@ class InspectionWorkspace {
   private readonly reflow: ReturnType<typeof createWorkspaceReflow>;
   private result: ParseForUiResult | null = null;
   private readonly search: ReportSearch;
-  private previousSection = "overview";
+  private previousSection = "hashes";
   constructor(private readonly root: Document) {
     this.appTitle = root.title;
     this.analysis = this.element("analysisValue");
@@ -49,8 +50,8 @@ class InspectionWorkspace {
     return this.root.getElementById(id)!;
   }
   begin(context: InspectionContext): void {
-    this.selected = "overview";
-    this.previousSection = "overview";
+    this.selected = "hashes";
+    this.previousSection = "hashes";
     this.analysisComplete = false;
     this.initialSectionPending = true;
     this.scrollPositions.clear();
@@ -59,6 +60,7 @@ class InspectionWorkspace {
     this.filter.value = "";
     this.search.reset();
     this.result = null;
+    this.element("fileOverviewContent").replaceChildren();
     this.element("fileBackButton").hidden = context.source !== "navigation";
     this.viewport.scrollTo({ top: 0, left: 0, behavior: "instant" });
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -69,29 +71,40 @@ class InspectionWorkspace {
   }
   completeAnalysis(result: ParseForUiResult): void {
     this.result = result;
+    this.element("fileOverviewContent").innerHTML = renderNativeFileOverview(result);
     const firstResult = !this.analysisComplete;
     this.analysisComplete = true;
     this.refresh();
     if (firstResult && this.initialSectionPending && !this.filter.value) {
-      this.activate(this.sections.find(section => !section.origin && section.title !== "Preview")?.key ??
-        this.sections[0]?.key ?? "overview");
+      this.activate(this.overviewSection()?.key ??
+        this.sections.find(section => !section.origin)?.key ??
+        this.sections[0]?.key ?? "hashes");
     }
     if (this.filter.value.trim()) this.search.update(this.filter.value);
   }
   refresh(): void {
     this.sections = collectWorkspaceSections(this.analysis);
-    renderWorkspaceNavigation(this.navigation, this.sections);
-    renderWorkspaceSelect(this.mobileView, this.sections, this.filter.value);
+    renderWorkspaceNavigation(this.navigation, this.navigationSections());
+    renderWorkspaceSelect(this.mobileView, this.navigationSections(), this.filter.value);
     this.element("workspaceUnsupported").hidden = !this.analysisComplete || this.sections.length > 0;
     this.updateNotices();
-    this.select(this.selected === "search" || this.sections.some(section => section.key === this.selected)
-      ? this.selected : "overview");
+    this.select(["overview", "hashes", "search"].includes(this.selected) ||
+      this.sections.some(section => section.key === this.selected) ? this.selected : "hashes");
     this.filterNavigation();
     this.syncLayout();
   }
+  private overviewSection(): WorkspaceSection | null {
+    if (!this.element("fileOverviewContent").hasChildNodes() && this.element("fileIconWrap").hidden) return null;
+    return { key: "overview", title: "Overview", description: "", origin: undefined,
+      element: this.element("workspaceOverview"), details: null };
+  }
+  private navigationSections(): WorkspaceSection[] {
+    const overview = this.overviewSection();
+    return overview ? [overview, ...this.sections] : this.sections;
+  }
   private select(key: string): void {
     const section = this.sections.find(item => item.key === key);
-    if (!section && key !== "overview" && key !== "search") return;
+    if (!section && !["overview", "hashes", "search"].includes(key)) return;
     if (this.selected !== key) {
       this.scrollPositions.set(this.selected, {
         page: window.scrollY, top: this.viewport.scrollTop, left: this.viewport.scrollLeft
@@ -100,6 +113,7 @@ class InspectionWorkspace {
     }
     this.selected = key;
     this.element("workspaceOverview").hidden = key !== "overview";
+    this.element("workspaceHashes").hidden = key !== "hashes";
     this.element("reportSearchResults").hidden = key !== "search";
     this.element("hashDetails").hidden = false;
     this.analysis.hidden = !section;
@@ -116,7 +130,7 @@ class InspectionWorkspace {
   }
   private updateHeading(section: WorkspaceSection | undefined): void {
     this.element("workspaceTitle").textContent = section?.title ??
-      (this.selected === "search" ? "Search results" : "File hashes");
+      (this.selected === "search" ? "Search results" : this.selected === "hashes" ? "File hashes" : "Overview");
     this.element("workspaceDescription").textContent = section?.description ?? "";
     const heading = this.element("workspaceHeading");
     if (section?.origin === "supplemental") {
@@ -164,14 +178,14 @@ class InspectionWorkspace {
   private clearSearch(): void {
     this.filter.value = "";
     this.search.reset();
-    renderWorkspaceSelect(this.mobileView, this.sections);
+    renderWorkspaceSelect(this.mobileView, this.navigationSections());
     this.filterNavigation();
   }
   private searchReport(): void {
     if (this.selected !== "search") this.previousSection = this.selected;
     const query = this.filter.value.trim();
     this.search.update(query);
-    renderWorkspaceSelect(this.mobileView, this.sections, query);
+    renderWorkspaceSelect(this.mobileView, this.navigationSections(), query);
     this.activate(query ? "search" : this.previousSection);
     this.filterNavigation();
   }
@@ -220,6 +234,13 @@ class InspectionWorkspace {
     }
   }
   private attachEvents(): void {
+    this.analysis.addEventListener("inspection-reveal", event => {
+      this.refresh();
+      const section = this.sections.find(item => event.target instanceof Node &&
+        item.element.contains(event.target));
+      if (section) this.activate(section.key);
+      this.viewport.focus({ preventScroll: true });
+    });
     this.element("fileInfoCard").addEventListener("click", event => {
       const button = event.target instanceof Element ?
         event.target.closest<HTMLElement>("[data-workspace-target], [data-workspace-source]") : null;
@@ -252,7 +273,7 @@ class InspectionWorkspace {
     this.element("fileBackButton").addEventListener("click", () => window.history.back());
     this.element("fileHashesButton").addEventListener("click", () => {
       this.clearSearch();
-      this.activate("overview");
+      this.activate("hashes");
       this.viewport.focus({ preventScroll: true });
     });
   }

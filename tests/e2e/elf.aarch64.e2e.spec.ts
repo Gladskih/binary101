@@ -34,7 +34,7 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   await expect(page.locator("#elfInstructionSetsPanel")).toContainText("AArch64");
   expect(requests.filter(url => url.endsWith(".wasm"))).toHaveLength(0);
   await page.locator("#elfInstructionSetsAnalyzeButton").click();
-  await expect(page.locator("#elfInstructionSetsAnalyzeButton")).toHaveText("Re-analyze instruction sets");
+  await expect(page.locator("#elfInstructionSetsAnalyzeButton")).toHaveText("Instruction sets analyzed");
   const panel = page.locator("#elfInstructionSetsPanel");
   await expect(panel).toContainText("6 instruction(s)");
   await expect(panel).toContainText("FEAT_SVE or FEAT_SME");
@@ -51,7 +51,7 @@ test("ELF AArch64 analyzes using local WASM and displays architecture requiremen
   await expect(panel).toContainText("Configured EL0 access");
   await expect(panel).not.toContainText("MRS TPIDR_EL0");
   await expect(panel).not.toContainText("HVC");
-  await page.locator("#elfInstructionSetsAnalyzeButton").click();
+  await expect(page.locator("#elfInstructionSetsAnalyzeButton")).toBeDisabled();
   await expect(row.getByRole("cell").nth(2)).toHaveText("2");
   expect(requests.some(url => /llvm-aarch64.*\.wasm$/.test(url))).toBe(true);
   expect(requests.every(url => new URL(url).origin === new URL(page.url()).origin)).toBe(true);

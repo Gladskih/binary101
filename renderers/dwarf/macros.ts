@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { escapeHtml } from "../../html-utils.js";
 import { dwarfAttributeValue, dwarfNumericValue } from "../../analyzers/dwarf/attribute-values.js";
 import { dwarfLineProgramForUnit, dwarfSectionContributionAt,
@@ -103,7 +104,7 @@ export const renderDwarfMacros = (dwarf: DwarfAnalysis): string => {
   const macros = dwarf.macros?.filter(macro => macro.entries.length) ?? [];
   if (!macros.length) return "";
   return "<h5>Preprocessor macros</h5>" + macros.map((macro, index) =>
-    `<details><summary>Macro sequence ${index + 1}: ${macro.entries.length} directives</summary>` +
-    renderAutoPagedSortableTable(createDwarfMacroTableModel(dwarf, macro)) + "</details>"
+    renderCollectionStart(`Macro sequence ${index + 1}: ${macro.entries.length} directives`, macro.entries.length) +
+    renderAutoPagedSortableTable(createDwarfMacroTableModel(dwarf, macro)) + renderCollectionEnd(macro.entries.length)
   ).join("");
 };

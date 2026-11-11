@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { escapeHtml } from "../../html-utils.js";
 import { dwarfUnitRoot } from "../../analyzers/dwarf/attribute-values.js";
 import { dwarfTagLabel } from "../../analyzers/dwarf/tag-names.js";
@@ -48,12 +49,14 @@ const renderAddressLookup = (dwarf: DwarfAnalysis): string => {
 
 export const renderDwarfLookups = (dwarf: DwarfAnalysis): string =>
   (dwarf.publicNames ?? []).filter(table => table.entries.length).map(table =>
-    `<details><summary>${escapeHtml(table.sectionName.includes("types") ? "Indexed public types" : "Indexed public names")}` +
-    ` (${table.entries.length})</summary>` + renderAutoPagedSortableTable(createDwarfPublicNameTableModel(dwarf, table)) +
-    "</details>"
+    renderCollectionStart(`${escapeHtml(table.sectionName.includes("types") ?
+      "Indexed public types" : "Indexed public names")} (${table.entries.length})`, table.entries.length) +
+    renderAutoPagedSortableTable(createDwarfPublicNameTableModel(dwarf, table)) +
+    renderCollectionEnd(table.entries.length)
   ).join("") + (dwarf.nameIndexes ?? []).filter(table => table.names.some(name => name.entries.length)).map(table =>
-    `<details><summary>Debugger name index (${table.names.length} names)</summary>` +
-    renderAutoPagedSortableTable(createDwarfNameIndexTableModel(dwarf, table)) + "</details>"
+    renderCollectionStart(`Debugger name index (${table.names.length} names)`, table.names.length) +
+    renderAutoPagedSortableTable(createDwarfNameIndexTableModel(dwarf, table)) +
+    renderCollectionEnd(table.names.length)
   ).join("") + renderAddressLookup(dwarf);
 
 export const getDwarfLookupTableModel = (dwarf: DwarfAnalysis, id: string): PagedSortableTableModel | null => {

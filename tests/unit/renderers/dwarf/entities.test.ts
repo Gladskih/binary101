@@ -77,7 +77,8 @@ void test("entities keep unnamed inline sites and omit empty attribute disclosur
 
   assert.ok(html.includes("calculate::(unnamed)"));
   assert.match(html, /file not recorded/);
-  assert.equal(html.match(/<details>/g)?.length, 2);
+  assert.equal(html.match(/class="collectionSummary">Attributes/g)?.length, 2);
+  assert.doesNotMatch(html, /<details>/);
   dwarf.linePrograms = [];
   assert.match(renderDwarfEntities(dwarf), /file not recorded/);
 });

@@ -1,6 +1,7 @@
 "use strict";
 
 import { formatHumanSize } from "../../binary-utils.js";
+import { renderInstructionSetAction } from "../instruction-set-action.js";
 import { escapeHtml } from "../../html-utils.js";
 import { IMAGE_FILE_MACHINE_ARM64 } from "../../analyzers/coff/machine.js";
 import { getCanonicalPeMachine } from "../../analyzers/pe/machine.js";
@@ -71,11 +72,7 @@ const renderFeatureTable = (rows: string): string =>
 const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): void => {
   const disasm = pe.disassembly;
   out.push(renderInstructionPanelStart());
-  const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
-  out.push(
-    `<button type="button" class="actionButton" id="${ANALYZE_BUTTON_ID}">` +
-    `${escapeHtml(analyzeLabel)}</button>`
-  );
+  out.push(renderInstructionSetAction(ANALYZE_BUTTON_ID, disasm));
   out.push(
     `<button type="button" class="actionButton" id="${CANCEL_BUTTON_ID}" hidden>` +
     `Cancel</button>`

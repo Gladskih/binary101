@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
@@ -9,13 +10,13 @@ import { renderDwarfAnalysis } from "../dwarf.js";
 const renderComment = (comment: ElfCommentInfo): string => {
   if (!comment.strings?.length) return "";
   const items = comment.strings.map(text => `<li class="mono">${escapeHtml(text)}</li>`).join("");
-  return `<details style="margin-top:.35rem"><summary style="cursor:pointer">Compiler comments (.comment) (${comment.strings.length})</summary><ul>${items}</ul></details>`;
+  return `${renderCollectionStart(`Compiler comments (.comment) (${comment.strings.length})`, comment.strings.length, ` style="margin-top:.35rem"`)}<ul>${items}</ul>${renderCollectionEnd(comment.strings.length)}`;
 };
 
 const renderCommentIssues = (comment: ElfCommentInfo): string => {
   if (!comment.issues?.length) return "";
   const items = comment.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-  return `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">.comment notes</summary><ul>${items}</ul></details>`;
+  return `${renderCollectionStart(`.comment notes`, comment.issues.length, ` style="margin-top:.35rem"`)}<ul>${items}</ul>${renderCollectionEnd(comment.issues.length)}`;
 };
 
 const renderDebugLink = (debugLink: ElfDebugLinkInfo, littleEndian: boolean): string => {

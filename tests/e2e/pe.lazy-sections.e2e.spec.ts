@@ -33,10 +33,11 @@ test.describe("PE lazy sections", () => {
     await toggleInspectionSection(section.locator(":scope > details > summary"));
     await expect(body).not.toHaveJSProperty("childElementCount", 0);
 
-    const manifest = page.locator("#analysisValue details details").filter({
-      has: page.locator("summary", { hasText: /^MANIFEST\b/ })
+    const manifest = page.locator("[data-pe-resource-group]").filter({
+      has: page.locator(".collectionSummary", { hasText: /^MANIFEST\b/ })
     }).first();
-    await toggleInspectionSection(manifest.locator(":scope > summary"));
+    await expect(manifest).toBeVisible();
+    await expect(manifest.locator(":scope > summary")).toHaveCount(0);
     const firstTreeDetails = manifest.locator("[data-manifest-tree] details").first();
     await toggleInspectionSection(firstTreeDetails.locator(":scope > summary"));
     await expect(firstTreeDetails).toHaveJSProperty("open", true);
@@ -46,7 +47,7 @@ test.describe("PE lazy sections", () => {
     await expect(page.locator("[data-manifest-tree-viewer]")).toHaveCount(0);
 
     await toggleInspectionSection(section.locator(":scope > details > summary"));
-    await expect(manifest).toHaveJSProperty("open", true);
+    await expect(manifest).toBeVisible();
     await expect(firstTreeDetails).toHaveJSProperty("open", true);
   });
 
@@ -127,8 +128,8 @@ test.describe("PE section entropy", () => {
 
     await expect(entropyValue).toHaveText(/^\d+\.\d{2}$/);
     await expect(section.getByRole("button", {
-      name: "Recalculate entropy for all sections"
-    })).toBeVisible();
+      name: "Entropy calculated"
+    })).toBeDisabled();
     await expect(section.locator("[data-section-entropy-status]")).toHaveText(
       "Calculated for 1 of 1 sections."
     );

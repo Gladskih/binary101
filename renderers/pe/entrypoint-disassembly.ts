@@ -20,10 +20,11 @@ const hasEntrypoint = (pe: PeWindowsParseResult): boolean =>
 const renderEntrypointActions = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!hasEntrypoint(pe)) return;
   const label = pe.entrypointDisassembly
-    ? "Re-disassemble entry point"
+    ? "Entry point disassembled"
     : "Disassemble entry point";
   out.push(
-    `<button type="button" class="actionButton" id="${ENTRYPOINT_BUTTON_ID}">` +
+    `<button type="button" class="actionButton" id="${ENTRYPOINT_BUTTON_ID}"` +
+    `${pe.entrypointDisassembly ? " disabled" : ""}>` +
     `${escapeHtml(label)}</button>`
   );
 };

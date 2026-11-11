@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { humanSize, hex } from "../../binary-utils.js";
@@ -60,7 +61,7 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
     const linkedModule = findLinkedModuleForImport(pe, index);
     const linkedImport = findLinkedImportDescriptor(linkedModule, index);
     const moduleNote = renderImportLibraryInfoNote(mod.dll);
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${mod.functions?.length || 0} function(s)</summary>`);
+    out.push(renderCollectionStart(`<b>${dll}</b> - ${mod.functions?.length || 0} function(s)`, Math.max(1, mod.functions?.length ?? 0)));
     out.push(`<dl style="margin-top:.35rem">`);
     if (moduleNote) out.push(renderDefinitionRow("DLL-name note", moduleNote));
     out.push(renderDefinitionRow("OriginalFirstThunk", hex(mod.originalFirstThunkRva >>> 0, 8), "PE format: RVA of the Import Lookup Table (INT/ILT)."));
@@ -92,7 +93,7 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
         entrySize
       ));
     }
-    out.push(`</details>`);
+    out.push(renderCollectionEnd(Math.max(1, mod.functions?.length ?? 0)));
   });
   out.push(renderPeSectionEnd());
 };
@@ -154,7 +155,7 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
     const linkedModule = findLinkedModuleForDelayImport(pe, index);
     const linkedDelayImport = findLinkedDelayImportDescriptor(linkedModule, index);
     const moduleNote = renderImportLibraryInfoNote(entry.name);
-    out.push(`<details><summary style="cursor:pointer;padding:.25rem .5rem;border:1px solid var(--border2);border-radius:6px;background:var(--chip-bg)"><b>${dll}</b> - ${entry.functions?.length || 0} function(s)</summary>`);
+    out.push(renderCollectionStart(`<b>${dll}</b> - ${entry.functions?.length || 0} function(s)`, Math.max(1, entry.functions?.length ?? 0)));
     out.push(`<dl style="margin-top:.35rem">`);
     if (moduleNote) out.push(renderDefinitionRow("DLL-name note", moduleNote));
     out.push(renderDefinitionRow("Attributes", hex(entry.Attributes >>> 0, 8), "MSVC delayimp.h documents bit 0 as dlattrRva for VC7+ RVA-based descriptors, while the PE format page separately says the field should be zero."));
@@ -190,7 +191,7 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
         entrySize
       ));
     }
-    out.push(`</details>`);
+    out.push(renderCollectionEnd(Math.max(1, entry.functions?.length ?? 0)));
   });
   out.push(renderPeSectionEnd());
 };

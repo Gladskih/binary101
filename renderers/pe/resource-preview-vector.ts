@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import type { ResourceVector } from "../../analyzers/pe/resources/preview/vector-types.js";
 import { escapeHtmlText } from "../../html-utils.js";
 
@@ -20,8 +21,8 @@ export const renderVectorPreview = (vector: ResourceVector): string => {
     `aria-label="${vector.format} resource drawing" viewBox="${box.x} ${box.y} ${box.width} ${box.height}" ` +
     `width="${box.width}" height="${box.height}">${markup.join("")}</svg>` +
     `<figcaption>${vector.format} drawing</figcaption></figure>` +
-    (vector.records ? `<details><summary>${vector.records.length} metafile records</summary>` +
+    (vector.records ? renderCollectionStart(`${vector.records.length} metafile records`, vector.records.length) +
       `<table class="table"><thead><tr><th>Record type</th><th>Offset</th><th>Bytes</th></tr></thead><tbody>` +
       vector.records.map(record => `<tr><td>${record.type}</td><td>${record.offset}</td>` +
-        `<td>${record.size}</td></tr>`).join("") + `</tbody></table></details>` : "");
+        `<td>${record.size}</td></tr>`).join("") + `</tbody></table>${renderCollectionEnd(vector.records.length)}` : "");
 };

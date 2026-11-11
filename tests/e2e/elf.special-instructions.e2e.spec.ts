@@ -40,6 +40,7 @@ test("ELF ISA displays privileges, explanations and exact virtual addresses", as
   await expect(table.locator("summary", { hasText: /^I\/O privilege$/ })).toBeVisible();
   await expect(table.locator("summary", { hasText: /^MOV CR$/ })).toBeVisible();
   await expect(table.locator("summary", { hasText: /^HLT$/ })).toHaveCount(0);
-  await panel.getByRole("button", { name: "Re-analyze instruction sets", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "Instruction sets analyzed", exact: true }))
+    .toBeDisabled();
   await expect(rdmsr.getByRole("cell").nth(2)).toHaveText("2");
 });

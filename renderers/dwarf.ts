@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "./counted-collection.js";
 "use strict";
 
 import { escapeHtml } from "../html-utils.js";
@@ -73,15 +74,15 @@ const renderTags = (dwarf: DwarfAnalysis): string => {
     `<tr><td class="mono">${escapeHtml(dwarfTagName(tag))}</td>` +
     `<td class="dwarfTable__numeric">${count}</td></tr>`
   ).join("");
-  return `<details><summary>DIE tag statistics (${counts.size} kinds)</summary>` +
+  return renderCollectionStart(`DIE tag statistics (${counts.size} kinds)`, counts.size) +
     `<div class="tableWrap"><table class="table"><thead><tr>` +
-    `<th>Tag</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+    `<th>Tag</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table></div>${renderCollectionEnd(counts.size)}`;
 };
 
 const renderIssues = (dwarf: DwarfAnalysis): string => {
   if (!dwarf.issues.length) return "";
-  return `<details open><summary>DWARF notices (${dwarf.issues.length})</summary><ul>` +
-    dwarf.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul></details>`;
+  return `${renderCollectionStart(`DWARF notices (${dwarf.issues.length})`, dwarf.issues.length, ` open`)}<ul>` +
+    dwarf.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul>${renderCollectionEnd(dwarf.issues.length)}`;
 };
 
 export const renderDwarfAnalysis = (dwarf: DwarfAnalysis): string =>

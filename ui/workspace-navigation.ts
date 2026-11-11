@@ -31,10 +31,11 @@ export const renderWorkspaceSelect = (
   sections: WorkspaceSection[],
   query = ""
 ): void => {
-  select.replaceChildren(new Option("File hashes", "overview"));
+  select.replaceChildren(new Option("File hashes", "hashes"));
+  if (sections.some(section => section.key === "overview")) select.prepend(new Option("Overview", "overview"));
   if (query.trim()) select.append(new Option("Search results", "search"));
   for (const [label, items] of [
-    ["File structure", sections.filter(section => !section.origin)],
+    ["File structure", sections.filter(section => !section.origin && section.key !== "overview")],
     ["Analysis", sections.filter(section => section.origin)]
   ] as const) {
     if (!items.length) continue;

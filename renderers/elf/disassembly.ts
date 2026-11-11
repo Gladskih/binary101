@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { formatHumanSize } from "../../binary-utils.js";
@@ -11,6 +12,7 @@ import {
 } from "../../analyzers/x86/cpuid-features.js";
 import { renderX86SpecialInstructions } from "../x86-special-instructions.js";
 import { renderAarch64SpecialInstructions } from "../aarch64-special-instructions.js";
+import { renderInstructionSetAction } from "../instruction-set-action.js";
 
 const ANALYZE_BUTTON_ID = "elfInstructionSetsAnalyzeButton";
 const CANCEL_BUTTON_ID = "elfInstructionSetsCancelButton";
@@ -42,11 +44,8 @@ const renderFeatureTableStart = (out: string[]): void => {
 };
 
 const renderInstructionSetHeader = (disasm: ElfParseResult["disassembly"], out: string[]): void => {
-  const analyzeLabel = disasm ? "Re-analyze instruction sets" : "Analyze instruction sets";
   out.push(`<div class="analysisPanelActions">`);
-  out.push(
-    `<button type="button" class="actionButton" id="${ANALYZE_BUTTON_ID}">${escapeHtml(analyzeLabel)}</button>`
-  );
+  out.push(renderInstructionSetAction(ANALYZE_BUTTON_ID, disasm));
   out.push(`<button type="button" class="actionButton" id="${CANCEL_BUTTON_ID}" hidden>Cancel</button>`);
   out.push(`</div>`);
 };
@@ -77,7 +76,8 @@ const renderDisassemblySummary = (disasm: NonNullable<ElfParseResult["disassembl
   if (disasm.issues?.length) {
     const items = disasm.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
     out.push(
-      `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Notes</summary><ul>${items}</ul></details>`
+      renderCollectionStart("Notes", disasm.issues.length) + `<ul>${items}</ul>` +
+      renderCollectionEnd(disasm.issues.length)
     );
   }
 };
@@ -136,7 +136,7 @@ const renderOtherFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembl
   const other = disasm.instructionSets.filter(set => !knownIds.has(set.id));
   if (!other.length) return;
   out.push(
-    `<details style="margin-top:.35rem"><summary class="dim" style="cursor:pointer">Other detected features (${other.length})</summary>`
+    renderCollectionStart(`Other detected features (${other.length})`, other.length, ` style="margin-top:.35rem"`)
   );
   renderFeatureTableStart(out);
   for (const set of other) {
@@ -148,7 +148,7 @@ const renderOtherFeatureCounts = (disasm: NonNullable<ElfParseResult["disassembl
       `<tr><td><span class="opt sel" title="${title}">${label}</span></td><td>${count}</td><td>${description}</td></tr>`
     );
   }
-  out.push(`</tbody></table></details>`);
+  out.push(`</tbody></table>${renderCollectionEnd(other.length)}`);
 };
 
 export const renderInstructionSetsContent = (elf: ElfParseResult, out: string[]): void => {

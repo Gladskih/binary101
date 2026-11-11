@@ -40,7 +40,8 @@ void test("ARM64 result escapes requirements, decoder version and issues", () =>
     issues: ["<bad>"], instructionSets: [{ id: "test", label: "SVE or <SME>",
       description: "", instructionCount: 1 }] });
 
-  assert.ok(html.includes("Re-analyze instruction sets"));
+  assert.ok(html.includes("Instruction sets analyzed"));
+  assert.match(html, /id="peInstructionSetsAnalyzeButton" disabled/);
   assert.ok(html.includes("1 instruction(s) decoded from 4 B (4 bytes) / 8 B (8 bytes)"));
   assert.ok(html.includes("Invalid decodes: 1"));
   assert.ok(html.includes("LLVM &lt;version>"));

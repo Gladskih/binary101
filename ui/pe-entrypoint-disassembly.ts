@@ -168,6 +168,10 @@ const revealSelectedDisassembly = (): void => {
   const details = panel?.querySelector("details");
   if (!details || !(details instanceof HTMLDetailsElement)) return;
   details.open = true;
+  panel?.dispatchEvent(new CustomEvent("inspection-reveal", { bubbles: true }));
+  if (panel?.classList.contains("workspacePanel")) {
+    return;
+  }
   const summary = details.querySelector("summary");
   summary?.focus({ preventScroll: true });
   summary?.scrollIntoView({ block: "start" });

@@ -15,6 +15,8 @@
   - ask the user for clarification, references, or sample files when that can change the answer
 - Prefer a clearly documented "I am not sure because X" over a confident but incorrect guess
 - Do not run the full test suite. Test only affected code. Do not run the same unit tests both with and without coverage.
+- Fix recurring defects in shared components and verify affected callers.
+- Show verified builds as review previews; report local checks, CI and deployment separately.
 - Tokens and your context are expensive, limit wordy output of tools by built-in options or commands and avoid redundant context bloating
 - When you see
   - anything suspicious in existing code

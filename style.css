@@ -2,6 +2,10 @@
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
 :root {
+  /* Reading measure for text blocks, independent of the available workspace width.
+     https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html */
+  --reading-measure: 65ch;
+
   color-scheme: light dark;
 
   --bg: rgb(20 20 24);
@@ -55,6 +59,38 @@ body {
   font: 14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   display: flex;
   flex-direction: column
+}
+p,blockquote,div.smallNote,.peDiagnosticText {
+  max-inline-size: var(--reading-measure)
+}
+.sectionEntropyControl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px
+}
+.sectionEntropyControl > button {
+  inline-size: 32ch;
+  max-inline-size: 100%
+}
+.sectionEntropyControl > [data-section-entropy-status] {
+  min-height: 1.55em
+}
+.collectionSummary {
+  font-size: inherit;
+  font-weight: 600;
+  margin: 8px 0;
+  line-height: 1.55
+}
+.peDiagnosticDetails > .collectionSummary {
+  color: var(--warning-text,#b45309)
+}
+.actionButton:disabled {
+  cursor: default;
+  background: var(--workspace-rail,var(--card));
+  color: var(--muted);
+  border-color: var(--workspace-control-border,var(--border2))
 }
 .iconSprite {
   position: absolute;
@@ -451,7 +487,7 @@ dd {
   border: 1px solid var(--border2);
   border-radius: 6px
 }
-.peTlsFields .table {
+.peTlsFields table {
   min-inline-size: 38rem
 }
 .peTlsFields__options {
@@ -1124,8 +1160,8 @@ dd {
   justify-content: space-between;
   padding: .45rem .1rem
 }
-.table {
-  width: 100%;
+table {
+  width: auto;
   border-collapse: collapse;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -1133,13 +1169,19 @@ dd {
   background: transparent;
   margin-top: 6px
 }
-.table th,.table td {
+table th,table td {
   padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border2);
+  border-right: 1px solid var(--border2);
   font-family: var(--mono);
-  font-size: 12px
+  font-size: 12px;
+  max-inline-size: var(--reading-measure);
+  overflow-wrap: anywhere
 }
-.table th {
+table th:last-child,table td:last-child {
+  border-right: 0
+}
+table th {
   background: rgb(0 0 0 / 10%);
   text-align: left;
   color: var(--muted)
@@ -1170,7 +1212,7 @@ dd {
   word-break: normal;
   white-space: normal
 }
-.table tr:last-child td {
+table tr:last-child td {
   border-bottom: none
 }
 .peNumeric {
@@ -1179,7 +1221,7 @@ dd {
 .peDebugIndex th:nth-child(-n+4),.peDebugIndex td:nth-child(-n+4) {
   white-space: nowrap
 }
-.table th.peNumeric {
+table th.peNumeric {
   text-align: right
 }
 .analysisStatisticsTable th,.analysisStatisticsTable td {
@@ -1189,7 +1231,7 @@ dd {
   min-width: 4rem;
   white-space: nowrap
 }
-.table .elfNote__value {
+table .elfNote__value {
   white-space: nowrap
 }
 .tableWrap {
@@ -1198,7 +1240,7 @@ dd {
   max-width: 100%;
   min-width: 0
 }
-.table .isaTable__count {
+table .isaTable__count {
   text-align: right
 }
 .aarch64IsaTable th {
@@ -1339,12 +1381,12 @@ dd {
 .peDataDirectoryStatus--absent {
   background: var(--muted)
 }
-.table[data-sortable] .sortableTableHeader + .sortableTableHeader,
-.table[data-sortable] tbody > tr > * + * {
+table[data-sortable] .sortableTableHeader + .sortableTableHeader,
+table[data-sortable] tbody > tr > * + * {
   border-left: 1px solid var(--border)
 }
-.table[data-paged-sortable-table] .sortableTableHeader + .sortableTableHeader,
-.table[data-paged-sortable-table] tbody > tr > * + * {
+table[data-paged-sortable-table] .sortableTableHeader + .sortableTableHeader,
+table[data-paged-sortable-table] tbody > tr > * + * {
   border-left: 1px solid var(--border)
 }
 .peEntrypointBlockIndexTable .sortableTableHeader + .sortableTableHeader,

@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 "use strict";
 
 import { hex } from "../../binary-utils.js";
@@ -33,13 +34,13 @@ const renderRelocations = (fixup: PeFunctionOverride): string => {
       }
     }
   }
-  return `<details><summary>Relocations (${count})</summary>` +
+  return renderCollectionStart(`Relocations (${count})`, count) +
     `<div class="tableWrap"><table class="table"><thead><tr><th>Original RVA</th>` +
     `<th>Page RVA</th><th>Type</th><th>Offset</th><th>RVA</th></tr></thead>` +
     `<tbody>${visible.join("")}</tbody></table></div>` +
     `${count > RENDER_LIMIT
       ? `<div class="smallNote">${count - RENDER_LIMIT} more relocations hidden</div>` : ""}` +
-    `</details>`;
+    renderCollectionEnd(count);
 };
 
 const renderBddNodes = (fixup: PeFunctionOverride): string => {
@@ -56,11 +57,11 @@ const renderBddNodes = (fixup: PeFunctionOverride): string => {
     if (rows.length >= RENDER_LIMIT) break;
   }
   const hidden = count - rows.length;
-  return `<details><summary>BDD nodes (${count})</summary>` +
+  return renderCollectionStart(`BDD nodes (${count})`, count) +
     `<div class="tableWrap"><table class="table"><thead><tr><th>BDD offset</th>` +
     `<th>#</th><th>Left</th><th>Right</th><th>Value</th></tr></thead>` +
     `<tbody>${rows.slice(0, RENDER_LIMIT).join("")}</tbody></table></div>` +
-    `${hidden ? `<div class="smallNote">${hidden} more nodes hidden</div>` : ""}</details>`;
+    `${hidden ? `<div class="smallNote">${hidden} more nodes hidden</div>` : ""}${renderCollectionEnd(count)}`;
 };
 
 export const renderDynamicFunctionOverrides = (fixup: PeFunctionOverride): string => {

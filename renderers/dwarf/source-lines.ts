@@ -1,3 +1,4 @@
+import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
 import { escapeHtml } from "../../html-utils.js";
 import { dwarfLineProgramForUnit } from "../../analyzers/dwarf/unit-sections.js";
@@ -45,8 +46,8 @@ export const createDwarfSourceLineTableModel = (
 
 const renderProgramRows = (dwarf: DwarfAnalysis, program: DwarfLineProgram): string => {
   const model = createDwarfSourceLineTableModel(dwarf, program);
-  return model.rowCount ? "<details><summary>Source line mappings (" + model.rowCount +
-    ")</summary>" + renderAutoPagedSortableTable(model) + "</details>" : "";
+  return model.rowCount ? renderCollectionStart(`Source line mappings (${model.rowCount})`, model.rowCount) +
+    renderAutoPagedSortableTable(model) + renderCollectionEnd(model.rowCount) : "";
 };
 
 const renderProgramFiles = (dwarf: DwarfAnalysis, program: DwarfLineProgram): string => {
