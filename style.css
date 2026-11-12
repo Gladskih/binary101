@@ -2,9 +2,11 @@
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
 :root {
-  /* Reading measure for text blocks, independent of the available workspace width.
-     https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html */
-  --reading-measure: 65ch;
+  /* USWDS: 45–90 characters for most text; short UI messages can use longer lines.
+     https://designsystem.digital.gov/components/typography/#measure-line-length */
+  --reading-measure: 75ch;
+  /* Use the existing PE header/TLS chip-group measure throughout the UI. */
+  --options-measure: 56rem;
 
   color-scheme: light dark;
 
@@ -480,6 +482,8 @@ dd {
 .optionsRow {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
+  max-inline-size: var(--options-measure);
   gap: 6px;
   margin-top: 4px
 }
@@ -497,10 +501,10 @@ dd {
   border-top: 1px solid var(--border2)
 }
 .peTlsFields__options .optionsRow {
-  max-inline-size: 56rem;
   margin-top: 0
 }
 .opt {
+  max-inline-size: 100%;
   font-size: 11.5px;
   padding: .15rem .45rem;
   border-radius: 7px;

@@ -35,7 +35,8 @@ export const renderOptionChips = (
 
 export const renderFlagChips = (
   mask: number,
-  flags: Array<[number, string, string?]>
+  flags: Array<[number, string, string?]>,
+  additionalChipsHtml = ""
 ): string => {
   const normalizedMask = mask >>> 0;
   const knownMask = flags.reduce(
@@ -58,6 +59,6 @@ export const renderFlagChips = (
         `UNKNOWN_BITS_${unknownHex}</span>`
     );
   }
-  return `<div class="optionsRow">${chips.join("")}
+  return `<div class="optionsRow">${chips.join("")}${additionalChipsHtml}
   </div>`;
 };

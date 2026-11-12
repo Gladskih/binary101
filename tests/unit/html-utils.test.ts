@@ -87,6 +87,21 @@ void test("renderFlagChips surfaces unknown set bits", () => {
   );
 });
 
+void test("renderFlagChips keeps additional field chips inside the same wrapping group", () => {
+  const html = renderFlagChips(0, [], '<span class="opt dim">ENTRY_SIZE_4</span>');
+
+  assert.equal(html, '<div class="optionsRow"><span class="opt dim">ENTRY_SIZE_4</span>\n  </div>');
+});
+
+void test("renderFlagChips without explanations has only its labels and numeric titles", () => {
+  const html = renderFlagChips(1, [[1, "READ"], [2, "WRITE"]]);
+
+  assert.equal(html, '<div class="optionsRow">' +
+    '<span class="opt sel" title="READ (0x0001)">READ</span>' +
+    '<span class="opt dim" title="WRITE (0x0002)">WRITE</span>\n  </div>');
+  assert.equal(renderFlagChips(0, []), '<div class="optionsRow">\n  </div>');
+});
+
 void test("escapeHtml handles non-string inputs", () => {
   const htmlNumber = escapeHtml(42);
   const htmlNull = escapeHtml(null);

@@ -63,6 +63,7 @@ void test("renderLoadConfigGuardFlags keeps explanations in chip tooltips only",
     /<span class="opt sel" title="CFG table entries are 7 bytes">CF_FUNCTION_TABLE_SIZE_7BYTES<\/span>/);
   assert.match(html, /title="CF_INSTRUMENTED - Module contains compiler-inserted CFG checks/);
   assert.doesNotMatch(html, /smallNote|CF_INSTRUMENTED:/);
+  assert.equal(html.match(/class="optionsRow"/g)?.length, 1);
 });
 
 void test("renderLoadConfigGuardFlags renders zero with chip tooltips and no explanatory block", () => {
@@ -73,6 +74,7 @@ void test("renderLoadConfigGuardFlags renders zero with chip tooltips and no exp
     /<span class="opt dim" title="CFG table entries are plain 4-byte RVAs">CF_FUNCTION_TABLE_SIZE_4BYTES<\/span>/);
   assert.match(html, /title="CF_INSTRUMENTED - Module contains compiler-inserted CFG checks/);
   assert.doesNotMatch(html, /smallNote|No CFG-related flags/);
+  assert.equal(html.match(/class="optionsRow"/g)?.length, 1);
 });
 
 void test("renderLoadConfigGuardFlags names RF, retpoline, XFG, CastGuard and memcpy", () => {

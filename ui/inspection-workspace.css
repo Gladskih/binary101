@@ -633,7 +633,7 @@ details[data-analysis-origin="supplemental"] > summary {
 }
 [data-pe-lazy-section="pe-headers"] .peSectionBody {
   --pe-header-label-width: min(38%,14.5rem);
-  --pe-header-value-width: 56rem;
+  --pe-header-value-width: var(--options-measure);
 }
 [data-pe-lazy-section="pe-headers"] .peSectionBody > dl {
   grid-template-columns: minmax(0,var(--pe-header-label-width)) minmax(0,1fr);

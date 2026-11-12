@@ -201,7 +201,7 @@ export const renderLoadConfigGuardFlags = (lc: PeLoadConfig): string => {
       `CF_FUNCTION_TABLE_SIZE_${4 + stride}BYTES</span>`
     : `<span class="opt dim" title="CFG table entries are plain 4-byte RVAs">CF_FUNCTION_TABLE_SIZE_4BYTES</span>`;
   return `${guardFlags ? hex(guardFlags, 8) : "0"}` +
-    `${renderFlagChips(guardFlags & 0x0fff_ffff, GUARD_FLAGS)}<div class="optionsRow">${strideChip}</div>`;
+    renderFlagChips(guardFlags & 0x0fff_ffff, GUARD_FLAGS, strideChip);
 };
 
 export const renderLoadConfigChecks = (lc: PeLoadConfig): string => {
