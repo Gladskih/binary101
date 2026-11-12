@@ -3,7 +3,8 @@ import { detectBinaryType, type ParseForUiResult } from "./analyzers/index.js";
 import { createInspectionFileParser } from "./ui/inspection-file-parser.js";
 import { renderAnalysisIntoUi as renderParsedResult } from "./ui/render-analysis.js";
 import { attachPreviewGuards, buildPreviewHtml } from "./ui/preview.js";
-import { createHashControls, computeAndDisplayHash, copyHashToClipboard, resetHashDisplay } from "./ui/hash-controls.js";
+import { createHashControls, attachHashControls, resetHashDisplay } from "./ui/hash-controls.js";
+import { computeSmallFileHashes } from "./ui/small-file-hashes.js";
 import { createFileActionClickHandler } from "./ui/file-actions.js";
 import { isPeWindowsParseResult } from "./analyzers/pe/index.js";
 import { handlePeEntrypointJumpClick } from "./ui/pe-entrypoint-navigation.js";
@@ -27,6 +28,7 @@ import { addAccessibleTooltip, enhanceAccessibleTooltips } from "./ui/accessible
 import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 import { createSwfBodyAnalysis } from "./ui/swf-analysis.js";
 import { createInspectionWorkspace } from "./ui/inspection-workspace.js";
+import { attachFilePanelControls } from "./ui/file-panel.js";
 const getElement = (id: string) => document.getElementById(id)!;
 const dropZoneElement = getElement("dropZone") as HTMLElement,
   fileInputElement = getElement("fileInput") as HTMLInputElement,
@@ -48,6 +50,7 @@ const dropZoneElement = getElement("dropZone") as HTMLElement,
 attachPeFileIconGuard(fileIconElement, fileIconWrapElement);
 const fileInspectionContext = createFileInspectionContext(getElement);
 const inspectionWorkspace = createInspectionWorkspace(document);
+attachFilePanelControls(document);
 const hashControls = createHashControls(document);
 let currentFile: File | null = null; let currentPreviewUrl: string | null = null;
 let currentTypeLabel = ""; let currentParseResult: ParseForUiResult = { analyzer: null, parsed: null };
@@ -111,6 +114,7 @@ const resetFileInspectionView = (): void => {
   analysisValueElement.innerHTML = "";
   fileAnalysisDurationDetailElement.textContent = "";
   resetHashDisplay(...hashControls);
+  getElement("hashStatus").textContent = "";
   fileInspectionContext.clear();
 };
 const showEmptyInspection = (message: string | null): void => {
@@ -121,8 +125,10 @@ const showEmptyInspection = (message: string | null): void => {
 const inspectionNavigation = createInspectionNavigationController({
   openDirectoryRoute: route => { void directoryInspection.showRoute(route); },
   openEmptyRoute: showEmptyInspection,
-  openFileRoute: showFileInfo
+  openFileRoute: showFileInfo,
+  openSection: key => inspectionWorkspace.restoreSection(key)
 });
+inspectionWorkspace.connectHistory(inspectionNavigation);
 const directoryInspection: DirectoryInspectionController = createDirectoryInspectionController({
   openButtonElement: getElement("directoryOpenButton") as HTMLButtonElement,
   cardElement: getElement("directoryInfoCard"), nameElement: getElement("directoryName"),
@@ -238,6 +244,7 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
   currentParseResult = { analyzer: null, parsed: null };
   renderPeFileIcon(null, "", fileIconElement, fileIconWrapElement);
   resetHashDisplay(...hashControls);
+  getElement("hashStatus").textContent = "";
   try {
     setPreviewUrl(null);
     fileInfoCardElement.hidden = true;
@@ -267,6 +274,8 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     currentParseResult = parsedResult;
     renderPeFileIcon(parsedResult, file.name, fileIconElement, fileIconWrapElement);
     renderResult(parsedResult);
+    void computeSmallFileHashes(file, hashControls,
+      () => fileInspectionGeneration === currentGeneration, getElement("hashStatus"));
     setStatusMessage(null);
   } catch (error) {
     if (fileInspectionGeneration !== currentGeneration) return;
@@ -285,14 +294,4 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
     if (fileInspectionGeneration === currentGeneration) fileParser.finish();
   }
 }
-hashControls.forEach(control => {
-  control.buttonElement.addEventListener("click", () => {
-    const file = currentFile;
-    void computeAndDisplayHash(control.algorithm, file, control, () => currentFile === file);
-  });
-  control.copyButtonElement.addEventListener("click", () => {
-    void copyHashToClipboard(control.valueElement).then(status => {
-      setStatusMessage(status === "copied" ? `${control.label} copied.` : "Clipboard copy failed.");
-    });
-  });
-});
+attachHashControls(hashControls, getCurrentFile, getElement("hashStatus"));

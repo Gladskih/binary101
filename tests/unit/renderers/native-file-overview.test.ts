@@ -1,228 +1,132 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderNativeFileOverview } from "../../../renderers/native-file-overview.js";
-import { createBasePe, createPeSection } from "../../fixtures/pe-renderer-headers-fixture.js";
+import { createBasePe } from "../../fixtures/pe-renderer-headers-fixture.js";
 import { parseForUi } from "../../../analyzers/index.js";
 import { createElfMetadataFile } from "../../fixtures/elf-metadata-file.js";
-import { createMkvFile } from "../../fixtures/mkv-base-fixtures.js";
-import { createWebmFile } from "../../fixtures/webm-base-fixtures.js";
 import { createPeRomFile } from "../../fixtures/sample-files-pe.js";
-import { DOMParser } from "@xmldom/xmldom";
+import { createWebmFile } from "../../fixtures/webm-base-fixtures.js";
+import { readOverviewDocument, readOverviewFacts } from "../../helpers/overview-card-fixture.js";
 
-const readTables = (html: string) => Array.from(new DOMParser({ onError: assert.fail })
-  .parseFromString(`<root>${html}</root>`, "application/xml").getElementsByTagName("table"))
-  .map(table => {
-    const headers = Array.from(table.getElementsByTagName("th"));
-    assert.ok(headers.every(header => header.getAttribute("scope") === "col"));
-    const rows = Array.from(table.getElementsByTagName("tbody")[0]!.getElementsByTagName("tr"))
-      .map(row => Array.from(row.getElementsByTagName("td"), cell => cell.textContent));
-    assert.equal(table.textContent, headers.map(header => header.textContent).join("") +
-      rows.flat().join(""));
-    return { headers: headers.map(header => header.textContent), rows };
-  });
+const language = (size: number) => ({ lang: null, size, codePage: 0, dataRVA: 0,
+  dataFileOffset: null, reserved: 0 });
 
-void test("PE overview reads actual VERSION strings and preserves their provenance", () => {
+void test("resources highlight identification fields without reproducing VERSION tables", () => {
   const pe = createBasePe();
   pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: 1, name: null,
-    langs: [{ lang: 0x409, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      versionInfo: { stringValues: [{ table: "040904E4", key: "FileDescription", value: "<sample>" },
-        { table: "040904E4", key: "CompanyName", value: "A&B" },
-        { table: "040904E4", key: "ProductName", value: "Product" },
-        { table: "040904E4", key: "ProductVersion", value: "product version" },
-        { table: "040904E4", key: "OriginalFilename", value: "original.exe" },
-        { table: "040904E4", key: "PrivateBuild", value: "not identification" }] } }] }] }] };
+    langs: [{ ...language(100), versionInfo: { stringValues: [
+      { table: "040904E4", key: "FileDescription", value: "<Product>" },
+      { table: "040904E4", key: "FileVersion", value: "1.2.3" },
+      { table: "040904E4", key: "CompanyName", value: "A&B" },
+      { table: "040904E4", key: "InternalName", value: "Full detail only" }
+    ] } }] }] }] };
 
   const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
 
-  assert.match(html, /VERSION/);
-  assert.match(html, /FileDescription/);
-  assert.match(html, /040904E4/);
-  assert.match(html, /&lt;sample&gt;/);
-  assert.match(html, /A&amp;B/);
-  assert.match(html, /ProductName<\/td><td>Product/);
-  assert.match(html, /ProductVersion<\/td><td>product version/);
-  assert.match(html, /OriginalFilename<\/td><td>original.exe/);
-  assert.doesNotMatch(html, /Architecture|COFF.Machine|Subsystem/);
-  assert.doesNotMatch(html, /PrivateBuild|not identification/);
-  assert.match(html, /data-workspace-source="resources"/);
-  assert.deepEqual(readTables(html), [{ headers: ["StringFileInfo key", "Value", "String table"],
-    rows: [["FileDescription", "<sample>", "040904E4"], ["CompanyName", "A&B", "040904E4"],
-      ["ProductName", "Product", "040904E4"], ["ProductVersion", "product version", "040904E4"],
-      ["OriginalFilename", "original.exe", "040904E4"]] }]);
+  assert.deepEqual(readOverviewFacts(html), [["FileDescription", "<Product>"],
+    ["FileVersion", "1.2.3"], ["CompanyName", "A&B"]]);
+  assert.match(html, /data-workspace-target="analysis-resources"/);
+  assert.doesNotMatch(html, /Full detail only|<table|<ul|<ol|<details/);
 });
 
-void test("PE without identification metadata does not duplicate the section table", () => {
-  const pe = createBasePe();
-  pe.sections = [createPeSection(".text", { pointerToRawData: 512, sizeOfRawData: 1024 })];
-
-  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
-
-  assert.equal(html, "");
-});
-
-void test("unknown formats do not acquire fabricated metadata", () => {
-  assert.equal(renderNativeFileOverview({ analyzer: null, parsed: null }), "");
-});
-
-void test("ROM files do not acquire a duplicate section table or Windows resource metadata", async () => {
-  const result = await parseForUi(createPeRomFile());
-
-  const html = renderNativeFileOverview(result);
-
-  assert.doesNotMatch(html, /Section headers|VERSION/);
-});
-
-void test("an empty PE has no fabricated section table", () => {
-  const pe = createBasePe();
-  pe.sections = [];
-  pe.resources = { top: [], detail: [] };
-
-  assert.equal(renderNativeFileOverview({ analyzer: "pe", parsed: pe }), "");
-});
-
-void test("VERSION variants retain names, unknown language and each string table", () => {
+void test("conflicting VERSION values are reported rather than choosing one locale as authoritative", () => {
   const pe = createBasePe();
   pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: null, name: "named",
-    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      versionInfo: { stringValues: [{ table: "first", key: "FileVersion", value: "one" },
-        { table: "second", key: "FileVersion", value: "two" }] } }] }] }] };
+    langs: [{ ...language(100), versionInfo: { stringValues: [
+      { table: "one", key: "FileDescription", value: "One" },
+      { table: "two", key: "FileDescription", value: "Two" },
+      { table: "three", key: "FileDescription", value: "One" }
+    ] } }] }] }] };
+
+  assert.deepEqual(readOverviewFacts(renderNativeFileOverview({ analyzer: "pe", parsed: pe })),
+    [["FileDescription", "2 distinct values"]]);
+});
+
+void test("resources select one representative icon and retain unknown source identifiers in its alt", () => {
+  const pe = createBasePe();
+  pe.resources = { top: [], issues: ["A warning"], detail: [
+    { typeName: "PNG", entries: [{ id: 1, name: null, langs: [{ ...language(100),
+      previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" }] }] },
+    { typeName: "ICON", entries: [{ id: null, name: "<icon>", langs: [
+      { ...language(1), previewKind: "image", previewDataUrl: "data:image/png;base64,AQ==" },
+      { ...language(20), previewKind: "image", previewDataUrl: "data:image/png;base64,Ag==" },
+      { ...language(2), previewKind: "image", previewDataUrl: "data:image/png;base64,Aw==" }
+    ] }] }
+  ] };
+
+  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
+  const images = readOverviewDocument(html).getElementsByTagName("img");
+
+  assert.equal(images.length, 1);
+  assert.equal(images[0]!.getAttribute("src"), "data:image/png;base64,Ag==");
+  assert.equal(images[0]!.getAttribute("alt"), "ICON / <icon> / LANGID ?");
+  assert.deepEqual(readOverviewFacts(html), [["Largest resource", "PNG / 1"],
+    ["Size", "100 B (100 bytes)"], ["Resource warnings", "1"]]);
+});
+
+void test("without an icon the largest local image is used and remote previews are excluded", () => {
+  const pe = createBasePe();
+  pe.resources = { top: [], detail: [{ typeName: "BITMAP", entries: [{ id: null, name: null,
+    langs: [{ ...language(5), previewKind: "image", previewDataUrl: "data:image/png;base64,AQ==" },
+      { ...language(10), lang: 0x409, previewKind: "image", previewDataUrl: "data:image/png;base64,Ag==" },
+      { ...language(100), previewKind: "image", previewDataUrl: "https://example.invalid/image.png" }] }] }] };
 
   const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
 
-  assert.match(html, /VERSION \/ named \/ LANGID \?/);
-  assert.match(html, /<td>one<\/td><td>first/);
-  assert.match(html, /<td>two<\/td><td>second/);
-});
-
-void test("resources without identification strings do not invent an identification summary", () => {
-  const pe = createBasePe();
-  pe.sections = [createPeSection(".data")];
-  pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: null, name: null,
-    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0 }] }] }] };
-
-  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
-
-  assert.equal(html, "");
-});
-
-void test("PE overview shows actual notices and local resource images with source paths", () => {
-  const pe = createBasePe();
-  pe.warnings = ["<recorded warning>"];
-  pe.resources = { top: [], detail: [{ typeName: "ICON", entries: [{ id: 1, name: null,
-    langs: [{ lang: 0x409, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" }] }] }] };
-
-  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
-
-  assert.match(html, /&lt;recorded warning&gt;/);
-  assert.match(html, /data-workspace-source="sanity"/);
-  assert.match(html, /data:image\/png;base64,AA==/);
-  assert.match(html, /ICON \/ 1 \/ LANGID 0x0409/);
-  assert.match(html, /loading="lazy"/);
-  assert.doesNotMatch(html, /This file has analysis notices/);
-  const document = new DOMParser({ onError: assert.fail }).parseFromString(`<root>${html}</root>`,
-    "application/xml");
-  assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("alt"), "ICON / 1 / LANGID 0x0409");
-  assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("decoding"), "async");
-  assert.equal(document.getElementsByTagName("button")[0]!.getAttribute("data-workspace-source"), "resources");
-  assert.equal(document.getElementsByTagName("div")[0]!.getAttribute("aria-label"), "Resource image previews");
-});
-
-void test("VERSION identification with no name, ID or language preserves unknown values", () => {
-  const pe = createBasePe();
-  pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: null, name: null,
-    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      versionInfo: { stringValues: [{ table: "native", key: "FileVersion", value: "one" }] } }] }] }] };
-
-  assert.match(renderNativeFileOverview({ analyzer: "pe", parsed: pe }), /VERSION \/ \? \/ LANGID \?/);
-});
-
-void test("resource galleries preserve named and unknown-language paths and skip nonlocal images", () => {
-  const pe = createBasePe();
-  pe.resources = { top: [], detail: [{ typeName: "BITMAP", entries: [{ id: null, name: "<name>",
-    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" },
-    { lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
-      previewKind: "image", previewDataUrl: "https://example.invalid/image.png" }] },
-  { id: null, name: null, langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0,
-    dataFileOffset: null, reserved: 0, previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" }] }] }] };
-
-  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
-
-  assert.match(html, /BITMAP \/ &lt;name&gt; \/ LANGID \?/);
-  assert.match(html, /BITMAP \/ \? \/ LANGID \?/);
+  assert.match(html, /data:image\/png;base64,Ag==/);
+  assert.match(html, /BITMAP \/ \? \/ LANGID 0x0409/);
   assert.doesNotMatch(html, /example.invalid/);
 });
 
-void test("ELF identification retains native field names and links to its sources", async () => {
+void test("resources without images still have factual highlights and warnings stay supplemental", () => {
+  const pe = createBasePe();
+  pe.warnings = ["Recorded warning", "Second warning"];
+  pe.resources = { top: [], detail: [{ typeName: "STRING", entries: [{ id: 1, name: null,
+    langs: [language(8)] }] }] };
+
+  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
+
+  assert.equal(readOverviewDocument(html).getElementsByTagName("img").length, 0);
+  assert.match(html, /data-analysis-origin="supplemental"/);
+  assert.deepEqual(readOverviewFacts(html), [["Largest resource", "STRING / 1"], ["Size", "8 B (8 bytes)"],
+    ["Warnings", "2"], ["First recorded warning", "Recorded warning"]]);
+});
+
+void test("empty, missing, ROM and unsupported formats do not produce fabricated cards", async () => {
+  const pe = createBasePe();
+  const rom = await parseForUi(createPeRomFile());
+  const media = await parseForUi(createWebmFile());
+
+  assert.equal(renderNativeFileOverview({ analyzer: "pe", parsed: pe }), "");
+  pe.resources = { top: [], detail: [] };
+  assert.equal(renderNativeFileOverview({ analyzer: "pe", parsed: pe }), "");
+  assert.doesNotMatch(renderNativeFileOverview(rom), /analysis-resources|<table/);
+  assert.equal(renderNativeFileOverview(media), "");
+  assert.equal(renderNativeFileOverview({ analyzer: null, parsed: null }), "");
+});
+
+void test("ELF tiles expose source identifiers with a compact dependency highlight", async () => {
   const result = await parseForUi(createElfMetadataFile().file);
   assert.equal(result.analyzer, "elf");
+  result.parsed.notes!.entries.unshift({ source: "auxiliary", name: "GNU", type: 1,
+    typeName: "NT_GNU_ABI_TAG", value: "not a build ID", description: null, descSize: 0 });
 
   const html = renderNativeFileOverview(result);
 
-  assert.match(html, /NT_GNU_BUILD_ID/);
-  assert.match(html, /\.comment/);
-  assert.match(html, /DT_NEEDED/);
-  assert.match(html, /data-workspace-source="notes"/);
-  assert.match(html, /data-workspace-source="linking"/);
-  assert.doesNotMatch(html, /Architecture/);
-  assert.match(html, /data-workspace-source="debug"/);
-  assert.deepEqual(readTables(html), [
-    { headers: ["String"], rows: [["GCC"], ["Clang"]] },
-    { headers: ["Source", "Value"], rows: [['Section ".note.gnu.build-id"',
-      "000102030405060708090a0b0c0d0e0f10111213"]] },
-    { headers: ["String"], rows: [["libc.so.6"], ["libm.so.6"]] }
-  ]);
+  assert.deepEqual(readOverviewFacts(html), [["First string", "GCC"], ["Strings", "2"],
+    ["Value", "000102030405060708090a0b0c0d0e0f10111213"], ["Source", 'Section ".note.gnu.build-id"'],
+    ["First dependency", "libc.so.6"], ["Dependencies", "2"]]);
+  assert.doesNotMatch(html, /<table|<ul|<ol|Architecture/);
 });
 
-void test("ELF missing identification metadata produces no empty summary tables", async () => {
+void test("ELF missing metadata and an unavailable build ID remain explicit", async () => {
   const result = await parseForUi(createElfMetadataFile().file);
   assert.equal(result.analyzer, "elf");
+  result.parsed.notes!.entries[0]!.value = null;
+
+  assert.match(renderNativeFileOverview(result), /Unavailable/);
   delete result.parsed.comment;
   delete result.parsed.notes;
   delete result.parsed.dynamic;
-
-  assert.equal(renderNativeFileOverview(result), "");
-});
-
-void test("ELF preserves an unavailable build ID and escapes needed library names", async () => {
-  const result = await parseForUi(createElfMetadataFile(["<library>.so"]).file);
-  assert.equal(result.analyzer, "elf");
-  assert.ok(result.parsed.notes);
-  result.parsed.notes.entries = [{ source: "native source", name: "GNU", type: 3,
-    typeName: "NT_GNU_BUILD_ID", value: null, description: null, descSize: 0 }];
-
-  const html = renderNativeFileOverview(result);
-
-  assert.match(html, /native source<\/td><td>Unavailable/);
-  assert.match(html, /&lt;library&gt;.so/);
-});
-
-void test("Matroska overview shows the title and native track fields", async () => {
-  const result = await parseForUi(createMkvFile());
-
-  const html = renderNativeFileOverview(result);
-
-  assert.match(html, /Info.Title/);
-  assert.match(html, /Example Matroska/);
-  assert.match(html, /TrackNumber/);
-  assert.match(html, /V_MPEG4\/ISO\/AVC/);
-  assert.match(html, /A_AAC/);
-  assert.deepEqual(readTables(html), [{
-    headers: ["TrackNumber", "TrackType", "CodecID", "Name", "Language"],
-    rows: [["1", "1 (Video)", "V_MPEG4/ISO/AVC", "", "und (default)"],
-      ["2", "2 (Audio)", "A_AAC", "", "und (default)"]]
-  }]);
-});
-
-void test("WebM overview handles an absent segment, title and tracks", async () => {
-  const result = await parseForUi(createWebmFile());
-  assert.equal(result.analyzer, "webm");
-  assert.ok(result.parsed.segment);
-  result.parsed.segment.info = null;
-  result.parsed.segment.tracks = [];
-
-  assert.equal(renderNativeFileOverview(result), "");
-  result.parsed.segment = null;
   assert.equal(renderNativeFileOverview(result), "");
 });

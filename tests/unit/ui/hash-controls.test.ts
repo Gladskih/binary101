@@ -1,131 +1,20 @@
-"use strict";
-
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
+import {
+  createHashControlsFixture, createClipboardDigestText, createHashValueElement, getHashAlgorithm,
+  nodeDigestNameForHashAlgorithm, createNativeHashFile, createFallbackHashFile,
+  installNativeDigestProbe, installClipboardStub, clickFixture, nextText
+} from "../../helpers/hash-controls-fixture.js";
 import {
   HASH_ALGORITHMS,
   computeAndDisplayHash,
   copyHashToClipboard,
   resetHashDisplay,
-  type HashAlgorithmOption,
-  type HashControls
+  createHashControls,
+  attachHashControls
 } from "../../../ui/hash-controls.js";
-
-const createHashControlsFixture = (label = "SHA-256"): {
-  controls: HashControls;
-  valueElement: HTMLElement;
-  buttonElement: HTMLButtonElement;
-  copyButtonElement: HTMLButtonElement;
-  nativeHashBadgeElement: HTMLButtonElement;
-} => {
-  const valueElement = { textContent: "" } as HTMLElement;
-  const buttonElement = {
-    hidden: false,
-    disabled: false,
-    textContent: "Compute SHA-256"
-  } as HTMLButtonElement;
-  const copyButtonElement = { hidden: true } as HTMLButtonElement;
-  const nativeHashBadgeElement = {
-    classList: { add: () => undefined, remove: () => undefined },
-    parentElement: null,
-    textContent: "🍃",
-    title: "",
-    setAttribute: () => undefined
-  } as unknown as HTMLButtonElement;
-  return {
-    controls: { label, valueElement, buttonElement, copyButtonElement, nativeHashBadgeElement },
-    valueElement,
-    buttonElement,
-    copyButtonElement,
-    nativeHashBadgeElement
-  };
-};
-
-const createClipboardDigestText = (): string => {
-  const bytes = new Uint8Array(8);
-  bytes.forEach((_, index) => {
-    bytes[index] = index;
-  });
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-};
-const createHashValueElement = (textContent: string): HTMLElement =>
-  ({ textContent }) as HTMLElement;
-
-const getHashAlgorithm = (id: string): HashAlgorithmOption => {
-  const algorithm = HASH_ALGORITHMS.find(entry => entry.id === id);
-  assert.ok(algorithm);
-  return algorithm;
-};
-
-const nodeDigestNameForHashAlgorithm = (algorithm: HashAlgorithmOption): string => {
-  if (algorithm.id === "sha512224") return "sha512-224";
-  if (algorithm.id === "sha512256") return "sha512-256";
-  return algorithm.id;
-};
-
-const createNativeHashFile = (bytes: Uint8Array<ArrayBuffer>): File => ({
-  arrayBuffer: async () =>
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-  stream: () => { throw new Error("Native hash must not read a stream."); }
-}) as unknown as File;
-
-const createFallbackHashFile = (bytes: Uint8Array<ArrayBuffer>): File => ({
-  arrayBuffer: async () => { throw new Error("Fallback hash must not read an ArrayBuffer."); },
-  stream: () => new Blob([bytes]).stream()
-}) as unknown as File;
-
-const installNativeDigestProbe = (): {
-  algorithms: AlgorithmIdentifier[];
-  restore: () => void;
-} => {
-  const globals = globalThis as unknown as Record<string, unknown>;
-  const cryptoDescriptor = Object.getOwnPropertyDescriptor(globals, "crypto");
-  const nativeDigest = crypto.subtle.digest.bind(crypto.subtle);
-  const algorithms: AlgorithmIdentifier[] = [];
-  Object.defineProperty(globals, "crypto", {
-    configurable: true,
-    value: {
-      subtle: {
-        digest: async (
-          algorithm: AlgorithmIdentifier,
-          data: BufferSource
-        ): Promise<ArrayBuffer> => {
-          algorithms.push(algorithm);
-          return nativeDigest(algorithm, data);
-        }
-      }
-    }
-  });
-  return {
-    algorithms,
-    restore: () => {
-      if (cryptoDescriptor) Object.defineProperty(globals, "crypto", cryptoDescriptor);
-    }
-  };
-};
-
-const installClipboardStub = (
-  writeText: (text: string) => Promise<void>
-): (() => void) => {
-  const globals = globalThis as unknown as Record<string, unknown>;
-  const hadNavigator = Object.prototype.hasOwnProperty.call(globals, "navigator");
-  const originalNavigator = globals["navigator"];
-  Object.defineProperty(globals, "navigator", {
-    configurable: true,
-    value: { clipboard: { writeText } }
-  });
-  return () => {
-    if (hadNavigator) {
-      Object.defineProperty(globals, "navigator", {
-        configurable: true,
-        value: originalNavigator
-      });
-      return;
-    }
-    Reflect.deleteProperty(globals, "navigator");
-  };
-};
 
 void test("resetHashDisplay restores both hash controls to their initial state", () => {
   const sha256 = createHashControlsFixture().controls;
@@ -292,5 +181,104 @@ void test("copyHashToClipboard reports failure when clipboard writes reject", as
     assert.equal(result, "failed");
   } finally {
     restoreNavigator();
+  }
+});
+
+void test("bound controls compute the active file and report successful copying locally", async () => {
+  const state = createHashControlsFixture();
+  Object.defineProperty(state.copyButtonElement, "dataset", { value: {} });
+  const status = { textContent: "", dataset: {} } as HTMLElement;
+  const compute = clickFixture(state.buttonElement);
+  const copy = clickFixture(state.copyButtonElement);
+  const file = new File(["abc"], "sample");
+  const value = nextText(state.valueElement);
+  let clipboard = "";
+  const restore = installClipboardStub(async text => { clipboard = text; });
+  attachHashControls([{ ...state.controls, algorithm: getHashAlgorithm("sha256") }], () => file, status);
+
+  try {
+    compute();
+    assert.equal(await value, createHash("sha256").update("abc").digest("hex"));
+    const message = nextText(status);
+    copy();
+    assert.equal(await message, "SHA-256 copied.");
+    assert.equal(clipboard, state.valueElement.textContent);
+    assert.equal(state.copyButtonElement.dataset["copyState"], "copied");
+    resetHashDisplay(state.controls);
+    assert.equal(state.copyButtonElement.dataset["copyState"], undefined);
+  } finally {
+    restore();
+  }
+});
+
+void test("bound copy failures produce a local error rather than a success indicator", async () => {
+  const state = createHashControlsFixture();
+  Object.defineProperty(state.copyButtonElement, "dataset", { value: {} });
+  const status = { textContent: "", dataset: {} } as HTMLElement;
+  clickFixture(state.buttonElement);
+  const copy = clickFixture(state.copyButtonElement);
+  const message = nextText(status);
+  const restore = installClipboardStub(async () => { throw new Error("denied"); });
+  attachHashControls([{ ...state.controls, algorithm: getHashAlgorithm("sha256") }], () => null, status);
+
+  try {
+    copy();
+    assert.equal(await message, "Clipboard copy failed.");
+    assert.equal(status.dataset["state"], "failed");
+    assert.equal(state.copyButtonElement.dataset["copyState"], "failed");
+  } finally {
+    restore();
+  }
+});
+
+void test("hash controls reserve the full digest length without including it in copied data", () => {
+  const elements = new Map<string, HTMLElement>();
+  for (const algorithm of HASH_ALGORITHMS) {
+    const state = createHashControlsFixture(algorithm.label);
+    elements.set(`${algorithm.id}Value`, state.valueElement);
+    elements.set(`${algorithm.id}ComputeButton`, state.buttonElement);
+    elements.set(`${algorithm.id}CopyButton`, state.copyButtonElement);
+    elements.set(`${algorithm.id}Reserved`, { textContent: "" } as HTMLElement);
+    if ("nativeAlgorithm" in algorithm) elements.set(`${algorithm.id}NativeBadge`, state.nativeHashBadgeElement);
+  }
+  const root = { getElementById: (id: string) => elements.get(id) ?? null } as Document;
+
+  const controls = createHashControls(root);
+
+  assert.equal(controls.length, 8);
+  assert.equal(elements.get("md5Reserved")!.textContent!.length, 32);
+  assert.equal(elements.get("sha512Reserved")!.textContent!.length, 128);
+  assert.equal(elements.get("sha512Value")!.textContent, "");
+});
+
+void test("bound controls ignore failed reads and copy completions after the file changes", async () => {
+  const state = createHashControlsFixture();
+  Object.defineProperty(state.copyButtonElement, "dataset", { value: {} });
+  const status = { textContent: "", dataset: {} } as HTMLElement;
+  const compute = clickFixture(state.buttonElement);
+  const copy = clickFixture(state.copyButtonElement);
+  let file: File | null = new File(["abc"], "first");
+  let failRead: (error: Error) => void = () => {};
+  Object.defineProperty(file, "arrayBuffer", { value: () => new Promise<ArrayBuffer>((_, reject) => {
+    failRead = reject;
+  }) });
+  let finishCopy: () => void = () => {};
+  const restore = installClipboardStub(() => new Promise<void>(resolve => { finishCopy = resolve; }));
+  attachHashControls([{ ...state.controls, algorithm: getHashAlgorithm("sha256") }], () => file, status);
+
+  try {
+    compute();
+    copy();
+    file = null;
+    resetHashDisplay(state.controls);
+    failRead(new Error("Stale read failed"));
+    finishCopy();
+    await setImmediate();
+    assert.equal(state.valueElement.textContent, "");
+    assert.equal(state.buttonElement.disabled, false);
+    assert.equal(state.copyButtonElement.dataset["copyState"], undefined);
+    assert.equal(status.textContent, "");
+  } finally {
+    restore();
   }
 });

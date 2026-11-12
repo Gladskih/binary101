@@ -14,6 +14,7 @@ interface InspectionHistoryConfig {
   readonly history?: BrowserHistoryLike;
   readonly targetWindow?: BrowserWindowLike;
   readonly openRoute: (routeId: string | null) => void;
+  readonly openSection?: (key: string | null) => void;
 }
 
 interface InspectionHistoryController {
@@ -21,12 +22,16 @@ interface InspectionHistoryController {
   initialize(routeId: string): void;
   push(routeId: string): void;
   replace(routeId: string): void;
+  currentSectionKey(): string | null;
+  initializeSection(key: string): void;
+  selectSection(key: string): void;
 }
 
 interface InspectionHistoryState {
   readonly app: "binary101";
   readonly routeId: string;
   readonly version: 1;
+  readonly section?: string;
 }
 
 const createInspectionHistoryState = (routeId: string): InspectionHistoryState => ({
@@ -40,6 +45,12 @@ const readInspectionRouteId = (state: unknown): string | null => {
   const candidate = state as Partial<InspectionHistoryState>;
   if (candidate.app !== "binary101" || candidate.version !== 1) return null;
   return typeof candidate.routeId === "string" ? candidate.routeId : null;
+};
+
+const readSectionKey = (state: unknown): string | null => {
+  if (!readInspectionRouteId(state)) return null;
+  const candidate = state as InspectionHistoryState;
+  return typeof candidate.section === "string" ? candidate.section : null;
 };
 
 const createInspectionHistoryController = (
@@ -58,15 +69,31 @@ const createInspectionHistoryController = (
     setActiveRouteId(routeId);
     writer(createInspectionHistoryState(routeId), "");
   };
+  const writeSection = (key: string, writer: BrowserHistoryLike["pushState"]): void => {
+    if (!activeRouteId) return;
+    writer({ ...createInspectionHistoryState(activeRouteId), section: key }, "");
+  };
   targetWindow.addEventListener("popstate", event => {
-    activeRouteId = readInspectionRouteId(event.state);
+    const routeId = readInspectionRouteId(event.state);
+    if (routeId && routeId === activeRouteId && readSectionKey(event.state) !== null) {
+      config.openSection?.(readSectionKey(event.state));
+      return;
+    }
+    activeRouteId = routeId;
     config.openRoute(activeRouteId);
   });
   return {
     currentRouteId: () => activeRouteId,
     initialize: routeId => writeState(routeId, historyObject.replaceState.bind(historyObject)),
     push: routeId => writeState(routeId, historyObject.pushState.bind(historyObject)),
-    replace: routeId => writeState(routeId, historyObject.replaceState.bind(historyObject))
+    replace: routeId => writeState(routeId, historyObject.replaceState.bind(historyObject)),
+    currentSectionKey: () => readSectionKey(historyObject.state),
+    initializeSection: key => writeSection(key, historyObject.replaceState.bind(historyObject)),
+    selectSection: key => {
+      if (readSectionKey(historyObject.state) !== key) {
+        writeSection(key, historyObject.pushState.bind(historyObject));
+      }
+    }
   };
 };
 

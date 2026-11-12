@@ -10,6 +10,7 @@ import {
 } from "../../../../../renderers/pe/layout.js";
 import { renderException } from "../../../../../renderers/pe/exception.js";
 import type { PeParseResult } from "../../../../../analyzers/pe/index.js";
+import { createBasePe, createPeSection } from "../../../../fixtures/pe-renderer-headers-fixture.js";
 
 const assertSanityAbsent = (html: string): void => assert.equal(html, "");
 
@@ -149,24 +150,14 @@ void test("renderSanity reports suspicious entrypoint sections", () => {
   renderSanity(outside, outOutside);
   assert.ok(outOutside.join("").includes("AddressOfEntryPoint points outside any section"));
 
-  const nonExecutable = {
-    imageSizeMismatch: false,
-    debug: null,
-    opt: { AddressOfEntryPoint: 0x2000 },
-    sections: [
-      {
-        name: ".data",
-        virtualSize: 0x100,
-        virtualAddress: 0x2000,
-        sizeOfRawData: 0x100,
-        pointerToRawData: 0,
-        characteristics: 0x40000040
-      }
-    ]
-  } as unknown as PeParseResult;
+  const nonExecutable = createBasePe();
+  nonExecutable.opt.AddressOfEntryPoint = 0x2000;
+  nonExecutable.sections = [createPeSection(".data", { virtualSize: 0x100,
+    virtualAddress: 0x2000, sizeOfRawData: 0x100, characteristics: 0x40000040 })];
 
   const outNonExecutable: string[] = [];
   renderSanity(nonExecutable, outNonExecutable);
+  assert.match(outNonExecutable.join(""), /non-executable section \(\.data;/);
   assert.ok(outNonExecutable.join("").includes("missing IMAGE_SCN_MEM_EXECUTE"));
 });
 

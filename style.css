@@ -1697,14 +1697,13 @@ table[data-paged-sortable-table] tbody > tr > * + * {
   display: flex;
   justify-content: flex-start;
   margin-bottom: 10px;
-  max-height: 260px;
-  overflow: hidden
+  max-height: 75dvh
 }
 .imagePreview img {
   width: auto;
   max-width: 100%;
   height: auto;
-  max-height: 260px;
+  max-height: 75dvh;
   object-fit: contain;
   border: 1px solid var(--border2);
   border-radius: 6px;
@@ -1712,13 +1711,11 @@ table[data-paged-sortable-table] tbody > tr > * + * {
 }
 .videoPreview {
   margin-bottom: 10px;
-  max-height: 320px;
-  overflow: hidden;
   display: flex;
   justify-content: flex-start
 }
 .videoPreview video {
-  max-height: 320px;
+  max-height: 75dvh;
   max-width: 100%;
   width: 100%;
   border-radius: 6px;

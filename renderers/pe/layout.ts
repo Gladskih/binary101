@@ -39,7 +39,7 @@ const getEntrypointSanityIssue = (pe: PeParseResult): string | null => {
     return `AddressOfEntryPoint points outside any section (RVA ${hex(entrypointRva, 8)}).`;
   }
   return (entrySection.characteristics & IMAGE_SCN_MEM_EXECUTE) === 0
-    ? `Entry point is in a non-executable section (${entrySection.name || "(unnamed)"}; missing IMAGE_SCN_MEM_EXECUTE).`
+    ? `Entry point is in a non-executable section (${entrySection.name.value || "(unnamed)"}; missing IMAGE_SCN_MEM_EXECUTE).`
     : null;
 };
 

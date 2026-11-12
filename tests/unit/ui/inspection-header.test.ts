@@ -9,7 +9,7 @@ const fixture = () => {
   const elements = new Map<string, HTMLElement>();
   for (const id of ["fileInfoCard", "directoryInfoCard", "fileDetails", "inspectionWorkspace",
     "fileActions", "fileChromeDock", "appHeader", "fileHeader", "workspaceSearchHome",
-    "workspaceSearch", "fileNameDetail", "directoryName"]) {
+    "workspaceSearch", "fileNameDetail", "directoryName", "fileInfoRail", "fileIconWrap", "fileOverviewIcon"]) {
     // The fixture implements only the DOM surface exercised by header placement.
     const element = { hidden: false, textContent: "" } as HTMLElement;
     Object.defineProperty(element, "parentElement", { get: () => parents.get(element) ?? null });
@@ -37,7 +37,7 @@ const fixture = () => {
   element("directoryName").textContent = "sample folder";
   const details = element("fileDetails") as HTMLDetailsElement;
   details.open = true;
-  parents.set(details, element("inspectionWorkspace"));
+  parents.set(details, element("fileInfoRail"));
   parents.set(element("fileHeader"), element("appHeader"));
   parents.set(element("fileActions"), element("appHeader"));
   parents.set(element("workspaceSearch"), element("workspaceSearchHome"));
@@ -60,16 +60,17 @@ void test("a wide open details pane owns file identity, actions and report searc
   assert.equal(state.appends(), count);
 });
 
-void test("closing the dock restores identity and search to their normal controls", () => {
+void test("closing file properties keeps identity, actions and search accessible outside them", () => {
   const state = fixture();
   syncInspectionHeader(state.root, "Inspector", state.layout);
   state.details.open = false;
 
   syncInspectionHeader(state.root, "Inspector", state.layout);
 
-  assert.equal(state.element("fileHeader").parentElement, state.element("appHeader"));
-  assert.equal(state.element("workspaceSearch").parentElement, state.element("workspaceSearchHome"));
-  assert.equal(state.classes.has("hasDockedHeader"), false);
+  assert.equal(state.element("fileHeader").parentElement, state.element("fileChromeDock"));
+  assert.equal(state.element("fileActions").parentElement, state.element("fileChromeDock"));
+  assert.equal(state.element("workspaceSearch").parentElement, state.element("fileChromeDock"));
+  assert.equal(state.classes.has("hasDockedHeader"), true);
 });
 
 void test("narrow details share the toolbar and can return to the dock without a hierarchy cycle", () => {
@@ -82,8 +83,11 @@ void test("narrow details share the toolbar and can return to the dock without a
   assert.equal(state.element("fileActions").parentElement, state.element("appHeader"));
   state.layout.matches = true;
   syncInspectionHeader(state.root, "Inspector", state.layout);
-  assert.equal(state.details.parentElement, state.element("inspectionWorkspace"));
+  assert.equal(state.details.parentElement, state.element("fileInfoRail"));
   assert.equal(state.element("fileActions").parentElement, state.element("fileChromeDock"));
+  state.layout.matches = false;
+  syncInspectionHeader(state.root, "Inspector", state.layout);
+  assert.equal(state.element("fileActions").parentElement, state.element("appHeader"));
 });
 
 void test("directory and welcome views restore global actions and hide file properties", () => {

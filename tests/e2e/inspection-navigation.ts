@@ -1,5 +1,15 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+export const computeInspectionHash = async (page: Page, id: string): Promise<void> => {
+  const value = page.locator(`#${id}Value`);
+  const button = page.locator(`#${id}ComputeButton`);
+  await expect.poll(async () => {
+    if (/^[a-f0-9]+$/.test(await value.textContent() ?? "")) return "computed";
+    return await button.isEnabled() ? "ready" : "working";
+  }).not.toBe("working");
+  if (!/^[a-f0-9]+$/.test(await value.textContent() ?? "")) await button.click();
+};
+
 export const expandInspectionCollection = async (collection: Locator): Promise<void> => {
   await expect(collection).toBeVisible();
   if (await collection.evaluate(element =>
@@ -11,11 +21,6 @@ export const expandInspectionCollection = async (collection: Locator): Promise<v
 export const openInspectionSection = async (page: Page, title: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
   if (title === "Overview" && await page.locator("#workspaceOverview").isVisible()) return;
-  if (title === "Preview") {
-    await page.locator("#fileDetails").evaluate(element => { element.setAttribute("open", ""); });
-    await expect(page.locator("#filePreview")).toBeVisible();
-    return;
-  }
   if (title === "File hashes") {
     await page.locator("#fileHashesButton").click();
     await expect(page.locator("#workspaceTitle")).toHaveText("File hashes");

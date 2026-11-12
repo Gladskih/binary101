@@ -6,6 +6,8 @@ import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
 import { ReportSearch, revealReportText } from "./report-search.js";
 import { renderNativeFileOverview } from "../renderers/native-file-overview.js";
 import { syncInspectionHeader, WIDE_INSPECTION_QUERY } from "./inspection-header.js";
+import type { InspectionNavigationController } from "./inspection-navigation.js";
+import { renderWorkspaceHeading } from "./workspace-heading.js";
 
 interface WorkspaceScrollPosition {
   page: number;
@@ -30,20 +32,20 @@ class InspectionWorkspace {
   private readonly navigation: HTMLElement;
   private readonly filter: HTMLInputElement;
   private continuous = false;
-  private readonly appTitle: string;
   private readonly syncHeader: () => void;
   private readonly reflow: ReturnType<typeof createWorkspaceReflow>;
   private result: ParseForUiResult | null = null;
   private readonly search: ReportSearch;
   private previousSection = "hashes";
+  private history: InspectionNavigationController | null = null;
   constructor(private readonly root: Document) {
-    this.appTitle = root.title;
+    const appTitle = root.title;
     this.analysis = this.element("analysisValue");
     this.navigation = this.element("workspaceNavigation");
     this.filter = this.element("workspaceFilter") as HTMLInputElement;
     const details = this.element("fileDetails") as HTMLDetailsElement;
     const wide = matchMedia(WIDE_INSPECTION_QUERY);
-    this.syncHeader = () => syncInspectionHeader(root, this.appTitle, wide);
+    this.syncHeader = () => syncInspectionHeader(root, appTitle, wide);
     details.open = wide.matches;
     wide.addEventListener("change", () => { details.open = wide.matches; this.syncLayout(); });
     details.addEventListener("toggle", () => this.syncLayout());
@@ -57,6 +59,17 @@ class InspectionWorkspace {
   private element(id: string): HTMLElement {
     return this.root.getElementById(id)!;
   }
+  connectHistory(history: InspectionNavigationController): void {
+    this.history = history;
+  }
+  restoreSection(key: string | null): void {
+    this.clearSearch();
+    if (key === "search") {
+      this.filter.value = this.search.currentQuery();
+      this.search.update(this.filter.value);
+    }
+    this.changeSelection(key ?? this.initialSection());
+  }
   begin(context: InspectionContext): void {
     this.selected = "hashes";
     this.previousSection = "hashes";
@@ -68,7 +81,6 @@ class InspectionWorkspace {
     this.filter.value = "";
     this.search.reset();
     this.result = null;
-    this.element("filePreview").replaceChildren();
     this.element("fileOverviewContent").replaceChildren();
     this.element("fileBackButton").hidden = context.source !== "navigation";
     this.viewport.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -85,13 +97,12 @@ class InspectionWorkspace {
     this.analysisComplete = true;
     this.refresh();
     if (firstResult && this.initialSectionPending && !this.filter.value) {
-      this.activate(this.initialSection());
+      this.restoreSection(this.history?.currentSectionKey() ?? this.initialSection());
+      this.history?.initializeSection(this.selected);
     }
     if (this.filter.value.trim()) this.search.update(this.filter.value);
   }
   refresh(): void {
-    const preview = this.analysis.querySelector(".imagePreview, .videoPreview, .audioPreview");
-    if (preview) this.element("filePreview").replaceChildren(preview);
     this.sections = collectWorkspaceSections(this.analysis);
     // UI policy, not format limits: show up to three short, eager structures together.
     // Row/text limits keep a long table or document from qualifying as a short report.
@@ -105,7 +116,8 @@ class InspectionWorkspace {
     this.syncLayout();
   }
   private initialSection(): string {
-    return this.overviewSection()?.key ?? this.sections.find(section => !section.origin)?.key ??
+    return this.sections.find(section => section.title === "Preview")?.key ?? this.overviewSection()?.key ??
+      this.sections.find(section => !section.origin)?.key ??
       this.sections[0]?.key ?? "hashes";
   }
   private overviewSection(): WorkspaceSection | null {
@@ -134,23 +146,20 @@ class InspectionWorkspace {
     this.element("reportSearchResults").hidden = key !== "search";
     this.element("hashDetails").hidden = false;
     const continuous = this.isContinuousSelection();
-    this.element("workspaceHeading").hidden = continuous;
     this.updateBackButton();
     this.analysis.hidden = !section && !continuous;
     for (const item of this.sections) {
       item.element.hidden = !continuous && item !== section;
       if (item.details) item.details.open = continuous || item === section;
     }
-    this.updateHeading(section);
+    renderWorkspaceHeading(this.root, section, this.selected);
     this.updateNavigation(key);
   }
   private updateBackButton(): void {
     const back = this.element("workspaceReportButton");
-    const overview = this.overviewSection();
-    back.hidden = this.selected === "overview" || (!this.continuous && !overview) ||
-      this.isContinuousSelection();
-    back.textContent = overview ? "Overview" : "Back to report";
-    back.dataset["workspaceTarget"] = overview?.key ?? this.sections[0]?.key ?? "hashes";
+    back.hidden = !this.continuous || this.isContinuousSelection();
+    back.textContent = "Back to report";
+    back.dataset["workspaceTarget"] = this.sections[0]?.key ?? "hashes";
   }
   private isContinuousSelection(): boolean {
     return this.continuous && this.selected !== "hashes" && this.selected !== "search";
@@ -167,20 +176,12 @@ class InspectionWorkspace {
       else button.removeAttribute("aria-current");
     });
   }
-  private updateHeading(section: WorkspaceSection | undefined): void {
-    this.element("workspaceTitle").textContent = section?.title ??
-      (this.selected === "search" ? "Search results" : this.selected === "hashes" ? "File hashes" : "Overview");
-    this.element("workspaceDescription").textContent = section?.description ?? "";
-    const heading = this.element("workspaceHeading");
-    if (section?.origin === "supplemental") {
-      heading.dataset["analysisOrigin"] = "supplemental";
-      heading.title = "Supplemental analysis";
-    } else {
-      delete heading.dataset["analysisOrigin"];
-      heading.removeAttribute("title");
-    }
-  }
   private activate(key: string): boolean {
+    if (!this.changeSelection(key)) return false;
+    this.history?.selectSection(key);
+    return true;
+  }
+  private changeSelection(key: string): boolean {
     this.initialSectionPending = false;
     if (key === this.selected) return false;
     this.pendingScroll = key;
@@ -202,7 +203,7 @@ class InspectionWorkspace {
   }
   private clearSearch(): void {
     this.filter.value = "";
-    this.search.reset();
+    this.search.suspend();
   }
   private searchReport(): void {
     if (this.selected !== "search") this.previousSection = this.selected;
@@ -274,7 +275,7 @@ class InspectionWorkspace {
     this.element("fileOpenButton").addEventListener("click", () => {
       (this.element("fileInput") as HTMLInputElement).click();
     });
-    this.element("fileBackButton").addEventListener("click", () => window.history.back());
+    this.element("fileBackButton").addEventListener("click", () => this.history?.returnToFileList());
     this.element("fileHashesButton").addEventListener("click", () => {
       this.clearSearch();
       this.activate("hashes");

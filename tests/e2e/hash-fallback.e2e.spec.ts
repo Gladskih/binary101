@@ -18,7 +18,8 @@ void test("marks a native hash fallback with a tooltip", async ({ page }) => {
     globalThis.document.getElementById("dropZone")?.dispatchEvent(event);
   });
   await expect(page.locator("#fileNameDetail")).toHaveText("fallback.bin");
-  await page.getByRole("button", { name: "Compute SHA-256" }).click();
+  await expect(page.locator("#hashStatus")).toContainText("Automatic hashes failed:");
+  await page.locator("#sha256ComputeButton").click();
   await expect(page.locator("#sha256NativeBadge")).toHaveText("🍂");
   await page.locator("#sha256NativeBadge").click();
   await expect(page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup")).toHaveAttribute(

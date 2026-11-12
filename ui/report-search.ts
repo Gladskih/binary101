@@ -21,11 +21,17 @@ export class ReportSearch {
     this.panel = root.getElementById("reportSearchResults")!;
   }
   reset(): void {
-    this.controller?.abort();
-    clearTimeout(this.timer);
+    this.suspend();
     this.matches = [];
     this.query = "";
     this.panel.replaceChildren();
+  }
+  suspend(): void {
+    this.controller?.abort();
+    clearTimeout(this.timer);
+  }
+  currentQuery(): string {
+    return this.query;
   }
   update(query: string): void {
     this.reset();
@@ -111,6 +117,12 @@ export class ReportSearch {
   }
 }
 
+const openAncestors = (target: Element, section: HTMLElement): void => {
+  for (let parent = target.parentElement; parent && section.contains(parent); parent = parent.parentElement) {
+    if (parent instanceof HTMLDetailsElement) parent.open = true;
+  }
+};
+
 export const revealReportText = (section: HTMLElement, value: string): void => {
   if (!value) return;
   revealPagedSortableTableText(section, value);
@@ -119,9 +131,7 @@ export const revealReportText = (section: HTMLElement, value: string): void => {
   while ((node = walker.nextNode())) {
     if (!node.textContent?.includes(value) || !node.parentElement) continue;
     const target = node.parentElement.closest<HTMLElement>("td, dd, pre, code, li") ?? node.parentElement;
-    for (let parent = target.parentElement; parent && section.contains(parent); parent = parent.parentElement) {
-      if (parent instanceof HTMLDetailsElement) parent.open = true;
-    }
+    openAncestors(target, section);
     section.querySelector(".reportSearchTarget")?.classList.remove("reportSearchTarget");
     target.classList.add("reportSearchTarget");
     target.scrollIntoView({ block: "center", inline: "nearest" });

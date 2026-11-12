@@ -83,3 +83,32 @@ void test("inspection navigation restores routes from browser history", () => {
   assert.deepEqual(openedDirectories, ["root"]);
   assert.deepEqual(emptyMessages, ["History entry is no longer available. Select the file or folder again."]);
 });
+
+void test("return to files opens the parent directory even after detail section navigation", async () => {
+  const history = new FakeHistory();
+  const targetWindow = new FakeWindow();
+  const openedDirectories: string[] = [];
+  const sections: Array<string | null> = [];
+  const navigation = createInspectionNavigationController({ history, targetWindow,
+    openDirectoryRoute: route => openedDirectories.push(route.locations[0]!.name),
+    openEmptyRoute: () => {}, openFileRoute: async () => {}, openSection: key => sections.push(key) });
+  navigation.initialize();
+  navigation.returnToFileList();
+  navigation.openDirectory(createDirectoryRoute("root"));
+  const parent = history.state;
+  await navigation.openFile(new File(["a"], "file.txt"), { source: "navigation", object: "file",
+    relativePath: "root/file.txt" });
+  navigation.initializeSection("preview");
+  navigation.selectSection("structure");
+  targetWindow.dispatchPopState(history.state);
+
+  assert.deepEqual(sections, ["structure"]);
+  assert.equal(navigation.currentSectionKey(), "structure");
+  navigation.returnToFileList();
+  assert.deepEqual(openedDirectories, ["root"]);
+  assert.deepEqual(history.state, parent);
+  await navigation.openFile(new File(["a"], "direct.txt"), { source: "selection", object: "file" });
+  await navigation.openFile(new File(["b"], "another.txt"), { source: "selection", object: "file" });
+  navigation.returnToFileList();
+  assert.deepEqual(openedDirectories, ["root"]);
+});

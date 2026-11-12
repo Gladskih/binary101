@@ -21,13 +21,13 @@ export const syncInspectionHeader = (
   const fileVisible = !element("fileInfoCard").hidden;
   const details = element("fileDetails") as HTMLDetailsElement;
   details.hidden = !fileVisible;
-  // Detach details before moving its toolbar into the dock, avoiding a DOM hierarchy cycle.
-  moveElement(details, element(fileVisible && !layout.matches ? "fileActions" : "inspectionWorkspace"));
-  const docked = fileVisible && layout.matches && details.open;
+  moveElement(details, element(fileVisible && !layout.matches ? "fileActions" : "fileInfoRail"));
+  const docked = fileVisible && layout.matches;
   const headerParent = element(docked ? "fileChromeDock" : "appHeader");
   moveElement(element("fileHeader"), headerParent);
   moveElement(element("fileActions"), headerParent);
   moveElement(element("workspaceSearch"), element(docked ? "fileChromeDock" : "workspaceSearchHome"));
+  moveElement(element("fileIconWrap"), element(docked ? "fileInfoRail" : "fileOverviewIcon"));
   root.body.classList.toggle("hasDockedHeader", docked);
   syncContext(root, appTitle);
 };

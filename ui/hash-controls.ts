@@ -33,6 +33,8 @@ type HashControls = {
   nativeHashBadgeElement?: HTMLButtonElement | undefined;
 };
 
+export type HashAlgorithmControls = HashControls & { algorithm: HashAlgorithmOption };
+
 type FileDigest = {
   value: Uint8Array;
   usedNativeFallback: boolean;
@@ -52,6 +54,8 @@ const HASH_ALGORITHMS: readonly HashAlgorithmOption[] = [
 export const createHashControls = (root: Document) => HASH_ALGORITHMS.map(algorithm => {
   const badge = root.getElementById(`${algorithm.id}NativeBadge`) as HTMLButtonElement | null;
   if (badge) addAccessibleTooltipToButton(badge, badge.title);
+  const reserved = root.getElementById(`${algorithm.id}Reserved`);
+  if (reserved) reserved.textContent = "0".repeat(FALLBACK_HASHES[algorithm.id].outputLen * 2);
   return {
     algorithm, label: algorithm.label,
     valueElement: root.getElementById(`${algorithm.id}Value`)!,
@@ -88,6 +92,7 @@ const resetHashDisplay = (...controls: HashControls[]): void => {
   for (const control of controls) {
     control.valueElement.textContent = "";
     control.copyButtonElement.hidden = true;
+    delete control.copyButtonElement.dataset?.["copyState"];
     if (control.nativeHashBadgeElement) showNativeHashBadge(control.nativeHashBadgeElement);
     control.buttonElement.hidden = false;
     control.buttonElement.disabled = false;
@@ -237,6 +242,31 @@ const copyHashToClipboard = async (
   } catch {
     return "failed";
   }
+};
+
+export const attachHashControls = (
+  controls: readonly HashAlgorithmControls[], getFile: () => File | null, status: HTMLElement
+): void => {
+  for (const control of controls) {
+    control.buttonElement.addEventListener("click", () => {
+      const file = getFile();
+      void computeAndDisplayHash(control.algorithm, file, control, () => getFile() === file);
+    });
+    control.copyButtonElement.addEventListener("click", () => {
+      const file = getFile();
+      void showCopyResult(control, status, () => getFile() === file);
+    });
+  }
+};
+
+const showCopyResult = async (
+  control: HashControls, status: HTMLElement, isCurrent: () => boolean
+): Promise<void> => {
+  const result = await copyHashToClipboard(control.valueElement);
+  if (!isCurrent()) return;
+  control.copyButtonElement.dataset["copyState"] = result;
+  status.dataset["state"] = result;
+  status.textContent = result === "copied" ? `${control.label} copied.` : "Clipboard copy failed.";
 };
 
 export type { HashAlgorithmOption, HashControls };

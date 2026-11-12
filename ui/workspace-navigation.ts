@@ -1,7 +1,7 @@
 import type { WorkspaceSection } from "./workspace-sections.js";
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
-import { escapeHtmlText } from "../html-utils.js";
 import { renderPeSectionPreview } from "../renderers/pe/section-preview.js";
+import { renderOverviewCard } from "../renderers/overview-card.js";
 
 const navigationButton = (
   key: string,
@@ -52,11 +52,5 @@ export const renderWorkspaceCards = (
   ...sections.filter(section => section.origin)].map(section => {
   const preview = result?.analyzer === "pe" ? renderPeSectionPreview(result.parsed,
     section.key.replace(/^analysis-/, "")) : "";
-  // The DOS summary repeats e_lfanew, already present in the native-field preview.
-  const description = preview && section.key === "analysis-dos-header" ? "" : section.description;
-  return `<article class="workspaceCard"` +
-    (section.origin ? ` data-analysis-origin="${section.origin}" title="Supplemental analysis"` : "") + `>` +
-    `<h4><button type="button" class="overviewLink" ` +
-    `data-workspace-target="${escapeHtmlText(section.key)}">${escapeHtmlText(section.title)}</button></h4>` +
-    (description ? `<p>${escapeHtmlText(description)}</p>` : "") + preview + `</article>`;
+  return renderOverviewCard(section.title, section.key, preview, section.origin);
 }).join("");

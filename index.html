@@ -47,7 +47,12 @@
     </div>
     <div class="fileHeader" id="fileHeader">
       <div class="fileHeader__identity">
-        <button type="button" class="fileHeader__back" id="fileBackButton" hidden>← Back to files</button>
+        <button type="button" class="fileHeader__back" id="fileBackButton" title="Back to files" hidden>
+          <span class="fileActionLabel">← Back to files</span>
+          <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
+            <path d="m10 5-7 7 7 7M3 12h18"/>
+          </svg>
+        </button>
         <h2 id="fileNameDetail" tabindex="-1"></h2>
         <div id="fileBinaryTypeDetail" class="fileHeader__type"></div>
         <span class="fileHeader__size" id="fileSizeDetail"></span>
@@ -61,9 +66,24 @@
     </div>
 
     <div class="appHeader__actions" id="fileActions">
-      <button type="button" class="secondaryButton" id="fileHashesButton">File hashes</button>
-      <button type="button" class="secondaryButton" id="directoryOpenButton">Open folder</button>
-      <button type="button" class="actionButton" id="fileOpenButton">Open files</button>
+      <button type="button" class="secondaryButton" id="fileHashesButton" title="File hashes">
+        <span class="fileActionLabel">File hashes</span>
+        <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
+          <path d="m10 3-4 18M18 3l-4 18M3 9h18M2 15h18"/>
+        </svg>
+      </button>
+      <button type="button" class="secondaryButton" id="directoryOpenButton" title="Open folder">
+        <span class="fileActionLabel">Open folder</span>
+        <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M3 7V4h6l3 3h9v13H3Z"/>
+        </svg>
+      </button>
+      <button type="button" class="actionButton" id="fileOpenButton" title="Open files">
+        <span class="fileActionLabel">Open files</span>
+        <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M14 2H4v20h16V8ZM14 2v6h6M12 18v-7m-3 3 3-3 3 3"/>
+        </svg>
+      </button>
       <a class="appHeader__repository" href="https://github.com/Gladskih/binary101">GitHub</a>
     </div>
   </header>
@@ -167,16 +187,26 @@
       </article>
       <article id="fileInfoCard" aria-labelledby="fileNameDetail" hidden>
         <div class="inspectionWorkspace" id="inspectionWorkspace">
+          <aside id="fileInfoRail" class="fileInfoRail" aria-label="File information and actions">
+            <button type="button" id="filePanelToggle" class="iconButton filePanelToggle"
+              aria-label="Hide file panel" aria-expanded="true" title="Hide file panel">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>
+            </button>
+            <button type="button" id="filePanelSearch" class="iconButton filePanelSearch"
+              aria-label="Search report" title="Search report">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>
+              </svg>
+            </button>
+            <div id="fileChromeDock" class="fileChromeDock"></div>
+            <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+              <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+            </div>
           <details id="fileDetails" class="fileDetails">
-            <summary aria-label="File properties and preview" title="File properties and preview">
-              <span class="fileDetails__label">File details</span>
+            <summary aria-label="File properties" title="File properties">
+              <span class="fileDetails__label">File properties</span>
             </summary>
             <div class="fileDetails__body">
-              <div id="fileChromeDock" class="fileChromeDock"></div>
-              <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
-                <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
-              </div>
-              <div id="filePreview"></div>
               <dl id="fileProperties" class="fileProperties" aria-label="File properties">
                 <div class="fileProperty"><dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd></div>
                 <div class="fileProperty">
@@ -201,6 +231,7 @@
               </dl>
             </div>
           </details>
+          </aside>
           <aside class="workspaceSidebar">
             <div id="workspaceSearchHome">
             <label class="workspaceSidebar__search" id="workspaceSearch">
@@ -220,6 +251,7 @@
               <p id="workspaceDescription"></p>
             </div>
             <section id="workspaceOverview" aria-label="File overview" hidden>
+              <div id="fileOverviewIcon"></div>
               <div class="nativeOverview"><div id="fileOverviewContent"></div></div>
               <div id="workspaceCards" class="workspaceCards"></div>
             </section>
@@ -228,129 +260,99 @@
                 No format-specific analysis is available for this file.
               </p>
         <section id="hashDetails" class="hashDetails" aria-label="File hashes">
-
-          <dl>
-          <dt>MD5</dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="md5Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="md5ComputeButton">Compute MD5</button>
-              <button type="button" class="iconButton copyButton" id="md5CopyButton"
+<table class="hashTable"><thead><tr><th scope="col">Algorithm</th>
+<th scope="col">Digest</th><th scope="col"><span class="visuallyHidden">Actions</span></th>
+</tr></thead><tbody>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">MD5</span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="md5Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="md5Value"></span><button type="button" class="actionButton" id="md5ComputeButton">Compute MD5</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="md5CopyButton"
                 aria-label="Copy MD5 hash" title="Copy MD5 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt class="nativeHashLabel">
-            SHA-1
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-1
             <button
               type="button"
               class="nativeHashBadge"
               id="sha1NativeBadge"
               title="Native crypto is tried first."
-            >🍃</button>
-          </dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha1Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha1ComputeButton">Compute SHA-1</button>
-              <button type="button" class="iconButton copyButton" id="sha1CopyButton"
+            >🍃</button></span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha1Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha1Value"></span><button type="button" class="actionButton" id="sha1ComputeButton">Compute SHA-1</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha1CopyButton"
                 aria-label="Copy SHA-1 hash" title="Copy SHA-1 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt>SHA-224</dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha224Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha224ComputeButton">Compute SHA-224</button>
-              <button type="button" class="iconButton copyButton" id="sha224CopyButton"
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-224</span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha224Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha224Value"></span><button type="button" class="actionButton" id="sha224ComputeButton">Compute SHA-224</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha224CopyButton"
                 aria-label="Copy SHA-224 hash" title="Copy SHA-224 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt class="nativeHashLabel">
-            SHA-256
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-256
             <button
               type="button"
               class="nativeHashBadge"
               id="sha256NativeBadge"
               title="Native crypto is tried first."
-            >🍃</button>
-          </dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha256Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha256ComputeButton">Compute SHA-256</button>
-              <button type="button" class="iconButton copyButton" id="sha256CopyButton"
+            >🍃</button></span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha256Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha256Value"></span><button type="button" class="actionButton" id="sha256ComputeButton">Compute SHA-256</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha256CopyButton"
                 aria-label="Copy SHA-256 hash" title="Copy SHA-256 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt class="nativeHashLabel">
-            SHA-384
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-384
             <button
               type="button"
               class="nativeHashBadge"
               id="sha384NativeBadge"
               title="Native crypto is tried first."
-            >🍃</button>
-          </dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha384Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha384ComputeButton">Compute SHA-384</button>
-              <button type="button" class="iconButton copyButton" id="sha384CopyButton"
+            >🍃</button></span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha384Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha384Value"></span><button type="button" class="actionButton" id="sha384ComputeButton">Compute SHA-384</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha384CopyButton"
                 aria-label="Copy SHA-384 hash" title="Copy SHA-384 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt class="nativeHashLabel">
-            SHA-512
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-512
             <button
               type="button"
               class="nativeHashBadge"
               id="sha512NativeBadge"
               title="Native crypto is tried first."
-            >🍃</button>
-          </dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha512Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha512ComputeButton">Compute SHA-512</button>
-              <button type="button" class="iconButton copyButton" id="sha512CopyButton"
+            >🍃</button></span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha512Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha512Value"></span><button type="button" class="actionButton" id="sha512ComputeButton">Compute SHA-512</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha512CopyButton"
                 aria-label="Copy SHA-512 hash" title="Copy SHA-512 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt>SHA-512/224</dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha512224Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha512224ComputeButton">Compute SHA-512/224</button>
-              <button type="button" class="iconButton copyButton" id="sha512224CopyButton"
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-512/224</span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha512224Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha512224Value"></span><button type="button" class="actionButton" id="sha512224ComputeButton">Compute SHA-512/224</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha512224CopyButton"
                 aria-label="Copy SHA-512/224 hash" title="Copy SHA-512/224 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          <dt>SHA-512/256</dt>
-          <dd class="hashRow">
-            <span class="hashValue" id="sha512256Value"></span>
-            <div class="hashButtons">
-              <button type="button" class="actionButton" id="sha512256ComputeButton">Compute SHA-512/256</button>
-              <button type="button" class="iconButton copyButton" id="sha512256CopyButton"
+              </button></td></tr>
+<tr class="hashRow"><th scope="row"><span class="hashAlgorithmLabel">SHA-512/256</span></th>
+<td class="hashTable__valueCell"><div class="hashDigest">
+<span id="sha512256Reserved" class="hashReserved" aria-hidden="true"></span>
+<span class="hashValue" id="sha512256Value"></span><button type="button" class="actionButton" id="sha512256ComputeButton">Compute SHA-512/256</button></div></td>
+<td class="hashTable__actions"><button type="button" class="iconButton copyButton" id="sha512256CopyButton"
                 aria-label="Copy SHA-512/256 hash" title="Copy SHA-512/256 hash" hidden>
                 <svg aria-hidden="true" viewBox="0 0 24 24"><use href="#copyIcon"></use></svg>
-              </button>
-            </div>
-          </dd>
-          </dl>
+              </button></td></tr>
+</tbody></table>
+<p id="hashStatus" class="hashStatus" role="status" aria-atomic="true"></p>
         </section>
             </section>
             <section id="reportSearchResults" aria-label="Report search results" hidden></section>

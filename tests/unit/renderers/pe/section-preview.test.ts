@@ -1,95 +1,124 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderPeSectionPreview } from "../../../../renderers/pe/section-preview.js";
-import { createBasePe } from "../../../fixtures/pe-renderer-headers-fixture.js";
-import type { PeImportEntry } from "../../../../analyzers/pe/imports/index.js";
-import type { PeParseResult } from "../../../../analyzers/pe/index.js";
-import type { ParsedWinCertificate } from "../../../../analyzers/pe/authenticode/index.js";
+import { createBasePe, createPeSection } from "../../../fixtures/pe-renderer-headers-fixture.js";
+import { readOverviewFacts } from "../../../helpers/overview-card-fixture.js";
 import { parseForUi } from "../../../../analyzers/index.js";
 import { createPeRomFile } from "../../../fixtures/sample-files-pe.js";
+import type { PeImportEntry } from "../../../../analyzers/pe/imports/index.js";
 
-const certificate = (): ParsedWinCertificate => ({ offset: 0, length: 8, availableBytes: 8,
-  revision: 0x200, revisionName: "2.0", certificateType: 2, typeName: "PKCS#7" });
-const moduleEntry = (dll: string): PeImportEntry => ({ dll, originalFirstThunkRva: 0,
-  firstThunkRva: 0, timeDateStamp: 0, forwarderChain: 0, functions: [],
+const moduleEntry = (dll: string, count: number): PeImportEntry => ({ dll, originalFirstThunkRva: 0,
+  firstThunkRva: 0, timeDateStamp: 0, forwarderChain: 0,
+  functions: Array.from({ length: count }, (_, index) => ({ name: `Symbol${index}` })),
   lookupSource: "missing", thunkTableTerminated: false });
 
-void test("PE previews name their source fields and retain the raw Machine value", () => {
+void test("import highlights select the actual maximum and totals without dumping function names", () => {
   const pe = createBasePe();
-  pe.opt.AddressOfEntryPoint = 0x1000;
-
-  const header = renderPeSectionPreview(pe, "pe-headers");
-
-  assert.match(header, /COFF.Machine<\/dt><dd>0x014c \(x86 \(I386\)\)/);
-  assert.match(header, /^<dl class="workspaceCard__fields">/);
-  assert.match(header, /OptionalHeader.AddressOfEntryPoint<\/dt><dd>0x00001000/);
-  assert.match(header, /OptionalHeader.Subsystem<\/dt><dd>0x0002 \(Windows GUI\)/);
-  assert.doesNotMatch(header, /Architecture|safe|malicious/);
-  assert.match(renderPeSectionPreview(pe, "dos-header"), /e_magic<\/dt><dd>MZ/);
-  assert.match(renderPeSectionPreview(pe, "dos-header"), /0x00000080/);
-});
-
-void test("unknown Machine values and missing or ROM optional headers stay explicit", async () => {
-  const pe = createBasePe();
-  pe.coff.Machine = 0xffff;
-  const incomplete: PeParseResult = { ...pe, opt: null };
-  const result = await parseForUi(createPeRomFile());
-  assert.ok(result.analyzer === "pe");
-  const rom = result.parsed;
-
-  assert.match(renderPeSectionPreview(incomplete, "pe-headers"), /0xffff<\/dd>/);
-  assert.doesNotMatch(renderPeSectionPreview(incomplete, "pe-headers"), /OptionalHeader/);
-  assert.doesNotMatch(renderPeSectionPreview(rom, "pe-headers"), /Subsystem/);
-  assert.equal(renderPeSectionPreview(rom, "security"), "");
-  assert.equal(renderPeSectionPreview(rom, "imports"), "");
-  assert.equal(renderPeSectionPreview(rom, "resources"), "");
-});
-
-void test("import previews retain names, show omitted descriptor counts and report parser warnings", () => {
-  const pe = createBasePe();
-  pe.imports.entries = [moduleEntry("<first>.dll"), moduleEntry(""), moduleEntry("third.dll"),
-    moduleEntry("fourth.dll")];
-  pe.imports.warning = "<recorded warning>";
+  pe.imports.entries = [moduleEntry("first.dll", 1), moduleEntry("<largest>.dll", 4), moduleEntry("third.dll", 2)];
 
   const html = renderPeSectionPreview(pe, "imports");
 
-  assert.match(html, /&lt;first&gt;.dll/);
-  assert.match(html, /empty DLL name/);
-  assert.match(html, /third.dll/);
-  assert.doesNotMatch(html, /fourth.dll/);
-  assert.match(html, /<p class="smallNote">1 more<\/p>/);
-  assert.match(html, /&lt;recorded warning&gt;/);
-  pe.imports.entries.pop();
-  assert.doesNotMatch(renderPeSectionPreview(pe, "imports"), /more/);
-});
-
-void test("empty imports, missing resources, missing security and unknown destinations add no facts", () => {
-  const pe = createBasePe();
-
-  assert.equal(renderPeSectionPreview(pe, "imports"), "");
-  assert.equal(renderPeSectionPreview(pe, "resources"), "");
-  assert.equal(renderPeSectionPreview(pe, "security"), "");
+  assert.deepEqual(readOverviewFacts(html), [["DLL with most imports", "<largest>.dll"],
+    ["Imports from this DLL", "4"], ["Total imports", "7 from 3 DLLs"]]);
+  assert.doesNotMatch(html, /Symbol|<table|<ul|first.dll|third.dll/);
+  assert.equal(pe.imports.entries[0]!.dll, "first.dll");
+  assert.equal(pe.imports.entries[1]!.functions.length, 4);
   assert.equal(renderPeSectionPreview(pe, "unknown"), "");
-  pe.resources = { top: [], detail: [], issues: ["<resource issue>"] };
-  assert.match(renderPeSectionPreview(pe, "resources"), /&lt;resource issue&gt;/);
+  assert.equal(renderPeSectionPreview(pe, "resources"), "");
 });
 
-void test("security previews distinguish unreported checks, an empty report and mixed outcomes", () => {
+void test("empty names, a single DLL and tied maxima keep their factual meaning", () => {
   const pe = createBasePe();
-  const record = certificate();
-  pe.security = { count: 1, certs: [record] };
+  pe.imports.entries = [moduleEntry("", 1)];
 
-  assert.match(renderPeSectionPreview(pe, "security"), /Not reported/);
-  record.authenticode = { format: "pkcs7", verification: { checks: [] } };
-  pe.security.certs.push(certificate());
-  assert.match(renderPeSectionPreview(pe, "security"), /verification.checks<\/dt><dd>0/);
-  record.authenticode.verification!.checks = [
-    { id: "digest", title: "Digest", status: "pass" },
-    { id: "signature", title: "Signature", status: "fail" },
-    { id: "trust", title: "Trust", status: "unknown" }
-  ];
+  assert.deepEqual(readOverviewFacts(renderPeSectionPreview(pe, "imports")), [
+    ["DLL with most imports", "(empty DLL name)"], ["Imports from this DLL", "1"],
+    ["Total imports", "1 from 1 DLL"]]);
+  pe.imports.entries.push(moduleEntry("tie.dll", 1));
+  assert.equal(readOverviewFacts(renderPeSectionPreview(pe, "imports"))[0]![1], "(empty DLL name)");
+});
+
+void test("section highlights compare raw and virtual sizes independently", () => {
+  const pe = createBasePe();
+  pe.sections = [createPeSection(".virtual", { sizeOfRawData: 1, virtualSize: 3000 }),
+    createPeSection("<raw>", { sizeOfRawData: 1024, virtualSize: 2 }),
+    createPeSection(".bss", { sizeOfRawData: 0, virtualSize: 5000 }),
+    createPeSection(".small", { sizeOfRawData: 0, virtualSize: 1 })];
+
+  assert.deepEqual(readOverviewFacts(renderPeSectionPreview(pe, "section-headers")), [
+    ["Largest SizeOfRawData", "<raw> · 1 KB (1024 bytes)"],
+    ["Largest VirtualSize", ".bss · 4.9 KB (5000 bytes)"]]);
+});
+
+void test("directory highlights count nonzero entries without claiming they are valid ranges", () => {
+  const pe = createBasePe();
+  pe.dirs = [{ name: "empty", rva: 0, size: 0 }, { name: "rva only", rva: 1, size: 0 },
+    { name: "<largest>", rva: 0, size: 1024 }, { name: "small", rva: 1, size: 1 }];
+
+  assert.deepEqual(readOverviewFacts(renderPeSectionPreview(pe, "data-directories")), [
+    ["Largest directory", "<largest>"], ["Size", "1 KB (1024 bytes)"], ["Nonzero directory entries", "3"]]);
+});
+
+void test("export highlights count every alias and forwarder", () => {
+  const pe = createBasePe();
+  pe.exports = { flags: 0, timestamp: 0, version: 0, dllName: "library.dll", Base: 1,
+    NumberOfFunctions: 2, NumberOfNames: 3, namePointerTable: 0, ordinalTable: 0, issues: [],
+    entries: [{ ordinal: 1, rva: 1, names: ["a", "b"], forwarder: "target.fn" },
+      { ordinal: 2, rva: 2, names: [] }] };
+
+  assert.deepEqual(readOverviewFacts(renderPeSectionPreview(pe, "exports")), [
+    ["DLL name", "library.dll"], ["Named exports", "2"], ["Forwarded exports", "1"]]);
+  pe.exports.dllName = "";
+  assert.equal(readOverviewFacts(renderPeSectionPreview(pe, "exports"))[0]![1], "(empty DLL name)");
+  pe.exports.entries = [];
+  assert.equal(renderPeSectionPreview(pe, "exports"), "");
+});
+
+void test("signature highlights preserve mixed checks without inventing a file verdict", () => {
+  const pe = createBasePe();
+  pe.security = { count: 1, certs: [{ offset: 0, length: 8, availableBytes: 8, revision: 0x200,
+    revisionName: "2.0", certificateType: 2, typeName: "PKCS#7",
+    authenticode: { format: "pkcs7", verification: { checks: [
+      { id: "file-digest-match", title: "Digest", status: "pass" },
+      { id: "certificate", title: "Certificate", status: "fail" },
+      { id: "trust", title: "Trust", status: "unknown" }
+    ] } } }] };
+
   const html = renderPeSectionPreview(pe, "security");
-  assert.match(html, /Recorded verification.checks<\/dt><dd>3/);
-  assert.match(html, /pass: 1 · fail: 1 · unknown: 1/);
-  assert.doesNotMatch(html, /safe|trusted file|valid signature/i);
+
+  assert.deepEqual(readOverviewFacts(html), [["Embedded file digest", "pass"],
+    ["Recorded checks", "1 pass · 1 fail · 1 unknown"], ["WIN_CERTIFICATE records", "1"]]);
+  assert.doesNotMatch(html, /safe|trusted file|<table|<ul/);
+  delete pe.security.certs[0]!.authenticode;
+  assert.equal(readOverviewFacts(renderPeSectionPreview(pe, "security"))[0]![1], "Not reported");
+  pe.security.certs[0]!.authenticode = { format: "pkcs7" };
+  assert.equal(readOverviewFacts(renderPeSectionPreview(pe, "security"))[0]![1], "Not reported");
+});
+
+void test("multiple signature records preserve conflicting digest results", () => {
+  const pe = createBasePe();
+  const record = { offset: 0, length: 8, availableBytes: 8, revision: 0x200,
+    revisionName: "2.0", certificateType: 2, typeName: "PKCS#7" };
+  pe.security = { count: 2, certs: ["pass", "fail"].map(status => ({ ...record,
+    authenticode: { format: "pkcs7", verification: { checks: [{ id: "file-digest-match", title: "Digest",
+      status: status === "pass" ? "pass" : "fail" }] } } })) };
+
+  assert.equal(readOverviewFacts(renderPeSectionPreview(pe, "security"))[0]![1], "pass · fail");
+});
+
+void test("absent collections, unknown destinations and ROM structures produce no empty tiles", async () => {
+  const pe = createBasePe();
+  pe.sections = [];
+  pe.dirs = [];
+  const rom = await parseForUi(createPeRomFile());
+  assert.equal(rom.analyzer, "pe");
+
+  for (const key of ["imports", "exports", "security", "resources", "section-headers", "data-directories", "unknown"]) {
+    assert.equal(renderPeSectionPreview(pe, key), "");
+  }
+  for (const key of ["imports", "exports", "security", "resources", "unknown"]) {
+    assert.equal(renderPeSectionPreview(rom.parsed, key), "");
+  }
+  assert.match(renderPeSectionPreview(rom.parsed, "section-headers"), /Largest SizeOfRawData/);
+  assert.match(renderPeSectionPreview(pe, "pe-headers"), /Machine/);
 });

@@ -88,6 +88,39 @@ button {
 .fileChromeDock:empty {
   display: none
 }
+.fileInfoRail {
+  display: none;
+  flex-direction: column;
+  grid-area: details;
+  min-width: 0;
+  background: var(--workspace-rail)
+}
+.filePanelToggle,.filePanelSearch,.fileActionIcon {
+  display: none
+}
+.filePanelToggle svg,.filePanelSearch svg,.fileActionIcon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round
+}
+.fileInfoRail > .filePrimaryInfo__iconWrap {
+  order: 1;
+  margin: 8px 12px 16px
+}
+.fileInfoRail > .fileDetails {
+  order: 2;
+  flex-shrink: 0
+}
+#fileOverviewIcon:not(:has(> :not([hidden]))) {
+  display: none
+}
+.fileChromeDock {
+  padding: 8px 12px 0
+}
 .fileChromeDock .fileHeader__identity {
   display: block
 }
@@ -556,9 +589,8 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   line-height: 1.4;
   color: var(--muted);
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis
+  white-space: normal;
+  overflow-wrap: anywhere
 }
 .workspaceAnalysis {
   display: flex;
@@ -614,6 +646,8 @@ details[data-analysis-origin="supplemental"] > summary {
   outline-offset: -2px
 }
 .workspaceHeading {
+  position: sticky;
+  left: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -823,7 +857,7 @@ details[data-analysis-origin="supplemental"] > summary {
   border: 0;
   background: transparent;
   margin: 16px 0 0;
-  max-inline-size: 72rem;
+  max-inline-size: 100%;
   display: flow-root
 }
 .nativeOverview {
@@ -842,141 +876,214 @@ details[data-analysis-origin="supplemental"] > summary {
   max-width: 100%;
   flex: 1 1 24rem
 }
-.nativeOverviewSection {
-  margin-bottom: 20px
-}
-.nativeOverviewSection h4 {
-  margin: 0 0 12px;
-  font-size: var(--font-size-base)
-}
 .workspaceCards {
   display: contents
 }
 #workspaceOverview {
   display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(min(100%,20rem),1fr));
+  grid-template-columns: repeat(auto-fill,minmax(min(100%,18rem),1fr));
+  align-items: stretch;
   gap: 12px;
-  align-items: start;
-  padding-bottom: 12px
+  padding-block: 4px 12px
 }
-#workspaceOverview .nativeOverview,#fileOverviewContent {
+#workspaceOverview .nativeOverview,#workspaceOverview #fileOverviewContent,
+#workspaceOverview #workspaceCards {
   display: contents
 }
-#workspaceOverview .nativeOverviewSection {
-  padding: 8px 12px 12px;
-  margin: 0;
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  min-width: 0
-}
-#fileOverviewContent .tableWrap {
-  overflow-x: auto;
-  max-inline-size: 100%
-}
 .workspaceCard {
-  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  inline-size: 100%;
+  margin: 0;
+  padding: 16px;
   border: 1px solid var(--border2);
-  border-radius: 6px;
-  min-width: 0
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  text-align: start;
+  cursor: pointer;
+  font: inherit;
+  overflow-wrap: anywhere
+}
+.workspaceCard:hover {
+  border-color: var(--accent);
+  background: var(--workspace-subtle)
+}
+.workspaceCard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px
 }
 .workspaceCard[data-analysis-origin="supplemental"] {
   background: var(--workspace-supplemental)
 }
-.workspaceCard[data-analysis-origin="supplemental"] h4 button {
-  font-weight: 700
-}
-.workspaceCard h4,.workspaceCard p {
-  margin: 0 0 8px
-}
-.workspaceCard h4 button {
-  min-height: 44px;
-  width: 100%;
-  font-weight: 600
-}
-.workspaceCard__fields {
-  display: block;
-  margin: 8px 0 0
-}
-.workspaceCard__fields dd {
-  margin: 0;
-  overflow-wrap: anywhere
-}
-.workspaceCard__fields dd + dt {
-  margin-top: 6px
-}
-.workspaceOverviewMode #workspaceNavigation {
-  display: none
-}
-.hasDockedHeader .workspaceOverviewMode .workspaceSidebar {
-  display: none
-}
-.overviewGallery {
-  grid-column: 1 / -1;
+.workspaceCard__header {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 12px;
-  margin: 0;
-  min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain
-}
-.overviewGallery:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px
-}
-.overviewMedia {
-  flex: 0 0 10rem;
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 6px;
-  width: 10rem;
-  padding: 8px;
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  overflow-wrap: anywhere
-}
-.overviewMedia img {
-  width: 72px;
-  height: 72px;
-  object-fit: contain
-}
-@media (width >=960px) and (height >=560px) {
-  .inspectionWorkspace.workspaceOverviewMode {
-    grid-template: "navigation details" auto "content details" minmax(0,1fr)
-      / minmax(0,1fr) auto
-  }
-}
-#hashDetails > dl {
-  margin: 0;
-  padding: 0;
-  grid-template-columns: max-content minmax(0,1fr);
-  grid-auto-rows: minmax(44px,auto);
   align-items: center;
-  gap: 8px 24px
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.4
 }
-#hashDetails .hashRow {
-  min-height: 44px;
-  flex-wrap: nowrap
+.workspaceCard__header svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round
 }
-#hashDetails .hashValue {
-  white-space: nowrap;
-  overflow-x: auto;
-  flex: 0 1 auto;
+.workspaceCard__body {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  width: 100%
+}
+.workspaceCard__body:has(.workspaceCard__image) {
+  grid-template-columns: minmax(0,1fr) auto
+}
+.workspaceCard__fact {
+  display: grid;
+  grid-column: 1;
+  gap: 2px;
   min-width: 0
 }
-#hashDetails .hashButtons {
-  flex-shrink: 0
+.workspaceCard__label {
+  color: var(--muted);
+  font-size: var(--font-size-base)
 }
-#hashDetails .hashValue:empty {
+.workspaceCard__value {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--font-size-base);
+  line-height: 1.4
+}
+.workspaceCard__fact:first-of-type .workspaceCard__value {
+  font-size: 18px;
+  font-weight: 600
+}
+.workspaceCard__image {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: start;
+  width: 112px;
+  height: 112px;
+  object-fit: contain
+}
+#workspaceOverview:has(.workspaceCard__image) #fileOverviewIcon {
   display: none
 }
-#hashDetails .copyButton {
-  min-width: 34px;
-  min-height: 34px
+.workspaceContent .hashTable {
+  inline-size: max-content;
+  max-inline-size: 100%;
+  border: 1px solid var(--border2)
+}
+.hashTable .hashRow {
+  display: table-row
+}
+.hashTable .hashAlgorithmLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-family: system-ui,sans-serif;
+  font-weight: 400
+}
+.hashTable :is(th,td) {
+  vertical-align: top
+}
+.hashTable .hashTable__valueCell {
+  max-inline-size: none
+}
+.hashDigest {
+  display: grid;
+  min-block-size: 44px
+}
+.hashDigest > * {
+  grid-area: 1 / 1;
+  place-self: start
+}
+.hashDigest .hashValue,.hashDigest .hashReserved {
+  display: block;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font: inherit;
+  line-height: 1.5
+}
+.hashDigest .hashReserved {
+  visibility: hidden;
+  user-select: none
+}
+.hashTable .hashTable__actions {
+  inline-size: 64px;
+  min-inline-size: 64px
+}
+.hashTable .copyButton {
+  inline-size: 44px;
+  block-size: 44px
+}
+.hashTable .copyButton[data-copy-state="copied"] svg {
+  display: none
+}
+.hashTable .copyButton[data-copy-state="copied"]::after {
+  content: "\2713";
+  color: var(--accent)
+}
+.hashStatus:not([data-state="failed"]) {
+  position: absolute;
+  clip-path: inset(50%);
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden
+}
+.hashStatus:empty {
+  display: none
+}
+@media (width < 640px) {
+  .workspaceContent .hashTable,.hashTable tbody {
+    display: block;
+    inline-size: 100%
+  }
+  .hashTable thead {
+    position: absolute;
+    clip-path: inset(50%);
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden
+  }
+  .hashTable .hashRow {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) max-content;
+    border-bottom: 1px solid var(--border2)
+  }
+  .hashTable .hashRow:last-child {
+    border-bottom: 0
+  }
+  .hashTable .hashRow > :is(th,td) {
+    border: 0
+  }
+  .hashTable .hashTable__valueCell {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-top: 0
+  }
+
+  /* Reserve the 44px action plus the shared cell padding before it appears. */
+  .hashTable .hashTable__actions {
+    grid-column: 2;
+    grid-row: 1;
+    min-block-size: calc(44px + 12px)
+  }
 }
 .overviewLink {
   padding: 0;
@@ -1292,28 +1399,101 @@ details[data-analysis-origin="supplemental"] > summary {
     grid-template: "navigation content details" minmax(0,1fr)
       / clamp(16rem,20%,24rem) minmax(0,1fr) auto
   }
-  .fileDetails {
+  .inspectionWorkspace:not(:has(#workspaceNavigation > *)) {
+    grid-template: "content details" minmax(0,1fr) / minmax(0,1fr) auto
+  }
+  .hasDockedHeader .inspectionWorkspace:not(:has(#workspaceNavigation > *)) .workspaceSidebar {
+    display: none
+  }
+  .hasDockedHeader .fileInfoRail {
+    display: flex;
     inline-size: 20rem;
     overflow-y: auto;
     border-bottom: 0;
     border-left: 1px solid var(--border)
   }
-  .fileDetails:not([open]) {
-    inline-size: 44px
+  .filePanelToggle {
+    position: sticky;
+    top: 4px;
+    z-index: 10;
+    align-self: flex-end;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 4px 4px -48px 0
   }
-  .fileDetails:not([open]) > summary {
-    list-style: none;
-    text-align: center
+  .fileInfoRail:not([data-collapsed="true"]) .fileHeader__identity {
+    padding-inline-end: 40px
   }
-  .fileDetails:not([open]) > summary .fileDetails__label {
+  .fileInfoRail[data-collapsed="true"] {
+    inline-size: 64px
+  }
+  .fileInfoRail[data-collapsed="true"] .filePanelToggle {
+    position: static;
+    align-self: center;
+    margin: 4px 0
+  }
+  .fileInfoRail[data-collapsed="true"] .filePanelToggle svg {
+    transform: rotate(180deg)
+  }
+  .fileInfoRail[data-collapsed="true"] .filePanelSearch {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 8px
+  }
+  .fileInfoRail[data-collapsed="true"]
+    :is(.fileDetails,.filePrimaryInfo__iconWrap,.workspaceSidebar__search) {
     display: none
   }
-  .fileDetails:not([open]) > summary::after {
-    content: "‹";
-    font-size: 20px
+  .fileInfoRail[data-collapsed="true"] .fileChromeDock {
+    padding: 0 10px
   }
-  .fileDetails:not([open]) > summary::-webkit-details-marker {
+  .fileInfoRail[data-collapsed="true"]
+    :is(#fileNameDetail,.fileHeader__type,.fileHeader__size) {
     display: none
+  }
+  .fileInfoRail[data-collapsed="true"] .appHeader__actions {
+    flex-direction: column;
+    margin-block: 0
+  }
+  .fileInfoRail[data-collapsed="true"] :is(.fileHeader__back,.appHeader__actions button) {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    min-width: 0;
+    padding: 0
+  }
+  .fileInfoRail[data-collapsed="true"] .fileActionIcon {
+    display: block
+  }
+  .fileInfoRail[data-collapsed="true"] .fileActionLabel {
+    position: absolute;
+    clip-path: inset(50%);
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    white-space: nowrap
+  }
+  .fileInfoRail[data-collapsed="true"] .appHeader__repository {
+    padding-inline: 0
+  }
+  .fileInfoRail[data-collapsed="true"] .fileHeader__progress {
+    flex-direction: column;
+    min-width: 0;
+    width: 44px
+  }
+  .fileInfoRail[data-collapsed="true"] .fileHeader__progress progress {
+    width: 44px
+  }
+  .fileDetails {
+    border: 0;
+    inline-size: auto;
+    overflow: visible
   }
 }
 .workspaceContinuous {

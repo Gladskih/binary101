@@ -13,10 +13,10 @@ const inspectPe = async (page: Page): Promise<void> => {
 test("native overview retains the icon, source fields and header properties", async ({ page }) => {
   await inspectPe(page);
   await expect(page.locator("#fileIcon")).toBeVisible();
-  await expect(page.locator("#fileOverviewContent")).toContainText("VERSION / 1 / LANGID 0x0409");
+  await expect(page.locator("#fileOverviewContent")).toContainText("PE resource showcase");
   await expect(page.locator("#fileOverviewContent")).toContainText("FileDescription");
   await expect(page.locator("#fileOverviewContent")).not.toContainText("Architecture");
-  await page.locator('[data-workspace-source="resources"]').filter({ hasText: /^VERSION/ }).click();
+  await page.locator('.workspaceCard[data-workspace-target="analysis-resources"]').click();
   await expect(page.locator('[data-pe-lazy-section="resources"]')).toBeVisible();
   await expect(page.locator("#workspaceNavigation")).not.toContainText("File hashes");
   await expect(page.locator("#fileFormatSummary")).toHaveCount(0);
@@ -33,7 +33,8 @@ test("file hashes remain a header tool with no outer frame or disclosure", async
   await openInspectionSection(page, "File hashes");
   await expect(page.locator("#fileIcon")).toBeVisible();
   await expect(page.locator("#hashDetails summary")).toHaveCount(0);
-  await expect(page.locator("#md5ComputeButton")).toBeVisible();
+  await expect(page.locator("#md5Value")).toHaveText(/^[a-f0-9]{32}$/);
+  await expect(page.locator("#md5CopyButton")).toBeVisible();
   await expect(page.locator("#hashDetails")).toHaveCSS("border-top-width", "0px");
 });
 

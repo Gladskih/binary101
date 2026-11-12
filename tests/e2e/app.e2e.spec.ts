@@ -1,4 +1,5 @@
-import { openInspectionContent, openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
+import { computeInspectionHash, openInspectionContent, openInspectionSection,
+  toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
@@ -38,7 +39,7 @@ const expectEveryHashCanBeComputed = async (page: Page, file: MockFile): Promise
   const fileBytes = Buffer.from(file.data);
   for (const { label, id, nodeDigestName } of hashExpectations) {
     const expectedDigest = createHash(nodeDigestName).update(fileBytes).digest("hex");
-    await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
+    await computeInspectionHash(page, id);
     await expect(page.locator(`#${id}Value`)).toHaveText(expectedDigest);
     await expect(page.getByRole("button", { name: `Copy ${label} hash`, exact: true })).toBeVisible();
   }
@@ -105,7 +106,7 @@ test.describe("file type detection", () => {
     }, fileContent);
     await expectBaseDetails(page, "sample.txt", "Text file");
     await expect(page.locator("#analysisValue")).toBeHidden();
-    await page.getByRole("button", { name: "Compute SHA-256" }).click();
+    await computeInspectionHash(page, "sha256");
     await expect(page.locator("#sha256Value")).toHaveText(/^[0-9a-f]{64}$/);
   });
   void test("drops a folder and fills file type rows progressively", async ({ page }) => {
@@ -208,7 +209,7 @@ test.describe("file hash actions", () => {
       .toBeGreaterThan(0);
 
     const hashDetails = page.locator("#hashDetails");
-    const nativeHashLabels = page.locator(".nativeHashLabel");
+    const nativeHashLabels = page.locator(".hashAlgorithmLabel:has(.nativeHashBadge)");
     const nativeHashBadges = page.locator(".nativeHashBadge");
     const nativeHashTooltip = page.locator("#sha256NativeBadge ~ .accessibleTooltipPopup");
     await openInspectionSection(page, "File hashes");

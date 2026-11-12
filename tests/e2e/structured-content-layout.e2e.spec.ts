@@ -57,7 +57,10 @@ test("short desktop reports also receive the full viewport height", async ({ pag
 });
 
 test("hash computation keeps row and panel height stable at the base font size", async ({ page }) => {
-  await inspect(page);
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: "hash.bin", mimeType: "application/octet-stream",
+    buffer: Buffer.alloc(128 * 1024, 37) });
+  await expect(page.locator("#fileAnalysisDurationDetail")).not.toHaveText("");
   await openInspectionSection(page, "File hashes");
   const row = page.locator(".hashRow").filter({ has: page.locator("#md5Value") });
   const before = (await row.boundingBox())!.height;
@@ -127,13 +130,15 @@ test("certificate nodes keep a readable width regardless of whether they have ch
   expect((await page.locator(".peSecurityCertCard").boundingBox())!.width).toBeLessThan(900);
 });
 
-test("collapsing file details returns its unused width to the report", async ({ page }) => {
+test("closing metadata keeps the file action rail available without a second top toolbar", async ({ page }) => {
   await page.setViewportSize({ width: 2530, height: 1100 });
   await inspect(page);
   const before = (await page.locator(".workspaceContent").boundingBox())!.width;
   await page.locator("#fileDetails > summary").click();
   const after = (await page.locator(".workspaceContent").boundingBox())!.width;
-  expect(after - before).toBeGreaterThan(200);
+  expect(after).toBeCloseTo(before, 0);
+  await expect(page.locator("#fileOpenButton")).toBeVisible();
+  await expect(page.locator(".appHeader")).toBeHidden();
   await page.locator("#fileDetails > summary").click();
   expect((await page.locator(".workspaceContent").boundingBox())!.width).toBeCloseTo(before, 0);
 });

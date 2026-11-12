@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { openInspectionSection } from "./inspection-navigation.js";
 
 const dispatchFixtureFolderDrop = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
@@ -90,4 +91,17 @@ test("browser back and forward restore folder and file inspection routes", async
   await expectDirectory(page, "fixture-folder", "Drop", "Directory");
   await page.goForward();
   await expectPixelFile(page);
+});
+
+test("Back to files returns to the folder after navigating within a file report", async ({ page }) => {
+  await page.goto("/");
+  await dispatchFixtureFolderDrop(page);
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
+  await page.locator("#directoryFileListingBody tr", { hasText: "pixel.png" }).click();
+  await expectPixelFile(page);
+  await openInspectionSection(page, "File hashes");
+
+  await page.locator("#fileBackButton").click();
+
+  await expectDirectory(page, "fixture-folder", "Drop", "Directory");
 });

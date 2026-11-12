@@ -65,3 +65,46 @@ void test("inspection history restores known app states and ignores foreign stat
   assert.equal(controller.currentRouteId(), null);
   assert.deepEqual(openedRoutes, ["folder", null, null]);
 });
+
+void test("section history stays within the active file route and restores without reopening it", () => {
+  const history = new FakeHistory();
+  const targetWindow = new FakeWindow();
+  const openedRoutes: Array<string | null> = [];
+  const sections: Array<string | null> = [];
+  const controller = createInspectionHistoryController({ history, targetWindow,
+    openRoute: route => openedRoutes.push(route), openSection: key => sections.push(key) });
+  controller.initialize("file");
+  controller.initializeSection("overview");
+  const overview = history.state;
+  controller.selectSection("headers");
+  controller.selectSection("headers");
+
+  assert.equal(controller.currentSectionKey(), "headers");
+  assert.equal(history.pushedStates.length, 1);
+  assert.deepEqual(history.state, { app: "binary101", routeId: "file", version: 1, section: "headers" });
+  history.state = overview;
+  targetWindow.dispatchPopState(overview);
+  assert.deepEqual(sections, ["overview"]);
+  assert.deepEqual(openedRoutes, []);
+  assert.equal(controller.currentSectionKey(), "overview");
+  targetWindow.dispatchPopState({ app: "binary101", routeId: "folder", version: 1 });
+  assert.deepEqual(openedRoutes, ["folder"]);
+});
+
+void test("uninitialized, foreign and invalid section states do not create report routes", () => {
+  const history = new FakeHistory();
+  const targetWindow = new FakeWindow();
+  const controller = createInspectionHistoryController({ history, targetWindow, openRoute: () => {} });
+
+  controller.initializeSection("overview");
+  controller.selectSection("headers");
+  assert.equal(history.replacedStates.length, 0);
+  assert.equal(history.pushedStates.length, 0);
+  assert.equal(controller.currentSectionKey(), null);
+  history.state = { app: "other", routeId: "file", version: 1, section: "headers" };
+  assert.equal(controller.currentSectionKey(), null);
+  controller.initialize("file");
+  history.state = { app: "binary101", routeId: "file", version: 1, section: 7 };
+  assert.equal(controller.currentSectionKey(), null);
+  targetWindow.dispatchPopState(history.state);
+});
