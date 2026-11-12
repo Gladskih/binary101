@@ -8,6 +8,11 @@ interface SearchPath {
   parent: SearchPath | null;
 }
 
+export const reportTextPattern = (query: string): RegExp | null => {
+  const needle = query.trim();
+  return needle ? new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "iu") : null;
+};
+
 const childEntries = function* (value: object): Generator<[string | number, unknown]> {
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index++) yield [index, value[index]];
@@ -54,13 +59,13 @@ export const searchReportText = async (
   signal: AbortSignal
 ): Promise<ReportTextMatch[]> => {
   signal.throwIfAborted();
-  const needle = query.trim().toLowerCase();
-  if (!needle || !searchableObject(parsed)) return [];
+  const pattern = reportTextPattern(query);
+  if (!pattern || !searchableObject(parsed)) return [];
   const matches: ReportTextMatch[] = [];
   let deadline = performance.now() + 8;
   for (const entry of parsedText(parsed)) {
     signal.throwIfAborted();
-    if (entry?.value.toLowerCase().includes(needle)) matches.push(entry);
+    if (entry && pattern.test(entry.value)) matches.push(entry);
     // Half a 60 Hz frame is a cooperative work budget, not a search/result cap.
     // https://web.dev/articles/optimize-long-tasks
     if (performance.now() < deadline) continue;

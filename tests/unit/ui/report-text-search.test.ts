@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { searchReportText } from "../../../ui/report-text-search.js";
+import { reportTextPattern, searchReportText } from "../../../ui/report-text-search.js";
+
+void test("the search pattern treats regex syntax literally and uses Unicode case folding", async () => {
+  const pattern = reportTextPattern(" [x].* ")!;
+
+  assert.equal(pattern.test("[X].*"), true);
+  assert.equal(pattern.test("xyz"), false);
+  assert.equal(reportTextPattern(" \t "), null);
+  assert.deepEqual(await searchReportText({ name: "İName ſ" }, "s", new AbortController().signal),
+    [{ path: ["name"], value: "İName ſ" }]);
+  assert.deepEqual(await searchReportText({ name: "İ" }, "i", new AbortController().signal), []);
+});
+
+void test("report search preserves internal spaces and requires the complete phrase", async () => {
+  const parsed = { names: ["two words", "two  words", "two other words"] };
+  const signal = new AbortController().signal;
+
+  assert.deepEqual(await searchReportText(parsed, " two words ", signal),
+    [{ path: ["names", 0], value: "two words" }]);
+  assert.deepEqual(await searchReportText(parsed, "two  words", signal),
+    [{ path: ["names", 1], value: "two  words" }]);
+});
 
 void test("report search finds text outside the first displayed page", async () => {
   const entries = Array.from({ length: 501 }, (_, index) => ({ name: `symbol-${index}` }));

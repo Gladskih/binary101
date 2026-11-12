@@ -1,8 +1,9 @@
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
 import type { WorkspaceSection } from "./workspace-sections.js";
-import { searchReportText, type ReportTextMatch } from "./report-text-search.js";
+import { reportTextPattern, searchReportText, type ReportTextMatch } from "./report-text-search.js";
 import { reportSearchSection } from "./report-search-location.js";
 import { revealPagedSortableTableText } from "./paged-sortable-tables.js";
+import { renderSearchExcerpt } from "./report-search-excerpt.js";
 
 export class ReportSearch {
   private controller: AbortController | null = null;
@@ -61,12 +62,12 @@ export class ReportSearch {
       "Includes unloaded sections and all table pages; raw bytes are not scanned.";
     this.panel.append(status);
     const sectionMatches = this.getSections().filter(section =>
-      section.title.toLowerCase().includes(this.query.toLowerCase()));
+      reportTextPattern(this.query)?.test(section.title));
     for (const section of sectionMatches) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "reportSearchSection overviewLink";
-      button.textContent = section.title;
+      button.innerHTML = renderSearchExcerpt(section.title, this.query);
       button.addEventListener("click", () => this.reveal(section.key, ""));
       this.panel.append(button);
     }
@@ -96,9 +97,7 @@ export class ReportSearch {
     context.className = "reportSearchContext";
     context.textContent = match.path.map(part => typeof part === "number" ? `[${part}]` : part).join(" / ");
     const text = document.createElement("pre");
-    const offset = Math.max(0, match.value.toLowerCase().indexOf(this.query.toLowerCase()) - 60);
-    text.textContent = (offset ? "…" : "") + match.value.slice(offset, offset + 360) +
-      (offset + 360 < match.value.length ? "…" : "");
+    text.innerHTML = renderSearchExcerpt(match.value, this.query);
     item.append(context, text);
     if (sectionKey) {
       const button = document.createElement("button");

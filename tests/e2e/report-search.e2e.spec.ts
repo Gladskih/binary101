@@ -10,6 +10,7 @@ test("global search includes unmounted sections and every paginated row", async 
   await expect(page.locator('[data-paged-sortable-table-id="pe-exports"]')).toHaveCount(0);
   await page.locator("#workspaceFilter").fill("Beta&lt;");
   await expect(page.locator("#reportSearchResults")).toContainText("Beta&lt;");
+  await expect(page.locator("#reportSearchResults mark")).toHaveText("Beta&lt;");
   await expect(page.locator("#workspaceNavigation").getByRole("button", { name: /^DOS header/ }))
     .toBeVisible();
   await expect(page.locator("#workspaceNavigationEmpty")).toBeHidden();

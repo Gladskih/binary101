@@ -56,16 +56,7 @@
           </progress>
           <span id="fileAnalysisPercent" aria-hidden="true"></span>
         </span>
-    <dl id="fileProperties" class="fileProperties" aria-label="File properties">
-            <div class="fileProperty"><dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd></div>
-            <div class="fileProperty"><dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd></div>
-            <div class="fileProperty"><dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd></div>
-            <div class="fileProperty"><dt>Source</dt><dd id="fileSourceDetail" class="optionsRow"></dd></div>
-            <div class="fileProperty"><dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd></div>
-            <div class="fileProperty"><dt id="fileRelativePathTerm" hidden>Relative path</dt><dd id="fileRelativePathDetail" hidden></dd></div>
-            <div class="fileProperty"><dt id="fileSubtypeTerm" hidden>Subtype</dt><dd id="fileSubtypeDetail" hidden></dd></div>
 
-    </dl>
       </div>
     </div>
 
@@ -176,20 +167,48 @@
       </article>
       <article id="fileInfoCard" aria-labelledby="fileNameDetail" hidden>
         <div class="inspectionWorkspace">
+          <details id="fileDetails" class="fileDetails">
+            <summary>File properties &amp; preview</summary>
+            <div class="fileDetails__body">
+              <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
+                <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
+              </div>
+              <div id="filePreview"></div>
+              <dl id="fileProperties" class="fileProperties" aria-label="File properties">
+                <div class="fileProperty"><dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd></div>
+                <div class="fileProperty">
+                  <dt>Inspection time (UTC)</dt><dd id="fileTimestampDetail"></dd>
+                </div>
+                <div class="fileProperty">
+                  <dt>Analysis duration</dt><dd id="fileAnalysisDurationDetail"></dd>
+                </div>
+                <div class="fileProperty">
+                  <dt>Source</dt><dd id="fileSourceDetail" class="optionsRow"></dd>
+                </div>
+                <div class="fileProperty">
+                  <dt>Object</dt><dd id="fileObjectDetail" class="optionsRow"></dd>
+                </div>
+                <div class="fileProperty">
+                  <dt id="fileRelativePathTerm" hidden>Relative path</dt>
+                  <dd id="fileRelativePathDetail" hidden></dd>
+                </div>
+                <div class="fileProperty">
+                  <dt id="fileSubtypeTerm" hidden>Subtype</dt><dd id="fileSubtypeDetail" hidden></dd>
+                </div>
+              </dl>
+            </div>
+          </details>
           <aside class="workspaceSidebar">
-            <label class="workspaceMobileNavigation">
-              <span>Section</span>
-              <select id="workspaceMobileView"></select>
-            </label>
             <label class="workspaceSidebar__search">
               <span class="workspaceSearchLabel">Search</span>
               <input id="workspaceFilter" type="search" placeholder="Search report…" autocomplete="off">
             </label>
             <nav id="workspaceNavigation" aria-label="File sections"></nav>
-            <p id="workspaceNavigationEmpty" class="smallNote" hidden>No matching sections.</p>
           </aside>
           <div class="workspaceContent" id="workspaceContent" tabindex="-1">
             <div class="workspaceHeading" id="workspaceHeading">
+              <button type="button" id="workspaceReportButton" class="overviewLink"
+                data-workspace-target="" hidden>Back to report</button>
               <h3 id="workspaceTitle">Overview</h3>
               <p id="workspaceDescription"></p>
             </div>
@@ -197,9 +216,7 @@
               role="region" aria-label="Report contents">
             <section id="workspaceOverview" aria-label="File overview" hidden>
               <div id="workspaceNotice" class="workspaceNotice" hidden></div>
-              <div class="nativeOverview"><div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
-                  <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
-                </div><div id="fileOverviewContent"></div></div>
+              <div class="nativeOverview"><div id="fileOverviewContent"></div></div>
             </section>
             <section id="workspaceHashes" aria-label="File hash tools">
               <p id="workspaceUnsupported" class="smallNote" hidden>

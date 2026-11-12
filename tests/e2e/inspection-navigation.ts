@@ -10,19 +10,28 @@ export const expandInspectionCollection = async (collection: Locator): Promise<v
 
 export const openInspectionSection = async (page: Page, title: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
+  if (title === "Preview") {
+    await page.locator("#fileDetails").evaluate(element => { element.setAttribute("open", ""); });
+    await expect(page.locator("#filePreview")).toBeVisible();
+    return;
+  }
   if (title === "File hashes") {
     await page.locator("#fileHashesButton").click();
     await expect(page.locator("#workspaceTitle")).toHaveText("File hashes");
     return;
   }
-  const select = page.locator("#workspaceMobileView");
-  if (await select.isVisible()) {
-    await select.selectOption({ label: title });
-  } else {
-    await page.locator("#workspaceNavigation button").filter({
-      has: page.getByText(title, { exact: true })
-    }).click();
+  await expect(page.locator("#fileAnalysisDurationDetail")).not.toHaveText("");
+  const continuous = page.locator(".workspaceContinuous");
+  if (await continuous.count()) {
+    const back = page.locator("#workspaceReportButton");
+    if (await back.isVisible()) await back.click();
+    await expect(page.getByRole("heading", { name: title, exact: true }))
+      .toBeVisible();
+    return;
   }
+  await page.locator("#workspaceNavigation button").filter({
+    has: page.getByText(title, { exact: true })
+  }).click();
   await expect(page.locator("#workspaceTitle")).toHaveText(title);
 };
 

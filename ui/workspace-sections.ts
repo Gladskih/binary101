@@ -13,7 +13,7 @@ export const sectionDetails = (element: HTMLElement): HTMLDetailsElement | null 
 
 const sectionHeading = (element: HTMLElement): Element | null =>
   sectionDetails(element)?.querySelector(":scope > summary") ??
-  element.querySelector(":scope > h2, :scope > h3, :scope > h4");
+  element.querySelector(":scope > :is(h2, h3, h4):not(.workspaceInlineHeading)");
 
 const sectionTitle = (element: HTMLElement): string => {
   const heading = sectionHeading(element);
@@ -55,6 +55,12 @@ export const collectWorkspaceSections = (root: HTMLElement): WorkspaceSection[] 
     const title = sectionTitle(element);
     const key = element.dataset["peLazySection"] ?? element.dataset["elfLazySection"] ??
       (element.id || `${index}-${title}`);
+    if (!element.querySelector(":scope > .workspaceInlineHeading")) {
+      const heading = document.createElement("h3");
+      heading.className = "workspaceInlineHeading";
+      heading.textContent = title;
+      element.prepend(heading);
+    }
     element.classList.add("workspacePanel");
     element.setAttribute("aria-label", title);
     return {

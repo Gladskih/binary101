@@ -16,7 +16,7 @@ test("WebM analysis uses a local worker and displays its parsed result", async (
 
   await inspectMedia(page);
 
-  await expect(page.locator("#workspaceMobileView")).toContainText("Tracks");
+  await expect(page.locator("#workspaceNavigation")).toContainText("Tracks");
   expect(workers.some(url => url.includes("webm-worker"))).toBe(true);
   await expect(page.locator("#fileAnalysisProgress")).toBeHidden();
   expect(errors).toEqual([]);
@@ -35,7 +35,7 @@ test("failed WebM workers report an error, release progress and allow another fi
   await expect(page.locator("#fileAnalysisProgress")).toBeHidden();
   await page.unroute(workerUrl);
   await inspectMedia(page);
-  await expect(page.locator("#workspaceMobileView")).toContainText("Tracks");
+  await expect(page.locator("#workspaceNavigation")).toContainText("Tracks");
   expect(errors).toEqual([]);
 });
 

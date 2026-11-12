@@ -1,8 +1,5 @@
 import { collectWorkspaceSections, type WorkspaceSection } from "./workspace-sections.js";
-import {
-  renderWorkspaceNavigation,
-  renderWorkspaceSelect
-} from "./workspace-navigation.js";
+import { renderWorkspaceNavigation } from "./workspace-navigation.js";
 import type { InspectionContext } from "./inspection-context.js";
 import { createWorkspaceReflow } from "./workspace-reflow.js";
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
@@ -26,7 +23,7 @@ class InspectionWorkspace {
   private readonly analysis: HTMLElement;
   private readonly navigation: HTMLElement;
   private readonly filter: HTMLInputElement;
-  private readonly mobileView: HTMLSelectElement;
+  private continuous = false;
   private readonly appTitle: string;
   private readonly reflow: ReturnType<typeof createWorkspaceReflow>;
   private result: ParseForUiResult | null = null;
@@ -37,7 +34,10 @@ class InspectionWorkspace {
     this.analysis = this.element("analysisValue");
     this.navigation = this.element("workspaceNavigation");
     this.filter = this.element("workspaceFilter") as HTMLInputElement;
-    this.mobileView = this.element("workspaceMobileView") as HTMLSelectElement;
+    const details = this.element("fileDetails") as HTMLDetailsElement;
+    const wide = matchMedia("(min-width: 1280px) and (min-height: 560px)");
+    details.open = wide.matches;
+    wide.addEventListener("change", () => { details.open = wide.matches; });
     this.viewport = this.element("workspaceViewport");
     this.reflow = createWorkspaceReflow(this.viewport);
     this.search = new ReportSearch(root, () => this.result, () => this.sections,
@@ -59,6 +59,7 @@ class InspectionWorkspace {
     this.filter.value = "";
     this.search.reset();
     this.result = null;
+    this.element("filePreview").replaceChildren();
     this.element("fileOverviewContent").replaceChildren();
     this.element("fileBackButton").hidden = context.source !== "navigation";
     this.viewport.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -82,18 +83,25 @@ class InspectionWorkspace {
     if (this.filter.value.trim()) this.search.update(this.filter.value);
   }
   refresh(): void {
+    const preview = this.analysis.querySelector(".imagePreview, .videoPreview, .audioPreview");
+    if (preview) this.element("filePreview").replaceChildren(preview);
     this.sections = collectWorkspaceSections(this.analysis);
+    // UI policy, not format limits: show up to three short, eager structures together.
+    // Row/text limits keep a long table or document from qualifying as a short report.
+    this.continuous = this.sections.length > 0 && this.sections.length <= 3 &&
+      !this.analysis.querySelector("[data-pe-lazy-section], [data-elf-lazy-section]") &&
+      this.analysis.querySelectorAll("tbody > tr").length <= 40 &&
+      (this.analysis.textContent?.length ?? 0) <= 12000;
+    this.analysis.closest(".inspectionWorkspace")?.classList.toggle("workspaceContinuous", this.continuous);
     renderWorkspaceNavigation(this.navigation, this.navigationSections());
-    renderWorkspaceSelect(this.mobileView, this.navigationSections(), this.filter.value);
     this.element("workspaceUnsupported").hidden = !this.analysisComplete || this.sections.length > 0;
     this.updateNotices();
     this.select(["overview", "hashes", "search"].includes(this.selected) ||
       this.sections.some(section => section.key === this.selected) ? this.selected : "hashes");
-    this.updateNavigationEmpty();
     this.syncLayout();
   }
   private overviewSection(): WorkspaceSection | null {
-    if (!this.element("fileOverviewContent").hasChildNodes() && this.element("fileIconWrap").hidden) return null;
+    if (!this.element("fileOverviewContent").hasChildNodes()) return null;
     return { key: "overview", title: "Overview", description: "", origin: undefined,
       element: this.element("workspaceOverview"), details: null };
   }
@@ -115,15 +123,25 @@ class InspectionWorkspace {
     this.element("workspaceHashes").hidden = key !== "hashes";
     this.element("reportSearchResults").hidden = key !== "search";
     this.element("hashDetails").hidden = false;
-    this.analysis.hidden = !section;
+    const continuous = this.continuous && key !== "hashes" && key !== "search";
+    this.element("workspaceHeading").hidden = continuous;
+    const back = this.element("workspaceReportButton");
+    back.hidden = !this.continuous || continuous;
+    back.dataset["workspaceTarget"] = this.sections[0]?.key ?? "hashes";
+    this.analysis.hidden = !section && !continuous;
     for (const item of this.sections) {
-      item.element.hidden = item !== section;
-      if (item.details) item.details.open = item === section;
+      item.element.hidden = !continuous && item !== section;
+      if (item.details) item.details.open = continuous || item === section;
     }
     this.updateHeading(section);
-    this.mobileView.value = key;
     this.navigation.querySelectorAll<HTMLElement>("[data-workspace-target]").forEach(button => {
-      if (button.dataset["workspaceTarget"] === key) button.setAttribute("aria-current", "page");
+      if (button.dataset["workspaceTarget"] === key) {
+        button.setAttribute("aria-current", "page");
+        const bounds = button.getBoundingClientRect();
+        const nav = this.navigation.getBoundingClientRect();
+        this.navigation.scrollLeft += bounds.left < nav.left ? bounds.left - nav.left :
+          Math.max(0, bounds.right - nav.right);
+      }
       else button.removeAttribute("aria-current");
     });
   }
@@ -177,16 +195,12 @@ class InspectionWorkspace {
   private clearSearch(): void {
     this.filter.value = "";
     this.search.reset();
-    renderWorkspaceSelect(this.mobileView, this.navigationSections());
-    this.updateNavigationEmpty();
   }
   private searchReport(): void {
     if (this.selected !== "search") this.previousSection = this.selected;
     const query = this.filter.value.trim();
     this.search.update(query);
-    renderWorkspaceSelect(this.mobileView, this.navigationSections(), query);
     this.activate(query ? "search" : this.previousSection);
-    this.updateNavigationEmpty();
   }
   private restoreScroll(key: string): void {
     requestAnimationFrame(() => {
@@ -200,10 +214,6 @@ class InspectionWorkspace {
       }
       this.reflow.capture();
     });
-  }
-  private updateNavigationEmpty(): void {
-    this.element("workspaceNavigationEmpty").hidden =
-      this.navigation.querySelector("[data-workspace-target]") !== null;
   }
   private syncLayout(): void {
     const fileVisible = !this.element("fileInfoCard").hidden;
@@ -252,11 +262,6 @@ class InspectionWorkspace {
       if (event.detail === 0 || this.viewport.contains(button)) {
         this.viewport.focus({ preventScroll: true });
       }
-    });
-    this.mobileView.addEventListener("change", () => {
-      const key = this.mobileView.value;
-      if (key !== "search") this.clearSearch();
-      this.activate(key);
     });
     this.filter.addEventListener("input", () => this.searchReport());
     this.filter.addEventListener("keydown", event => {
