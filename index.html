@@ -79,7 +79,8 @@
 
   <main id="mainContent" tabindex="-1">
     <div id="statusMessage" role="status" aria-atomic="true"></div>
-    <button id="dropZone" type="button" aria-labelledby="zoneTitle zoneHelp">
+    <div class="fileSelection">
+      <button id="dropZone" type="button" aria-labelledby="zoneTitle zoneHelp">
       <span id="dropZoneInner">
         <svg class="dropZoneIcon" aria-hidden="true" viewBox="0 0 32 32" fill="none"
           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -89,8 +90,9 @@
         <span class="zoneTitle" id="zoneTitle">Open files</span>
         <span class="zoneHint" id="zoneHelp">Drop files or folders here, or paste from clipboard.</span>
       </span>
-    </button>
-    <p class="selectionPrivacy">Files stay in your browser.</p>
+      </button>
+      <p class="selectionPrivacy">Files stay in your browser.</p>
+    </div>
     <input id="fileInput" type="file" multiple hidden>
 
     <section id="resultsSection">
