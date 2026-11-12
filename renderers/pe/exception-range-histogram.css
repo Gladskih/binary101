@@ -14,7 +14,7 @@
 
 .rangeHistogram__caption span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 
 .rangeHistogram__scroll {
@@ -61,5 +61,5 @@
 .rangeHistogram__note {
   margin: 8px 8px 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }

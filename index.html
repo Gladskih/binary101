@@ -40,12 +40,12 @@
     </symbol>
   </svg>
   <a class="skipLink" href="#mainContent">Skip to inspection</a>
-  <header class="appHeader">
+  <header class="appHeader" id="appHeader">
     <div class="appBrand">
       <img class="appBrand__mark" src="./favicon.svg" alt="" width="32" height="32">
       <h1>Local File Inspector</h1>
     </div>
-    <div class="fileHeader">
+    <div class="fileHeader" id="fileHeader">
       <div class="fileHeader__identity">
         <button type="button" class="fileHeader__back" id="fileBackButton" hidden>← Back to files</button>
         <h2 id="fileNameDetail" tabindex="-1"></h2>
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <div class="appHeader__actions">
+    <div class="appHeader__actions" id="fileActions">
       <button type="button" class="secondaryButton" id="fileHashesButton">File hashes</button>
       <button type="button" class="secondaryButton" id="directoryOpenButton">Open folder</button>
       <button type="button" class="actionButton" id="fileOpenButton">Open files</button>
@@ -166,10 +166,13 @@
         </section>
       </article>
       <article id="fileInfoCard" aria-labelledby="fileNameDetail" hidden>
-        <div class="inspectionWorkspace">
+        <div class="inspectionWorkspace" id="inspectionWorkspace">
           <details id="fileDetails" class="fileDetails">
-            <summary>File properties &amp; preview</summary>
+            <summary aria-label="File properties and preview" title="File properties and preview">
+              <span class="fileDetails__label">File details</span>
+            </summary>
             <div class="fileDetails__body">
+              <div id="fileChromeDock" class="fileChromeDock"></div>
               <div id="fileIconWrap" class="filePrimaryInfo__iconWrap" hidden>
                 <img id="fileIcon" class="filePrimaryInfo__icon" alt="">
               </div>
@@ -199,24 +202,26 @@
             </div>
           </details>
           <aside class="workspaceSidebar">
-            <label class="workspaceSidebar__search">
-              <span class="workspaceSearchLabel">Search</span>
+            <div id="workspaceSearchHome">
+            <label class="workspaceSidebar__search" id="workspaceSearch">
+              <span class="workspaceSearchLabel visuallyHidden">Search</span>
               <input id="workspaceFilter" type="search" placeholder="Search report…" autocomplete="off">
             </label>
+            </div>
             <nav id="workspaceNavigation" aria-label="File sections"></nav>
           </aside>
           <div class="workspaceContent" id="workspaceContent" tabindex="-1">
+            <div id="workspaceViewport" class="workspaceViewport" tabindex="0"
+              role="region" aria-label="Report contents">
             <div class="workspaceHeading" id="workspaceHeading">
               <button type="button" id="workspaceReportButton" class="overviewLink"
                 data-workspace-target="" hidden>Back to report</button>
               <h3 id="workspaceTitle">Overview</h3>
               <p id="workspaceDescription"></p>
             </div>
-            <div id="workspaceViewport" class="workspaceViewport" tabindex="0"
-              role="region" aria-label="Report contents">
             <section id="workspaceOverview" aria-label="File overview" hidden>
-              <div id="workspaceNotice" class="workspaceNotice" hidden></div>
               <div class="nativeOverview"><div id="fileOverviewContent"></div></div>
+              <div id="workspaceCards" class="workspaceCards"></div>
             </section>
             <section id="workspaceHashes" aria-label="File hash tools">
               <p id="workspaceUnsupported" class="smallNote" hidden>

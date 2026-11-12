@@ -29,7 +29,8 @@ void test("PE overview reads actual VERSION strings and preserves their provenan
         { table: "040904E4", key: "CompanyName", value: "A&B" },
         { table: "040904E4", key: "ProductName", value: "Product" },
         { table: "040904E4", key: "ProductVersion", value: "product version" },
-        { table: "040904E4", key: "OriginalFilename", value: "original.exe" }] } }] }] }] };
+        { table: "040904E4", key: "OriginalFilename", value: "original.exe" },
+        { table: "040904E4", key: "PrivateBuild", value: "not identification" }] } }] }] }] };
 
   const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
 
@@ -42,6 +43,7 @@ void test("PE overview reads actual VERSION strings and preserves their provenan
   assert.match(html, /ProductVersion<\/td><td>product version/);
   assert.match(html, /OriginalFilename<\/td><td>original.exe/);
   assert.doesNotMatch(html, /Architecture|COFF.Machine|Subsystem/);
+  assert.doesNotMatch(html, /PrivateBuild|not identification/);
   assert.match(html, /data-workspace-source="resources"/);
   assert.deepEqual(readTables(html), [{ headers: ["StringFileInfo key", "Value", "String table"],
     rows: [["FileDescription", "<sample>", "040904E4"], ["CompanyName", "A&B", "040904E4"],
@@ -49,33 +51,25 @@ void test("PE overview reads actual VERSION strings and preserves their provenan
       ["OriginalFilename", "original.exe", "040904E4"]] }]);
 });
 
-void test("PE without identification metadata shows native section raw ranges without invented conclusions", () => {
+void test("PE without identification metadata does not duplicate the section table", () => {
   const pe = createBasePe();
   pe.sections = [createPeSection(".text", { pointerToRawData: 512, sizeOfRawData: 1024 })];
 
   const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
 
-  assert.match(html, /PointerToRawData/);
-  assert.match(html, /SizeOfRawData/);
-  assert.match(html, /\.text/);
-  assert.match(html, /0x00000200/);
-  assert.doesNotMatch(html, /safe|malicious|compiler|Architecture/i);
-  assert.match(html, /data-workspace-source="section-headers"/);
-  assert.deepEqual(readTables(html), [{ headers: ["Name", "PointerToRawData", "SizeOfRawData"],
-    rows: [[".text", "0x00000200", "1 KB (1024 bytes)"]] }]);
+  assert.equal(html, "");
 });
 
 void test("unknown formats do not acquire fabricated metadata", () => {
   assert.equal(renderNativeFileOverview({ analyzer: null, parsed: null }), "");
 });
 
-void test("ROM sections are shown without treating them as Windows version resources", async () => {
+void test("ROM files do not acquire a duplicate section table or Windows resource metadata", async () => {
   const result = await parseForUi(createPeRomFile());
 
   const html = renderNativeFileOverview(result);
 
-  assert.match(html, /Section headers/);
-  assert.doesNotMatch(html, /VERSION/);
+  assert.doesNotMatch(html, /Section headers|VERSION/);
 });
 
 void test("an empty PE has no fabricated section table", () => {
@@ -100,7 +94,7 @@ void test("VERSION variants retain names, unknown language and each string table
   assert.match(html, /<td>two<\/td><td>second/);
 });
 
-void test("resources without identification strings fall back to native sections", () => {
+void test("resources without identification strings do not invent an identification summary", () => {
   const pe = createBasePe();
   pe.sections = [createPeSection(".data")];
   pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: null, name: null,
@@ -108,8 +102,55 @@ void test("resources without identification strings fall back to native sections
 
   const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
 
-  assert.match(html, /Section headers/);
-  assert.doesNotMatch(html, /VERSION/);
+  assert.equal(html, "");
+});
+
+void test("PE overview shows actual notices and local resource images with source paths", () => {
+  const pe = createBasePe();
+  pe.warnings = ["<recorded warning>"];
+  pe.resources = { top: [], detail: [{ typeName: "ICON", entries: [{ id: 1, name: null,
+    langs: [{ lang: 0x409, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
+      previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" }] }] }] };
+
+  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
+
+  assert.match(html, /&lt;recorded warning&gt;/);
+  assert.match(html, /data-workspace-source="sanity"/);
+  assert.match(html, /data:image\/png;base64,AA==/);
+  assert.match(html, /ICON \/ 1 \/ LANGID 0x0409/);
+  assert.match(html, /loading="lazy"/);
+  assert.doesNotMatch(html, /This file has analysis notices/);
+  const document = new DOMParser({ onError: assert.fail }).parseFromString(`<root>${html}</root>`,
+    "application/xml");
+  assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("alt"), "ICON / 1 / LANGID 0x0409");
+  assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("decoding"), "async");
+  assert.equal(document.getElementsByTagName("button")[1]!.getAttribute("data-workspace-source"), "resources");
+});
+
+void test("VERSION identification with no name, ID or language preserves unknown values", () => {
+  const pe = createBasePe();
+  pe.resources = { top: [], detail: [{ typeName: "VERSION", entries: [{ id: null, name: null,
+    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
+      versionInfo: { stringValues: [{ table: "native", key: "FileVersion", value: "one" }] } }] }] }] };
+
+  assert.match(renderNativeFileOverview({ analyzer: "pe", parsed: pe }), /VERSION \/ \? \/ LANGID \?/);
+});
+
+void test("resource galleries preserve named and unknown-language paths and skip nonlocal images", () => {
+  const pe = createBasePe();
+  pe.resources = { top: [], detail: [{ typeName: "BITMAP", entries: [{ id: null, name: "<name>",
+    langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
+      previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" },
+    { lang: null, size: 0, codePage: 0, dataRVA: 0, dataFileOffset: null, reserved: 0,
+      previewKind: "image", previewDataUrl: "https://example.invalid/image.png" }] },
+  { id: null, name: null, langs: [{ lang: null, size: 0, codePage: 0, dataRVA: 0,
+    dataFileOffset: null, reserved: 0, previewKind: "image", previewDataUrl: "data:image/png;base64,AA==" }] }] }] };
+
+  const html = renderNativeFileOverview({ analyzer: "pe", parsed: pe });
+
+  assert.match(html, /BITMAP \/ &lt;name&gt; \/ LANGID \?/);
+  assert.match(html, /BITMAP \/ \? \/ LANGID \?/);
+  assert.doesNotMatch(html, /example.invalid/);
 });
 
 void test("ELF identification retains native field names and links to its sources", async () => {

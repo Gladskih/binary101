@@ -9,7 +9,8 @@ test("plain PNG tables share the grid and the workspace has no outer card gutter
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
-  await expect(page.locator("#workspaceTitle")).toHaveText("Preview");
+  await expect(page.getByRole("heading", { name: "PNG structure", exact: true })).toBeVisible();
+  await expect(page.locator("#filePreview img")).toBeVisible();
   await openInspectionSection(page, "Chunks");
   const table = page.locator("#analysisValue table:visible").first();
   await expect(table.locator("tbody td").first()).toHaveCSS("border-right-width", "1px");

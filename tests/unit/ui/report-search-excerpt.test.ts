@@ -27,3 +27,10 @@ void test("search excerpts show context around distant matches and mark truncate
   assert.equal(renderSearchExcerpt("absent", "needle"), "absent");
   assert.equal(renderSearchExcerpt("", "needle"), "");
 });
+
+void test("a phrase longer than the excerpt still receives one complete highlight", () => {
+  const phrase = "long phrase ".repeat(40).trim();
+
+  assert.equal(renderSearchExcerpt("x".repeat(100) + phrase + "tail", phrase),
+    "…" + "x".repeat(60) + `<mark>${phrase}</mark>…`);
+});

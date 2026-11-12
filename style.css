@@ -2,6 +2,8 @@
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
 :root {
+  --font-size-base: 14px;
+
   /* USWDS: 45–90 characters for most text; short UI messages can use longer lines.
      https://designsystem.digital.gov/components/typography/#measure-line-length */
   --reading-measure: 75ch;
@@ -59,13 +61,12 @@ body {
   min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  font: var(--font-size-base)/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   display: flex;
   flex-direction: column
 }
-p,blockquote,.smallNote,.peDiagnosticText,
-dd:not(:has(table,.tableWrap,.optionsRow,dl,details)),
-li:not(:has(table,.tableWrap,ul,ol,dl,details)) {
+:where(p,blockquote,.smallNote,.peDiagnosticText,dd,li):not(
+  :where(:has(table,.tableWrap,.optionsRow,ul,ol,dl,details))) {
   max-inline-size: var(--reading-measure)
 }
 .sectionEntropyControl {
@@ -114,7 +115,7 @@ header h1 {
 header p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 main {
   flex: 1;
@@ -153,11 +154,11 @@ main {
   font-weight: 600
 }
 .zoneHint {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 #statusMessage {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   min-height: 1.2em;
   color: var(--accent);
   overflow-wrap: anywhere
@@ -208,7 +209,7 @@ main {
 }
 .inspectionContext__label {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   min-width: 3.5rem
 }
 .inspectionContext .optionsRow {
@@ -217,7 +218,7 @@ main {
 .inspectionRelativePath {
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   overflow-wrap: anywhere
 }
 .inspectionRelativePath[hidden] {
@@ -245,7 +246,7 @@ main {
   display: none
 }
 .directoryListingSection h3 {
-  font-size: 13px;
+  font-size: var(--font-size-base);
   margin: 0 0 4px
 }
 .directoryFolderTable,.directoryFileTable,.directoryWarningTable {
@@ -339,7 +340,7 @@ dd {
 }
 .hashDetailsCount {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 600
 }
 .nativeHashLabel {
@@ -359,7 +360,7 @@ dd {
   border-radius: var(--radius-chip);
   background: var(--ok-bg);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-base);
   line-height: 1;
   white-space: nowrap;
   cursor: pointer
@@ -430,7 +431,7 @@ dd {
 }
 .hashValue {
   font-family: var(--mono);
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 .hashButtons {
   display: flex;
@@ -441,7 +442,7 @@ dd {
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   border-radius: 8px;
   padding: .5rem .6rem;
@@ -506,7 +507,7 @@ dd {
 }
 .opt {
   max-inline-size: 100%;
-  font-size: 11.5px;
+  font-size: var(--font-size-base);
   padding: .15rem .45rem;
   border-radius: 7px;
   border: 1px solid var(--border)
@@ -521,7 +522,7 @@ dd {
 }
 .smallNote {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   margin-top: 4px
 }
 .peHeaderTitle {
@@ -794,7 +795,7 @@ dd {
 .loadConfigDynamicMeta span,
 .loadConfigDynamicEntrySummary span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 .loadConfigDynamicMeta b,
 .loadConfigDynamicEntrySummary b {
@@ -841,7 +842,7 @@ dd {
   flex-wrap: wrap
 }
 .manifestChecksStatus {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 700
 }
 .manifestChecksStatus--pass {
@@ -879,10 +880,12 @@ dd {
 }
 .peSecurityCertList {
   display: grid;
+  justify-items: start;
   gap: .75rem;
   margin-top: .5rem
 }
 .peSecurityCertCard {
+  max-inline-size: 100%;
   padding: .7rem .8rem;
   border: 1px solid var(--border2);
   border-radius: 12px;
@@ -1005,6 +1008,8 @@ dd {
   bottom: calc(100% - 1rem)
 }
 .peSecurityTreeNode {
+  inline-size: fit-content;
+  max-inline-size: var(--reading-measure);
   padding: .55rem .65rem;
   border: 1px solid var(--border2);
   border-radius: 12px;
@@ -1043,7 +1048,7 @@ dd {
   margin-top: .35rem
 }
 .peSecurityTreeBadge {
-  font-size: 11px;
+  font-size: var(--font-size-base);
   padding: .15rem .4rem;
   border: 1px solid var(--border2);
   border-radius: 999px;
@@ -1131,7 +1136,7 @@ dd {
   padding-top: .55rem
 }
 .pePackerFinding__title {
-  font-size: .85rem;
+  font-size: var(--font-size-base);
   margin: 0 0 .35rem
 }
 .pePackerFinding__evidenceLabel {
@@ -1181,12 +1186,15 @@ table th,table td {
   border-bottom: 1px solid var(--border2);
   border-right: 1px solid var(--border2);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   max-inline-size: var(--reading-measure);
   overflow-wrap: anywhere
 }
 table th:last-child,table td:last-child {
   border-right: 0
+}
+table :is(th,td):has(table,.tableWrap,.optionsRow) {
+  max-inline-size: none
 }
 table th {
   background: rgb(0 0 0 / 10%);
@@ -1205,7 +1213,7 @@ table th {
 }
 .winapiMetadataNamespace,
 .winapiMetadataConvention {
-  font-size: 11px
+  font-size: var(--font-size-base)
 }
 .winapiMetadataSignature {
   color: var(--text);
@@ -1464,7 +1472,7 @@ table[data-paged-sortable-table] tbody > tr > * + * {
 .pagedSortableTablePageCount {
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--font-size-base);
 }
 .pagedSortableTableControls {
   align-items: center;
@@ -1478,7 +1486,7 @@ table[data-paged-sortable-table] tbody > tr > * + * {
   border-radius: 6px;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   padding: 4px 6px;
   width: 4.5rem;
 }
@@ -1488,8 +1496,7 @@ table[data-paged-sortable-table] tbody > tr > * + * {
   outline-offset: 1px;
 }
 .tableWrap > .peResourcePreviewTable {
-  min-width: 600px;
-  table-layout: fixed
+  min-width: 600px
 }
 .peResourcePreviewTable > thead > tr > th,
 .peResourcePreviewTable > tbody > tr > td {
@@ -1674,7 +1681,7 @@ table[data-paged-sortable-table] tbody > tr > * + * {
   color: var(--text);
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-family: var(--mono);
   cursor: pointer
 }

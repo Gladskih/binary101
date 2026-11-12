@@ -1,11 +1,11 @@
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
 import { escapeHtmlText } from "../html-utils.js";
-import { hex, formatHumanSize } from "../binary-utils.js";
+import { hex } from "../binary-utils.js";
 import { isPeWindowsParseResult } from "../analyzers/pe/core/parse-result.js";
-import { peSectionNameValue } from "../analyzers/pe/sections/name.js";
+import { getPeSanityIssues } from "./pe/layout.js";
 
 const table = (headers: readonly string[], rows: readonly (readonly string[])[]): string =>
-  `<div class="tableWrap"><table class="table"><thead><tr>` +
+  `<div class="tableWrap" tabindex="0"><table class="table"><thead><tr>` +
   headers.map(header => `<th scope="col">${escapeHtmlText(header)}</th>`).join("") +
   `</tr></thead><tbody>` + rows.map(row => `<tr>` +
     row.map(cell => `<td>${escapeHtmlText(cell)}</td>`).join("") + `</tr>`).join("") +
@@ -28,11 +28,24 @@ const peOverview = (result: Extract<ParseForUiResult, { analyzer: "pe" }>): stri
       table(["StringFileInfo key", "Value", "String table"],
         values.map(value => [value.key, value.value, value.table])))] : [];
     }))) : [];
-  if (versions.length) return versions.join("");
-  return pe.sections.length ? source("Section headers", "section-headers",
-    table(["Name", "PointerToRawData", "SizeOfRawData"], pe.sections.map(section =>
-      [peSectionNameValue(section.name), hex(section.pointerToRawData, 8),
-        formatHumanSize(section.sizeOfRawData)]))) : "";
+  const issues = getPeSanityIssues(pe);
+  return (issues.length ? source("Sanity", "sanity", `<ul>${issues.map(issue =>
+    `<li>${escapeHtmlText(issue)}</li>`).join("")}</ul>`) : "") +
+    peImageGallery(result) + versions.join("");
+};
+
+const peImageGallery = (result: Extract<ParseForUiResult, { analyzer: "pe" }>): string => {
+  if (!isPeWindowsParseResult(result.parsed)) return "";
+  const images = result.parsed.resources?.detail.flatMap(group => group.entries.flatMap(entry =>
+    entry.langs.flatMap(language => {
+      if (!language.previewDataUrl?.startsWith("data:image/")) return [];
+      const name = `${group.typeName} / ${entry.name ?? entry.id ?? "?"} / LANGID ` +
+        (language.lang == null ? "?" : hex(language.lang, 4));
+      return [`<button type="button" class="overviewMedia" data-workspace-source="resources">` +
+        `<img loading="lazy" decoding="async" src="${escapeHtmlText(language.previewDataUrl)}" ` +
+        `alt="${escapeHtmlText(name)}" /><span>${escapeHtmlText(name)}</span></button>`];
+    }))) ?? [];
+  return images.length ? `<div class="overviewGallery">${images.join("")}</div>` : "";
 };
 
 const elfOverview = (result: Extract<ParseForUiResult, { analyzer: "elf" }>): string => {

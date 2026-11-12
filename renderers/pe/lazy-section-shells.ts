@@ -245,7 +245,7 @@ const addWindowsRuntimeDescriptors = (
     getNativeAotSectionDescriptor(pe.nativeAotCandidate));
   pushIf(descriptors, pe.security, {
     key: PE_LAZY_SECTION_KEYS.security,
-    summary: `Authenticode: ${plural(pe.security?.count ?? 0, "record", "records")}`,
+    summary: `WIN_CERTIFICATE: ${plural(pe.security?.count ?? 0, "record", "records")}`,
     title: "Security (WIN_CERTIFICATE)"
   });
   pushIf(descriptors, pe.architecture, {

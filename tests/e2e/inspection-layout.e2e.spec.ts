@@ -62,7 +62,9 @@ for (const colorScheme of ["dark", "light"] as const) {
       const section = page.locator("#workspaceNavigation button").filter({
         has: page.getByText("Resources", { exact: true })
       });
-      await section.focus();
+      await page.locator("#workspaceCards button").filter({
+        has: page.getByText("Resources", { exact: true })
+      }).focus();
       await page.keyboard.press("Enter");
       await expect(section).toHaveAttribute("aria-current", "page");
       await expect(page.locator("#workspaceTitle")).toHaveText("Resources");

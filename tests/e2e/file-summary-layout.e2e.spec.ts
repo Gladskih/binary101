@@ -16,7 +16,7 @@ test("native overview retains the icon, source fields and header properties", as
   await expect(page.locator("#fileOverviewContent")).toContainText("VERSION / 1 / LANGID 0x0409");
   await expect(page.locator("#fileOverviewContent")).toContainText("FileDescription");
   await expect(page.locator("#fileOverviewContent")).not.toContainText("Architecture");
-  await page.locator('[data-workspace-source="resources"]').click();
+  await page.locator('[data-workspace-source="resources"]').filter({ hasText: /^VERSION/ }).click();
   await expect(page.locator('[data-pe-lazy-section="resources"]')).toBeVisible();
   await expect(page.locator("#workspaceNavigation")).not.toContainText("File hashes");
   await expect(page.locator("#fileFormatSummary")).toHaveCount(0);
@@ -37,34 +37,23 @@ test("file hashes remain a header tool with no outer frame or disclosure", async
   await expect(page.locator("#hashDetails")).toHaveCSS("border-top-width", "0px");
 });
 
-test("wide screen uses one row for file properties and actions", async ({ page }) => {
-  // Leave room for a complete row across different system font metrics.
+test("wide screen docks file identity and actions without reserving a top toolbar", async ({ page }) => {
   await page.setViewportSize({ width: 3200, height: 1000 });
   await inspectPe(page);
-  expect(await page.locator(".appHeader").evaluate(element => element.getBoundingClientRect().height))
-    .toBeLessThanOrEqual(50);
-  await expect(page.locator('.appHeader a[href*="github.com"]')).toBeVisible();
-  const baselines = await page.locator(".appHeader").evaluate(header =>
-    Array.from(header.querySelectorAll(
-      "#fileNameDetail,#fileBinaryTypeDetail,#fileSizeDetail,.fileProperty dt," +
-      ".fileProperty dd:not(:has(.opt)),.fileProperty .opt.sel"
-    )).filter(element => element.getClientRects().length).map(element => {
-      const marker = element.ownerDocument.createElement("span");
-      marker.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
-      element.append(marker);
-      const baseline = marker.getBoundingClientRect().y;
-      marker.remove();
-      return baseline;
-    }));
-  expect(Math.max(...baselines) - Math.min(...baselines)).toBeLessThan(1);
-  await expect(page.locator("#fileBinaryTypeDetail")).toHaveCSS("border-left-width", "1px");
-  await expect(page.locator("#fileSizeDetail")).toHaveCSS("border-left-width", "1px");
+  await expect(page.locator(".appHeader")).toBeHidden();
+  await expect(page.locator('#fileChromeDock a[href*="github.com"]')).toBeVisible();
+  await expect(page.locator("#fileChromeDock #fileNameDetail")).toBeVisible();
+  await expect(page.locator("#fileChromeDock #fileBinaryTypeDetail"))
+    .toHaveCSS("border-left-width", "0px");
+  await expect(page.locator("#fileChromeDock #fileSizeDetail"))
+    .toHaveCSS("border-left-width", "0px");
 });
 
 for (const width of [320, 500, 768]) {
   test(`header and navigation fit a ${width}px viewport`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await inspectPe(page);
+    await openInspectionSection(page, "Data directories");
     await expect(page.locator("#workspaceNavigation")).toBeVisible();
     await expect(page.locator("#workspaceFilter")).toBeVisible();
     const sectionBox = await page.locator("#workspaceNavigation").boundingBox();
@@ -75,7 +64,6 @@ for (const width of [320, 500, 768]) {
     await expect(page.locator("#fileProperties")).toBeVisible();
     await page.locator("#fileDetails > summary").click();
     expect(await page.locator("html").evaluate(element => element.scrollWidth)).toBeLessThanOrEqual(width);
-    await openInspectionSection(page, "Data directories");
     await expect(page.locator('[data-pe-lazy-section="data-directories"]')).toBeVisible();
   });
 }

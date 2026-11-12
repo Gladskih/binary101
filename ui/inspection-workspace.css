@@ -34,7 +34,7 @@
 }
 body {
   height: auto;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   line-height: 1.55
 }
 button,input,select {
@@ -82,6 +82,54 @@ button {
   background: var(--card);
   text-align: left
 }
+.hasDockedHeader .appHeader {
+  display: none!important
+}
+.fileChromeDock:empty {
+  display: none
+}
+.fileChromeDock .fileHeader__identity {
+  display: block
+}
+.fileChromeDock .fileHeader__identity > * {
+  margin-block: 6px
+}
+.fileChromeDock .fileHeader__type,.fileChromeDock .fileHeader__size {
+  border-left: 0;
+  padding-left: 0
+}
+.fileChromeDock .fileHeader__size {
+  display: block
+}
+.fileChromeDock .appHeader__actions {
+  justify-content: flex-start;
+  margin: 12px 0
+}
+.fileChromeDock .workspaceSidebar__search {
+  display: flex;
+  margin: 0 0 12px
+}
+#fileActions > .fileDetails {
+  background: transparent;
+  border: 0
+}
+#fileActions > .fileDetails > summary {
+  padding: 8px 12px;
+  border: 1px solid var(--workspace-control-border);
+  border-radius: 6px;
+  font-weight: 600;
+  line-height: 1.4;
+  min-height: 34px
+}
+.appHeader .fileDetails__body {
+  position: absolute;
+  inset: 100% 12px auto auto;
+  inline-size: min(24rem,calc(100vw - 24px));
+  max-block-size: 70dvh;
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--workspace-control-border)
+}
 .appBrand {
   display: flex;
   align-items: center;
@@ -107,7 +155,7 @@ button {
 .appHeader__repository {
   color: var(--muted);
   padding: 6px;
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 .appHeader__repository:hover,.appHeader__repository:focus-visible {
   color: var(--accent)
@@ -145,7 +193,7 @@ body:has(#fileInfoCard:not([hidden])) .appBrand {
 .actionButton,.secondaryButton {
   border-radius: 6px;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   line-height: 1.4;
   white-space: nowrap;
   min-height: 34px;
@@ -220,18 +268,18 @@ body:not(.hasInspection) .appHeader__repository {
   color: var(--text)
 }
 .zoneHint {
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 .selectionPrivacy {
   max-inline-size: none;
   margin: 12px 0 0;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 #statusMessage {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   min-height: 0;
   width: calc(100% - 32px);
   margin: 0 auto;
@@ -298,14 +346,14 @@ body:has(#fileInfoCard:not([hidden])) #fileProperties {
   display: block;
   margin: 0;
   gap: 6px 18px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   line-height: 1.4;
   min-width: 0
 }
 .fileProperty {
   display: grid;
   gap: 4px;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   min-width: 0;
   padding-block: 8px;
   border-bottom: 1px solid var(--border)
@@ -315,7 +363,7 @@ body:has(#fileInfoCard:not([hidden])) #fileProperties {
 }
 .fileProperty dt {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   white-space: nowrap
 }
 .fileProperty dd {
@@ -334,7 +382,7 @@ body:has(#fileInfoCard:not([hidden])) #fileProperties {
 }
 .fileProperty .opt {
   padding: 2px 5px;
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 @media (width >=960px) {
   body:has(#fileInfoCard:not([hidden])) .appHeader__actions {
@@ -364,7 +412,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   margin: 0
 }
 .fileHeader__type {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 .fileHeader__type, .fileHeader__size {
@@ -373,7 +421,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
 }
 .fileHeader__size {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 .fileHeader__progress {
@@ -381,7 +429,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-variant-numeric: tabular-nums
 }
 .fileHeader__progress progress {
@@ -397,7 +445,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   border: 0;
   background: transparent;
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   min-height: 24px;
   padding: 0;
   cursor: pointer
@@ -420,7 +468,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
 .fileDetails > summary {
   padding: 10px 12px;
   min-height: 44px;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   cursor: pointer
 }
 .fileDetails__body {
@@ -463,7 +511,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
 .workspaceSearchLabel {
   width: 44px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 .workspaceSidebar__search input {
@@ -474,7 +522,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   padding: 8px 10px;
   width: 100%;
   min-width: 0;
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 .workspaceSidebar__search input:focus-visible {
   outline: 2px solid var(--accent);
@@ -495,7 +543,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   text-align: left;
   background: transparent;
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   min-width: 0;
   min-height: 44px;
   flex: 0 0 auto;
@@ -503,7 +551,7 @@ body:has(#fileInfoCard:not([hidden])) .fileHeader {
   line-height: 1.4
 }
 .workspaceNavItem__detail {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   font-weight: 400;
   line-height: 1.4;
   color: var(--muted);
@@ -555,6 +603,8 @@ details[data-analysis-origin="supplemental"] > summary {
   outline-offset: -3px
 }
 .workspaceViewport {
+  --workspace-scroll-mode: page;
+
   min-width: 0;
   overflow-x: auto;
   overflow-anchor: none
@@ -568,9 +618,8 @@ details[data-analysis-origin="supplemental"] > summary {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 12px;
-  margin-bottom: 10px;
-  padding: 4px 8px;
-  margin-inline: -8px;
+  margin: 0 0 8px;
+  padding: 4px 0;
   border-bottom: 1px solid var(--border)
 }
 .workspaceHeading h3 {
@@ -582,7 +631,7 @@ details[data-analysis-origin="supplemental"] > summary {
 }
 #workspaceDescription {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-size-base);
   margin: 0;
   overflow-wrap: anywhere
 }
@@ -590,7 +639,7 @@ details[data-analysis-origin="supplemental"] > summary {
   display: none
 }
 .workspaceSectionHeading {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0 0 18px
 }
@@ -605,25 +654,6 @@ details[data-analysis-origin="supplemental"] > summary {
   height: auto;
   max-height: 11rem;
   object-fit: contain
-}
-.workspaceNotice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 14px 16px;
-  margin-bottom: 26px;
-  background: var(--warn-bg);
-  border-radius: 5px;
-  font-size: 12px
-}
-.workspaceNotice button {
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  text-decoration: underline;
-  cursor: pointer
 }
 #analysisValue {
   padding: 0;
@@ -666,6 +696,9 @@ details[data-analysis-origin="supplemental"] > summary {
 }
 .workspaceContinuous .workspacePanel + .workspacePanel {
   margin-top: 28px!important
+}
+.hasDockedHeader .workspaceContinuous .workspaceSidebar {
+  display: none
 }
 .workspacePanel[data-analysis-origin="supplemental"] > .workspaceInlineHeading {
   background: var(--workspace-supplemental)
@@ -766,7 +799,7 @@ details[data-analysis-origin="supplemental"] > summary {
 }
 .peExportTable code.dim {
   color: var(--muted);
-  font-size: 11px
+  font-size: var(--font-size-base)
 }
 .workspaceContent .tableWrap {
   width: fit-content
@@ -814,18 +847,111 @@ details[data-analysis-origin="supplemental"] > summary {
 }
 .nativeOverviewSection h4 {
   margin: 0 0 12px;
-  font-size: 14px
+  font-size: var(--font-size-base)
+}
+.workspaceCards {
+  display: contents
+}
+#workspaceOverview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(min(100%,20rem),1fr));
+  gap: 12px;
+  align-items: start;
+  padding-bottom: 12px
+}
+#workspaceOverview .nativeOverview,#fileOverviewContent {
+  display: contents
+}
+#workspaceOverview .nativeOverviewSection {
+  padding: 8px 12px 12px;
+  margin: 0;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  min-width: 0
+}
+#fileOverviewContent .tableWrap {
+  overflow-x: auto;
+  max-inline-size: 100%
+}
+.workspaceCard {
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  min-width: 0
+}
+.workspaceCard[data-analysis-origin="supplemental"] {
+  background: var(--workspace-supplemental)
+}
+.workspaceCard[data-analysis-origin="supplemental"] h4 button {
+  font-weight: 700
+}
+.workspaceCard h4,.workspaceCard p {
+  margin: 0 0 8px
+}
+.workspaceCard h4 button {
+  min-height: 44px;
+  width: 100%;
+  font-weight: 600
+}
+.workspaceCard__fields {
+  display: block;
+  margin: 8px 0 0
+}
+.workspaceCard__fields dd {
+  margin: 0;
+  overflow-wrap: anywhere
+}
+.workspaceCard__fields dd + dt {
+  margin-top: 6px
+}
+.workspaceOverviewMode #workspaceNavigation {
+  display: none
+}
+.hasDockedHeader .workspaceOverviewMode .workspaceSidebar {
+  display: none
+}
+.overviewGallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  min-width: 0
+}
+.overviewMedia {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  width: 10rem;
+  padding: 8px;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  overflow-wrap: anywhere
+}
+.overviewMedia img {
+  width: 72px;
+  height: 72px;
+  object-fit: contain
+}
+@media (width >=960px) and (height >=560px) {
+  .inspectionWorkspace.workspaceOverviewMode {
+    grid-template: "navigation details" auto "content details" minmax(0,1fr)
+      / minmax(0,1fr) auto
+  }
 }
 #hashDetails > dl {
   margin: 0;
   padding: 0;
   grid-template-columns: max-content minmax(0,1fr);
-  grid-auto-rows: minmax(36px,auto);
+  grid-auto-rows: minmax(44px,auto);
   align-items: center;
   gap: 8px 24px
 }
 #hashDetails .hashRow {
-  min-height: 36px;
+  min-height: 44px;
   flex-wrap: nowrap
 }
 #hashDetails .hashValue {
@@ -869,7 +995,7 @@ details[data-analysis-origin="supplemental"] > summary {
   border-bottom: 1px solid var(--border2)
 }
 .reportSearchContext {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted);
   overflow-wrap: anywhere
 }
@@ -878,7 +1004,7 @@ details[data-analysis-origin="supplemental"] > summary {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 6px 0;
-  font-size: 13px
+  font-size: var(--font-size-base)
 }
 .reportSearchSection {
   display: block;
@@ -894,7 +1020,7 @@ details[data-analysis-origin="supplemental"] > summary {
   border-radius: 2px
 }
 .hashValue {
-  font-size: 12px
+  font-size: var(--font-size-base)
 }
 .workspaceContent .hashRow {
   flex-wrap: wrap;
@@ -908,7 +1034,7 @@ details[data-analysis-origin="supplemental"] > summary {
   gap: 7px;
   max-width: 440px;
   margin: 18px 0 12px;
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted)
 }
 .pagedTableSearch input {
@@ -919,14 +1045,14 @@ details[data-analysis-origin="supplemental"] > summary {
   border-radius: 5px;
   background: var(--card);
   color: var(--text);
-  font-size: 13px
+  font-size: var(--font-size-base)
 }
 .pagedTableSearch input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px
 }
 .pagedTableSearch__feedback {
-  font-size: 12px;
+  font-size: var(--font-size-base);
   color: var(--muted);
   margin-bottom: 12px
 }
@@ -953,7 +1079,7 @@ details[data-analysis-origin="supplemental"] > summary {
   margin-top: 24px
 }
 .directoryListingSection h3 {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   margin-bottom: 12px
 }
 .directoryActionRow td:first-child {
@@ -991,7 +1117,7 @@ details[data-analysis-origin="supplemental"] > summary {
   gap: 8px;
   padding: 16px 24px;
   text-align: left;
-  font-size: 11px;
+  font-size: var(--font-size-base);
   max-width: 1768px;
   width: 100%;
   margin-inline: auto
@@ -1067,7 +1193,7 @@ details[data-analysis-origin="supplemental"] > summary {
     min-height: 0
   }
   .workspaceSidebar {
-    padding: 10px;
+    padding: 6px 8px;
     border-bottom: 0;
     border-right: 1px solid var(--border);
     min-height: 0;
@@ -1077,7 +1203,7 @@ details[data-analysis-origin="supplemental"] > summary {
   }
   .workspaceSidebar__search {
     display: block;
-    margin: 0 8px 12px
+    margin: 0 0 8px
   }
   .workspaceSearchLabel {
     display: block;
@@ -1100,7 +1226,7 @@ details[data-analysis-origin="supplemental"] > summary {
     border-top: 1px solid var(--border2)
   }
   .workspaceContent {
-    padding: 10px 16px 0;
+    padding: 0 12px;
     min-height: 0;
     display: flex;
     flex-direction: column
@@ -1109,6 +1235,8 @@ details[data-analysis-origin="supplemental"] > summary {
     flex-shrink: 0
   }
   .workspaceViewport {
+    --workspace-scroll-mode: pane;
+
     flex: 1;
     min-height: 0;
     overflow: auto;
@@ -1151,15 +1279,33 @@ details[data-analysis-origin="supplemental"] > summary {
     max-width: none
   }
 }
-@media (width >=1280px) and (height >=560px) {
+@media (width >=960px) and (height >=560px) {
   .inspectionWorkspace {
     grid-template: "navigation content details" minmax(0,1fr)
-      / clamp(16rem,20%,24rem) minmax(0,1fr) 20rem
+      / clamp(16rem,20%,24rem) minmax(0,1fr) auto
   }
   .fileDetails {
+    inline-size: 20rem;
     overflow-y: auto;
     border-bottom: 0;
     border-left: 1px solid var(--border)
+  }
+  .fileDetails:not([open]) {
+    inline-size: 44px
+  }
+  .fileDetails:not([open]) > summary {
+    list-style: none;
+    text-align: center
+  }
+  .fileDetails:not([open]) > summary .fileDetails__label {
+    display: none
+  }
+  .fileDetails:not([open]) > summary::after {
+    content: "‹";
+    font-size: 20px
+  }
+  .fileDetails:not([open]) > summary::-webkit-details-marker {
+    display: none
   }
 }
 .workspaceContinuous {
@@ -1173,9 +1319,9 @@ details[data-analysis-origin="supplemental"] > summary {
 .workspaceContinuous .workspaceSearchLabel {
   margin: 0
 }
-@media (width >=1280px) and (height >=560px) {
+@media (width >=960px) and (height >=560px) {
   .workspaceContinuous {
-    grid-template: "navigation details" auto "content details" minmax(0,1fr) / minmax(0,1fr) 20rem
+    grid-template: "navigation details" auto "content details" minmax(0,1fr) / minmax(0,1fr) auto
   }
 }
 @media (prefers-reduced-motion:reduce) {

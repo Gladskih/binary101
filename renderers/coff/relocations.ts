@@ -100,7 +100,7 @@ export const getCoffRelocationTableModel = (
 };
 
 const renderRelocationBlockHeader = (block: CoffRelocationBlock, out: string[]): void => {
-  out.push(`<h5 style="margin:.75rem 0 .4rem 0;font-size:.85rem">`);
+  out.push(`<h5 style="margin:.75rem 0 .4rem 0;font-size:var(--font-size-base)">`);
   out.push(escapeHtml(block.sectionName || `Section #${block.sectionIndex}`));
   out.push(`</h5>`);
   if (block.extendedRelocationCount != null) {

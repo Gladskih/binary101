@@ -34,7 +34,7 @@ const IMAGE_SCN_GPREL = 0x00008000;
 
 const renderTlsCallbackRvas = (callbackRvas: number[] | undefined, out: string[]): void => {
   if (!callbackRvas?.length) return;
-  out.push(`<h5 style="margin:.5rem 0 .25rem 0;font-size:.85rem">Callback RVAs</h5>`);
+  out.push(`<h5 style="margin:.5rem 0 .25rem 0;font-size:var(--font-size-base)">Callback RVAs</h5>`);
   out.push(`<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>RVA</th></tr></thead><tbody>`);
   callbackRvas.forEach((rva, index) => {
     out.push(`<tr><td>${index + 1}</td><td>${hex(rva, 8)}</td></tr>`);

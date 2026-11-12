@@ -22,8 +22,9 @@ class WorkspaceReflow {
     this.revision += 1;
     this.paneLayout = this.usesPane();
   }
-  private usesPane(): boolean {
-    return getComputedStyle(this.viewport).overflowY === "auto";
+  usesPane(): boolean {
+    // Horizontal scrolling also computes overflow-y:auto in page layouts.
+    return getComputedStyle(this.viewport).getPropertyValue("--workspace-scroll-mode").trim() === "pane";
   }
   private visibleTop(): number {
     return Math.max(0, this.viewport.getBoundingClientRect().top);
