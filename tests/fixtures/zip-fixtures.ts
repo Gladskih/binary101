@@ -140,11 +140,10 @@ const writeEndOfCentralDirectory = (
   append(eocd);
 };
 
-export const createZipWithEntries = (): MockFile => {
-  const entries: ZipEntryFixture[] = [
+export const createZipWithEntries = (entries: ZipEntryFixture[] = [
     { name: "stored.txt", method: 0, data: encoder.encode("stored") },
     { name: "deflated.txt", method: 8, data: encoder.encode("deflated") }
-  ];
+  ]): MockFile => {
   const parts: Uint8Array[] = [];
   let cursor = 0;
   const append = (bytes: Uint8Array): number => {

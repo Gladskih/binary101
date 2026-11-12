@@ -8,8 +8,9 @@ import {
   MIN_LOCAL_HEADER_SIZE,
   UTF8_DECODER
 } from "./constants.js";
-import { getSafeNumber, readDataView } from "./io.js";
-import type { ZipCentralDirectoryEntry, ZipCentralDirectoryEntryLocalHeaderInfo } from "./types.js";
+import { getSafeNumber } from "./io.js";
+import { createFileRangeReader } from "../file-range-reader.js";
+import type { ZipCentralDirectoryEntry } from "./types.js";
 
 const readUtf8 = (bytes: Uint8Array): string => UTF8_DECODER.decode(bytes);
 
@@ -138,58 +139,70 @@ const parseCentralDirectoryEntries = (
   return entries;
 };
 
+const setExtractError = (entry: ZipCentralDirectoryEntry, message: string): void => {
+  if (!entry.extractError) entry.extractError = message;
+};
+
+const annotateLocalEntry = (
+  entry: ZipCentralDirectoryEntry, localHeader: DataView, localOffset: number, fileSize: number
+): void => {
+  const nameLength = localHeader.getUint16(26, true);
+  const extraLength = localHeader.getUint16(28, true);
+  const dataOffset = localOffset + MIN_LOCAL_HEADER_SIZE + nameLength + extraLength;
+  entry.localHeader = {
+    nameLength,
+    extraLength,
+    offset: localOffset
+  };
+  const compressedSize = getSafeNumber(entry.compressedSize);
+  entry.dataOffset = dataOffset;
+  entry.dataLength = compressedSize;
+  entry.dataEnd = compressedSize == null ? null : dataOffset + compressedSize;
+  const dataPastEnd = entry.dataEnd != null && entry.dataEnd > fileSize;
+  const startPastEnd = dataOffset > fileSize;
+  if (startPastEnd || dataPastEnd) {
+    setExtractError(entry, "Compressed data extends beyond the file size.");
+    return;
+  }
+  if (entry.isEncrypted) {
+    setExtractError(entry, "Encrypted entries are not supported for extraction.");
+    return;
+  }
+  const isSupportedMethod = [0, 8, 14].includes(entry.compressionMethod);
+  if (!isSupportedMethod) {
+    setExtractError(entry, "Compression method is not supported for extraction.");
+  }
+  if (compressedSize == null) {
+    setExtractError(entry, "Compressed size exceeds supported range.");
+  }
+};
+
 const annotateEntryDataOffsets = async (
   file: File,
   entries: ZipCentralDirectoryEntry[]
 ): Promise<void> => {
   const fileSize = file.size || 0;
-  for (const entry of entries) {
-    const setExtractError = (message: string): void => {
-      if (!entry.extractError) entry.extractError = message;
-    };
+  // Read physical headers in order: central directory order need not match file order.
+  // APPNOTE 4.3.6 / 4.3.12: https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+  const reader = createFileRangeReader(file, 0, fileSize);
+  const ordered = entries.toSorted((left, right) =>
+    Number(left.localHeaderOffset) - Number(right.localHeaderOffset));
+  for (const entry of ordered) {
     const localOffset = getSafeNumber(entry.localHeaderOffset);
     if (localOffset == null) {
-      setExtractError("Local header offset exceeds supported range.");
+      setExtractError(entry, "Local header offset exceeds supported range.");
       continue;
     }
-    const localHeader = await readDataView(file, localOffset, MIN_LOCAL_HEADER_SIZE);
-    if (!localHeader || localHeader.byteLength < MIN_LOCAL_HEADER_SIZE) {
-      setExtractError("Local file header is truncated or missing.");
+    const localHeader = await reader.read(localOffset, MIN_LOCAL_HEADER_SIZE);
+    if (localHeader.byteLength < MIN_LOCAL_HEADER_SIZE) {
+      setExtractError(entry, "Local file header is truncated or missing.");
       continue;
     }
     if (localHeader.getUint32(0, true) !== LOCAL_FILE_HEADER_SIGNATURE) {
-      setExtractError("Local file header signature mismatch.");
+      setExtractError(entry, "Local file header signature mismatch.");
       continue;
     }
-    const nameLength = localHeader.getUint16(26, true);
-    const extraLength = localHeader.getUint16(28, true);
-    const dataOffset = localOffset + MIN_LOCAL_HEADER_SIZE + nameLength + extraLength;
-    entry.localHeader = {
-      nameLength,
-      extraLength,
-      offset: localOffset
-    } as ZipCentralDirectoryEntryLocalHeaderInfo;
-    const compressedSize = getSafeNumber(entry.compressedSize);
-    entry.dataOffset = dataOffset;
-    entry.dataLength = compressedSize;
-    entry.dataEnd = compressedSize == null ? null : dataOffset + compressedSize;
-    const dataPastEnd = entry.dataEnd != null && entry.dataEnd > fileSize;
-    const startPastEnd = dataOffset > fileSize;
-    if (startPastEnd || dataPastEnd) {
-      setExtractError("Compressed data extends beyond the file size.");
-      continue;
-    }
-    if (entry.isEncrypted) {
-      setExtractError("Encrypted entries are not supported for extraction.");
-      continue;
-    }
-    const isSupportedMethod = [0, 8, 14].includes(entry.compressionMethod);
-    if (!isSupportedMethod) {
-      setExtractError("Compression method is not supported for extraction.");
-    }
-    if (compressedSize == null) {
-      setExtractError("Compressed size exceeds supported range.");
-    }
+    annotateLocalEntry(entry, localHeader, localOffset, fileSize);
   }
 };
 
