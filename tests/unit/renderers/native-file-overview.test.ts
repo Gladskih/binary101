@@ -124,7 +124,8 @@ void test("PE overview shows actual notices and local resource images with sourc
     "application/xml");
   assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("alt"), "ICON / 1 / LANGID 0x0409");
   assert.equal(document.getElementsByTagName("img")[0]!.getAttribute("decoding"), "async");
-  assert.equal(document.getElementsByTagName("button")[1]!.getAttribute("data-workspace-source"), "resources");
+  assert.equal(document.getElementsByTagName("button")[0]!.getAttribute("data-workspace-source"), "resources");
+  assert.equal(document.getElementsByTagName("div")[0]!.getAttribute("aria-label"), "Resource image previews");
 });
 
 void test("VERSION identification with no name, ID or language preserves unknown values", () => {

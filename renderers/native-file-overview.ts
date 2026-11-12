@@ -29,9 +29,9 @@ const peOverview = (result: Extract<ParseForUiResult, { analyzer: "pe" }>): stri
         values.map(value => [value.key, value.value, value.table])))] : [];
     }))) : [];
   const issues = getPeSanityIssues(pe);
-  return (issues.length ? source("Sanity", "sanity", `<ul>${issues.map(issue =>
+  return peImageGallery(result) + (issues.length ? source("Sanity", "sanity", `<ul>${issues.map(issue =>
     `<li>${escapeHtmlText(issue)}</li>`).join("")}</ul>`) : "") +
-    peImageGallery(result) + versions.join("");
+    versions.join("");
 };
 
 const peImageGallery = (result: Extract<ParseForUiResult, { analyzer: "pe" }>): string => {
@@ -45,7 +45,8 @@ const peImageGallery = (result: Extract<ParseForUiResult, { analyzer: "pe" }>): 
         `<img loading="lazy" decoding="async" src="${escapeHtmlText(language.previewDataUrl)}" ` +
         `alt="${escapeHtmlText(name)}" /><span>${escapeHtmlText(name)}</span></button>`];
     }))) ?? [];
-  return images.length ? `<div class="overviewGallery">${images.join("")}</div>` : "";
+  return images.length ? `<div class="overviewGallery" role="region" tabindex="0" ` +
+    `aria-label="Resource image previews">${images.join("")}</div>` : "";
 };
 
 const elfOverview = (result: Extract<ParseForUiResult, { analyzer: "elf" }>): string => {

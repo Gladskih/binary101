@@ -2,6 +2,14 @@ import { expect, test } from "@playwright/test";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
 import { createPePlusFile } from "../fixtures/sample-files-pe.js";
 import { openInspectionSection } from "./inspection-navigation.js";
+import { buildResourceSection } from "../fixtures/pe-resource-preview-section.js";
+import { createPeResourceSpecs } from "../fixtures/pe-resource-preview-payloads.js";
+
+const imageResources = (count: number) => {
+  const bitmap = createPeResourceSpecs().find(resource => resource.typeId === 2)!;
+  return createPeResourcePreviewFile(buildResourceSection(Array.from({ length: count }, (_, index) =>
+    ({ ...bitmap, entryId: index + 1 }))));
+};
 
 test("PE overview previews native destinations without mounting the detail panels", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -39,3 +47,30 @@ test("PE files without VERSION metadata still start with source previews", async
   await openInspectionSection(page, "Section headers");
   await expect(page.locator("#workspaceTitle")).toHaveText("Section headers");
 });
+
+for (const width of [390, 1440, 1684, 2530]) {
+  test(`many resource images do not push the other overview cards down at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const single = imageResources(1);
+    await page.setInputFiles("#fileInput", { name: single.name, mimeType: single.type,
+      buffer: Buffer.from(single.data) });
+    await expect(page.locator(".overviewMedia")).toHaveCount(1);
+    const before = (await page.locator(".workspaceCard").last().boundingBox())!;
+    const many = imageResources(40);
+
+    await page.setInputFiles("#fileInput", { name: "many-images.exe", mimeType: many.type,
+      buffer: Buffer.from(many.data) });
+    await expect(page.locator(".overviewMedia")).toHaveCount(40);
+    const after = (await page.locator(".workspaceCard").last().boundingBox())!;
+    expect(after.y - before.y).toBeLessThan(32);
+    const first = (await page.locator(".overviewMedia").first().boundingBox())!;
+    const last = (await page.locator(".overviewMedia").last().boundingBox())!;
+    expect(last.y).toBeCloseTo(first.y, 0);
+    await page.locator(".overviewGallery").scrollIntoViewIfNeeded();
+    await page.locator(".overviewGallery").evaluate(element => { element.scrollLeft = element.scrollWidth; });
+    await expect(page.locator(".overviewMedia").last()).toBeInViewport();
+    await page.locator(".overviewMedia").last().click();
+    await expect(page.locator("#workspaceTitle")).toHaveText("Resources");
+  });
+}
