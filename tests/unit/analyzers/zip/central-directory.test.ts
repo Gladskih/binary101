@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { annotateEntryDataOffsets, parseCentralDirectoryEntries } from "../../../../analyzers/zip/central-directory.js";
 import type { ZipCentralDirectoryEntry } from "../../../../analyzers/zip/index.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { MIN_LOCAL_HEADER_SIZE } from "../../../../analyzers/zip/index.js";
 import { createZipWithEntries } from "../../../fixtures/zip-fixtures.js";
 import { parseZip } from "../../../../analyzers/zip/index.js";
 
@@ -76,6 +77,51 @@ void test("local data may end exactly at EOF, while unsafe sizes and starts past
   await annotateEntryDataOffsets(new MockFile(header), [pastEnd]);
 
   assert.equal(pastEnd.extractError, "Compressed data extends beyond the file size.");
+});
+
+void test("sparse local headers read only required bytes with bounded concurrency", async context => {
+  const count = 32;
+  const spacing = 128 * 1024;
+  const bytes = new Uint8Array((count - 1) * spacing + MIN_LOCAL_HEADER_SIZE);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < count; index += 1) {
+    view.setUint32(index * spacing, 0x04034b50, true);
+  }
+  const original = (await parseZip(createZipWithEntries()))!.centralDirectory!.entries[0]!;
+  const entries = Array.from({ length: count }, (_, index) =>
+    ({ ...original, index, localHeaderOffset: index * spacing, compressedSize: 0 }));
+  const file = new MockFile(bytes);
+  const realSlice = file.slice.bind(file);
+  const ranges: Array<{ start: number; end: number }> = [];
+  let active = 0;
+  let peak = 0;
+  context.mock.method(file, "slice", (start?: number, end?: number, contentType?: string): Blob => {
+    ranges.push({ start: start ?? 0, end: end ?? file.size });
+    const blob = realSlice(start, end, contentType);
+    const originalRead = blob.arrayBuffer.bind(blob);
+    Object.defineProperty(blob, "arrayBuffer", { value: async (): Promise<ArrayBuffer> => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      try {
+        return await originalRead();
+      } finally {
+        active -= 1;
+      }
+    } });
+    return blob;
+  });
+
+  await annotateEntryDataOffsets(file, entries.reverse());
+
+  assert.equal(ranges.length, count);
+  assert.ok(ranges.every(range => range.end - range.start === MIN_LOCAL_HEADER_SIZE),
+    "sparse headers should not read unrelated compressed data");
+  assert.ok(peak > 1 && peak <= 8, "independent ranges should be read with bounded concurrency");
+  for (const entry of entries) {
+    assert.equal(entry.dataOffset, Number(entry.localHeaderOffset) + MIN_LOCAL_HEADER_SIZE);
+    assert.equal(entry.extractError, undefined);
+  }
 });
 
 const buildCdEntry = (): DataView => {
