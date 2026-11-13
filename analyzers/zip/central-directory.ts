@@ -9,7 +9,6 @@ import {
   UTF8_DECODER
 } from "./constants.js";
 import { getSafeNumber } from "./io.js";
-import { createFileRangeReader } from "../file-range-reader.js";
 import type { ZipCentralDirectoryEntry } from "./types.js";
 
 const readUtf8 = (bytes: Uint8Array): string => UTF8_DECODER.decode(bytes);
@@ -177,32 +176,70 @@ const annotateLocalEntry = (
   }
 };
 
+// ZIP directory order may differ from physical order. Merge nearby 30-byte headers into
+// bounded reads; sparse archive entries must not trigger 64 KiB cache-window overreads.
+const MAX_LOCAL_HEADER_BATCH_BYTES = 64 * 1024;
+const MAX_LOCAL_HEADER_BATCH_GAP = 4 * 1024;
+const LOCAL_HEADER_READ_CONCURRENCY = 8;
+
+type LocalHeaderBatch = {
+  start: number;
+  end: number;
+  entries: Array<{ entry: ZipCentralDirectoryEntry; offset: number }>;
+};
+
 const annotateEntryDataOffsets = async (
   file: File,
   entries: ZipCentralDirectoryEntry[]
 ): Promise<void> => {
   const fileSize = file.size || 0;
-  // Read physical headers in order: central directory order need not match file order.
-  // APPNOTE 4.3.6 / 4.3.12: https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
-  const reader = createFileRangeReader(file, 0, fileSize);
   const ordered = entries.toSorted((left, right) =>
     Number(left.localHeaderOffset) - Number(right.localHeaderOffset));
+  const batches: LocalHeaderBatch[] = [];
+  let currentBatch: LocalHeaderBatch | null = null;
+
   for (const entry of ordered) {
-    const localOffset = getSafeNumber(entry.localHeaderOffset);
-    if (localOffset == null) {
+    const offset = getSafeNumber(entry.localHeaderOffset);
+    if (offset == null) {
       setExtractError(entry, "Local header offset exceeds supported range.");
       continue;
     }
-    const localHeader = await reader.read(localOffset, MIN_LOCAL_HEADER_SIZE);
-    if (localHeader.byteLength < MIN_LOCAL_HEADER_SIZE) {
+    if (offset < 0 || offset > fileSize - MIN_LOCAL_HEADER_SIZE) {
       setExtractError(entry, "Local file header is truncated or missing.");
       continue;
     }
-    if (localHeader.getUint32(0, true) !== LOCAL_FILE_HEADER_SIGNATURE) {
-      setExtractError(entry, "Local file header signature mismatch.");
-      continue;
+    if (!currentBatch ||
+        offset - currentBatch.end > MAX_LOCAL_HEADER_BATCH_GAP ||
+        offset + MIN_LOCAL_HEADER_SIZE - currentBatch.start > MAX_LOCAL_HEADER_BATCH_BYTES) {
+      currentBatch = { start: offset, end: offset + MIN_LOCAL_HEADER_SIZE, entries: [] };
+      batches.push(currentBatch);
     }
-    annotateLocalEntry(entry, localHeader, localOffset, fileSize);
+    currentBatch.end = Math.max(currentBatch.end, offset + MIN_LOCAL_HEADER_SIZE);
+    currentBatch.entries.push({ entry, offset });
+  }
+
+  // Concurrent I/O is bounded to eight windows (at most 512 KiB in flight).
+  // All header validation and offset calculations within each window are synchronous.
+  for (let start = 0; start < batches.length; start += LOCAL_HEADER_READ_CONCURRENCY) {
+    const active = batches.slice(start, start + LOCAL_HEADER_READ_CONCURRENCY);
+    const buffers = await Promise.all(active.map(batch =>
+      file.slice(batch.start, batch.end).arrayBuffer()));
+    active.forEach((batch, index) => {
+      const buffer = buffers[index]!;
+      for (const { entry, offset } of batch.entries) {
+        const relativeOffset = offset - batch.start;
+        if (relativeOffset + MIN_LOCAL_HEADER_SIZE > buffer.byteLength) {
+          setExtractError(entry, "Local file header is truncated or missing.");
+          continue;
+        }
+        const header = new DataView(buffer, relativeOffset, MIN_LOCAL_HEADER_SIZE);
+        if (header.getUint32(0, true) !== LOCAL_FILE_HEADER_SIGNATURE) {
+          setExtractError(entry, "Local file header signature mismatch.");
+          continue;
+        }
+        annotateLocalEntry(entry, header, offset, fileSize);
+      }
+    });
   }
 };
 
