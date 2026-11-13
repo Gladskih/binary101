@@ -28,10 +28,10 @@ void test("hashes every algorithm for a real empty file", async ({ page }) => {
   ]);
   await expect(page.locator("#fileSourceDetail .opt.sel")).toHaveText("Selection");
   await expect(page.locator("#fileObjectDetail .opt.sel")).toHaveText("File");
-  for (const [label, id, nodeName] of hashAlgorithms) {
-    await page.getByRole("button", { name: `Compute ${label}`, exact: true }).click();
+  for (const [, id, nodeName] of hashAlgorithms) {
     await expect(page.locator(`#${id}Value`)).toHaveText(
       createHash(nodeName).update(emptyBuffer).digest("hex")
     );
+    await expect(page.locator(`#${id}ComputeButton`)).toBeHidden();
   }
 });

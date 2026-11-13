@@ -56,7 +56,13 @@ for (const colorScheme of ["dark", "light"] as const) {
         buffer: Buffer.from(file.data) });
       await expect(page.locator("#workspaceTitle")).toHaveText("Overview");
       await expandFileDetails(page);
-      await expect(page.locator("#fileIcon")).toBeVisible();
+      await expect(page.locator("#fileIcon")).toHaveAttribute("src", /^data:image\//);
+      if (width < 960) {
+        await expect(page.locator("#workspaceOverview .workspaceCard__image")).toBeVisible();
+        await expect(page.locator("#fileIcon")).toBeHidden();
+      } else {
+        await expect(page.locator("#fileIcon")).toBeVisible();
+      }
       await expect(page.locator("#fileMimeTypeDetail")).not.toHaveText("");
       await collapseNarrowFileDetails(page);
       const section = page.locator("#workspaceNavigation button").filter({

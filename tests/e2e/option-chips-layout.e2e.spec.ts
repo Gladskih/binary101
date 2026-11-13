@@ -33,10 +33,12 @@ for (const width of [390, 1280, 2530]) {
           .getComputedStyle(row).maxInlineSize),
         previous: chips.at(-2)!.getBoundingClientRect().y,
         stride: chips.at(-1)!.getBoundingClientRect().y,
-        maxChipWidth: Math.max(...chips.map(chip => chip.getBoundingClientRect().width)) };
+        maxChipWidth: Math.max(...chips.map(chip => chip.getBoundingClientRect().width)),
+        maxChipOverflow: Math.max(...chips.map(chip => chip.scrollWidth - chip.clientWidth)) };
     });
     expect(geometry.width).toBeLessThanOrEqual(geometry.maxWidth);
-    expect(geometry.maxChipWidth).toBeLessThan(geometry.width);
+    expect(geometry.maxChipWidth).toBeLessThanOrEqual(geometry.width);
+    expect(geometry.maxChipOverflow).toBeLessThanOrEqual(1);
     if (width === 2530) {
       expect(geometry.width).toBeCloseTo(headerWidth, 0);
       expect(geometry.stride).toBe(geometry.previous);
