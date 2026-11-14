@@ -5,8 +5,13 @@ import { selectElfBinaryLayout } from "./binary-layout.js";
 import { ELF_DYNAMIC_TAG, ELF_SECTION_TYPE, ELF_SEGMENT_TYPE } from "./abi-constants.js";
 
 export interface ElfDynamicEntry {
-  tag: number;
+  tag: number | bigint;
   value: bigint;
+}
+
+export interface ElfDynamicTable {
+  entries: ElfDynamicEntry[];
+  terminated: boolean;
 }
 
 // gABI §8.3: dynamic entries are class-sized pairs, terminated by DT_NULL.
@@ -27,14 +32,14 @@ const dynamicRange = (
   return range;
 };
 
-export const readElfDynamicEntries = async (
+export const readElfDynamicTable = async (
   reader: FileRangeReader,
   elf: Pick<ElfRelocationImage, "programHeaders" | "sections" | "is64" | "littleEndian">,
   issues: string[],
   layout = selectElfBinaryLayout(elf)
-): Promise<ElfDynamicEntry[]> => {
+): Promise<ElfDynamicTable> => {
   const range = dynamicRange(reader, elf, issues);
-  if (!range) return [];
+  if (!range) return { entries: [], terminated: false };
   const stride = layout.dynamicEntrySize;
   if (range.size % stride) issues.push("ELF dynamic table has a partial entry.");
   const entries: ElfDynamicEntry[] = [];
@@ -42,11 +47,15 @@ export const readElfDynamicEntries = async (
     const record = layout.readDynamic(await reader.read(position, stride));
     if (!record) break;
     const tag = Number(record.tag);
-    if (tag === ELF_DYNAMIC_TAG.NULL) return entries;
-    if (Number.isSafeInteger(tag)) {
-      entries.push({ tag, value: record.value });
-    }
+    if (tag === ELF_DYNAMIC_TAG.NULL) return { entries, terminated: true };
+    entries.push({ tag: Number.isSafeInteger(tag) ? tag : record.tag, value: record.value });
   }
   issues.push("ELF dynamic table is missing DT_NULL.");
-  return entries;
+  return { entries, terminated: false };
 };
+
+export const readElfDynamicEntries = async (
+  reader: FileRangeReader,
+  elf: Pick<ElfRelocationImage, "programHeaders" | "sections" | "is64" | "littleEndian">,
+  issues: string[], layout = selectElfBinaryLayout(elf)
+): Promise<ElfDynamicEntry[]> => (await readElfDynamicTable(reader, elf, issues, layout)).entries;

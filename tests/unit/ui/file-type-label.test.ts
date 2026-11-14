@@ -34,7 +34,7 @@ void test("ELF subtypes distinguish PIE from unmarked shared objects", () => {
   setFileSubtypeLabel(term, detail, { analyzer: "elf", parsed: elf });
   assert.equal(term.hidden, true);
   // DF_1_PIE from glibc elf.h; ET_DYN alone cannot distinguish executables.
-  elf.dynamic = { needed: [], flags1: 0x08000000, soname: null, rpath: null, runpath: null,
+  elf.dynamic = { entries: [], needed: [], flags1: 0x08000000, soname: null, rpath: null, runpath: null,
     init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
     flags: null, issues: [] };
   setFileSubtypeLabel(term, detail, { analyzer: "elf", parsed: elf });

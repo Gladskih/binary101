@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
-import { readElfDynamicEntries } from "../../../../analyzers/elf/dynamic-entries.js";
+import { readElfDynamicEntries, readElfDynamicTable } from "../../../../analyzers/elf/dynamic-entries.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 
 void test("shared dynamic decoding preserves repeated DT_NEEDED entries", async () => {
@@ -17,6 +17,17 @@ void test("shared dynamic decoding preserves repeated DT_NEEDED entries", async 
   assert.deepEqual(entries, [{ tag: 1, value: 1n }, { tag: 1, value: 2n }]);
 });
 
+void test("records whether the bounded dynamic scan reached DT_NULL", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.installTags();
+  const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
+  assert.equal((await readElfDynamicTable(reader, fixture.elf, [])).terminated, true);
+  fixture.elf.programHeaders[1]!.filesz = 16n;
+  const issues: string[] = [];
+  assert.equal((await readElfDynamicTable(reader, fixture.elf, issues)).terminated, false);
+  assert.match(issues.join(" "), /DT_NULL/);
+});
+
 void test("short reads and tags outside safe numeric range cannot trigger DataView exceptions", async () => {
   const fixture = dynamicRelocationFixture();
   fixture.tags.clear();
@@ -26,7 +37,8 @@ void test("short reads and tags outside safe numeric range cannot trigger DataVi
   const issues: string[] = [];
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
 
-  assert.deepEqual(await readElfDynamicEntries(reader, fixture.elf, []), []);
+  assert.deepEqual(await readElfDynamicEntries(reader, fixture.elf, []),
+    [{ tag: 1n << 63n, value: 0n }]);
   assert.deepEqual(await readElfDynamicEntries({ ...reader,
     read: async () => new DataView(new ArrayBuffer(0)) }, fixture.elf, issues), []);
   assert.match(issues.join(" "), /DT_NULL/);

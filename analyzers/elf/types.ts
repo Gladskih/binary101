@@ -1,6 +1,7 @@
 "use strict";
 
 import type { ElfInstructionSetReport } from "./disassembly-types.js";
+import type { ElfDynamicEntry } from "./dynamic-entries.js";
 import type { ElfCoreNote } from "./core-note-types.js";
 import type { ElfAttributeSection } from "./attribute-types.js";
 import type { ElfMipsMetadata } from "./mips-types.js";
@@ -118,6 +119,8 @@ export interface ElfInterpreterInfo {
 }
 
 export interface ElfDynamicInfo {
+  terminated?: boolean;
+  entries: (ElfDynamicEntry & { string?: string | null })[];
   needed: string[];
   soname: string | null;
   rpath: string | null;

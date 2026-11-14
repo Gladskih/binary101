@@ -2,7 +2,7 @@ import type { ElfParseResult } from "./types.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { createFileRangeReader } from "../file-range-reader.js";
-import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
+import { readElfDynamicTable, type ElfDynamicEntry } from "./dynamic-entries.js";
 import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfHashTables } from "./hash-tables.js";
@@ -48,12 +48,14 @@ const parseLinkingTables = async (file: File, result: ElfParseResult, entries: E
 const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: ElfBinaryLayout,
   logicalSizes: Map<number, bigint>): Promise<void> => {
   const issues: string[] = [];
-  const entries = await readElfDynamicEntries(createFileRangeReader(file, 0, file.size), result, issues, layout);
+  const table = await readElfDynamicTable(
+    createFileRangeReader(file, 0, file.size), result, issues, layout);
+  const { entries } = table;
   const cache = new Map<number, ElfRelocationSymbol>();
   const hashes = await parseElfHashTables(file, result, entries);
   retainMetadata(result, "hashTables", hashes);
   const [dynamic, symbols] = await Promise.all([
-    parseElfDynamicInfo({ file, ...result }, entries),
+    parseElfDynamicInfo({ file, ...result }, table),
     parseElfDynamicSymbols({ file, ...result }, entries, cache, layout, hashes)
   ]);
   retainMetadata(result, "dynamic", dynamic);

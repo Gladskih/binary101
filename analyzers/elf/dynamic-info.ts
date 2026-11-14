@@ -1,10 +1,11 @@
-"use strict";
-
 import { createElfStringTableReader } from "./string-table.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
-import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
+import {
+  readElfDynamicTable, type ElfDynamicEntry, type ElfDynamicTable
+} from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
+import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
 
 // gABI p_type/sh_type and dynamic tags; GNU DT_FLAGS_1 from glibc's ELF declarations.
 // https://gabi.xinuos.com/elf/07-pheader.html
@@ -31,7 +32,7 @@ const DT_PREINIT_ARRAY = 32;
 const DT_PREINIT_ARRAYSZ = 33;
 const DT_FLAGS_1 = 0x6ffffffb;
 
-type DynEntry = { tag: number; value: bigint };
+type DynEntry = ElfDynamicEntry;
 
 const hasDynamicTable = (file: File, headers: ElfProgramHeader[], sections: ElfSectionHeader[],
   issues: string[]): boolean => {
@@ -118,16 +119,24 @@ export async function parseElfDynamicInfo(opts: {
   sections: ElfSectionHeader[];
   is64: boolean;
   littleEndian: boolean;
-}, parsedEntries?: ElfDynamicEntry[]): Promise<ElfDynamicInfo | null> {
+}, parsedEntries?: ElfDynamicEntry[] | ElfDynamicTable): Promise<ElfDynamicInfo | null> {
   const issues: string[] = [];
   if (!hasDynamicTable(opts.file, opts.programHeaders, opts.sections, issues)) return null;
   const reader = createFileRangeReader(opts.file, 0, opts.file.size);
-  const entries = parsedEntries ?? await readElfDynamicEntries(reader, opts, issues);
+  // Legacy callers supplying entries alone provide no evidence of the DT_NULL terminator.
+  const table = Array.isArray(parsedEntries) ? { entries: parsedEntries, terminated: false } :
+    parsedEntries ?? await readElfDynamicTable(reader, opts, issues);
+  const { entries } = table;
   const readString = createElfStringTableReader(reader,
     locateDynStringTable({ ...opts, entries, issues }), issues);
   const needed = (await Promise.all(getTagValues(entries, DT_NEEDED)
     .map(value => readString(Number(value))))).filter((name): name is string => !!name);
   return {
+    terminated: table.terminated,
+    entries: await Promise.all(entries.map(async entry =>
+      typeof entry.tag === "number" &&
+      ELF_DYNAMIC_TAG_DESCRIPTIONS[entry.tag]?.[1] === "string"
+        ? { ...entry, string: await readString(Number(entry.value)) } : entry)),
     needed,
     soname: await readNamedTag(entries, DT_SONAME, readString),
     rpath: await readNamedTag(entries, DT_RPATH, readString),

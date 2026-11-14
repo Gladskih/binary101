@@ -1,6 +1,7 @@
 import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
 import type { WorkspaceSection } from "./workspace-sections.js";
-import { reportTextPattern, searchReportText, type ReportTextMatch } from "./report-text-search.js";
+import { searchReportText, type ReportTextMatch } from "./report-text-search.js";
+import { findReportSectionMatch } from "./report-section-search.js";
 import { reportSearchSection } from "./report-search-location.js";
 import { revealPagedSortableTableText } from "./paged-sortable-tables.js";
 import { renderSearchExcerpt } from "./report-search-excerpt.js";
@@ -64,17 +65,23 @@ export class ReportSearch {
     const status = document.createElement("p");
     status.className = "smallNote";
     status.setAttribute("role", "status");
-    status.textContent = `${this.matches.length} text matches in parsed data. ` +
+    const sectionMatches = this.getSections().flatMap(section => {
+      const label = findReportSectionMatch(section.title,
+        section.element.dataset["reportSearchLabels"]?.split("|") ?? [], this.query);
+      return label ? [{ section, label }] : [];
+    });
+    status.textContent = `${this.matches.length} text matches in parsed data; ` +
+      `${sectionMatches.length} matching sections. ` +
       "Includes unloaded sections and all table pages; raw bytes are not scanned.";
     this.panel.append(status);
-    const sectionMatches = this.getSections().filter(section =>
-      reportTextPattern(this.query)?.test(section.title));
-    for (const section of sectionMatches) {
+    for (const { section, label } of sectionMatches) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "reportSearchSection overviewLink";
-      button.innerHTML = renderSearchExcerpt(section.title, this.query);
-      button.addEventListener("click", () => this.reveal(section.key, ""));
+      button.innerHTML = renderSearchExcerpt(section.title, this.query) +
+        (label === section.title ? "" : ` — ${renderSearchExcerpt(label, this.query)}`);
+      button.addEventListener("click", () =>
+        this.reveal(section.key, label === section.title ? "" : label));
       this.panel.append(button);
     }
     const list = document.createElement("ol");

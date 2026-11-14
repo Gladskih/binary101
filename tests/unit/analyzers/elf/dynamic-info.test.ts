@@ -31,10 +31,42 @@ void test("parseElfDynamicInfo reads DT_NEEDED / DT_SONAME / DT_RUNPATH", async 
   const parsed = await parseElf(file);
   assert.ok(parsed);
   assert.ok(parsed.dynamic);
+  assert.equal(parsed.dynamic.terminated, true);
   assert.deepEqual(parsed.dynamic.needed, expected.needed);
   assert.equal(parsed.dynamic.soname, expected.soname);
   assert.equal(parsed.dynamic.runpath, expected.runpath);
   assert.equal(parsed.dynamic.init, 0x401000n);
+});
+
+void test("preserves every dynamic record in order and resolves extended string tags", async () => {
+  const fixture = dynamicStringsFixture("\0<audit.so>\0");
+  // glibc elf/elf.h: AUDIT, DEPAUDIT, FILTER, AUXILIARY are string references.
+  const entries = [
+    { tag: 3, value: 0x400000n }, { tag: 21, value: 0n },
+    { tag: 22, value: 0n }, { tag: 24, value: 0n },
+    { tag: 0x6ffffefc, value: 1n }, { tag: 0x6ffffefb, value: 1n },
+    { tag: 0x7fffffff, value: 1n }, { tag: 0x7ffffffd, value: 1n },
+    { tag: 0x1234, value: 1n << 63n }, { tag: 3, value: 99n }
+  ];
+  const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [] }, entries);
+  assert.deepEqual(result?.entries.map(({ tag, value }) => ({ tag, value })), entries);
+  assert.deepEqual(result?.entries.slice(4, 8).map(entry => entry.string),
+    ["<audit.so>", "<audit.so>", "<audit.so>", "<audit.so>"]);
+});
+
+void test("keeps invalid audit string references and their warnings", async () => {
+  const fixture = dynamicStringsFixture();
+  const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [] },
+    [{ tag: 0x6ffffefc, value: 1n << 60n }]);
+  assert.deepEqual(result?.entries, [{ tag: 0x6ffffefc, value: 1n << 60n, string: null }]);
+  assert.match(result!.issues.join(" "), /reference|offset/);
+});
+
+void test("keeps unrecognized 64-bit tag identities without numeric conversion", async () => {
+  const fixture = dynamicStringsFixture();
+  const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [] },
+    [{ tag: (1n << 60n) + 1n, value: 0n }]);
+  assert.deepEqual(result?.entries, [{ tag: (1n << 60n) + 1n, value: 0n }]);
 });
 
 void test("parseElfDynamicInfo falls back to linked strings when DT_STRTAB doesn't map", async () => {

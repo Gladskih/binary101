@@ -17,7 +17,7 @@ export const readElfRelocationTags = async (
   const conflicts = new Set<number>();
   for (const { tag, value } of entries) {
     // Only single-valued tags consumed by this analysis; DT_NEEDED may repeat.
-    if (!relocationTags.has(tag)) continue;
+    if (typeof tag !== "number" || !relocationTags.has(tag)) continue;
     if (tags.has(tag) && tags.get(tag) !== value) {
       issues.push(`Conflicting ELF dynamic relocation tag ${tag}.`);
       conflicts.add(tag);

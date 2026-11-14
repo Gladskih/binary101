@@ -22,6 +22,7 @@ import { renderElfDebug } from "./debug.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
 import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 import { renderChecksWithoutFindings } from "../checks-without-findings.js";
+import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "../../analyzers/elf/dynamic-tags.js";
 
 export interface ElfLazySection {
   key: string;
@@ -107,7 +108,9 @@ export const renderElfLazy = (elf: ElfParseResult | null): string => elf
     const html = (section.key === "instruction-sets"
       ? renderInstructionSetsShell()
       : renderElfSectionStart(section.title) + renderElfSectionEnd())
-      .replace("<section ", `<section data-elf-lazy-section="${section.key}" `);
+      .replace("<section ", `<section data-elf-lazy-section="${section.key}" ` +
+        (section.key === "linking" && elf.dynamic ? `data-report-search-labels="` +
+          `${Object.values(ELF_DYNAMIC_TAG_DESCRIPTIONS).map(([name]) => name).join("|")}" ` : ""));
     return supplementalSections.has(section.key) ? markSupplementalAnalysis(html) : html;
   }).join("") + renderChecksWithoutFindings(elf)
   : "";

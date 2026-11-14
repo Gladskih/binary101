@@ -1,6 +1,7 @@
 @import url("./renderers/pe/exception-range-histogram.css");
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
+@import url("./renderers/elf/dynamic-entries.css");
 :root {
   --font-size-base: 14px;
 

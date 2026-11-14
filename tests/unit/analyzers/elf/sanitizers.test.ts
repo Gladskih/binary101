@@ -62,7 +62,7 @@ void test("empty metadata and section names alone do not identify sanitizers", (
 
 void test("uses DT_NEEDED only when dynamic metadata parsed without warnings", () => {
   const elf = sanitizerElf();
-  elf.dynamic = { needed: ["libasan.so.8"], soname: null, rpath: null, runpath: null,
+  elf.dynamic = { entries: [], needed: ["libasan.so.8"], soname: null, rpath: null, runpath: null,
     init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
     flags: null, flags1: null, issues: [] };
   assert.deepEqual(analyzeElfSanitizers(elf), [{ tool: "ASan", kind: "dependency",

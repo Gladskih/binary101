@@ -21,11 +21,11 @@ void test("renderElfLinking renders interpreter and DT_NEEDED libraries", async 
   assert.ok(html.includes(expectDefined(expected.needed[1])));
   assert.ok(html.includes(expected.soname));
   assert.ok(html.includes(expected.runpath));
-  assert.ok(html.includes("Flags (DT_FLAGS)"));
+  assert.ok(html.includes("DT_FLAGS"));
   assert.ok(html.includes("DF_TEXTREL"));
   assert.ok(html.includes("DF_STATIC_TLS"));
   assert.ok(html.includes("UNKNOWN_BITS_0x1220"));
-  assert.ok(html.includes("Flags_1 (DT_FLAGS_1)"));
+  assert.ok(html.includes("DT_FLAGS_1"));
   assert.ok(html.includes("DF_1_NODELETE"));
   assert.ok(html.includes("DF_1_INITFIRST"));
   assert.ok(html.includes("DF_1_NOOPEN"));
@@ -34,43 +34,18 @@ void test("renderElfLinking renders interpreter and DT_NEEDED libraries", async 
   assert.match(html, /class="opt sel"[^>]*>DF_1_NODELETE<\/span>/);
 });
 
-// glibc elf.h defines DF_* and DF_1_* below the high bit; preserve unknown bit 31.
-// https://github.com/bminor/glibc/blob/master/elf/elf.h
-for (const [flags, expected] of [
-  [null, '<div class="dim">Tag absent</div>'], [0, '<div class="mono">0x00000000</div>'],
-  [0x80000000, '<div class="mono">0x80000000</div>']
-] as const) {
-  void test(`dynamic flag chips preserve absent, zero and unknown values: ${flags}`, () => {
-    const elf = relocationFixture().elf;
-    elf.dynamic = { needed: [], soname: null, rpath: null, runpath: null,
-      init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
-      flags, flags1: flags, issues: [] };
-    const out: string[] = [];
-
-    renderElfLinking(elf, out);
-
-    assert.ok(out.join("").includes(`>Flags (DT_FLAGS)</dt><dd>${expected}`));
-    assert.ok(out.join("").includes(`>Flags_1 (DT_FLAGS_1)</dt><dd>${expected}`));
-    assert.doesNotMatch(out.join(""), /class="opt sel"[^>]*>DF_/);
-    assert.match(out.join(""), /class="opt dim"[^>]*>DF_ORIGIN<\/span>/);
-    assert.match(out.join(""), /class="opt dim"[^>]*>DF_1_NOW<\/span>/);
-  });
-}
-
-void test("dynamic flag chips keep unknown high bits selected and escape diagnostics", () => {
+void test("dynamic linking escapes interpreter and dynamic warnings", () => {
   const elf = relocationFixture().elf;
-  elf.interpreter = { path: "", issues: ["<bad interpreter>"] };
-  elf.dynamic = { needed: [], soname: null, rpath: "<path>", runpath: null,
+  elf.interpreter = { path: "<loader>", issues: ["<bad interpreter>"] };
+  elf.dynamic = { entries: [{ tag: 15, value: 1n, string: "<path>" }],
+    needed: [], soname: null, rpath: "<path>", runpath: null,
     init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
-    flags: 0x80000000, flags1: 0x80000000, issues: ["<bad flags>"] };
+    flags: null, flags1: null, issues: ["<bad flags>"] };
   const out: string[] = [];
-
   renderElfLinking(elf, out);
-
-  assert.match(out.join(""), /class="opt sel"[^>]*>UNKNOWN_BITS_0x80000000<\/span>/);
   assert.ok(out.join("").includes("&lt;bad interpreter>"));
   assert.ok(out.join("").includes("&lt;bad flags>"));
-  assert.ok(out.join("").includes("&lt;path>"));
+  assert.ok(out.join("").includes("&lt;path&gt;"));
   assert.doesNotMatch(out.join(""), /<bad|<path/);
 });
 

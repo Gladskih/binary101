@@ -1,0 +1,22 @@
+.elfDynamicEntries {
+  grid-template-columns: minmax(0, min(38%, 14.5rem)) minmax(0, 1fr);
+  max-inline-size: calc(14.5rem + 1rem + var(--options-measure));
+}
+
+.elfDynamicEntries dt,
+.elfDynamicEntries dd {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.elfDynamicEntries .opt {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+@media (width < 640px) {
+  .elfDynamicEntries dt:has(+ dd > .optionsRow > .opt:nth-child(6)),
+  .elfDynamicEntries dd:has(> .optionsRow > .opt:nth-child(6)) {
+    grid-column: 1 / -1;
+  }
+}
