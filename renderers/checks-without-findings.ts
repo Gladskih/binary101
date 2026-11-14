@@ -1,40 +1,47 @@
 import type { ElfParseResult } from "../analyzers/elf/types.js";
 import { isPeWindowsParseResult, type PeParseResult } from "../analyzers/pe/core/parse-result.js";
+import { SANITIZER_ABI_SYMBOLS } from "../analyzers/sanitizers/abi-catalog.js";
+import { escapeHtml } from "../html-utils.js";
 import { markSupplementalAnalysis } from "./supplemental-analysis.js";
 import { PE_PACKER_SECTIONS } from "./pe/packer-sections.js";
+import { collectPeChecksWithoutFindings } from "./pe/checks-without-findings.js";
 
-type Check = readonly [name: string, scope: string];
-const collectChecks = (file: ElfParseResult | PeParseResult): Check[] => {
-  const checks: Check[] = [];
-  if ("sanitizerEvidence" in file && file.sanitizerEvidence?.length === 0) {
-    checks.push(["Sanitizer evidence", "Available runtime dependencies, symbols and build metadata. " +
-      "Stripped, renamed or trap-only instrumentation can escape this check."]);
+const sanitizerChecks = (file: ElfParseResult | PeParseResult): string[] => {
+  if (!("sanitizerEvidence" in file) || !file.sanitizerEvidence) return [];
+  const found = new Set<string>(file.sanitizerEvidence.map(evidence => evidence.tool));
+  return [...new Set([...SANITIZER_ABI_SYMBOLS.values(), "Go race detector"])]
+    .filter(tool => !found.has(tool));
+};
+const embeddedResourceChecks = (file: ElfParseResult | PeParseResult): string[] => {
+  const analysis = file.embeddedResources;
+  if (analysis === undefined) return [];
+  const formats = new Set(analysis?.bundles.map(bundle => bundle.resource.format));
+  return (["Qt RCC", "GLib GResource"] as const).filter(format => !formats.has(format));
+};
+const packerChecks = (file: PeParseResult): string[] => {
+  if (!isPeWindowsParseResult(file) || file.packers === undefined) return [];
+  const reported = new Set<string>(file.packers?.reports.map(report => report.id));
+  return Object.entries(PE_PACKER_SECTIONS).filter(([id]) => !reported.has(id))
+    .map(([, section]) => section.title);
+};
+const collectChecks = (file: ElfParseResult | PeParseResult): string[] => {
+  const checks = [...sanitizerChecks(file), ...embeddedResourceChecks(file)];
+  if (!("signature" in file)) return checks;
+  if (!file.dwarf) {
+    checks.push("DWARF debug information");
   }
-  if (file.embeddedResources === null) {
-    checks.push(["Qt / GLib embedded resources", "Supported containers and resource symbols."]);
+  if (isPeWindowsParseResult(file)) {
+    checks.push(...collectPeChecksWithoutFindings(file));
   }
-  if ("signature" in file && isPeWindowsParseResult(file)) {
-    if ((file.clr?.readyToRun ?? file.readyToRun)?.status === "absent") {
-      checks.push(["ReadyToRun", "Managed native header and supported composite header export."]);
-    }
-    if (file.packers !== undefined) {
-      const reported = new Set<string>(file.packers?.reports.map(report => report.id));
-      const missing = Object.entries(PE_PACKER_SECTIONS).filter(([id]) => !reported.has(id));
-      if (missing.length) {
-        checks.push(["PE packagers", missing.map(([, section]) => section.title).join(", ")]);
-      }
-    }
-  }
-  return checks;
+  return checks.concat(packerChecks(file));
 };
 
 export const renderChecksWithoutFindings = (file: ElfParseResult | PeParseResult): string => {
-  const checks = collectChecks(file);
+  const checks = collectChecks(file).sort((left, right) => left.localeCompare(right));
   if (!checks.length) return "";
   return markSupplementalAnalysis(`<section class="checksWithoutFindings">` +
     `<h4>Checks without findings</h4>` +
-    `<p class="smallNote">These automatic checks returned no matching evidence in the inputs listed. ` +
-    `File hashes and disassembly run on demand.</p><dl>` +
-    checks.map(([name, scope]) => `<dt>${name}</dt><dd>${scope}</dd>`).join("") +
-    `</dl></section>`);
+    `<p class="smallNote">No findings were returned for these checks. ` +
+    `Heuristic searches can miss data: not detected does not mean absent.</p>` +
+    `<ul>` + checks.map(name => `<li>${escapeHtml(name)}</li>`).join("") + `</ul></section>`);
 };

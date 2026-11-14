@@ -34,7 +34,7 @@ void test("lists an ELF sanitizer check with no evidence in the common section",
   elf.sanitizerEvidence = [];
   const html = renderElfLazy(elf);
   assert.match(html, /Checks without findings/);
-  assert.match(html, /<dt>Sanitizer evidence<\/dt>/);
+  assert.match(html, /<li>ASan<\/li>/);
   assert.doesNotMatch(html, /data-elf-lazy-section="sanitizers"/);
-  assert.doesNotMatch(html, /<dt>Qt \/ GLib embedded resources<\/dt>/);
+  assert.doesNotMatch(html, /<li>Qt RCC<\/li>|<li>GLib GResource<\/li>/);
 });

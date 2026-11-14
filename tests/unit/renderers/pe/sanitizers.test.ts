@@ -23,9 +23,9 @@ void test("lists completed PE checks with no evidence together", () => {
   pe.packers = null;
   const html = renderPe(pe);
   assert.match(html, /Checks without findings/);
-  assert.match(html, /<dt>Sanitizer evidence<\/dt>/);
-  assert.match(html, /<dt>Qt \/ GLib embedded resources<\/dt>/);
-  assert.match(html, /<dt>PE packagers<\/dt>/);
+  assert.match(html, /<li>ASan<\/li>/);
+  assert.match(html, /<li>Qt RCC<\/li>/);
+  assert.match(html, /<li>UPX executable packer<\/li>/);
   assert.doesNotMatch(html, /data-pe-lazy-section="sanitizers"/);
-  assert.doesNotMatch(html, /<dt>ReadyToRun<\/dt>/);
+  assert.match(html, /<li>ReadyToRun<\/li>/);
 });
