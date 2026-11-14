@@ -1,5 +1,5 @@
-import { computeInspectionHash, openInspectionContent, openInspectionSection,
-  toggleInspectionSection } from "./inspection-navigation.js";
+import { computeInspectionHash, openInspectionContent, openInspectionSection
+} from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
@@ -203,8 +203,7 @@ test.describe("file hash actions", () => {
     );
     await page.keyboard.press("Escape");
     await expect(page.locator("#fileBinaryTypeDetail .accessibleTooltipPopup")).toBeHidden();
-    await expect(page.locator("#analysisValue .accessibleTooltipButton")).toHaveCount(0);
-    await toggleInspectionSection(page.locator('[data-pe-lazy-section="pe-headers"] > details > summary'));
+    await expect(page.locator("#workspaceTitle")).toHaveText("PE/COFF headers");
     await expect.poll(async () => await page.locator("#analysisValue .accessibleTooltipButton").count())
       .toBeGreaterThan(0);
 

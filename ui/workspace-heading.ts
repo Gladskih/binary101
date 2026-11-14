@@ -10,7 +10,7 @@ export const renderWorkspaceHeading = (
   root: Document, section: WorkspaceSection | undefined, selected: string
 ): void => {
   root.getElementById("workspaceTitle")!.textContent = section?.title ??
-    (selected === "search" ? "Search results" : selected === "hashes" ? "File hashes" : "Overview");
+    (selected === "search" ? "Search results" : selected === "hashes" ? "File hashes" : "Analysis");
   root.getElementById("workspaceDescription")!.textContent = section?.description ?? "";
   const heading = root.getElementById("workspaceHeading")!;
   heading.hidden = hideHeading(root, section, selected);

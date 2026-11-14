@@ -9,7 +9,7 @@ const inspect = async (page: Page): Promise<void> => {
   const file = createPeResourcePreviewFile();
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
-  await expect(page.locator("#workspaceTitle")).toHaveText("Overview");
+  await expect(page.locator("#workspaceTitle")).toHaveText("PE/COFF headers");
 };
 
 for (const width of [1024, 2530]) {
@@ -29,7 +29,7 @@ test("ordinary metadata, table values and option labels use the base font size",
   await page.setViewportSize({ width: 1440, height: 900 });
   await inspect(page);
   const sizes = await page.locator("#fileProperties dt, #fileSourceDetail .opt, #workspaceFilter, " +
-    "#fileOpenButton, #fileOverviewContent td").evaluateAll(elements =>
+    "#fileOpenButton, #analysisValue td").evaluateAll(elements =>
     elements.map(element => Number.parseFloat(element.ownerDocument.defaultView!
       .getComputedStyle(element).fontSize)));
   expect(sizes.length).toBeGreaterThan(5);

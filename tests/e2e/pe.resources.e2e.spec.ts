@@ -19,7 +19,7 @@ const expectBaseDetails = async (page: Page, fileName: string, expectedKind: str
 };
 
 const expectFileIcon = async (page: Page, fileName: string): Promise<void> => {
-  await openInspectionSection(page, "Overview");
+  await openInspectionSection(page, "PE/COFF headers");
   const icon = page.locator("#fileIcon");
   await expect(icon).toBeVisible();
   await expect(icon).toHaveAttribute("alt", `Icon embedded in ${fileName}`);

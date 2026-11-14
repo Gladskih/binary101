@@ -7,16 +7,15 @@ const inspectPe = async (page: Page): Promise<void> => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
-  await expect(page.locator("#workspaceTitle")).toHaveText("Overview");
+  await expect(page.locator("#workspaceTitle")).toHaveText("PE/COFF headers");
 };
 
-test("native overview retains the icon, source fields and header properties", async ({ page }) => {
+test("native headers retain the icon, source fields and file properties", async ({ page }) => {
   await inspectPe(page);
   await expect(page.locator("#fileIcon")).toBeVisible();
-  await expect(page.locator("#fileOverviewContent")).toContainText("PE resource showcase");
-  await expect(page.locator("#fileOverviewContent")).toContainText("FileDescription");
-  await expect(page.locator("#fileOverviewContent")).not.toContainText("Architecture");
-  await page.locator('.workspaceCard[data-workspace-target="analysis-resources"]').click();
+  await expect(page.locator('[data-pe-lazy-section="pe-headers"]')).toContainText("Machine");
+  await expect(page.locator("#workspaceOverview,.workspaceCard")).toHaveCount(0);
+  await openInspectionSection(page, "Resources");
   await expect(page.locator('[data-pe-lazy-section="resources"]')).toBeVisible();
   await expect(page.locator("#workspaceNavigation")).not.toContainText("File hashes");
   await expect(page.locator("#fileFormatSummary")).toHaveCount(0);

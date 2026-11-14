@@ -1,7 +1,4 @@
 import type { WorkspaceSection } from "./workspace-sections.js";
-import type { ParseForUiResult } from "../analyzers/analyzer-types.js";
-import { renderPeSectionPreview } from "../renderers/pe/section-preview.js";
-import { renderOverviewCard } from "../renderers/overview-card.js";
 
 const navigationButton = (
   key: string,
@@ -44,13 +41,3 @@ export const renderWorkspaceNavigation = (
   analysis.append(...buttons(sections.filter(section => section.origin)));
   navigation.append(analysis);
 };
-
-export const renderWorkspaceCards = (
-  sections: readonly Pick<WorkspaceSection, "key" | "title" | "description" | "origin">[],
-  result: ParseForUiResult | null
-): string => [...sections.filter(section => !section.origin),
-  ...sections.filter(section => section.origin)].map(section => {
-  const preview = result?.analyzer === "pe" ? renderPeSectionPreview(result.parsed,
-    section.key.replace(/^analysis-/, "")) : "";
-  return renderOverviewCard(section.title, section.key, preview, section.origin);
-}).join("");

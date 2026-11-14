@@ -27,7 +27,7 @@ export const syncInspectionHeader = (
   moveElement(element("fileHeader"), headerParent);
   moveElement(element("fileActions"), headerParent);
   moveElement(element("workspaceSearch"), element(docked ? "fileChromeDock" : "workspaceSearchHome"));
-  moveElement(element("fileIconWrap"), element(docked ? "fileInfoRail" : "fileOverviewIcon"));
+  moveElement(element("fileIconWrap"), element(docked ? "fileInfoRail" : "fileDetailsBody"));
   root.body.classList.toggle("hasDockedHeader", docked);
   syncContext(root, appTitle);
 };

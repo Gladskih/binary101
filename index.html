@@ -206,7 +206,7 @@
             <summary aria-label="File properties" title="File properties">
               <span class="fileDetails__label">File properties</span>
             </summary>
-            <div class="fileDetails__body">
+            <div class="fileDetails__body" id="fileDetailsBody">
               <dl id="fileProperties" class="fileProperties" aria-label="File properties">
                 <div class="fileProperty"><dt>MIME type</dt><dd id="fileMimeTypeDetail"></dd></div>
                 <div class="fileProperty">
@@ -247,14 +247,9 @@
             <div class="workspaceHeading" id="workspaceHeading">
               <button type="button" id="workspaceReportButton" class="overviewLink"
                 data-workspace-target="" hidden>Back to report</button>
-              <h3 id="workspaceTitle">Overview</h3>
+              <h3 id="workspaceTitle">Analysis</h3>
               <p id="workspaceDescription"></p>
             </div>
-            <section id="workspaceOverview" aria-label="File overview" hidden>
-              <div id="fileOverviewIcon"></div>
-              <div class="nativeOverview"><div id="fileOverviewContent"></div></div>
-              <div id="workspaceCards" class="workspaceCards"></div>
-            </section>
             <section id="workspaceHashes" aria-label="File hash tools">
               <p id="workspaceUnsupported" class="smallNote" hidden>
                 No format-specific analysis is available for this file.

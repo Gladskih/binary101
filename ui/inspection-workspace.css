@@ -115,9 +115,7 @@ button {
   order: 2;
   flex-shrink: 0
 }
-#fileOverviewIcon:not(:has(> :not([hidden]))) {
-  display: none
-}
+
 .fileChromeDock {
   padding: 8px 12px 0
 }
@@ -859,126 +857,6 @@ details[data-analysis-origin="supplemental"] > summary {
   margin: 16px 0 0;
   max-inline-size: 100%;
   display: flow-root
-}
-.nativeOverview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 24px
-}
-.nativeOverview > .filePrimaryInfo__iconWrap {
-  width: 11rem;
-  margin: 0;
-  flex-shrink: 0
-}
-#fileOverviewContent {
-  min-width: 0;
-  max-width: 100%;
-  flex: 1 1 24rem
-}
-.workspaceCards {
-  display: contents
-}
-#workspaceOverview {
-  display: grid;
-  grid-template-columns: repeat(auto-fill,minmax(min(100%,18rem),1fr));
-  align-items: stretch;
-  gap: 12px;
-  padding-block: 4px 12px
-}
-#workspaceOverview .nativeOverview,#workspaceOverview #fileOverviewContent,
-#workspaceOverview #workspaceCards {
-  display: contents
-}
-.workspaceCard {
-  display: flex;
-  flex-direction: column;
-  min-inline-size: 0;
-  inline-size: 100%;
-  margin: 0;
-  padding: 16px;
-  border: 1px solid var(--border2);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--text);
-  text-align: start;
-  cursor: pointer;
-  font: inherit;
-  overflow-wrap: anywhere
-}
-.workspaceCard:hover {
-  border-color: var(--accent);
-  background: var(--workspace-subtle)
-}
-.workspaceCard:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px
-}
-.workspaceCard[data-analysis-origin="supplemental"] {
-  background: var(--workspace-supplemental)
-}
-.workspaceCard__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  font-size: 16px;
-  font-weight: 650;
-  line-height: 1.4
-}
-.workspaceCard__header svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round
-}
-.workspaceCard__body {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-  width: 100%
-}
-.workspaceCard__body:has(.workspaceCard__image) {
-  grid-template-columns: minmax(0,1fr) auto
-}
-.workspaceCard__fact {
-  display: grid;
-  grid-column: 1;
-  gap: 2px;
-  min-width: 0
-}
-.workspaceCard__label {
-  color: var(--muted);
-  font-size: var(--font-size-base)
-}
-.workspaceCard__value {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  color: var(--text);
-  font-size: var(--font-size-base);
-  line-height: 1.4
-}
-.workspaceCard__fact:first-of-type .workspaceCard__value {
-  font-size: 18px;
-  font-weight: 600
-}
-.workspaceCard__image {
-  grid-column: 2;
-  grid-row: 1 / span 3;
-  align-self: start;
-  width: 112px;
-  height: 112px;
-  object-fit: contain
-}
-#workspaceOverview:has(.workspaceCard__image) #fileOverviewIcon {
-  display: none
 }
 .workspaceContent .hashTable {
   inline-size: max-content;

@@ -9,7 +9,7 @@ const fixture = () => {
   const elements = new Map<string, HTMLElement>();
   for (const id of ["fileInfoCard", "directoryInfoCard", "fileDetails", "inspectionWorkspace",
     "fileActions", "fileChromeDock", "appHeader", "fileHeader", "workspaceSearchHome",
-    "workspaceSearch", "fileNameDetail", "directoryName", "fileInfoRail", "fileIconWrap", "fileOverviewIcon"]) {
+    "workspaceSearch", "fileNameDetail", "directoryName", "fileInfoRail", "fileIconWrap", "fileDetailsBody"]) {
     // The fixture implements only the DOM surface exercised by header placement.
     const element = { hidden: false, textContent: "" } as HTMLElement;
     Object.defineProperty(element, "parentElement", { get: () => parents.get(element) ?? null });
@@ -81,10 +81,12 @@ void test("narrow details share the toolbar and can return to the dock without a
 
   assert.equal(state.details.parentElement, state.element("fileActions"));
   assert.equal(state.element("fileActions").parentElement, state.element("appHeader"));
+  assert.equal(state.element("fileIconWrap").parentElement, state.element("fileDetailsBody"));
   state.layout.matches = true;
   syncInspectionHeader(state.root, "Inspector", state.layout);
   assert.equal(state.details.parentElement, state.element("fileInfoRail"));
   assert.equal(state.element("fileActions").parentElement, state.element("fileChromeDock"));
+  assert.equal(state.element("fileIconWrap").parentElement, state.element("fileInfoRail"));
   state.layout.matches = false;
   syncInspectionHeader(state.root, "Inspector", state.layout);
   assert.equal(state.element("fileActions").parentElement, state.element("appHeader"));

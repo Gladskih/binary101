@@ -20,7 +20,6 @@ export const expandInspectionCollection = async (collection: Locator): Promise<v
 
 export const openInspectionSection = async (page: Page, title: string): Promise<void> => {
   await expect(page.locator("#fileInfoCard")).toBeVisible();
-  if (title === "Overview" && await page.locator("#workspaceOverview").isVisible()) return;
   if (title === "File hashes") {
     await page.locator("#fileHashesButton").click();
     await expect(page.locator("#workspaceTitle")).toHaveText("File hashes");
@@ -35,11 +34,7 @@ export const openInspectionSection = async (page: Page, title: string): Promise<
       .toBeVisible();
     return;
   }
-  const card = page.locator("#workspaceCards button").filter({
-    has: page.getByText(title, { exact: true })
-  });
-  if (await card.isVisible()) await card.click();
-  else await page.locator("#workspaceNavigation button").filter({
+  await page.locator("#workspaceNavigation button").filter({
     has: page.getByText(title, { exact: true })
   }).click();
   await expect(page.locator("#workspaceTitle")).toHaveText(title);

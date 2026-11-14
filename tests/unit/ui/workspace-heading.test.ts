@@ -28,7 +28,7 @@ void test("section headings identify supplemental analysis and clear it for nati
   assert.equal(state.nodes.get("workspaceHeading")!.title, "");
 });
 
-for (const [key, title] of [["search", "Search results"], ["hashes", "File hashes"], ["overview", "Overview"]]) {
+for (const [key, title] of [["search", "Search results"], ["hashes", "File hashes"], ["native", "Analysis"]]) {
   void test(`virtual view ${key} supplies its own title without a description`, () => {
     const state = fixture();
 
