@@ -37,12 +37,17 @@ for (const width of [390, 1280]) {
     await expect(section).toContainText("libasan.so.8");
     await expect(section).toContainText("Runtime dependency");
     await expect(section).not.toContainText("ABI reference");
+    await openInspectionSection(page, "Checks without findings");
+    const checks = page.locator(".checksWithoutFindings");
+    await expect(checks.getByRole("listitem").filter({ hasText: /^ASan$/ })).toHaveCount(0);
+    await expect(checks.getByRole("listitem").filter({ hasText: /^UBSan$/ })).toBeVisible();
     const plain = createElfMetadataFile().file;
     await page.setInputFiles("#fileInput", { name: plain.name, mimeType: plain.type,
       buffer: Buffer.from(plain.data) });
     await expect(section).toHaveCount(0);
     await openInspectionSection(page, "Checks without findings");
-    await expect(page.locator("#analysisValue")).toContainText("Sanitizer evidence");
-    await expect(page.locator("#analysisValue")).toContainText("trap-only");
+    await expect(checks.getByRole("listitem").filter({ hasText: /^ASan$/ })).toBeVisible();
+    await expect(checks.getByRole("listitem").filter({ hasText: /^UBSan$/ })).toBeVisible();
+    await expect(checks).toContainText("not detected does not mean absent");
   });
 }
