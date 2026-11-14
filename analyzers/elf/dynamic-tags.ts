@@ -1,3 +1,5 @@
+import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
+
 type DynamicValueKind = "address" | "bytes" | "count" | "string" | "presence" |
   "flags" | "relocation" | "value";
 
@@ -44,6 +46,10 @@ export const ELF_DYNAMIC_TAG_DESCRIPTIONS: Readonly<Record<number,
   36: ["DT_RELR", "address", "Packed relative relocation table."],
   37: ["DT_RELRENT", "bytes", "Size of one RELR record."],
   39: ["DT_SYMTABSZ", "bytes", "Dynamic symbol table size (gABI)."],
+  // Experimental assignment: llvm/include/llvm/BinaryFormat/DynamicTags.def
+  // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/BinaryFormat/DynamicTags.def
+  [ELF_DYNAMIC_TAG.CREL]: ["DT_CREL", "address",
+    "Packed relocation table using the experimental LLVM CREL encoding."],
   0x6ffffdf5: ["DT_GNU_PRELINKED", "value", "GNU prelink timestamp."],
   0x6ffffdf6: ["DT_GNU_CONFLICTSZ", "bytes", "GNU conflict table size."],
   0x6ffffdf7: ["DT_GNU_LIBLISTSZ", "bytes", "GNU library list size."],

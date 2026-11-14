@@ -12,7 +12,8 @@ const dynamicReportBytes = async (): Promise<Uint8Array> => {
   // gABI 8.3 and glibc elf/elf.h; deliberately include zero presence flags and repeats.
   const entries = [
     ...elf.dynamic!.entries.filter(entry => entry.tag === 5 || entry.tag === 10),
-    { tag: 3, value: 0x400000n }, { tag: 21, value: 0n },
+    // LLVM DynamicTags.def: DT_CREL; also recognized as a DT_PLTREL encoding.
+    { tag: 0x40000026, value: 0x400000n }, { tag: 20, value: 0x40000026n },
     { tag: 22, value: 0n }, { tag: 24, value: 0n },
     { tag: 0x6ffffefc, value: 1n }, { tag: 0x7fffffff, value: 1n },
     { tag: 30, value: (1n << 60n) | 8n }, { tag: 0x6ffffffb, value: 0n },
@@ -43,6 +44,9 @@ for (const width of [390, 1280]) {
       await expect(fields.locator("dt")).toHaveCount(12);
       await expect(fields).toContainText("libc.so.6");
       await expect(fields).toContainText("0x8000000000000000");
+      await expect(fields.locator("dt").filter({ hasText: /^DT_CREL$/ })).toHaveCount(1);
+      await expect(fields.locator(".opt.sel").filter({ hasText: /^DT_CREL/ })).toHaveCount(1);
+      await expect(fields).not.toContainText("Unknown relocation encoding");
       const coverage = page.locator("[data-elf-dynamic-coverage]");
       await expect(coverage.locator("dl")).toHaveCount(1);
       await expect(coverage.locator("details")).toHaveCount(0);

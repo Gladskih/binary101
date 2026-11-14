@@ -1,4 +1,5 @@
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "../../analyzers/elf/dynamic-tags.js";
+import { ELF_DYNAMIC_TAG } from "../../analyzers/elf/abi-constants.js";
 import { DYNAMIC_FLAGS, DYNAMIC_FLAGS_1 } from "../../analyzers/elf/constants.js";
 import type { ElfDynamicInfo, ElfOptionEntry } from "../../analyzers/elf/types.js";
 import {
@@ -6,6 +7,14 @@ import {
 } from "../../html-utils.js";
 
 type DynamicRecord = ElfDynamicInfo["entries"][number];
+
+// llvm-readobj accepts DT_REL, DT_RELA and DT_CREL as DT_PLTREL values.
+// https://github.com/llvm/llvm-project/blob/main/llvm/tools/llvm-readobj/ELFDumper.cpp
+const pltRelocationFormats: ElfOptionEntry[] = [
+  [ELF_DYNAMIC_TAG.RELA, "DT_RELA", "PLT relocations have explicit addends."],
+  [ELF_DYNAMIC_TAG.REL, "DT_REL", "PLT relocations have implicit addends."],
+  [ELF_DYNAMIC_TAG.CREL, "DT_CREL", "PLT relocations use the experimental LLVM CREL encoding."]
+];
 
 // GNU/Sun flag assignments: https://github.com/bminor/glibc/blob/master/elf/elf.h
 // Sun feature meanings: https://docs.oracle.com/cd/E19683-01/817-3677/chapter6-42444/
@@ -50,10 +59,8 @@ const renderValue = (entry: DynamicRecord, kind: string): string => {
   const raw = `<code>${rawHex(entry.value)}</code>`;
   if (kind === "flags") return raw + formatFlags(Number(entry.tag), entry.value);
   if (kind === "relocation") {
-    return raw + renderOptionChips(Number(entry.value), [
-      [7, "DT_RELA", "PLT relocations have explicit addends."],
-      [17, "DT_REL", "PLT relocations have implicit addends."]
-    ]) + (entry.value === 7n || entry.value === 17n ? "" :
+    return raw + renderOptionChips(Number(entry.value), pltRelocationFormats) +
+      (pltRelocationFormats.some(([tag]) => BigInt(tag) === entry.value) ? "" :
       `<span class="dim">Unknown relocation encoding</span>`);
   }
   return raw + valueDetail(entry, kind);

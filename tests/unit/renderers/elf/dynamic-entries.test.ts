@@ -80,6 +80,19 @@ void test("formats sizes, counts, addresses, relocation enums and all flag famil
   assert.equal(renderElfDynamicEntries([]), "");
 });
 
+void test("recognizes the experimental LLVM DT_CREL tag and PLT relocation encoding", () => {
+  // llvm/include/llvm/BinaryFormat/DynamicTags.def assigns CREL = 0x40000026.
+  const html = renderElfDynamicEntries([
+    { tag: 0x40000026, value: 0x400000n }, { tag: 20, value: 0x40000026n }
+  ]);
+  assert.match(html, /<dt[^>]*>DT_CREL<\/dt>/);
+  assert.match(html, /experimental LLVM/i);
+  assert.match(html, /class="opt sel"[^>]*>DT_CREL<\/span>/);
+  assert.doesNotMatch(html, /Unknown tag|Unknown relocation encoding/);
+  const absent = renderElfDynamicTagCoverage({ entries: [], terminated: true });
+  assert.match(absent, /DT_CREL/);
+});
+
 void test("uses the header field layout and associates raw values with their tags", () => {
   const document = new DOMParser({ onError: (_level, message) => assert.fail(message) })
     .parseFromString(`<section>${renderElfDynamicEntries([
