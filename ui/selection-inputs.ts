@@ -1,7 +1,8 @@
-"use strict";
-
 import type { DirectoryInspectionController } from "./directory-inspection.js";
 import type { DirectInspectionSource, InspectionContext } from "./inspection-context.js";
+import { captureClipboardEntries } from "./clipboard-snapshot.js";
+import type { ClipboardEntry } from "./clipboard-snapshot.js";
+import { formatAccessError } from "./directory-handles.js";
 
 type StatusWriter = (message: string | null | undefined) => void;
 type FileOpener = (file: File, context: InspectionContext) => Promise<void>;
@@ -12,6 +13,9 @@ interface SelectionInputConfig {
   readonly fileInputElement: HTMLInputElement;
   readonly openFile: FileOpener;
   readonly setStatusMessage: StatusWriter;
+  readonly chooseClipboardEntries: (
+    entries: readonly ClipboardEntry[]
+  ) => Promise<readonly ClipboardEntry[]>;
 }
 
 const snapshotFileList = (files: FileList): File[] =>
@@ -63,45 +67,53 @@ const handleDroppedFiles = async (config: SelectionInputConfig, event: Event): P
   if (!openedItems) await openFileSelection(config, droppedFiles, "drop");
 };
 
+const openClipboardSelection = async (
+  config: SelectionInputConfig, entries: readonly ClipboardEntry[]
+): Promise<void> => {
+  const entry = entries[0];
+  if (!entry) return;
+  if (entry.kind === "unavailable") {
+    config.setStatusMessage(`Paste: ${entry.error} Use Open files or drag a file here.`);
+  } else if (entry.kind === "text") {
+    await config.openFile(new File([entry.text], "clipboard.bin", {
+      type: entry.type || "text/plain"
+    }), { source: "paste", object: "file" });
+  } else if (entries.every(entry => entry.kind === "file")) {
+    await config.directoryInspection.openFiles(entries.map(entry => entry.file), "paste");
+  } else {
+    const handles = entries.flatMap(entry => entry.kind === "handle" ? [entry.handle] :
+      entry.kind === "file" ? [{ kind: "file", name: entry.file.name,
+        getFile: async () => entry.file }] : []);
+    await config.directoryInspection.openDroppedItems({ length: handles.length,
+      item: index => handles[index] ? { kind: "file",
+        getAsFileSystemHandle: async () => handles[index]! } : null }, "paste");
+  }
+};
+
 const handlePaste = async (
-  config: SelectionInputConfig,
-  event: ClipboardEvent
+  config: SelectionInputConfig, event: ClipboardEvent, isCurrent: () => boolean
 ): Promise<void> => {
   const clipboardData = event.clipboardData;
   if (!clipboardData) {
     config.setStatusMessage("Paste: clipboard not available.");
     return;
   }
-  const files = clipboardData.files ? snapshotFileList(clipboardData.files) : [];
-  const items = clipboardData.items ? Array.from(clipboardData.items) : [];
-  const openedItems = await config.directoryInspection.openDroppedItems(
-    { length: items.length, item: index => items[index] ?? null },
-    "paste"
-  );
-  if (openedItems) return;
-  if (files.length > 0) {
-    await config.directoryInspection.openFiles(files, "paste");
-    return;
+  try {
+    const entries = await captureClipboardEntries(Array.from(clipboardData.items ?? []),
+      clipboardData.files ? snapshotFileList(clipboardData.files) : []);
+    if (!isCurrent()) return;
+    const selected = await config.chooseClipboardEntries(entries);
+    if (!isCurrent()) return;
+    if (!entries.length) {
+      config.setStatusMessage("Paste: no file or readable format received. " +
+        "Use Open files or drag a file here.");
+      return;
+    }
+    config.setStatusMessage(null);
+    await openClipboardSelection(config, selected);
+  } catch (error) {
+    if (isCurrent()) config.setStatusMessage(`Paste: ${formatAccessError(error)}`);
   }
-  const textItems = items.filter(item => item.kind === "string");
-  if (textItems.length !== 1) {
-    config.setStatusMessage("Paste: unsupported clipboard payload.");
-    return;
-  }
-  const [textItem] = textItems;
-  if (!textItem) {
-    config.setStatusMessage("Paste: clipboard item missing.");
-    return;
-  }
-  const text = await new Promise<string | null>(resolve => textItem.getAsString(resolve));
-  if (typeof text !== "string" || text.length === 0) {
-    config.setStatusMessage("Paste: empty text.");
-    return;
-  }
-  await config.openFile(
-    new File([text], "clipboard.bin", { type: "application/octet-stream" }),
-    { source: "paste", object: "file" }
-  );
 };
 
 const attachDocumentFileDrop = (config: SelectionInputConfig): void => {
@@ -145,10 +157,12 @@ const attachSelectionInputs = (config: SelectionInputConfig): void => {
   );
   config.dropZoneElement.addEventListener("click", () => config.fileInputElement.click());
   attachFilePicker(config);
+  let pasteGeneration = 0;
   window.addEventListener("paste", event => {
     if (event.target instanceof Element &&
       event.target.closest("input, textarea, [contenteditable]")) return;
-    void handlePaste(config, event as ClipboardEvent);
+    const generation = ++pasteGeneration;
+    void handlePaste(config, event as ClipboardEvent, () => generation === pasteGeneration);
   });
 };
 

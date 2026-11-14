@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-
 type PayloadKind = "one-file" | "multiple-files" | "folder" | "multiple-folders" | "mixed" | "text";
 type SourceKind = "drop" | "paste" | "dialog";
 type BrowserHandle = {
@@ -16,18 +15,15 @@ type SelectionFixtureWindow = Window & {
 };
 const sourceOptions = ["Selection", "Paste", "Drop", "Navigation"];
 const objectOptions = ["File", "Directory", "Collection"];
-
 const uploadFile = (name: string, text: string) => ({
   name,
   mimeType: "text/plain",
   buffer: Buffer.from(text)
 });
-
 const uploadsFor = (payload: PayloadKind) =>
   payload === "one-file"
     ? [uploadFile("alpha.txt", "alpha")]
     : [uploadFile("alpha.txt", "alpha"), uploadFile("beta.txt", "beta")];
-
 const installSelectionFixtures = async (page: Page): Promise<void> => {
   await page.addInitScript(() => {
     type FixtureItem =
@@ -136,6 +132,10 @@ const dispatchPaste = async (page: Page, payload: PayloadKind): Promise<void> =>
   await page.evaluate(payloadKind => {
     (globalThis as unknown as SelectionFixtureWindow).__binary101DispatchPaste?.(payloadKind);
   }, payload);
+  if (["multiple-files", "multiple-folders", "mixed"].includes(payload)) {
+    await page.getByRole("dialog", { name: "Clipboard contents" })
+      .getByRole("button", { name: "Browse all files and folders" }).click();
+  }
 };
 
 const openDialog = async (page: Page, payload: PayloadKind): Promise<void> => {

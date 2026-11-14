@@ -2,6 +2,7 @@
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
 @import url("./renderers/elf/dynamic-entries.css");
+@import url("./ui/clipboard-choice.css");
 :root {
   --font-size-base: 14px;
 

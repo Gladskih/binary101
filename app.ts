@@ -22,6 +22,7 @@ import { enhanceElfLazySections } from "./ui/elf-lazy-sections.js";
 import { createDirectoryInspectionController, type DirectoryInspectionController } from "./ui/directory-inspection.js";
 import { createInspectionNavigationController } from "./ui/inspection-navigation.js";
 import { attachSelectionInputs } from "./ui/selection-inputs.js";
+import { chooseClipboardEntries } from "./ui/clipboard-choice.js";
 import { createFileInspectionContext } from "./ui/file-inspection-context.js";
 import { setFileBinaryTypeLabel, setFileSubtypeLabel } from "./ui/file-type-label.js";
 import { addAccessibleTooltip, enhanceAccessibleTooltips } from "./ui/accessible-tooltips.js";
@@ -151,6 +152,7 @@ const directoryInspection: DirectoryInspectionController = createDirectoryInspec
 });
 inspectionNavigation.initialize();
 attachSelectionInputs({
+  chooseClipboardEntries,
   directoryInspection,
   dropZoneElement,
   fileInputElement,

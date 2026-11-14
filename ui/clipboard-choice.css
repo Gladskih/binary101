@@ -1,0 +1,33 @@
+.clipboardChoice {
+  box-sizing: border-box;
+  inline-size: min(48rem, calc(100% - 2rem));
+  max-block-size: calc(100% - 2rem);
+  padding: 1rem;
+  overflow: auto;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+}
+
+.clipboardChoice::backdrop {
+  background: var(--border2);
+}
+
+.clipboardChoice table {
+  min-inline-size: 44rem;
+}
+
+.clipboardChoice__preview {
+  min-inline-size: 16rem;
+  max-inline-size: 40ch;
+  white-space: pre-wrap;
+}
+
+.clipboardChoice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .5rem;
+  margin-block-start: 1rem;
+}

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { attachSelectionInputs } from "../../../ui/selection-inputs.js";
 import type { DirectoryInspectionController } from "../../../ui/directory-inspection.js";
 
@@ -102,6 +103,7 @@ void test("file picker keeps an unchanged selection and opens an updated snapsho
   const updated = new File(["ab"], initial.name, { lastModified: initial.lastModified });
   try {
     attachSelectionInputs({
+      chooseClipboardEntries: async entries => entries,
       directoryInspection: createDirectoryInspection(async () => false, async files => {
         opened.push(...files);
         return true;
@@ -131,6 +133,7 @@ void test("selection inputs route dropped files through directory inspection", a
   const openedSources: string[] = [];
   try {
     attachSelectionInputs({
+      chooseClipboardEntries: async entries => entries,
       directoryInspection: createDirectoryInspection(async () => false, async (_, source) => {
         openedSources.push(source);
         return true;
@@ -145,7 +148,7 @@ void test("selection inputs route dropped files through directory inspection", a
       value: { files: fileListFor([new File(["a"], "alpha.txt")]), items: { length: 0, item: () => null } }
     });
     dropZone.dispatch("drop", event);
-    await Promise.resolve();
+    await setImmediate();
     assert.equal(event.defaultPrevented, true);
     assert.deepEqual(openedSources, ["drop"]);
   } finally {
@@ -160,6 +163,7 @@ void test("selection inputs handle activation of the file picker and pasted text
   const openedFiles: File[] = [];
   try {
     attachSelectionInputs({
+      chooseClipboardEntries: async entries => entries,
       directoryInspection: createDirectoryInspection(async () => false, async () => true),
       dropZoneElement: dropZone as unknown as HTMLElement,
       fileInputElement: input as unknown as HTMLInputElement,
@@ -173,8 +177,8 @@ void test("selection inputs handle activation of the file picker and pasted text
         items: [{ kind: "string", getAsString: (resolve: (text: string) => void) => resolve("hello") }]
       }
     } as unknown as ClipboardEvent);
-    await Promise.resolve();
-    await Promise.resolve();
+    await setImmediate();
+    await setImmediate();
     assert.equal(input.clickCount, 1);
     assert.equal(openedFiles[0]?.name, "clipboard.bin");
     assert.equal(await openedFiles[0]?.text(), "hello");
@@ -189,6 +193,7 @@ void test("selection inputs prefer pasted handles over the file fallback", async
   let openedFiles = 0;
   try {
     attachSelectionInputs({
+      chooseClipboardEntries: async entries => entries,
       directoryInspection: createDirectoryInspection(async () => {
         openedItems += 1;
         return true;
@@ -204,10 +209,11 @@ void test("selection inputs prefer pasted handles over the file fallback", async
     browser.targetWindow.dispatch("paste", {
       clipboardData: {
         files: fileListFor([new File(["a"], "alpha.txt")]),
-        items: [{ kind: "file", getAsFileSystemHandle: async () => null }]
+        items: [{ kind: "file", getAsFileSystemHandle: async () => ({ kind: "directory", name: "folder",
+          entries: async function* () {} }) }]
       }
     } as unknown as ClipboardEvent);
-    await Promise.resolve();
+    await setImmediate();
     assert.equal(openedItems, 1);
     assert.equal(openedFiles, 0);
   } finally {
