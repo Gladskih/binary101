@@ -1,4 +1,6 @@
-import { toggleInspectionSection, expandInspectionCollection } from "./inspection-navigation.js";
+import {
+  toggleInspectionSection, expandInspectionCollection, openInspectionSection
+} from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { createPeRegistryFile } from "../fixtures/pe-registry-file.js";
 
@@ -47,8 +49,10 @@ void test("ATL table pagination reaches the last declaration and survives lazy r
   await expect(table.locator("tbody > tr")).toHaveCount(25);
   await expect(table.locator("tbody")).toContainText("Key124");
   await expect(table.locator("[data-paged-sortable-page-input]")).toHaveValue("3");
-  await toggleInspectionSection(resources.locator(":scope > details > summary"));
-  await toggleInspectionSection(resources.locator(":scope > details > summary"));
+  await openInspectionSection(page, "File hashes");
+  await expect(resources.locator(".peSectionBody")).toBeEmpty();
+  await openInspectionSection(page, "Resources");
+  await expandInspectionCollection(group);
   await expect(table.locator("[data-paged-sortable-page-input]")).toHaveValue("3");
   await expect(table.locator("tbody")).toContainText("Key124");
 });
@@ -74,8 +78,19 @@ void test("nested registry pagination works after changing the resource page", a
   await last.getByRole("button", { name: "Last", exact: true }).click();
   await expect(last.locator("tbody > tr")).toHaveCount(10);
   await outer.locator(":scope > .pagedSortableTableToolbar").getByRole("button", { name: "First", exact: true }).click();
+  await expect(outer.locator(":scope > .pagedSortableTableToolbar [data-paged-sortable-page-input]"))
+    .toHaveValue("1");
   await expect(first.locator("[data-paged-sortable-page-input]")).toHaveValue("2");
-  await toggleInspectionSection(resources.locator(":scope > details > summary"));
-  await toggleInspectionSection(resources.locator(":scope > details > summary"));
+  await openInspectionSection(page, "File hashes");
+  await expect(resources.locator(".peSectionBody")).toBeEmpty();
+  await openInspectionSection(page, "Resources");
+  await expandInspectionCollection(group);
+  await expect(outer.locator(":scope > .pagedSortableTableToolbar [data-paged-sortable-page-input]"))
+    .toHaveValue("1");
   await expect(first.locator("[data-paged-sortable-page-input]")).toHaveValue("2");
+  await expect(first.locator("tbody > tr")).toHaveCount(10);
+  await outer.locator(":scope > .pagedSortableTableToolbar")
+    .getByRole("button", { name: "Last", exact: true }).click();
+  await expect(last.locator("[data-paged-sortable-page-input]")).toHaveValue("2");
+  await expect(last.locator("tbody > tr")).toHaveCount(10);
 });
