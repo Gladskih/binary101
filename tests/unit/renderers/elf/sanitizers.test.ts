@@ -26,7 +26,9 @@ void test("does not inspect symbol names while creating lazy shells", () => {
     get: () => { throw new Error("eager sanitizer scan"); }
   });
   assert.equal(getElfLazySections(elf).find(section => section.key === "sanitizers"), undefined);
-  assert.doesNotMatch(renderElfLazy(elf), /Checks without findings/);
+  const html = renderElfLazy(elf);
+  assert.match(html, /<li>NativeAOT<\/li>/);
+  assert.doesNotMatch(html, /<li>ASan<\/li>/);
 });
 
 void test("lists an ELF sanitizer check with no evidence in the common section", () => {

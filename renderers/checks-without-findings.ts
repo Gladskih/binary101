@@ -24,9 +24,14 @@ const packerChecks = (file: PeParseResult): string[] => {
   return Object.entries(PE_PACKER_SECTIONS).filter(([id]) => !reported.has(id))
     .map(([, section]) => section.title);
 };
+const elfChecks = (file: ElfParseResult): string[] => ([
+  ["NativeAOT", file.nativeAot],
+  ["DWARF debug information", file.dwarf],
+  ["Go build information", file.goBuildInfo]
+] as const).filter(([, evidence]) => !evidence).map(([name]) => name);
 const collectChecks = (file: ElfParseResult | PeParseResult): string[] => {
   const checks = [...sanitizerChecks(file), ...embeddedResourceChecks(file)];
-  if (!("signature" in file)) return checks;
+  if (!("signature" in file)) return checks.concat(elfChecks(file));
   if (!file.dwarf) {
     checks.push("DWARF debug information");
   }
@@ -42,6 +47,6 @@ export const renderChecksWithoutFindings = (file: ElfParseResult | PeParseResult
   return markSupplementalAnalysis(`<section class="checksWithoutFindings">` +
     `<h4>Checks without findings</h4>` +
     `<p class="smallNote">No findings were returned for these checks. ` +
-    `Heuristic searches can miss data: not detected does not mean absent.</p>` +
+    `Some checks use heuristics; not detected does not mean absent.</p>` +
     `<ul>` + checks.map(name => `<li>${escapeHtml(name)}</li>`).join("") + `</ul></section>`);
 };
