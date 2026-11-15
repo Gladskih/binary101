@@ -39,10 +39,10 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
   };
   return { id: `elf-unwind-${section.sectionIndex}`, pageSize: 100, rowCount: section.fdes.length,
     columns: ["FDE offset", "CIE offset", "PC start", "PC bytes", "LSDA", "CFI"]
-      .map(label => ({ label, className: "peNumeric" })),
+      .map((label, column) => ({ label, className: column < 5 ? "peNumeric" : "" })),
     rowAt: index => section.fdes[index] ? { cells: values(index).map((value, column) => ({
       html: column === 5 ? instructionsHtml(section.fdes[index]!.instructions) + ruleHtml(index) : escapeHtml(value),
-      sortValue: value, className: "peNumeric"
+      sortValue: value, className: column < 5 ? "peNumeric" : ""
     })) } : null,
     sortValueAt: (index, column) => values(index)[column] ?? ""
   };

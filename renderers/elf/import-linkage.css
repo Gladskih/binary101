@@ -1,0 +1,13 @@
+.elfImportLinkage :is(th,.peNumeric) {
+  white-space: nowrap;
+}
+
+.elfImportLinkage td {
+  min-width: 8rem;
+  max-width: 30rem;
+  overflow-wrap: anywhere;
+}
+
+.elfImportLinkage .peNumeric {
+  min-width: 0;
+}

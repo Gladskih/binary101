@@ -8,6 +8,8 @@ import type { CodeExclusion } from "../code-exclusions.js";
 import type { NativeAotMetadata } from "../native-aot/format.js";
 import type { FeatureRequirements } from "llvm-aarch64-disasm";
 import type { Aarch64SpecialInstructionFinding } from "../aarch64/special-instructions.js";
+import type { ElfImportLinkage } from "./import-linkage.js";
+import type { ElfImportCodeEvidence } from "./import-linkage-code.js";
 
 export interface ElfInstructionSetUsage {
   aarch64Predicates?: FeatureRequirements["predicates"];
@@ -35,6 +37,7 @@ export interface ElfDisassemblySeedSummary {
 }
 
 export interface ElfInstructionSetReport {
+  importCode?: ElfImportCodeEvidence[];
   aarch64SpecialInstructions?: Aarch64SpecialInstructionFinding[];
   specialInstructions?: X86SpecialInstructionFinding[];
   decoderVersion?: string;
@@ -49,6 +52,7 @@ export interface ElfInstructionSetReport {
 }
 
 export interface AnalyzeElfInstructionSetOptions {
+  importLinkage?: ElfImportLinkage;
   fileType?: number;
   dynSymbols?: ElfDynamicSymbolInfo;
   symbolTables?: ElfSymbolTable[];

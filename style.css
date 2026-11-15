@@ -2,6 +2,7 @@
 @import url("./renderers/pe/msvc-eh.css");
 @import url("./renderers/pe/resource-previews.css");
 @import url("./renderers/elf/dynamic-entries.css");
+@import url("./renderers/elf/import-linkage.css");
 @import url("./ui/clipboard-choice.css");
 :root {
   --font-size-base: 14px;
@@ -1191,7 +1192,9 @@ table th,table td {
   font-family: var(--mono);
   font-size: var(--font-size-base);
   max-inline-size: var(--reading-measure);
-  overflow-wrap: anywhere
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: normal
 }
 table th:last-child,table td:last-child {
   border-right: 0

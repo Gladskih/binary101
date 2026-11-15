@@ -5,6 +5,7 @@ import type { PeDelayImportEntry } from "../imports/delay.js";
 import type { PeImportParseResult } from "../imports/index.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 import type { PeDirectIatReferenceCount } from "./types.js";
+import { getX86DirectMemoryBranch } from "../../x86/direct-memory-reference.js";
 
 const INVALID_SLOT_RANGE_ISSUE =
   "Import IAT slot falls outside the 32-bit RVA range and was skipped.";
@@ -112,50 +113,14 @@ export const collectDirectIatSlotRvas = (
   return slots;
 };
 
-const directMemoryAddress = (
-  iced: IcedX86Module,
-  instruction: IcedInstructionObject
-): bigint | null => {
-  if (instruction.op0Kind !== iced.OpKind["Memory"]) return null;
-  const noRegister = iced.Register?.["None"];
-  if (noRegister == null) return null;
-  if (instruction.memoryIndex !== noRegister) return null;
-  const directAbsolute = instruction.memoryBase === noRegister;
-  const ipRelativeBase =
-    instruction.memoryBase === iced.Register?.["EIP"] ||
-    instruction.memoryBase === iced.Register?.["RIP"];
-  if (instruction.isIpRelMemoryOperand !== ipRelativeBase) return null;
-  if (!directAbsolute && !ipRelativeBase) return null;
-  return instruction.memoryDisplacement;
-};
-
-const directIatReferenceKind = (
-  iced: IcedX86Module,
-  instruction: IcedInstructionObject
-): DirectIatReferenceKind | null => {
-  if (instruction.isCallNearIndirect) {
-    if (
-      instruction.isJmpNearIndirect ||
-      instruction.flowControl !== iced.FlowControl["IndirectCall"]
-    ) return null;
-    return "call";
-  }
-  if (
-    !instruction.isJmpNearIndirect ||
-    instruction.flowControl !== iced.FlowControl["IndirectBranch"]
-  ) return null;
-  return "jump";
-};
-
 export const getDirectIatReference = (
   iced: IcedX86Module,
   imageBase: bigint,
   instruction: IcedInstructionObject
 ): DirectIatReference | null => {
-  const kind = directIatReferenceKind(iced, instruction);
-  if (kind == null) return null;
-  const address = directMemoryAddress(iced, instruction);
-  if (address == null || address < imageBase) return null;
+  const reference = getX86DirectMemoryBranch(iced, instruction);
+  if (!reference || reference.address < imageBase) return null;
+  const { address, kind } = reference;
   const delta = address - imageBase;
   if (delta >= BigInt(PE_RVA_EXCLUSIVE_LIMIT)) return null;
   const rva = Number(delta);

@@ -19,6 +19,7 @@ import type { ElfHashTable } from "./hash-types.js";
 import type { GoBuildInfo } from "./go-build-info.js";
 import type { EmbeddedResourceAnalysis } from "../embedded-resources/types.js";
 import type { SanitizerEvidence } from "../sanitizers/types.js";
+import type { ElfImportLinkage } from "./import-linkage.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -108,6 +109,7 @@ export interface ElfParseResult {
   dwarf?: DwarfAnalysis;
   nativeAot?: NativeAotMetadata;
   relocations?: ElfRelocationInfo;
+  importLinkage?: ElfImportLinkage;
   is64: boolean;
   littleEndian: boolean;
   fileSize: number;

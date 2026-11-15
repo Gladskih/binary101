@@ -9,6 +9,7 @@ import { getNativeAotInvokeTableModel } from "../native-aot/invoke-map.js";
 import { getNativeAotStackTraceTableModel } from "../native-aot/stack-trace-map.js";
 import { getNativeAotFunctionTableModel } from "../native-aot/function-maps.js";
 import { getElfRelocationSummaryModel } from "./relocations.js";
+import { createElfImportLinkageModel } from "./import-linkage.js";
 import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel } from "./unwind.js";
@@ -76,6 +77,7 @@ export const getElfPagedTableModel: TableResolver = (elf, tableId) => {
     getDwarfPagedTableModel(elf.dwarf, tableId);
   if (dwarf) return dwarf;
   if (tableId === "elf-notes" && elf.notes) return createElfNotesTableModel(elf.notes);
+  if (tableId === "elf-import-linkage" && elf.importLinkage) return createElfImportLinkageModel(elf);
   for (const resolve of tableResolvers) {
     const table = resolve(elf, tableId);
     if (table) return table;

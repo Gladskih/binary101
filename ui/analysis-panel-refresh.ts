@@ -95,6 +95,7 @@ export const refreshPeOverlayPanel = (pe: PeParseResult): void => {
 };
 
 export const refreshElfInstructionSetsPanel = (elf: ElfParseResult): void => {
+  refreshElfLazySection("import-linkage", elf);
   if (refreshElfLazySection("instruction-sets", elf)) return;
   replaceRenderedRegion(ELF_INSTRUCTION_SETS_PANEL_ID, renderElfInstructionSetsPanel(elf));
 };

@@ -10,7 +10,7 @@ export type IcedInstructionObject = Pick<IcedPackage.Instruction,
   "hasRepePrefix" | "hasRepnePrefix" | "isCallNearIndirect" |
   "isIpRelMemoryOperand" | "isJmpNearIndirect" | "ipRelMemoryAddress" |
   "opKind" | "opRegister" | "immediate" | "cpuidFeatures" | "free"
-> & Partial<Pick<IcedPackage.Instruction, "isPrivileged">>;
+> & Partial<Pick<IcedPackage.Instruction, "isPrivileged" | "segmentPrefix">>;
 
 export type IcedX86Module = Pick<typeof IcedPackage,
   "Code" | "CpuidFeature" | "Decoder" | "DecoderOptions" | "FlowControl" |

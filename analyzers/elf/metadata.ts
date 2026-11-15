@@ -28,6 +28,7 @@ import { parseGoBuildInfo } from "./go-build-info.js";
 import { decodeElfSymbolNames } from "./symbol-names.js";
 import { analyzeElfEmbeddedResources } from "./embedded-resources.js";
 import { analyzeElfSanitizers } from "./sanitizers.js";
+import { analyzeElfImportLinkage } from "./import-linkage.js";
 
 const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult,
   key: Key, value: ElfParseResult[Key] | null): void => {
@@ -103,4 +104,5 @@ export const parseElfMetadata = async (file: File, result: ElfParseResult,
   retainMetadata(result, "unwind", await parseElfUnwind(file, result));
   retainMetadata(result, "lsdas", await parseElfLsda(file, result, await readElfNativeAotGc(file, result)));
   result.sanitizerEvidence = analyzeElfSanitizers(result);
+  retainMetadata(result, "importLinkage", analyzeElfImportLinkage(result));
 };

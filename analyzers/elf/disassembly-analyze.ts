@@ -15,6 +15,7 @@ import { sampleElfExecutableRegions, type ElfSampledSection } from "./disassembl
 import { createX86SpecialInstructionCollector } from "../x86/special-instructions.js";
 import { collectElfCodeExclusions } from "./code-exclusions.js";
 import { createCodeExclusionIndex } from "../code-exclusions.js";
+import { createElfImportCodeCollector } from "./import-linkage-code.js";
 
 const ELF_MACHINE_I386 = 3;
 const ELF_MACHINE_X86_64 = 62;
@@ -32,6 +33,7 @@ type ElfInstructionSetDecodeRun = {
 };
 
 type ElfInstructionSetDecodeResult = {
+  importCode: NonNullable<ElfInstructionSetReport["importCode"]>;
   bytesDecoded: number;
   instructionCount: number;
   invalidInstructionCount: number;
@@ -165,6 +167,7 @@ async function analyzeX86InstructionSets(
     invalidInstructionCount: decoded.invalidInstructionCount,
     instructionSets: decoded.instructionSets,
     specialInstructions: decoded.specialInstructions,
+    importCode: decoded.importCode,
     issues,
     seedSummary
   };
@@ -174,6 +177,8 @@ const decodeElfInstructionSetUsage = async (
   run: ElfInstructionSetDecodeRun
 ): Promise<ElfInstructionSetDecodeResult> => {
   const specialInstructions = createX86SpecialInstructionCollector(run.iced, address => address);
+  const importCode = createElfImportCodeCollector(run.iced,
+    run.opts.importLinkage, run.opts.relocations);
   const instructionSetUsage = createX86InstructionSetUsageTracker(run.iced.CpuidFeature);
   let bytesDecoded = 0;
   let instructionCount = 0;
@@ -198,7 +203,10 @@ const decodeElfInstructionSetUsage = async (
       crossedData: run.crossedData,
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
-      onInstruction: specialInstructions.record,
+      onInstruction: instruction => {
+        specialInstructions.record(instruction);
+        importCode.record(instruction);
+      },
       issues: run.issues,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onYield: async snapshot => {
@@ -228,6 +236,7 @@ const decodeElfInstructionSetUsage = async (
     instructionCount,
     invalidInstructionCount,
     instructionSets: instructionSetUsage.instructionSets(),
+    importCode: importCode.findings(),
     specialInstructions: specialInstructions.findings()
   };
 };

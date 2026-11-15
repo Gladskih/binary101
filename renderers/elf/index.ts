@@ -32,6 +32,7 @@ import type {
 import { renderInstructionSets } from "./disassembly.js";
 import { renderElfDebug } from "./debug.js";
 import { renderElfLinking } from "./linking.js";
+import { renderElfImportLinkage } from "./import-linkage.js";
 import { renderElfNotes } from "./notes.js";
 import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfSymbols } from "./symbols.js";
@@ -263,6 +264,7 @@ export function renderElf(elf: ElfParseResult | null): string {
   renderInstructionSets(elf, out);
   renderHeader(elf, out);
   renderElfLinking(elf, out);
+  renderElfImportLinkage(elf, out);
   renderElfSymbols(elf, out);
   if (elf.sanitizerEvidence?.length) renderElfSanitizers(elf, out);
   renderElfSymbolVersions(elf, out);

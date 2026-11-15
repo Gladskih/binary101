@@ -151,6 +151,7 @@ export const createElfDisassemblyController = (
           ...(elf.dynSymbols ? { dynSymbols: elf.dynSymbols } : {}),
           ...(elf.symbolTables ? { symbolTables: elf.symbolTables } : {}),
           ...(elf.relocations ? { relocations: elf.relocations } : {}),
+          ...(elf.importLinkage ? { importLinkage: elf.importLinkage } : {}),
           is64Bit: elf.is64,
           littleEndian: elf.littleEndian,
           entrypointVaddr: elf.header.entry,

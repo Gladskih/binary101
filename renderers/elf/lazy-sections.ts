@@ -4,6 +4,7 @@ import { renderHeader, renderProgramHeaders, renderSectionHeaders, renderIssues 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderInstructionSetsShell, renderInstructionSetsContent } from "./disassembly.js";
 import { renderElfLinking } from "./linking.js";
+import { renderElfImportLinkage } from "./import-linkage.js";
 import { renderElfSymbols } from "./symbols.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
@@ -49,6 +50,7 @@ export const getElfLazySections = (elf: ElfParseResult): ElfLazySection[] => {
   add("header", "ELF header", renderHeader);
   if (elf.sanitizerEvidence?.length) add("sanitizers", "Sanitizer evidence", renderElfSanitizers);
   if (elf.interpreter || elf.dynamic) add("linking", "Dynamic linking", renderElfLinking);
+  if (elf.importLinkage) add("import-linkage", "Import linkage", renderElfImportLinkage);
   if (elf.dynSymbols) add("symbols", "Imports / exports", renderElfSymbols);
   if (elf.symbolVersions) add("versions", "Symbol versions", renderElfSymbolVersions);
   addTables(elf, add);
@@ -100,7 +102,7 @@ const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
 };
 
 const supplementalSections = new Set([
-  "embedded-resources", "instruction-sets", "issues", "native-aot", "sanitizers"
+  "embedded-resources", "instruction-sets", "issues", "native-aot", "sanitizers", "import-linkage"
 ]);
 
 export const renderElfLazy = (elf: ElfParseResult | null): string => elf

@@ -15,6 +15,10 @@ void test("renders CIE metadata and paged FDE instructions", async () => {
   assert.equal(model.rowCount, 1);
   assert.equal(model.sortValueAt(0, 2), "0x2000");
   assert.match(model.rowAt(0)!.cells[5]!.html, /advance_loc/);
+  assert.equal(model.columns[5]!.className, "");
+  assert.equal(model.rowAt(0)!.cells[5]!.className, "");
+  assert.equal(model.columns[0]!.className, "peNumeric");
+  assert.equal(model.rowAt(0)!.cells[0]!.className, "peNumeric");
   assert.equal(model.rowAt(99), null);
   assert.equal(model.sortValueAt(99, 0), "");
   assert.equal(getElfPagedTableModel(fixture.elf, "elf-unwind-1")?.rowCount, 1);
