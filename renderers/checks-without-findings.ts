@@ -26,7 +26,6 @@ const packerChecks = (file: PeParseResult): string[] => {
 };
 const elfChecks = (file: ElfParseResult): string[] => ([
   ["NativeAOT", file.nativeAot],
-  ["DWARF debug information", file.dwarf],
   ["Go build information", file.goBuildInfo]
 ] as const).filter(([, evidence]) => !evidence).map(([name]) => name);
 const collectChecks = (file: ElfParseResult | PeParseResult): string[] => {

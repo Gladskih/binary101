@@ -11,7 +11,6 @@ import { createPeRomFile } from "../../fixtures/sample-files-pe.js";
 import { parsePe } from "../../../analyzers/pe/index.js";
 import { parseElf } from "../../../analyzers/elf/index.js";
 import { createElfNativeAotFixture } from "../../helpers/elf-native-aot-fixture.js";
-import { createElfDwarfFile } from "../../fixtures/elf-dwarf-file.js";
 
 void test("lists individual PE searches without grouping their negative results", () => {
   const pe = sanitizerPe();
@@ -98,30 +97,25 @@ void test("lists GResource independently when Qt resources are present", async (
   assert.match(html, /<li>GLib GResource<\/li>/);
 });
 
-void test("lists undetected ELF NativeAOT, DWARF and Go metadata as separate checks", () => {
+void test("lists undetected ELF runtime metadata without standard debug-information absence", () => {
   const html = renderChecksWithoutFindings(sanitizerElf());
 
   assert.match(html, /<li>NativeAOT<\/li>/);
-  assert.match(html, /<li>DWARF debug information<\/li>/);
+  assert.doesNotMatch(html, /<li>DWARF debug information<\/li>/);
   assert.match(html, /<li>Go build information<\/li>/);
   assert.match(html, /Some checks use heuristics/);
   assert.doesNotMatch(html, /<li>ReadyToRun<\/li>|<li>Go runtime metadata<\/li>/);
 });
 
 void test("found ELF metadata does not appear among undetected features", async () => {
-  const [elf, dwarf] = await Promise.all([
-    parseElf(createElfNativeAotFixture().file), parseElf(createElfDwarfFile())
-  ]);
+  const elf = await parseElf(createElfNativeAotFixture().file);
   assert.ok(elf?.nativeAot);
-  assert.ok(dwarf?.dwarf);
 
   assert.doesNotMatch(renderChecksWithoutFindings(elf), /<li>NativeAOT<\/li>/);
-  assert.doesNotMatch(renderChecksWithoutFindings(dwarf), /<li>DWARF debug information<\/li>/);
-  dwarf.goBuildInfo = { version: "go1.20", moduleInfo: "module sample" };
-  assert.doesNotMatch(renderChecksWithoutFindings(dwarf), /<li>Go build information<\/li>/);
+  elf.goBuildInfo = { version: "go1.20", moduleInfo: "module sample" };
+  assert.doesNotMatch(renderChecksWithoutFindings(elf), /<li>Go build information<\/li>/);
   const complete = sanitizerElf();
   complete.nativeAot = elf.nativeAot;
-  complete.dwarf = dwarf.dwarf;
-  complete.goBuildInfo = dwarf.goBuildInfo;
+  complete.goBuildInfo = elf.goBuildInfo;
   assert.equal(renderChecksWithoutFindings(complete), "");
 });

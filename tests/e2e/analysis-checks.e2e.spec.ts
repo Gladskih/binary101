@@ -40,7 +40,7 @@ for (const width of [390, 1258]) {
 
       const checks = page.locator(".checksWithoutFindings");
       await expect(checks.getByText("NativeAOT", { exact: true })).toBeVisible();
-      await expect(checks.getByText("DWARF debug information", { exact: true })).toBeVisible();
+      await expect(checks.getByText("DWARF debug information", { exact: true })).toHaveCount(0);
       await expect(checks.getByText("Go build information", { exact: true })).toBeVisible();
       await expect(checks.getByText("ReadyToRun", { exact: true })).toHaveCount(0);
       await expect(checks.locator("ul ul")).toHaveCount(0);
