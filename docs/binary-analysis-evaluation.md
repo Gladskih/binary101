@@ -106,6 +106,8 @@ Record the fixture SHA-256 and provenance, exact versions/commits, platform, com
 
 ## Inclusion and maintenance
 
+**Editorial integrity check (2026-11-16).** All four corpus documents were reviewed for designated ownership, evidence vocabulary, binary101 source-scoped negatives, and source-to-assembly versus post-build scope. Automated parsing found **24 consistently shaped Markdown tables** and **28 valid relative document/section links**. This check does **not** validate external websites, each source claim, runtime behavior, or statistical completeness; the comparison-results ledger above is still empty.
+
 Maintain a standing discovery backlog by workflow: structured editors, grammars, CLI query/decoding, malware/DFIR, RE and lifting, firmware/nested extraction, ISA diagnostics, debug/ABI/runtime metadata, file recognition and very-large-file UI. Revisit the catalog by category and explicitly search non-GitHub proprietary PE tools, older Windows PE viewers and ELF-specific desktop utilities; do not only follow features discussed previously. New post-build candidates belong in the catalog once identity and a primary reference are established; capability/evaluation claims belong here. Source-to-assembly projects belong in the [compiler inventory](compiler-exploration-landscape.md).
 
 
