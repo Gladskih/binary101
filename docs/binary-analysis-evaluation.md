@@ -38,11 +38,11 @@ For each capability record `claimed` (vendor/README), `code-observed` (file and 
 
 ### Compact capability comparison (source-described; **not benchmarked**)
 
-`D` = explicitly documented in linked first-party source; `P` = documented partial/specialized coverage; `?` = not established (never assume absence); `—` = outside stated primary role. `D` does **not** mean we ran the tool or proved correctness. Features may be edition/version-dependent.
+`D` = explicitly documented in linked first-party source; `P` = documented partial/specialized coverage; `N` = **not implemented in the inspected code path**, supported by source review; `?` = not established (never assume absence); `—` = outside stated primary role. `D` does **not** mean independent execution or correctness verification. For binary101, `N` is based on source inspection at commit [`bcdc4141a798`](https://github.com/Gladskih/binary101/tree/bcdc4141a79818e0bdd20175ef04e5cfab7ab870), not on marketing documentation. Features may be edition/version-dependent.
 
 | Tool / primary evidence | PE | ELF | Mach-O | Code analysis | Unwind-versus-code check | Workflow / critical limit |
 |---|:---:|:---:|:---:|---|---|---|
-| [binary101](https://github.com/Gladskih/binary101) | D | D | P | D: seed-guided reachable-code CFG; no C decompiler | ? (prologue validator not established) | Browser-local, metadata-first; scope varies by commit |
+| [binary101](https://github.com/Gladskih/binary101) | D | D | P | D: seed-guided reachable-code CFG; no C decompiler | **N: no prologue or whole-function unwind/code consistency check** ([AMD64 scanner](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-info.ts), [v3 decoder](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-v3.ts)) | Browser-local; structurally decodes/validates unwind v1–v3, including offsets and chains |
 | [PPEE v2 preview](https://www.mzrst.com/puppy/docs/features/data-directories/exception/) | D | — | — | D: x86/x64 code analysis | **D: x64 prologue**; full function **?** | GUI/CLI/JSON/MCP; v2 preview differs from v1.16 |
 | [Malcat](https://doc.malcat.fr/analysis/filetypes.html) · [code](https://doc.malcat.fr/analysis/disassembly.html) | D | D | D | D: disassembly, CFG, SLEIGH decompiler | ? | Multi-format dissection; free Lite limited |
 | [PE-bear](https://github.com/hasherezade/pe-bear) | D | — | — | ? | ? | PE-oriented GUI inspection and editing |
@@ -88,7 +88,7 @@ Record the fixture SHA-256 and provenance, exact versions/commits, platform, com
 |---|---|---|---|---|---|---|
 | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | **Not tested** |
 
-Vendor sample anecdotes, including PPEE's unusual `coreclr.dll` stubs, are **not our measurements**. A mismatch is not in itself a demonstrated compiler bug, malicious hook or actual unwinding failure. Use an unchanged control specimen, capture full outputs and independently check each finding.
+For binary101, the AMD64 unwind scan consumes mapped metadata records, decodes operations and validates their structure; it does not read/decode function-body machine instructions for a `UNWIND_CODE` comparison. The code search also found no separate prologue validator. This is a **source-observed limitation**, not an inferred negative from missing README text. Vendor sample anecdotes, including PPEE's unusual `coreclr.dll` stubs, are **not our measurements**. A mismatch is not in itself a demonstrated compiler bug, malicious hook or actual unwinding failure. Use an unchanged control specimen, capture full outputs and independently check each finding.
 
 ## Inclusion and maintenance
 
