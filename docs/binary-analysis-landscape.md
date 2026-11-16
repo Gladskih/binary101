@@ -1,18 +1,18 @@
 # Binary Analysis Landscape
 
-> **Catalog expanded 2026-11-15; historical GitHub metadata baseline 2026-10-24.** New entries were identified using their primary sites/repos on 2026-11-15. Existing `created_at` and `pushed_at` have **not** been refreshed; `?` is deliberate, not inactivity.
+> **Inventory maintenance: 2026-11-16.** New candidate sources last surveyed 2026-11-15; most historical GitHub metadata were captured 2026-10-24 (some entries checked later). `Created`/`Last push` are historical snapshots, **not live values**. Unknown values remain `?`.
 >
 > Scope: a curated, expanding inventory of file-structure inspectors, binary-format engines, reverse-engineering tools and adjacent forensic/specialist products relevant to [binary101](https://github.com/Gladskih/binary101). This is neither a claim of completeness nor a benchmark.
 
-**Related documents:** [Technical approaches and boundaries](binary-analysis-techniques.md) explains how decoders, disassembly, lifting, metadata, and parsing differ. [Evaluation and research backlog](binary-analysis-evaluation.md) records comparative dimensions, evidence levels, untested claims, and next experiments. This file is the **single canonical project inventory**; avoid copying inventories into the other documents.
+**Corpus structure:** This file is the **canonical inventory of post-build binary analysis tools** (identity, scope, primary references and recorded snapshots). [Binary Analysis Evaluation](binary-analysis-evaluation.md) owns capability claims, evidence definitions and comparison results. [Binary Analysis Techniques](binary-analysis-techniques.md) owns technical distinctions and algorithmic methods. [Compiler Exploration Landscape](compiler-exploration-landscape.md) is the separate, canonical inventory of **source-to-assembly/compiler exploration tools**. Cross-domain mentions are contextual, not new catalog entries.
 
 ## Scope and interpretation
 
 **Product, engine and upstream are different entities.** An in-browser wrapper around an existing engine is a distinct product but must credit its upstream. Use the first-listed section as the project's canonical catalog entry; other documents should link to it.
 
-**Dates.** `Created` is GitHub repository creation, not the invention of the product. `Last push` is `pushed_at` at the recorded snapshot and is not a guarantee of release freshness or maintenance. Avoid hard-coded “active” labels without an observation date.
+**Dates.** `Created` is GitHub repository creation, not invention of a product. `Last push` is GitHub `pushed_at` at the earlier recorded snapshot and does not prove a release or ongoing maintenance. Status labels in historical rows refer **only to that recorded snapshot**, never to the current date; new entries may have no established status.
 
-**Evidence.** Product-page/README descriptions are **claimed or documented**, source-tree inspection means **implemented code observed**, a passing CI job is a **specific build/test result**, and independent sample execution is **validated behavior**. One does not imply the next.
+**Evidence.** Follow the [controlled evidence vocabulary and scope rules](binary-analysis-evaluation.md#evidence-and-claim-records). Product-page claims, observed source code, test outcomes and independently reproduced behavior are distinct; a reachable site or CI badge does not prove a capability.
 
 **Ownership / funding.** Owner namespace does not identify the only contributor, legal owner or funder. `Unverified` means unknown, not unsupported or unpaid. GitHub stars are attention, not engineering quality.
 
@@ -22,7 +22,7 @@
 
 This family is central to comparing file-first analysis workflows. **One row per project family** here; details about comparative strengths belong in [evaluation](binary-analysis-evaluation.md), not a second duplicate inventory. Entries are sourced to official documentation or project repositories; **present in the code / runtime-verified / deep format support** are separate claims.
 
-| Project / primary reference | Primary model | Interaction and extension model | Verification as of 2026-11-08 |
+| Project / primary reference | Primary model | Interaction and extension model | Source / evidence as recorded (through 2026-11-15) |
 |---|---|---|---|
 | [ImHex](https://github.com/WerWolv/ImHex) · [patterns](https://github.com/WerWolv/ImHex-Patterns) | Programmable structure-aware hex editor | Pattern Language, format definitions, native and web usage | Official repository/documentation; depth on common test corpus **not checked** |
 | [ReHex](https://github.com/solemnwarning/rehex) | Reverse-engineering hex editor | Byte-range annotations, inline disassembly, Lua scripting and binary diff | [Project README](https://github.com/solemnwarning/rehex); general-purpose editor, not an automatic deep PE parser |
@@ -40,7 +40,7 @@ This family is central to comparing file-first analysis workflows. **One row per
 
 ## Browser-based analyzers and adjacent projects
 
-| Project | Scope and distinguishing idea | Owner / maintainer context | Created | Last push | Status | Business / funding |
+| Project | Scope and distinguishing idea | Owner / maintainer context | Created | Last push | Status at snapshot | Business / funding |
 |---|---|---|---|---|---|---|
 | [**binary101**](https://github.com/Gladskih/binary101) | Local, file-oriented structural and semantic inspection; deep PE/ELF work | `Gladskih` | 2025-11-10 | 2026-10-24 | Active | Personal OSS; no published revenue claim |
 | [**binkeep**](https://github.com/kano92-dir/binkeep) · [demo](https://kano92-dir.github.io/binkeep/) | Local-browser PE/ELF/Mach-O triage: Capstone WASM, functions/xrefs, .NET/APK/DEX, YARA and file diff; **decompiler is planned** | `kano92-dir` | ? | ? | Repo/site described; sample output not independently checked | MIT OSS (per [guide](https://kano92-dir.github.io/binkeep/guide.html)) |
@@ -59,7 +59,7 @@ This family is central to comparing file-first analysis workflows. **One row per
 | [**RzWeb**](https://github.com/IndAlok/rzweb) · [demo](https://rizin.pages.dev/) | Complete Rizin environment compiled to WASM | `IndAlok`; depends on Rizin and `rzwasi` | 2026-01-15 | 2026-10-24 | Active | Unverified |
 | [**SalSA Web**](https://github.com/a-rey/SalSA) · [demo](https://a-rey.github.io/SalSA/) | Browser deep-dive PE parser, derived from DoD SalSA | `a-rey`; upstream `deptofdefense/SalSA` | 2019-05-30 | 2020-05-08 | Dormant | Unverified |
 | [**Checksec Anywhere**](https://github.com/trailofbits/checksec-anywhere) · [demo](https://checksec-anywhere.com/) | In-browser PE/ELF/MO security-feature checks, bulk reports, SARIF | `trailofbits` | 2025-06-02 | 2026-10-20 | Active | Company OSS; Trail of Bits offers security consulting; **not evidence of product revenue** |
-| [**die-in-browser**](https://github.com/xoreaxlmbdx/die-in-browser) | Full Detect It Easy inside Linux-on-v86 browser emulator | `xoreaxlmbdx` | 2025-12-28 | 2026-07-23 | Quiet (93 days) | Unverified |
+| [**die-in-browser**](https://github.com/xoreaxlmbdx/die-in-browser) | Full Detect It Easy inside Linux-on-v86 browser emulator | `xoreaxlmbdx` | 2025-12-28 | 2026-07-23 | Quiet at 2026-10-24 snapshot | Unverified |
 | [**Infectio**](https://github.com/filippofinke/infectio) · [demo](https://infectio.filippofinke.ch/) | Rust/WASM local malware triage across binaries, documents and archives; optional local LLM | `filippofinke` | 2025-10-12 | 2025-10-12 | Dormant | Unverified |
 | [**Online Cyber Tools PE Analyzer**](https://onlinecybertools.com/tools/reverse-engineering/pe-analyzer) | Online PE headers, imports/exports, disassembly, strings and anomaly inspection | Owner not established | ? | N/A | Website; lifecycle unverified | Unverified |
 | [**Binary Triage**](https://qbitz.foo/binary-triage/index.html) | Browser PE triage, entropy, signatures and suspicious indicators | Owner/repository not established | ? | N/A | Website; lifecycle unverified | Unverified |
@@ -69,9 +69,9 @@ This family is central to comparing file-first analysis workflows. **One row per
 
 ## Desktop suites, format parsers, malware tools
 
-| Project | Primary role | Owner / stewardship | Created | Last push | Status | Economics |
+| Project | Primary role | Owner / stewardship | Created | Last push | Status at snapshot | Economics |
 |---|---|---|---|---|---|---|
-| [Ghidra](https://github.com/NationalSecurityAgency/ghidra) | Full RE suite: disassembly, SLEIGH/p-code, analysis, decompilation | US **NSA** | 2019-03-01 | 2026-10-22 | Active | Government-developed OSS; not a paid license product |
+| [Ghidra](https://github.com/NationalSecurityAgency/ghidra) | Full RE suite: disassembly, SLEIGH/p-code, analysis, decompilation, **Version Tracking** for binary comparison | US **NSA** | 2019-03-01 | 2026-10-22 | Active | Government-developed OSS; not a paid license product |
 | [IDA + Hex-Rays](https://hex-rays.com/ida-pro) | Professional RE/disassembly/decompilation | **Hex-Rays** | N/A | N/A | Commercial product | **Commercial** licenses |
 | [Binary Ninja API](https://github.com/Vector35/binaryninja-api) | Public API and extensions for the Binary Ninja product | **Vector 35** | 2015-10-30 | 2026-10-23 | Active | **Commercial** main product |
 | [Rizin](https://github.com/rizinorg/rizin) | Open RE framework, RzIL, analysis, patching | `rizinorg` community | 2020-09-30 | 2026-10-24 | Active | OSS; funding not established |
@@ -110,11 +110,11 @@ This family is central to comparing file-first analysis workflows. **One row per
 | [ANY.RUN](https://any.run/) | Hosted interactive malware sandbox | ANY.RUN | N/A | N/A | Product | **Commercial** SaaS |
 | [VirusTotal](https://www.virustotal.com/) | Hosted sample reputation/multiscanner, not a local structural parser | Google/Chronicle | N/A | N/A | Product/service | Commercial/enterprise offerings |
 
-`pe-bear` has an older project history than the current GitHub repository's 2022 creation date. **Do not confuse repo dates with invention dates.**
+`pe-bear` has an older project history than the current GitHub repository's 2022 creation date. **Do not confuse repo dates with invention dates.** Ghidra Version Tracking is a feature of Ghidra, not an additional independent project.
 
 ## ISA analytics, semantic diagnostics and binary rewriting
 
-| Project | Principal method | Owner | Created | Last push | Status | Economics |
+| Project | Principal method | Owner | Created | Last push | Status at snapshot | Economics |
 |---|---|---|---|---|---|---|
 | [x86lint](https://github.com/gaul/x86lint) | XED decode, linear sweep, peephole checks with local soundness/liveness guards | `gaul` | **2018-11-08** | 2026-09-27 | Active | Unverified |
 | [armlint](https://github.com/gaul/armlint) | AArch64 machine-code optimization checks; sibling of x86lint | `gaul` | 2026-05-23 | 2026-10-23 | Active | Unverified |
@@ -125,13 +125,12 @@ This family is central to comparing file-first analysis workflows. **One row per
 | [Mull](https://github.com/mull-project/mull) | Mutation testing for C/C++ based on **LLVM IR**, not generic post-build patching | `mull-project` | 2016-05-15 | 2026-10-20 | Active | OSS, package hosting sponsored by Cloudsmith; revenue unverified |
 | [BinDiff](https://github.com/google/bindiff) | Cross-binary function matching/diff from code and CFG features | `google` | 2023-09-20 | 2026-09-18 | Active | Historical commercial product lineage; present OSS GitHub edition |
 | [Diaphora](https://github.com/joxeankoret/diaphora) | Function-level diff, IDA integration, program similarity | `joxeankoret` | 2015-03-20 | 2026-10-20 | Active | Unverified |
-| [Ghidra Version Tracking](https://ghidra-sre.org/) | Pair functions/data across versions | NSA/Ghidra | Included with Ghidra | — | Active parent | Government OSS |
 | [VBinDiff](https://www.cjmweb.net/vbindiff/) | Byte-level hex differencing | Historical independent tool | ? | N/A | Unverified | Unverified |
 | [Bloaty](https://github.com/google/bloaty) | Binary *size attribution*, not decompilation | `google` | 2016-11-07 | 2026-09-24 | Active | Corporate OSS; revenue unverified |
 
 ## Engines, components and signature resources
 
-| Component | Owner / repository | Created | Last push | Status | Purpose / important distinction |
+| Component | Owner / repository | Created | Last push | Status at snapshot | Purpose / important distinction |
 |---|---|---|---|---|---|
 | [Intel XED](https://github.com/intelxed/xed) | Intel / `intelxed` | 2016-12-08 | 2026-08-24 | Active | x86 **encoding/decoding** and attributes; not a CFG builder/decompiler |
 | [iced-x86](https://github.com/icedland/iced) | `icedland` | 2018-09-07 | 2026-10-13 | Active | Fast x86 decoder/encoder, formatter, instruction metadata; not a full RE pipeline |
@@ -199,4 +198,5 @@ Other resources from the same exploration: [uops.info](https://uops.info/) (meas
 - Keep one canonical entry per product family; use links (not copied tables) in evaluation notes. Record parent/port/wrapper relations.
 - Treat missing evidence as **unknown**, not `no`. For a feature assertion, cite a specific product document, version/commit, code path or test result.
 - Avoid mass-refreshing “last push” to today's date without actually querying each repo.
-- Prefer fixed test samples and reproducible commands for rankings; store a test ledger in the [evaluation document](binary-analysis-evaluation.md).
+- Prefer fixed test samples and reproducible commands for rankings; store results only in the [evaluation document](binary-analysis-evaluation.md#comparison-results-ledger).
+- For source-to-assembly tools use the [compiler exploration inventory](compiler-exploration-landscape.md) as the canonical list; avoid copying its full rows here.
