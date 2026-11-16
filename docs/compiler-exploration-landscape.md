@@ -1,13 +1,16 @@
 # Compiler Exploration and Source-to-Assembly Landscape
 
-> **Research snapshot: 2026-11-15.** A curated cross-ecosystem inventory of tools
-> that connect source code to generated machine assembly, JIT code, compiler IR,
-> bytecode, or optimization decisions. This is a *discovery and capability study*,
+> **Source survey: 2026-11-15; cross-document review: 2026-11-16.** A curated
+> cross-ecosystem inventory of tools connecting source code to generated machine
+> assembly, JIT code, compiler IR, bytecode or optimization decisions. This is a *discovery and capability study*,
 > not an executed benchmark or a claim that every such tool has been found.
 >
-> Companion research: [Binary Analysis Landscape](binary-analysis-landscape.md),
-> [Binary Analysis Evaluation](binary-analysis-evaluation.md), and
-> [Binary Analysis Techniques](binary-analysis-techniques.md).
+> **Corpus ownership:** this is the canonical inventory for **compiler/source-to-code
+> exploration**, separate from the [post-build binary-analysis catalog](binary-analysis-landscape.md).
+> The [Evaluation](binary-analysis-evaluation.md#evidence-and-claim-records) document defines
+> shared evidence types and records comparative results; [Techniques](binary-analysis-techniques.md)
+> explains binary-analysis methods. Mentions of binary101/Ghidra here are contextual,
+> not additional source-to-assembly inventory entries.
 
 ## Scope, terminology, and evidence standard
 
@@ -36,14 +39,7 @@ must not be counted as independent implementations. For example, LLVM Explorer
 reuses a WasmBolt-derived compiler runtime; a VS Code view that calls the
 Compiler Explorer API is an alternative interface, not a second compiler service.
 
-**Evidence classification:** *documented* means described in a project's own
-README/site; *code-observed* means a specific implementation path has been read;
-*test-observed* means a particular automated test/build was seen; *sample-verified*
-means the same fixed input was actually run through the product and output checked;
-*unknown* means insufficient evidence. The inventory is principally **documented**
-and repository-identity verified; none of its cross-product rows is a
-sample-verified result from this research session. Do not interpret a missing
-feature claim as proof the feature does not exist.
+**Evidence:** apply the [shared evidence and claim standard](binary-analysis-evaluation.md#evidence-and-claim-records). Entries here are mostly **documented**, not `sample-verified`; no common cross-product executions were carried out. Report source date, exact runtime/compiler build and execution environment when available. Missing claims mean **unknown**, never proven absence. The experimental corpus below is proposed, not measured performance data.
 
 **Execution location** is a first-class architectural distinction. Hosted
 server-side compilation receives the source sent to its API. In-browser
@@ -53,10 +49,10 @@ installed toolchain. A browser UI alone does *not* imply local compilation.
 
 ## Key findings
 
-- [Compiler Explorer (Godbolt)](https://godbolt.org/) is the **broadest
-  general-purpose reference point** in this catalog for comparing compiler
-  versions, flags, architectures, and annotated assembly; that is a
-  feature-coverage observation, **not** a benchmarked quality ranking.
+- [Compiler Explorer (Godbolt)](https://godbolt.org/) is a major reference for
+  side-by-side compiler versions, flags, targets and annotated assembly.
+  No **comprehensive breadth ranking** or common-corpus quality benchmark
+  was performed; other products serve different source/build workflows.
 - [LLVM Explorer](https://github.com/afshin/llvm-explorer) and
   [WasmBolt](https://github.com/anutosh491/WasmBolt) demonstrate a materially
   different architecture: C/C++/LLVM work inside the browser using WebAssembly
@@ -178,7 +174,7 @@ the count with wrappers around the same compiler engine.
 This table expresses **documented default workflows** rather than a
 numerical feature score. An entry of “not established” does not mean “no”.
 
-| Workflow question | Best candidates to evaluate | Main qualification |
+| Workflow question | Candidates for controlled evaluation | Main qualification |
 |---|---|---|
 | Compare GCC vs Clang vs MSVC or many versions on a single snippet | Compiler Explorer | Availability differs by compiler/target; hosted service receives source. |
 | Explore optimized and unoptimized LLVM IR plus CFG/assembly | LLVM Explorer, WasmBolt, IRAnatomy, Compiler Explorer | Only some expose arbitrary pass pipelines and every intermediate state. |
@@ -266,8 +262,10 @@ corpus, not README-feature counting. Proposed minimal corpus:
 Capture for each test: source hash, exact compiler/JIT build, target triple and
 CPU, SDK and library versions, full command/options, OS/browser/runtime,
 generated assembly/IR and binary hashes, source-mapping evidence, elapsed time
-and peak resource use, diagnostics, network trace, and sample result. Store
-reproducers and command logs in a test ledger before assigning scores.
+and peak resource use, diagnostics, network trace, and sample result.
+Use the [common reproducibility ledger schema](binary-analysis-evaluation.md#comparison-results-ledger)
+for retained outcomes; this section defines the distinct **source-to-assembly test corpus**.
+Do not assign scores before comparable experimental evidence exists.
 
 ### Prioritized follow-up checks
 
@@ -309,7 +307,7 @@ references:
 - [Shader Playground shutdown announcement (2026-03-18)](https://timjones.io/blog/archive/2026/03/18/shutting-down-shader-playground)
   and [archived source](https://github.com/tgjones/shader-playground).
 
-**Verification limits, 2026-11-15:** Product descriptions were reviewed against
+**Verification limits (source survey 2026-11-15; editorial review 2026-11-16):** Product descriptions were reviewed against
 project websites, primary READMEs or upstream documentation, but individual
 compilations, source-line correlations, offline-mode tests, JIT tiers, actual
 generated device ISA, and comparable performance measurements were **not**
@@ -319,7 +317,9 @@ from a reachable page or a populated GitHub repository.
 
 **Update discipline:** Search new candidates by
 *AOT vs JIT vs GPU vs IR*, and by *hosted vs local browser vs IDE/CLI*;
-preserve one canonical row per product; document frontend/upstream relationships;
-differentiate stated capabilities from observed behavior; use dated archival
-and shutdown evidence; and add test results in a separate evaluation ledger
-rather than silently turning this inventory into an unsupported leaderboard.
+preserve one canonical row **within this source-to-assembly inventory**;
+cross-reference post-build analysis tools instead of importing their entire
+catalog; document frontend/upstream relationships; distinguish statements from
+observed behavior; use dated archival and shutdown evidence; and record
+experimental outcomes under the [shared comparison protocol](binary-analysis-evaluation.md#evidence-and-claim-records)
+instead of turning discovery into an unsupported leaderboard.
