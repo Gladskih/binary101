@@ -73,7 +73,7 @@ The table selects tools **by relevance to file-first PE/ELF inspection**, not by
 | [dwex](https://github.com/sevaa/dwex) | P | P | P | — | ? | DWARF DIE navigator, also Wasm/ar |
 | [Dependencies](https://github.com/lucasg/Dependencies) | P | — | — | — | ? | Windows imports/API sets/delays; no dynamic LoadLibrary |
 
-**Interpretation:** viewing `.pdata`/`.xdata` is not code/unwind consistency validation; a prologue check is not full-function CFG/data-flow validation; displaying ELF `.eh_frame` does not imply checking instructions against CFI. See [method boundaries](binary-analysis-techniques.md#specific-comparison-unwind-data-versus-machine-instructions).
+**Interpretation:** viewing `.pdata`/`.xdata` is not code/unwind consistency validation; a prologue check is not full-function CFG/data-flow validation; displaying ELF `.eh_frame` does not imply checking instructions against CFI. See [method boundaries](binary-analysis-techniques.md#unwind-metadata-and-machine-code-consistency-distinct-proof-obligations).
 
 ### Breadth and parser-depth caveat
 
