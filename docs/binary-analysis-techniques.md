@@ -1,14 +1,14 @@
 # Binary Analysis Techniques
 
-> Technical reference aligned with the [project catalog](binary-analysis-landscape.md), expanded 2026-11-15. Concepts are relatively stable; individual tool capabilities remain release-dependent. [Evaluation protocol](binary-analysis-evaluation.md).
+> Technical methods maintained 2026-11-16. [Post-build tool catalog](binary-analysis-landscape.md) · [Capability evidence and experimental results](binary-analysis-evaluation.md) · [Compiler/source-to-assembly inventory](compiler-exploration-landscape.md). Concepts are more stable than individual product releases.
 
-## Code-analysis implementation matrix
+## Code-analysis architectures (methods, not status scores)
 
-This table is intentionally **not** a feature-score leaderboard. `?` means the implementation has not been traced far enough to make an assertion. “No” is only used for clear product scope. Reader/parser support, disassembler ISA support and decompiler-language support are different dimensions.
+This matrix compares **technical approaches** (decoding, code discovery, control flow and lifting). The [evaluation matrix](binary-analysis-evaluation.md#compact-capability-comparison-source-described-not-benchmarked) is authoritative for scoped capability-status claims and their evidence. `?` here means insufficient technical inspection. Source descriptions are not executed benchmarks; formats, ISA backends and edition restrictions differ.
 
-| Tool | PE / ELF / MO | Decoder / disassembler | Starting-point discovery | CFG / intermediate representation / decompilation | Names, metadata and signatures |
+| Tool | Formats (selected) | Decoder / disassembler | Starting-point discovery | CFG / intermediate representation / decompilation | Names, metadata and signatures |
 |---|---|---|---|---|---|
-| **binary101** | PE+COFF / ELF / MO structural (depth differs) | **iced-x86 WASM** x86; **LLVM MC-derived WASM** AArch64 | Entry, symbols, callbacks, init arrays, unwind, RTTI, Go/AOT etc. when validated | Reachable-code inspection and control-flow traversal; **no general semantics IR or C decompiler** | Microsoft SDK API enrichment, CLR/R2R/AOT, Go, DWARF, MSVC/Itanium RTTI, LLVM demanglers; **not FLIRT** |
+| **binary101** | PE+COFF / ELF / Mach-O / WebAssembly structural (depth differs) | **iced-x86 WASM** x86; **LLVM MC-derived WASM** AArch64 | Entry, symbols, callbacks, init arrays, unwind, RTTI, Go/AOT etc. when validated | Reachable-code inspection and control-flow traversal; **no general semantics IR or C decompiler** | Microsoft SDK API enrichment, CLR/R2R/AOT, Go, DWARF, MSVC/Itanium RTTI, LLVM demanglers; **not FLIRT** |
 | **Ghidra** | Yes / Yes / Yes | SLEIGH ISA specifications | Layered loader + symbols + patterns + recursive/other analyses | **p-code**; comprehensive analysis, CFG, C-like decompiler | PDB/DWARF, demangling, FID, types, runtime analyzers and scripts |
 | **IDA + Hex-Rays** | Yes / Yes / Yes | IDA processor modules | Symbols, relocations, analysis, signatures, user edits | Native analysis and CFG; Hex-Rays **microcode** → structured pseudocode | **FLIRT**, Lumina, type libraries, debug symbols, RTTI, demangling |
 | **Binary Ninja** | Yes / Yes / Yes | Architecture-specific plugins / native decoder stack | Symbol and code discovery; user extensibility | **LLIL → MLIL → HLIL**, CFG and structured output | Type libraries, debug info, signatures/plugins; capabilities vary by edition |
@@ -18,7 +18,7 @@ This table is intentionally **not** a feature-score leaderboard. `?` means the i
 | **Kuna** | ELF/PE etc. via loaders, inspect per release | Rust **SLEIGH** decoder | Derived/extended Ghidra-like loader and function handling | Ghidra-derived decompiler pipeline, p-code family, C-like output | SLEIGH specs and available symbols/prototypes; exact FID coverage not assumed |
 | **Pyre** | Yes / Yes / Yes; also WASM modules | C++ Ghidra **SLEIGH** inside Emscripten WASM | Loader/function list + cross-references | **Ghidra p-code and decompiler**; browser code navigation | Lazy Ghidra libc prototypes; broad additional databases not audited |
 | **Peek-a-Bin** | **PE**; no general ELF/MO claim | **Capstone WASM**, x86/x64 + AArch64 | Hybrid recursive descent and linear sweep | CFG; **own IR/SSA/struct synthesis decompiler** for x86; optional Ghidra server | PE structures, driver/IOCTL features, signatures; no FLIRT assertion |
-| **PPEE 2.0 preview** | PE only | x86/x64 code scan; decoder implementation not independently audited | `.pdata` and other PE seeds; exact code-seed logic not audited | **Documents x64 prologue-vs-`UNWIND_INFO` checking**; full-function unwind-state validation **not demonstrated**; not a C decompiler | PE structures; Go/Rust/.NET/NativeAOT detectors claimed in v2 docs |
+| **PPEE 2.0 preview** | PE only | x86/x64 code scan; decoder implementation not independently audited | `.pdata` and other PE seeds; exact code-seed logic not audited | x64 unwind-aware static diagnostics; exact supported consistency scope is recorded in [Evaluation](binary-analysis-evaluation.md#compact-capability-comparison-source-described-not-benchmarked); not a general C decompiler | PE structures; Go/Rust/.NET/NativeAOT recognizers in product documentation |
 | **Malcat** | PE / ELF / MO and numerous other containers | Zydis x86/x64; Capstone ARM/MIPS | Linear/recursive scan, patterns and format metadata | CFG; edition-dependent SLEIGH decompiler | Parsers, ELF Go `pcln`, PE/.NET metadata; see [documented matrix](https://doc.malcat.fr/analysis/filetypes.html) |
 | **binkeep** | PE / ELF / MO | Capstone WASM: x86/x64/ARM/AArch64 | Linear sweep plus `.pdata`, Mach-O function starts, exports and symbols | xrefs/CFG; **decompiler planned** | PE/.NET, APK/DEX, YARA, imports and signature digests; [guide](https://kano92-dir.github.io/binkeep/guide.html) |
 | **ATLAS** | PE/ELF parser; MO identification only | Partial x86/x64 and Thumb native decoders | Heuristic/branch-derived probable functions | CFG and developing x86 LIR → pseudocode; incomplete ISA | Firmware/Cortex-M, annotations, local optional debugger; [limits](https://github.com/GreenShoeGarage/Atlas#transparent-v10-limitations) |
@@ -108,18 +108,22 @@ The term for the “authoritative mapping of assembler to instruction semantics�
 | Packed/obfuscated binaries | signatures, entropy, unpacking, memory traces | PPEE, Malcat, PE Parser, DIE, Manalyze, PE-sieve, ANY.RUN | File analysis remains static; absence of code findings ≠ absence of packed code |
 | Security properties | DEP/NX, ASLR/PIE, RELRO, CFG/CET, Authenticode | Checksec Anywhere, LIEF, binary101 | Explain *recorded* protections, distinguish metadata from actual runtime enforcement |
 
-### Specific comparison: unwind data versus machine instructions
+### Unwind metadata and machine-code consistency: distinct proof obligations
 
-| Check | Required evidence | Existing documented example | What it does **not** prove |
+The following are **analysis methods**, not assertions that a named product implements them. Current product evidence and binary101's source-reviewed implementation status live **only** in [Evaluation](binary-analysis-evaluation.md#compact-capability-comparison-source-described-not-benchmarked).
+
+| Validation level | Required input and analysis | What a pass supports | Unresolved by that level |
 |---|---|---|---|
-| Structural unwind parse | `.pdata` range, `.xdata` version, opcodes and offsets | PPEE, PE parsers, `llvm-readobj --unwind` | Instructions agree with records |
-| **Prologue-instruction consistency** | Decode `[BeginAddress, BeginAddress + SizeOfProlog)` and map to `UNWIND_CODE` | [PPEE 2.0 preview](https://www.mzrst.com/puppy/docs/features/data-directories/exception/) explicitly documents `prolog_mismatch`, `prolog_undescribed`, `prolog_hooked` | Whole-function correctness or the cause (patch/bug) |
-| Epilogue validity | Decode all reachable epilogues and apply architecture's unwind rules | Not established for PPEE in this review | That all body states can be unwound |
-| Full-function stack/frame invariants | CFG paths, abstract register/stack states, supported dynamic allocations and unwind semantics | **No independently verified comparator found in this pass** | Absence of bugs in unreachable or encrypted code |
+| Structural AMD64 unwind metadata | Map `.pdata` ranges and read `UNWIND_INFO` versions/opcodes, chains, offset/flag constraints | Internally consistent **metadata encoding** within supported variants | Agreement with executable instructions |
+| AMD64 v1/v2 prologue consistency | Disassemble `[BeginAddress, BeginAddress + SizeOfProlog)`; compare each relevant instruction's effect and **end offset** with `UNWIND_CODE` | Agreement on covered unwind-relevant prologue operations | Body/epilog validity, arbitrary instruction changes |
+| AMD64 v3 prologue consistency | Interpret v3 prologue instruction offsets and winding descriptors, including extended prologue size when present; decode actual instructions | Agreement with **v3-specific encoding semantics** | Body/epilog validity; v1/v2 checks cannot be reused mechanically |
+| Epilogue consistency | Locate/trace candidate epilogues and validate their instructions against version-specific unwind conventions | The checked exit sequences are unwind-compatible | Whether all reachable execution states or exits were found |
+| Full-function unwind-state consistency | Recover reachable CFG, track abstract stack/register/frame state along paths, model calls, dynamic allocations and allowed unwind semantics | Agreement on **modeled and reached** instructions and paths | Indirect/unreached/encrypted code and unsupported effects |
+| ELF CFI-to-code consistency | Decode FDE/CIE rules, associate PC ranges with reachable instructions, track CFA/register states and validate call/return and stack effects | Agreement of checked code paths with supported DWARF CFI rules | Correctness of unmodeled instructions or unrelated debug metadata |
 
-**binary101 currently does not implement instruction-versus-unwind verification:** its [AMD64 scanner](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-info.ts) decodes and checks the metadata, while the [v3 decoder](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-v3.ts) validates recorded offsets. Neither checks the actual instructions of a function. This status was checked against the source at commit `bcdc4141a798`. For a **future** binary101 validator, use **one top-level mismatch finding** with reason codes. Compare the exact tool versions on clean/altered fixtures before claiming a novel detection or lower false-positive rate. The prologue is bounded by `SizeOfProlog` on AMD64; chained entries and noncanonical code complicate interpretation. `.xdata` describes unwind-relevant operations, not every instruction.
+**Design implication:** a future mismatch checker can report a **single top-level finding** with machine-readable reason codes. Preserve the metadata version, exact VA/RVA and bytes, instruction sequence, abstract state, and reason an ambiguity cannot be resolved. An unwind record describes operations needed for unwinding; it is not a specification of arbitrary function semantics. A successfully decoded prologue is not evidence that every path in the function is unwind-correct.
 
-### Upstream/fork relationships worth remembering
+### Implementation relationships: ports, integrations, dependencies
 
 ```text
 Ghidra (C++ decompiler; SLEIGH + p-code)
@@ -139,7 +143,7 @@ PortEx parser/library
 └── PortexAnalyzerGUI: separate desktop view on the parser
 
 Kaitai Struct grammar ecosystem
-└── Bytes Revealer: grammar-based view alongside its own triage features
+└── Bytes Revealer: uses grammar-based viewing alongside its own triage features (**integration, not a fork**)
 
 checksec.rs
 └── Checksec Anywhere: extended Rust core + WASM + browser UI
@@ -147,11 +151,11 @@ checksec.rs
 GrammaTech Ddisasm → GTIRB → gtirb-rewriting / gtirb-pprinter
 └── SN4KE: experimental binary mutation workflow (also rev.ng branch)
 
-Capstone (decoder) → Peek-a-Bin / binkeep disassembly; elfx86exts ISA detection
-Zydis + Capstone decoders → Malcat native-code views (with SLEIGH-based decompilation)
-Intel XED (decoder) → x86lint instruction-sequence diagnostics
-iced-x86 (decoder) → binary101 x86/x64 analysis
-LLVM MC (decoder) → binary101 AArch64 analysis
+Capstone (decoder) → Peek-a-Bin / binkeep disassembly; elfx86exts ISA detection (**shared dependency, not project lineage**)
+Zydis + Capstone decoders → Malcat native-code views (with SLEIGH-based decompilation; **dependencies, not forks**)
+Intel XED (decoder) → x86lint instruction-sequence diagnostics (**dependency**)
+iced-x86 (decoder) → binary101 x86/x64 analysis (**dependency**)
+LLVM MC (decoder) → binary101 AArch64 analysis (**dependency**)
 ```
 
 **Non-equivalences:** `FLIRT ≠ demangling`; `RTTI ≠ inferred types`; `GTIRB ≠ LLVM IR`; `SLEIGH ≠ CFG itself`; `Capstone/XED/iced decode ≠ function discovery`; `PDB/DWARF ≠ decompiler`; `Go pclntab ≠ conventional linker symbol table`; `GitHub repo created ≠ project created`.
