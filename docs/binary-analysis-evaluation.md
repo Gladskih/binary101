@@ -1,6 +1,6 @@
 # Binary Analysis Evaluation
 
-> Updated 2026-11-15. Comparison methodology and research backlog. [Canonical catalog](binary-analysis-landscape.md) · [Technical approaches](binary-analysis-techniques.md).
+> Methodology and matrix maintained 2026-11-16; source discovery snapshot mainly 2026-11-15. [Canonical tool catalog](binary-analysis-landscape.md) · [Technical methods](binary-analysis-techniques.md) · [Compiler exploration](compiler-exploration-landscape.md).
 >
 > **Do not turn README promises, file counts, stars, or tool labels into tested feature coverage.** No cross-tool executable corpus or performance benchmark was completed in this revision.
 
@@ -18,7 +18,21 @@
 | Workflow | Browser/offline, no upload, large files, search, xrefs, scripting, plugins, editing | Similar screenshots = similar workflow |
 | Verification | Test corpus, differential oracles, fuzzing, reproducible build | Stars, LOC, CI badge = correctness |
 
-For each capability record `claimed` (vendor/README), `code-observed` (file and commit), `test-observed` (specific test/run), `sample-verified` (known input/output), or `unknown`. These are **evidence types, not a score**; a single module can have multiple. Preserve explicit unsupported/non-goals separately.
+## Evidence and claim records
+
+This document is the **single authority for comparative capability status and observed outcomes** in the post-build binary-analysis study. The [catalog](binary-analysis-landscape.md) owns project identity, historical metadata and primary references; [technical approaches](binary-analysis-techniques.md) explain algorithms, not binary101's current implementation status. [Compiler exploration](compiler-exploration-landscape.md) has its own scoped source-to-assembly inventory and experiment proposals, but uses these same evidence rules.
+
+A defensible claim records **(project, capability, target format/ISA, edition or build, source/version/commit, observation date, evidence type, limitations)**. Different claims about one tool may have different evidence strength. Use the following controlled terms:
+
+| Evidence type | Sufficient observation | Does not establish |
+|---|---|---|
+| `documented` | Explicit first-party manual/README/product feature statement and scope | Working behavior on a chosen file; implementation quality |
+| `code-observed` | Specific code path inspected at a pinned commit | All paths tested; correct or exhaustive behavior |
+| `test-observed` | Test definition and its **actual run result**, pinned to build/input | Correctness beyond the test cases; an unrun test file does not qualify |
+| `sample-verified` | Researchers execute the specified build on a fixed input, retain output and compare an independent oracle | Generality beyond tested samples |
+| `unknown` | Insufficient or conflicting evidence | Neither presence nor absence |
+
+**Coverage state and evidence type are separate.** Report `yes`, `partial`, `not implemented`, `unknown` or `out of scope` with an attached evidence type. A negative finding from source review must identify the exact revision and inspected subsystems; absence of a search hit alone is not sufficient. A product roadmap is not a current feature. Distinguish intended behavior, source code, passing tests, and externally reproduced outcomes; never collapse them into an unsupported score.
 
 ## Tool families and outstanding comparisons
 
@@ -36,13 +50,13 @@ For each capability record `claimed` (vendor/README), `code-observed` (file and 
 | Windows loader dependency diagnostics | Dependencies | API sets, delay imports, forwarders, SxS and library-resolution context | File imports do not imply real dynamic binding |
 
 
-### Compact capability comparison (source-described; **not benchmarked**)
+## Compact capability comparison (source-described; **not benchmarked**)
 
-`D` = explicitly documented in linked first-party source; `P` = documented partial/specialized coverage; `N` = **not implemented in the inspected code path**, supported by source review; `?` = not established (never assume absence); `—` = outside stated primary role. `D` does **not** mean independent execution or correctness verification. For binary101, `N` is based on source inspection at commit [`bcdc4141a798`](https://github.com/Gladskih/binary101/tree/bcdc4141a79818e0bdd20175ef04e5cfab7ab870), not on marketing documentation. Features may be edition/version-dependent.
+The table selects tools **by relevance to file-first PE/ELF inspection**, not by popularity or presumed rank. `D` = documented coverage; `P` = documented partial/specialized coverage; `N` = not implemented in the **inspected revision/subsystem** (source-observed); `?` = unestablished; `—` = outside stated primary role, **not a universal absence claim**. `D/P` do not mean independent execution. The binary101 negative is grounded in [AMD64 unwind parsing](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-info.ts) and [v3 processing](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-v3.ts) at commit [`bcdc4141a798`](https://github.com/Gladskih/binary101/tree/bcdc4141a79818e0bdd20175ef04e5cfab7ab870), plus repository search for an alternative validator. Edition/version dependencies remain explicit.
 
 | Tool / primary evidence | PE | ELF | Mach-O | Code analysis | Unwind-versus-code check | Workflow / critical limit |
 |---|:---:|:---:|:---:|---|---|---|
-| [binary101](https://github.com/Gladskih/binary101) | D | D | P | D: seed-guided reachable-code CFG; no C decompiler | **N: no prologue or whole-function unwind/code consistency check** ([AMD64 scanner](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-info.ts), [v3 decoder](https://github.com/Gladskih/binary101/blob/bcdc4141a79818e0bdd20175ef04e5cfab7ab870/analyzers/pe/exception/amd64/unwind-v3.ts)) | Browser-local; structurally decodes/validates unwind v1–v3, including offsets and chains |
+| [binary101](https://github.com/Gladskih/binary101) | D | D | P | D: seed-guided reachable-code CFG; no C decompiler | **N: no instruction/unwind consistency validator** | Browser-local PE/ELF/Mach-O/**WebAssembly**; separately decodes and validates AMD64 unwind metadata v1–v3 |
 | [PPEE v2 preview](https://www.mzrst.com/puppy/docs/features/data-directories/exception/) | D | — | — | D: x86/x64 code analysis | **D: x64 prologue**; full function **?** | GUI/CLI/JSON/MCP; v2 preview differs from v1.16 |
 | [Malcat](https://doc.malcat.fr/analysis/filetypes.html) · [code](https://doc.malcat.fr/analysis/disassembly.html) | D | D | D | D: disassembly, CFG, SLEIGH decompiler | ? | Multi-format dissection; free Lite limited |
 | [PE-bear](https://github.com/hasherezade/pe-bear) | D | — | — | ? | ? | PE-oriented GUI inspection and editing |
@@ -59,9 +73,9 @@ For each capability record `claimed` (vendor/README), `code-observed` (file and 
 | [dwex](https://github.com/sevaa/dwex) | P | P | P | — | ? | DWARF DIE navigator, also Wasm/ar |
 | [Dependencies](https://github.com/lucasg/Dependencies) | P | — | — | — | ? | Windows imports/API sets/delays; no dynamic LoadLibrary |
 
-**Precise distinction:** viewing `.pdata`/`.xdata` is not instruction-level validation; decoding a prologue is not whole-function control-flow/data-flow verification; displaying ELF `.eh_frame` is not checking code against CFI. A missing feature claim is `?` until inspected or tested.
+**Interpretation:** viewing `.pdata`/`.xdata` is not code/unwind consistency validation; a prologue check is not full-function CFG/data-flow validation; displaying ELF `.eh_frame` does not imply checking instructions against CFI. See [method boundaries](binary-analysis-techniques.md#specific-comparison-unwind-data-versus-machine-instructions).
 
-### Broad-format counts need decomposition
+### Breadth and parser-depth caveat
 
 The number of file types listed in a format registry, signatures database or generated website catalog is not the number of independent deep parsers. Treat `recognized`, `parsed`, `traversed`, `semantically interpreted`, `cryptographically verified`, and `editable` as distinct claims. In particular, do not convert broad-format marketing into cross-tool capability scores without sample execution.
 
@@ -70,12 +84,12 @@ The number of file types listed in a format registry, signatures database or gen
 | Case | Evidence to compare | Suggested comparators |
 |---|---|---|
 | Modern MSVC PE with RTTI and exception metadata | Raw record order, validated references, complete/extensible tree, ambiguity | binary101, PPEE v2, Malcat, PE-bear, PortEx, ImHex patterns, Cerbero |
-| Signed PE with complex Authenticode | CMS vs PE digest, signer verification, trust, timestamps, failure modes | Binary101, Cerbero, LIEF, Dissect; specific signature validators as oracle |
-| .NET NativeAOT / ReadyToRun PE | Metadata/ownership graph, well-supported version layouts, false seeds | Binary101, Ghidra, specialized .NET tools |
+| Signed PE with complex Authenticode | CMS vs PE digest, signer verification, trust, timestamps, failure modes | binary101, Cerbero, LIEF, Dissect; specific signature validators as oracle |
+| .NET NativeAOT / ReadyToRun PE | Metadata/ownership graph, well-supported version layouts, false seeds | binary101, Ghidra, specialized .NET tools |
 | ELF with DWARF, relocations and Go metadata | Exact sections/tags, addresses, raw ranges and orphan data | binary101, KDE ELF Dissector, XELFViewer, binsider, dwex, readelf, llvm-dwarfdump, Ghidra |
-| Nested archive/resource and damaged sample | Exact parent/child mapping, extraction boundaries, non-recursive failures | Binary101, unblob, Cerbero, Loupe, fq |
+| Nested archive/resource and damaged sample | Exact parent/child mapping, extraction boundaries, non-recursive failures | binary101, unblob, Cerbero, Loupe, fq |
 | Hand-crafted malformed/overlapping PE/ELF | Crashes, hangs, false positives, warning precision, resource limits | binary101, PPEE, Malcat, PortEx, LIEF, Kaitai and specialized parsers |
-| x64 PE altered prologue with matched unmodified control | `UNWIND_INFO` op offsets vs actual bytes; warning precision and false positives | PPEE v2 preview; binary101 only after implementing the validator; `llvm-readobj --unwind` for metadata |
+| x64 PE altered prologue with matched unmodified control | `UNWIND_INFO` op offsets vs actual bytes; warning precision and false positives | PPEE v2 preview; binary101 as baseline without this validator; `llvm-readobj --unwind` as metadata oracle |
 | x64 PE valid noncanonical prologues, chained records and epilogues | Prevent false mismatch on legitimate compiler/assembly cases, including probes and shrink wrapping | PPEE v2 preview, MSVC/Clang fixtures, WinDbg where possible |
 | x64 PE body-only frame/stack mutation | Determine whether a checker actually performs path-sensitive **full-function** analysis | Separate experimental CFG/dataflow validator; PPEE full-function support unverified |
 | ELF PLT/GOT, RELR, versioning and stripped/sectionless binaries | Confirm each decoded/linkage relationship with address evidence | binary101, KDE ELF Dissector, LIEF, readelf, objdump |
@@ -88,11 +102,11 @@ Record the fixture SHA-256 and provenance, exact versions/commits, platform, com
 |---|---|---|---|---|---|---|
 | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | *Pending* | **Not tested** |
 
-For binary101, the AMD64 unwind scan consumes mapped metadata records, decodes operations and validates their structure; it does not read/decode function-body machine instructions for a `UNWIND_CODE` comparison. The code search also found no separate prologue validator. This is a **source-observed limitation**, not an inferred negative from missing README text. Vendor sample anecdotes, including PPEE's unusual `coreclr.dll` stubs, are **not our measurements**. A mismatch is not in itself a demonstrated compiler bug, malicious hook or actual unwinding failure. Use an unchanged control specimen, capture full outputs and independently check each finding.
+**No comparable executions are recorded as of 2026-11-16.** Vendor sample anecdotes (including PPEE's `coreclr.dll` example) are **not our measurements**. A mismatch by itself does not establish a compiler bug, malicious hook, or real unwinding failure. Retain unchanged control inputs, complete outputs, independently checked expected results and the exact tools/builds.
 
 ## Inclusion and maintenance
 
-Maintain a standing discovery backlog by workflow: structured editors, grammars, CLI query/decoding, malware/DFIR, RE and lifting, firmware/nested extraction, ISA diagnostics, debug/ABI/runtime metadata, file recognition and very-large-file UI. Revisit the catalog by category and explicitly search non-GitHub proprietary PE tools, older Windows PE viewers and ELF-specific desktop utilities; do not only follow features discussed previously. New candidates belong in the catalog once identity and primary source are verified; deeper claims belong here with evidence.
+Maintain a standing discovery backlog by workflow: structured editors, grammars, CLI query/decoding, malware/DFIR, RE and lifting, firmware/nested extraction, ISA diagnostics, debug/ABI/runtime metadata, file recognition and very-large-file UI. Revisit the catalog by category and explicitly search non-GitHub proprietary PE tools, older Windows PE viewers and ELF-specific desktop utilities; do not only follow features discussed previously. New post-build candidates belong in the catalog once identity and a primary reference are established; capability/evaluation claims belong here. Source-to-assembly projects belong in the [compiler inventory](compiler-exploration-landscape.md).
 
 
 ## How binary101 can differentiate (hypotheses, not rankings)
