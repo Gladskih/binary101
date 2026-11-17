@@ -75,7 +75,7 @@ llvm-objdump -d probe-optimized.dll
 
 Run the checker in a standalone console. The optional offset selects an instruction
 boundary in the supplied function. The following results were verified on Windows x64
-10.0.26300 with DMD 2.114.0 and MSVC 19.51.36231.
+10.0.26300 with DMD 2.114.0 and MSVC 19.51.36244.
 
 | Command | Expected exit | Result |
 | --- | --- | --- |
