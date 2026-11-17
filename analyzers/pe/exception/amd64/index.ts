@@ -8,6 +8,9 @@ import { readAmd64RuntimeFunctionTable } from "./runtime-function-table.js";
 import { scanAmd64UnwindInfos } from "./unwind-info.js";
 import { createRvaRangeReader } from "../../rva-range-reader.js";
 import { resolveAmd64HandlerOwners } from "./handler-owners.js";
+import { createAmd64PrologValidator } from "./prolog-validation.js";
+import type { Amd64RuntimeFunctionTable } from "./runtime-function-table.js";
+import type { Amd64PrologReport } from "./prolog-types.js";
 
 export const parseAmd64ExceptionDirectory = async (
   reader: FileRangeReader,
@@ -19,12 +22,15 @@ export const parseAmd64ExceptionDirectory = async (
   if (directory.kind === "invalid") return directory.result;
   return parseAmd64ExceptionTable(reader, createRvaRangeReader(reader, rvaToOff,
     directory.directory.rva, directory.directory.size), directory.entryCount,
-    rvaToOff, directory.issues, directory.directory.rva);
+    rvaToOff, directory.issues, directory.directory.rva,
+    owners => createAmd64PrologValidator(reader, rvaToOff, owners));
 };
 
 export const parseAmd64ExceptionTable = async (
   reader: FileRangeReader, source: FileRangeReader, entryCount: number,
-  rvaToOff: RvaToOffset, issues: string[], directoryRva?: number
+  rvaToOff: RvaToOffset, issues: string[], directoryRva?: number,
+  createValidator?: (owners: Amd64RuntimeFunctionTable["functionsByUnwindRva"])
+    => ReturnType<typeof createAmd64PrologValidator>
 ): Promise<PeExceptionDirectory> => {
   const runtimeFunctions = await readAmd64RuntimeFunctionTable(reader, source, entryCount,
     rvaToOff, issues, directoryRva);
@@ -32,15 +38,12 @@ export const parseAmd64ExceptionTable = async (
     issues.push("Exception directory does not contain a complete RUNTIME_FUNCTION entry.");
     return createEmptyExceptionDirectory(issues, "amd64");
   }
-  const unwindInfo = await scanAmd64UnwindInfos(
-    reader,
-    rvaToOff,
-    runtimeFunctions.unwindRvas,
-    issues
-  );
+  const { unwindInfo, prologValidation } = await scanWithPrologValidation(reader, rvaToOff,
+    runtimeFunctions, issues, createValidator);
   const handlerOwners = resolveAmd64HandlerOwners(runtimeFunctions.functionsByUnwindRva,
     unwindInfo.chainedUnwindRvas ?? new Map<number, number>(), issues);
   return {
+    ...(prologValidation ? { prologValidation } : {}),
     functionCount: runtimeFunctions.functionCount,
     beginRvas: runtimeFunctions.beginRvas,
     rangeLengths: runtimeFunctions.rangeLengths,
@@ -61,4 +64,26 @@ export const parseAmd64ExceptionTable = async (
     issues,
     format: "amd64"
   };
+};
+
+const scanWithPrologValidation = async (reader: FileRangeReader, rvaToOff: RvaToOffset,
+  runtimeFunctions: Amd64RuntimeFunctionTable, issues: string[],
+  createValidator: ((owners: Amd64RuntimeFunctionTable["functionsByUnwindRva"])
+    => ReturnType<typeof createAmd64PrologValidator>) | undefined) => {
+  let validator: Awaited<ReturnType<typeof createAmd64PrologValidator>> | undefined;
+  let prologValidation: Amd64PrologReport | undefined;
+  if (createValidator && runtimeFunctions.functionsByUnwindRva.size) {
+    try { validator = await createValidator(runtimeFunctions.functionsByUnwindRva); }
+    catch {
+      prologValidation = { matchedCount: 0, findings: [], unverifiedCounts: {
+        "disassembler-unavailable": runtimeFunctions.beginRvas.length
+      } };
+    }
+  }
+  try {
+    const unwindInfo = await scanAmd64UnwindInfos(reader, rvaToOff,
+      runtimeFunctions.unwindRvas, issues, validator?.observe);
+    await validator?.finish();
+    return { unwindInfo, prologValidation: validator?.report ?? prologValidation };
+  } finally { validator?.free(); }
 };

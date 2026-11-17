@@ -121,7 +121,7 @@ The following are **analysis methods**, not assertions that a named product impl
 | Full-function unwind-state consistency | Recover reachable CFG, track abstract stack/register/frame state along paths, model calls, dynamic allocations and allowed unwind semantics | Agreement on **modeled and reached** instructions and paths | Indirect/unreached/encrypted code and unsupported effects |
 | ELF CFI-to-code consistency | Decode FDE/CIE rules, associate PC ranges with reachable instructions, track CFA/register states and validate call/return and stack effects | Agreement of checked code paths with supported DWARF CFI rules | Correctness of unmodeled instructions or unrelated debug metadata |
 
-**Design implication:** a future mismatch checker can report a **single top-level finding** with machine-readable reason codes. Preserve the metadata version, exact VA/RVA and bytes, instruction sequence, abstract state, and reason an ambiguity cannot be resolved. An unwind record describes operations needed for unwinding; it is not a specification of arbitrary function semantics. A successfully decoded prologue is not evidence that every path in the function is unwind-correct.
+A mismatch checker can report a **single top-level finding** with machine-readable reason codes. Preserve the metadata version, exact VA/RVA and bytes, instruction sequence, abstract state, and reason an ambiguity cannot be resolved. An unwind record describes operations needed for unwinding. Validate each claim within the modeled instruction paths, metadata version and supported prologue boundaries.
 
 ### Implementation relationships: ports, integrations, dependencies
 

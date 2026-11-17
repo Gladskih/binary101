@@ -13,9 +13,11 @@ export const handlePeSpecialInstructionClick = (
   if (!file || result.analyzer !== "pe" || !result.parsed) return true;
   if (!isPeWindowsParseResult(result.parsed)) return true;
   const rva = Number(button.dataset["peSpecialRva"]);
-  // Only navigate to validated sites from the current file's ISA analysis.
+  // Only navigate to sites recorded by an analysis of the current file.
   if (!result.parsed.disassembly?.specialInstructions.some(
     finding => finding.sampleRvas.includes(rva)
+  ) && !result.parsed.exception?.prologValidation?.findings.some(
+    finding => finding.beginRva === rva
   )) return true;
   controller.start(file, result.parsed, rva);
   return true;

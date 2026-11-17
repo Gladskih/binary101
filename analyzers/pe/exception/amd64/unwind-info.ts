@@ -1,5 +1,3 @@
-"use strict";
-
 import { createAmd64UnwindBlockReader } from "./unwind-block-reader.js";
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import { UNW_FLAG_EHANDLER, UNW_FLAG_UHANDLER, UNW_FLAG_CHAININFO, UNW_FLAG_LARGE }
@@ -13,6 +11,9 @@ import { decodeAmd64UnwindV3 } from "./unwind-v3.js";
 import { createV3Statistics, recordV3Statistics } from "./unwind-v3-statistics.js";
 import { Amd64UnwindV12StatisticsBuilder } from "./unwind-v12-statistics.js";
 import type { Amd64UnwindV12Header, Amd64UnwindV12Statistics } from "./unwind-v12-types.js";
+import type { Amd64UnwindOperationVisitor } from "./unwind-v12-types.js";
+import { createAmd64UnwindOperationCollector } from "./unwind-operations.js";
+import type { Amd64PrologDescription } from "./prolog-types.js";
 import {
   AMD64_UNWIND_INFO_VERSION_1,
   AMD64_UNWIND_INFO_VERSION_2,
@@ -47,6 +48,7 @@ export interface Amd64UnwindInfoTable {
 
 interface Amd64UnwindScanState extends Omit<Amd64UnwindInfoTable, "version12"> {
   version12?: Amd64UnwindV12StatisticsBuilder;
+  prologVisitor: Amd64UnwindOperationVisitor | undefined;
   lateEpilogCodeCount: number;
   truncatedUnwindCodeArrayCount: number;
   unexpectedUnwindVersionCount: number;
@@ -60,6 +62,7 @@ interface Amd64UnwindHeader extends Amd64UnwindV12Header {
 }
 
 const createEmptyScanState = (): Amd64UnwindScanState => ({
+  prologVisitor: undefined,
   chainedUnwindInfoCount: 0,
   epilogScopeCount: 0,
   epilogUnwindInfoCount: 0,
@@ -74,10 +77,7 @@ const createEmptyScanState = (): Amd64UnwindScanState => ({
   unwindInfoVersion2Count: 0
 });
 
-const readUint32 = (
-  data: DataView,
-  offset: number
-): number | null => {
+const readUint32 = (data: DataView, offset: number): number | null => {
   if (offset < 0 || offset + Uint32Array.BYTES_PER_ELEMENT > data.byteLength) return null;
   return data.getUint32(offset, true);
 };
@@ -141,9 +141,13 @@ const recordUnwindCodeAnalysis = (
   }
   if (!hasRegularUnwindCodes(header.version)) return false;
   state.version12 ??= new Amd64UnwindV12StatisticsBuilder();
+  const visitor = state.prologVisitor;
   const analysis = visitAmd64UnwindCodeSlots(new DataView(data.buffer,
     data.byteOffset + UNWIND_INFO_HEADER_SIZE, data.byteLength - UNWIND_INFO_HEADER_SIZE),
-  header.countOfCodes, header.version, state.version12.visitOperation);
+  header.countOfCodes, header.version, visitor ? (...operation) => {
+    state.version12!.visitOperation(...operation);
+    visitor(...operation);
+  } : state.version12.visitOperation);
   state.version12.recordBlock(header, analysis);
   issues.push(...analysis.issues);
   if (analysis.isTruncated) state.truncatedUnwindCodeArrayCount += 1;
@@ -227,26 +231,24 @@ const recordHandlerTarget = (state: Amd64UnwindScanState, targets: Set<number>, 
   targets.add(rva);
   state.handlerRvas.push(rva);
 };
-
-
 const processUnwindInfo = (
   data: DataView, header: Amd64UnwindHeader | null,
   state: Amd64UnwindScanState, issues: string[], enqueueUnwindRva: (rva: number) => void,
   handlerRvasSet: Set<number>, unwindInfoRva: number,
   validateRange: (begin: number, end: number) => boolean
-): void => {
+): boolean => {
   if (!header) {
     state.unreadableUnwindCount += 1;
-    return;
+    return false;
   }
   recordVersion(header.version, state);
   const validCodes = recordUnwindCodeAnalysis(data, header, state, issues);
   if ((header.flags & UNW_FLAG_CHAININFO) !== 0) {
     const target = readUnwindChain(data, header, state, issues, enqueueUnwindRva, validateRange);
     if (target && validCodes) recordChainLink(state, header, unwindInfoRva, target);
-    return;
+    return validCodes && target !== null;
   }
-  if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) return;
+  if ((header.flags & (UNW_FLAG_EHANDLER | UNW_FLAG_UHANDLER)) === 0) return validCodes;
   state.handlerUnwindInfoCount += 1;
   const handlerRva = readTrailingUint32(
     data,
@@ -256,13 +258,15 @@ const processUnwindInfo = (
   );
   if (handlerRva && validCodes) recordLanguageHandler(state, header, unwindInfoRva, handlerRva);
   recordHandlerTarget(state, handlerRvasSet, handlerRva);
+  return validCodes && handlerRva !== null;
 };
 
 export const scanAmd64UnwindInfos = async (
   reader: FileRangeReader,
   rvaToOff: RvaToOffset,
   initialUnwindRvas: Set<number>,
-  issues: string[]
+  issues: string[],
+  onProlog?: (rva: number, description: Amd64PrologDescription) => Promise<void>
 ): Promise<Amd64UnwindInfoTable> => {
   const state = createEmptyScanState();
   const validateRange = (begin: number, end: number): boolean =>
@@ -285,8 +289,15 @@ export const scanAmd64UnwindInfos = async (
     const pending = readBlock(unwindInfoRva);
     const data = pending instanceof DataView ? pending : await pending;
     const header = readUnwindHeader(data);
-    processUnwindInfo(data, header, state, issues, enqueueUnwindRva,
+    const operations: Amd64PrologDescription["operations"] = [];
+    state.prologVisitor = onProlog ? createAmd64UnwindOperationCollector(operations) : undefined;
+    const complete = processUnwindInfo(data, header, state, issues, enqueueUnwindRva,
       handlerRvasSet, unwindInfoRva, validateRange);
+    if (onProlog) await onProlog(unwindInfoRva, {
+      version: header?.version ?? 0, flags: header?.flags ?? 0,
+      prologSize: header?.prologSize ?? 0, frameRegister: header?.frameRegister ?? 0,
+      frameOffset: header?.frameOffset ?? 0, operations, complete
+    });
   }
   state.uniqueUnwindInfoCount = visitedUnwindRvas.size;
   appendSummaryIssues(state, issues);

@@ -7,6 +7,7 @@ import { renderExceptionRangeHistogram } from "./exception-range-histogram.js";
 import { renderExceptionV3 } from "./exception-v3.js";
 import { renderExceptionV12 } from "./exception-v12.js";
 import { renderDefinitionRow } from "../../html-utils.js";
+import { renderPrologValidation } from "./prolog-validation.js";
 import { renderArmntOpcodeStatistics, renderArmntPackedStatistics } from "./exception-armnt.js";
 import { renderCeExceptionStatistics } from "./exception-ce.js";
 import { renderIa64UnwindStatistics } from "./exception-ia64.js";
@@ -200,6 +201,7 @@ export function renderException(ex: PeExceptionSection, out: string[]): void {
   out.push(`<dt>Missing/invalid ranges</dt><dd>${ex.invalidEntryCount}</dd>`);
   out.push(`</dl>`);
   profile.renderFormatNote(ex, out);
+  if (ex.prologValidation) out.push(renderPrologValidation(ex.prologValidation));
   out.push(renderExceptionRangeHistogram(ex));
   if (ex.issues?.length) {
     out.push(renderPeDiagnostics("Exception directory warnings", ex.issues));

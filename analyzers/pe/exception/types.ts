@@ -2,6 +2,7 @@
 
 import type { Amd64UnwindV3Statistics } from "./amd64/unwind-v3-types.js";
 import type { Amd64UnwindV12Statistics } from "./amd64/unwind-v12-types.js";
+import type { Amd64PrologReport } from "./amd64/prolog-types.js";
 import type { ArmntPackedStatistics } from "./armnt-packed-types.js";
 import type { ArmntOpcodeStatistics } from "./armnt-opcode-types.js";
 import type { Arm64PackedStatistics } from "./arm64-packed-types.js";
@@ -38,6 +39,7 @@ export interface PeLanguageHandler {
 }
 
 export interface PeExceptionDirectory {
+  prologValidation?: Amd64PrologReport;
   languageHandlers?: PeLanguageHandler[];
   functionCount: number;
   beginRvas: number[];

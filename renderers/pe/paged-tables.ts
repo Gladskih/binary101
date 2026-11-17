@@ -44,6 +44,7 @@ import { getPortablePdbCustomTableModel } from "./portable-pdb-custom.js";
 import { getPortablePdbImportTableModel } from "./portable-pdb-imports.js";
 import { getPortablePdbTableModel } from "./portable-pdb.js";
 import { getMiscDebugTableModel } from "./debug-misc.js";
+import { getPrologValidationTableModel } from "./prolog-validation.js";
 
 const getClrTableModel = (pe: PeWindowsParseResult, tableId: string): PagedSortableTableModel | null =>
   tableId.startsWith("pe-clr-") && pe.clr?.meta?.tables
@@ -128,6 +129,7 @@ const getNativeAotTableModel = (
 type TableResolver = (pe: PeWindowsParseResult, tableId: string) => PagedSortableTableModel | null;
 
 const windowsTableResolvers: TableResolver[] = [
+  (pe, id) => getPrologValidationTableModel(pe.exception?.prologValidation, id),
   getPeDisassemblyStringTableModel, getClrTableModel, getPogoTableModel, getPortablePdbTableModel,
   getMiscDebugTableModel, getPortablePdbCustomTableModel, getPortablePdbImportTableModel, getFixupTableModel,
   getLegacyCodeViewTableModel, getTd32TableModel,
