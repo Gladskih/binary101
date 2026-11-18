@@ -15,6 +15,8 @@ void test("AMD64 exception tables can be stored independently from their referen
   assert.equal(result.uniqueUnwindInfoCount, 1);
   assert.equal(result.invalidEntryCount, 0);
   assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.prologValidation,
+    { matchedCount: 1, findings: [], unverifiedCounts: {} });
 });
 
 void test("AMD64 exception tables without complete rows retain empty-table and truncation diagnostics", async () => {

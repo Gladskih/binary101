@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parsePe, isPeWindowsParseResult } from "../../../../../analyzers/pe/index.js";
-import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy } from
+import { createPeDebugFile, createPeWithDebugPayloads, createPeWithExceptionCopy,
+  createPeWithRawExceptionCopy } from
   "../../../../fixtures/pe-debug-file.js";
+import { MockFile } from "../../../../helpers/mock-file.js";
 import { createLegacyCodeView } from "../../../../fixtures/pe-legacy-codeview.js";
 
 void test("full PE parsing recognizes inline CodeView without an external PDB path", async () => {
@@ -26,6 +28,30 @@ void test("full PE parsing analyzes an unmapped .pdata copy with its actual imag
   assert.deepEqual(parsed.debug?.entries?.[0]?.exception?.issues, []);
   assert.equal(parsed.debug?.entries?.[0]?.rawPayload, undefined);
 });
+
+for (const allocation of [40, 56]) {
+  void test(`a raw-only .pdata copy checks image-code stack allocation ${allocation}`, async () => {
+    const bytes = createPeWithRawExceptionCopy().data.slice();
+    const view = new DataView(bytes.buffer);
+    // Fixture .text is RVA 0x1000/raw 0x200, unwind is RVA 0x10c0/raw 0x2c0,
+    // and the raw-only debug table is at 0x400. Keep one six-byte function.
+    view.setUint32(0x310, 12, true);
+    view.setUint32(0x404, 0x1006, true);
+    bytes.set([0x48, 0x83, 0xec, allocation, 0x90, 0xc3], 0x200);
+    // UWOP_ALLOC_SMALL info 4 asserts 40 bytes at the SUB's next instruction.
+    // https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64
+    bytes.set([1, 4, 1, 0, 4, 0x42, 0, 0], 0x2c0);
+    const parsed = await parsePe(new MockFile(bytes));
+
+    assert.ok(parsed && isPeWindowsParseResult(parsed));
+    assert.equal(parsed.exception, null);
+    assert.match(parsed.debug?.warning ?? "", /Exception Table data directory is absent/);
+    const validation = parsed.debug?.entries?.[0]?.exception?.prologValidation;
+    assert.equal(validation?.matchedCount, Number(allocation === 40));
+    assert.equal(validation?.findings.length, Number(allocation !== 40));
+    assert.deepEqual(validation?.unverifiedCounts, {});
+  });
+}
 
 void test("full PE parsing retains embedded PDB, frame metadata, linker names and chained DBG paths", async () => {
   const parsed = await parsePe(createPeDebugFile());

@@ -1,5 +1,3 @@
-"use strict";
-
 import type { FileRangeReader } from "../../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../../types.js";
 import { createEmptyExceptionDirectory, type PeExceptionDirectory } from "../types.js";
@@ -22,15 +20,15 @@ export const parseAmd64ExceptionDirectory = async (
   if (directory.kind === "invalid") return directory.result;
   return parseAmd64ExceptionTable(reader, createRvaRangeReader(reader, rvaToOff,
     directory.directory.rva, directory.directory.size), directory.entryCount,
-    rvaToOff, directory.issues, directory.directory.rva,
-    owners => createAmd64PrologValidator(reader, rvaToOff, owners));
+    rvaToOff, directory.issues, directory.directory.rva);
 };
 
 export const parseAmd64ExceptionTable = async (
   reader: FileRangeReader, source: FileRangeReader, entryCount: number,
   rvaToOff: RvaToOffset, issues: string[], directoryRva?: number,
-  createValidator?: (owners: Amd64RuntimeFunctionTable["functionsByUnwindRva"])
+  createValidator: (owners: Amd64RuntimeFunctionTable["functionsByUnwindRva"])
     => ReturnType<typeof createAmd64PrologValidator>
+    = owners => createAmd64PrologValidator(reader, rvaToOff, owners)
 ): Promise<PeExceptionDirectory> => {
   const runtimeFunctions = await readAmd64RuntimeFunctionTable(reader, source, entryCount,
     rvaToOff, issues, directoryRva);
