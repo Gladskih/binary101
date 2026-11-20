@@ -71,6 +71,7 @@ void test("export table handles unnamed, empty-name and non-forwarded slots", ()
     { ordinal: 2, rva: 0, names: [""], forwarder: "" }
   ]);
 
+  assert.match(model.rowAt(0)?.cells[3]?.html ?? "", /0x00000000.*Unused slot/);
   assert.equal(model.rowAt(0)?.cells[2]?.html, "-");
   assert.equal(model.rowAt(1)?.cells[2]?.html, "");
   assert.equal(model.rowAt(0)?.cells[4]?.html, "-");

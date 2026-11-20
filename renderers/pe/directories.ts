@@ -147,14 +147,18 @@ export function renderExports(
   out.push(
     renderPeSectionStart(
       "Export directory",
-      `${ex.entries?.length ?? 0} entr${(ex.entries?.length ?? 0) === 1 ? "y" : "ies"}`
+      `${ex.entries.length} EAT slot${ex.entries.length === 1 ? "" : "s"} read`
     )
   );
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Name", escapeHtml(ex.dllName || ""), "Exported DLL name recorded by the linker."));
-  out.push(renderDefinitionRow("OrdinalBase", String(ex.Base), "Base value added to function indices to form ordinals."));
-  out.push(renderDefinitionRow("Functions", String(ex.NumberOfFunctions), "Total entries in Export Address Table (including unnamed)."));
-  out.push(renderDefinitionRow("Names", String(ex.NumberOfNames), "Number of entries with names (Export Name Ptr & Ord tables)."));
+  out.push(renderDefinitionRow("OrdinalBase", String(ex.Base), "Base value added to zero-based export address table indices to form ordinals."));
+  out.push(renderDefinitionRow("EAT slots", String(ex.NumberOfFunctions),
+    "Declared Export Address Table size in slots, including unused slots."));
+  out.push(renderDefinitionRow("Recovered targets", String(ex.entries.filter(entry => entry.rva !== 0).length),
+    "Nonzero slots read from the table. These can refer to code, data, or a forwarded export."));
+  out.push(renderDefinitionRow("Name pointers", String(ex.NumberOfNames),
+    "Declared number of export name pointers. Multiple names can refer to the same slot."));
   out.push(`</dl>`);
   if (ex.issues?.length) {
     out.push(`<ul class="smallNote">`);

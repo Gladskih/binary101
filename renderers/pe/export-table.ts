@@ -67,7 +67,8 @@ export const createExportTableModel = (
       { html: String(entry.ordinal), className: "peNumeric" },
       { html: entry.names.length
         ? entry.names.map((name, index) => renderExportName(entry, name, index)).join("<br>") : "-" },
-      { html: hex(entry.rva, 8), className: "peNumeric", sortValue: String(entry.rva) },
+      { html: hex(entry.rva, 8) + (entry.rva === 0 ? ` <span class="smallNote">Unused slot</span>` : ""),
+        className: "peNumeric", sortValue: String(entry.rva) },
       { html: entry.forwarder ? exportText(entry.forwarder) : "-" },
       ...(matches.length ? [{ html: links.get(entry.ordinal)?.map(exportText).join("<br>") ?? "-" }] : [])
     ] };
