@@ -12,6 +12,7 @@ export type ElfExecutableRegion = {
   fileOffset: bigint;
   fileSize: bigint;
   vaddr: bigint;
+  sectionIndex?: number;
 };
 
 const isExecutableLoadSegment = (ph: ElfProgramHeader): boolean => ph.type === PT_LOAD && (ph.flags & PF_X) !== 0;
@@ -24,8 +25,14 @@ const isExecutableSection = (sec: ElfSectionHeader): boolean => {
 
 export const getElfExecutableRegions = (
   programHeaders: ElfProgramHeader[],
-  sections: ElfSectionHeader[]
+  sections: ElfSectionHeader[],
+  fileType?: number
 ): ElfExecutableRegion[] => {
+  // gABI 3 and 5: ET_REL symbols use offsets within their defining section.
+  // The decoder keys instructions by a scalar, so use file offsets for ET_REL.
+  // https://gabi.xinuos.com/elf/05-symtab.html#symbol-value
+  if (fileType === 1) return executableSectionRegions(sections,
+    section => ({ vaddr: section.offset, sectionIndex: section.index }));
   const segmentRegions: ElfExecutableRegion[] = programHeaders
     .filter(isExecutableLoadSegment)
     .filter(ph => ph.filesz > 0n)
@@ -36,17 +43,27 @@ export const getElfExecutableRegions = (
       vaddr: ph.vaddr
     }));
   if (segmentRegions.length) return segmentRegions;
+  return executableSectionRegions(sections, section => ({ vaddr: section.addr }));
+};
 
-  return sections
+const executableSectionRegions = (
+  sections: ElfSectionHeader[],
+  coordinates: (section: ElfSectionHeader) => Pick<ElfExecutableRegion, "vaddr" | "sectionIndex">
+): ElfExecutableRegion[] => sections
     .filter(isExecutableSection)
     .filter(sec => sec.size > 0n)
     .map(sec => ({
       label: `Section ${sec.name ? `"${sec.name}"` : `#${sec.index}`} (SHF_EXECINSTR)`,
       fileOffset: sec.offset,
       fileSize: sec.size,
-      vaddr: sec.addr
+      ...coordinates(sec)
     }));
-};
+
+export const createElfSectionEdgeFilter = (regions: ElfExecutableRegion[]) =>
+  (from: bigint, to: bigint): boolean => {
+    const region = findElfRegionContainingVaddr(regions, from);
+    return region != null && to >= region.vaddr && to < region.vaddr + region.fileSize;
+  };
 
 export const findElfRegionContainingVaddr = (
   regions: ElfExecutableRegion[],

@@ -6,7 +6,7 @@ import type {
   ElfInstructionSetProgress,
   ElfInstructionSetReport
 } from "./disassembly-types.js";
-import { getElfExecutableRegions } from "./executable-regions.js";
+import { createElfSectionEdgeFilter, getElfExecutableRegions } from "./executable-regions.js";
 import { disassembleControlFlowForInstructionSetsVaddr } from "../x86/disassembly-control-flow-vaddr.js";
 import { isIcedX86Module, type IcedX86Module } from "../x86/disassembly-iced.js";
 import { createX86InstructionSetUsageTracker } from "../x86/instruction-set-usage.js";
@@ -25,6 +25,7 @@ type ElfInstructionSetDecodeRun = {
   iced: IcedX86Module;
   bitness: 32 | 64;
   sampledSections: ElfSampledSection[];
+  followEdge?: (from: bigint, to: bigint) => boolean;
   entrypoints: bigint[];
   yieldEveryInstructions: number;
   bytesSampled: number;
@@ -51,6 +52,17 @@ const reportProgress = (opts: AnalyzeElfInstructionSetOptions, progress: ElfInst
 };
 
 const yieldToEventLoop = async (): Promise<void> => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+const loadElfX86Decoder = async (issues: string[]): Promise<IcedX86Module | null> => {
+  try {
+    const iced: unknown = await import("iced-x86-disasm");
+    if (isIcedX86Module(iced)) return iced;
+    issues.push("Failed to load iced-x86 disassembler (unexpected module shape).");
+  } catch (error) {
+    issues.push(`Failed to load iced-x86 disassembler (${String(error)})`);
+  }
+  return null;
+};
 
 export async function analyzeElfInstructionSets(
   file: File,
@@ -80,7 +92,9 @@ async function analyzeX86InstructionSets(
   const issues: string[] = [];
   const machine = opts.machine >>> 0;
   const supported = machine === ELF_MACHINE_I386 || machine === ELF_MACHINE_X86_64;
-  const bitness: 32 | 64 = opts.is64Bit ? 64 : 32;
+  // AMD64 psABI, ILP32: ELFCLASS32 x32 files still execute in long mode.
+  // https://gitlab.com/x86-psABIs/x86-64-ABI/-/raw/master/x86-64-ABI/x32.tex
+  const bitness: 32 | 64 = machine === ELF_MACHINE_X86_64 ? 64 : 32;
   const yieldEveryInstructions =
     typeof opts.yieldEveryInstructions === "number" &&
     Number.isSafeInteger(opts.yieldEveryInstructions) &&
@@ -104,13 +118,13 @@ async function analyzeX86InstructionSets(
   }
   if (!opts.littleEndian) {
     issues.push("Big-endian ELF is not supported for x86/x86-64 disassembly.");
+    return emptyReport(0);
   }
-  if (machine === ELF_MACHINE_X86_64 && bitness !== 64) {
-    issues.push("Machine is x86-64 but ELF class reports 32-bit mode.");
-  } else if (machine === ELF_MACHINE_I386 && bitness !== 32) {
-    issues.push("Machine is i386 but ELF class reports 64-bit mode.");
+  if (machine === ELF_MACHINE_I386 && opts.is64Bit) {
+    issues.push("EM_386 requires the ELF32 file class.");
+    return emptyReport(0);
   }
-  const regions = getElfExecutableRegions(opts.programHeaders, opts.sections);
+  const regions = getElfExecutableRegions(opts.programHeaders, opts.sections, opts.fileType);
   if (!regions.length) {
     issues.push("No executable segments/sections available to locate code bytes.");
     return emptyReport(0);
@@ -137,22 +151,14 @@ async function analyzeX86InstructionSets(
     return emptyReport(bytesSampled, seedSummary);
   }
 
-  let iced: unknown;
-  try {
-    iced = await import("iced-x86-disasm");
-  } catch (err) {
-    issues.push(`Failed to load iced-x86 disassembler (${String(err)})`);
-    return emptyReport(bytesSampled, seedSummary);
-  }
-  if (!isIcedX86Module(iced)) {
-    issues.push("Failed to load iced-x86 disassembler (unexpected module shape).");
-    return emptyReport(bytesSampled, seedSummary);
-  }
+  const iced = await loadElfX86Decoder(issues);
+  if (!iced) return emptyReport(bytesSampled, seedSummary);
   const decoded = await decodeElfInstructionSetUsage({
     crossedData,
     iced,
     bitness,
     sampledSections,
+    ...(opts.fileType === 1 ? { followEdge: createElfSectionEdgeFilter(regions) } : {}),
     entrypoints,
     yieldEveryInstructions,
     bytesSampled,
@@ -207,6 +213,7 @@ const decodeElfInstructionSetUsage = async (
         specialInstructions.record(instruction);
         importCode.record(instruction);
       },
+      ...(run.followEdge ? { followEdge: run.followEdge } : {}),
       issues: run.issues,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onYield: async snapshot => {

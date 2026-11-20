@@ -4,11 +4,12 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import { notifyAarch64Progress, walkAarch64ControlFlow } from "../aarch64/control-flow.js";
 import type { AnalyzeElfInstructionSetOptions, ElfInstructionSetReport } from "./disassembly-types.js";
 import { collectElfInstructionSetSeeds } from "./disassembly-entrypoints.js";
-import { getElfExecutableRegions, findElfRegionContainingVaddr, type ElfExecutableRegion } from "./executable-regions.js";
+import { createElfSectionEdgeFilter, findElfRegionContainingVaddr,
+  getElfExecutableRegions, type ElfExecutableRegion } from "./executable-regions.js";
 import { createCodeExclusionIndex } from "../code-exclusions.js";
 
 const boundRegions = (file: File, opts: AnalyzeElfInstructionSetOptions, issues: string[]) =>
-  getElfExecutableRegions(opts.programHeaders, opts.sections).flatMap(region => {
+  getElfExecutableRegions(opts.programHeaders, opts.sections, opts.fileType).flatMap(region => {
     if (region.fileOffset < 0n || region.fileOffset >= BigInt(file.size) ||
         region.vaddr < 0n || region.vaddr + region.fileSize > 0x1_0000_0000_0000_0000n) {
       issues.push(`${region.label} has an out-of-bounds file range or virtual address.`);
@@ -71,5 +72,6 @@ const analyzeCode = async (
     return;
   }
   await walkAarch64ControlFlow(await loadAarch64Disassembler(), createCodeReader(file, regions),
-    seeds.entrypoints, opts, report, crossedData);
+    seeds.entrypoints, opts.fileType === 1
+      ? { ...opts, followEdge: createElfSectionEdgeFilter(regions) } : opts, report, crossedData);
 };

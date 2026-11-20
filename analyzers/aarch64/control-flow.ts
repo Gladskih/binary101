@@ -65,7 +65,8 @@ export const walkAarch64ControlFlow = async (
   readCode: (address: bigint) => Promise<Uint8Array>,
   entrypoints: bigint[],
   opts: Pick<AnalyzeElfInstructionSetOptions,
-    "signal" | "onProgress" | "yieldEveryInstructions" | "dataRanges">,
+    "signal" | "onProgress" | "yieldEveryInstructions" | "dataRanges"> &
+    { followEdge?: (from: bigint, to: bigint) => boolean },
   report: Aarch64ControlFlowReport,
   crossedData = createCodeExclusionIndex(opts.dataRanges)
 ): Promise<void> => {
@@ -89,8 +90,11 @@ export const walkAarch64ControlFlow = async (
         continue;
       }
       const bytes = readWindow(address);
-      recordBytes(decode, bytes instanceof Uint8Array ? bytes : await bytes,
-        address, pending, report, usage, special);
+      const targets = recordBytes(decode, bytes instanceof Uint8Array ? bytes : await bytes,
+        address, report, usage, special);
+      for (const target of targets) {
+        if (!opts.followEdge || opts.followEdge(address, target)) pending.push(target);
+      }
       if (++visitedCount % interval === 0) {
         report.instructionSets = [...usage.values()];
         notifyAarch64Progress(opts, report, "decoding");
@@ -124,15 +128,14 @@ const recordBytes = (
   decode: ReturnType<typeof createAarch64SampleDecoder>,
   bytes: Uint8Array,
   address: bigint,
-  pending: bigint[],
   report: Aarch64ControlFlowReport,
   usage: Map<string, ElfInstructionSetUsage>,
   special: ReturnType<typeof createAarch64SpecialInstructionCollector>
-): void => {
-  if (!bytes.length) return;
+): bigint[] => {
+  if (!bytes.length) return [];
   if (bytes.length < 4) report.issues.push(`Truncated AArch64 instruction at 0x${address.toString(16)}.`);
   const instruction = decode(bytes, address);
   recordInstruction(instruction, report, usage);
   if (instruction.specialInstruction) special.record(instruction.specialInstruction, address);
-  pending.push(...nextAddresses(instruction));
+  return nextAddresses(instruction);
 };

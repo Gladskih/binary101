@@ -46,8 +46,9 @@ void test("ET_REL symbol values are section offsets and require that exact secti
   const symbol = opts.symbolTables![0]!.entries[0]!;
   symbol.info = 0x11;
   symbol.value = 8n;
+  opts.sections[0]!.offset = 16n;
 
-  assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 0x1008n, end: 0x1010n }]);
+  assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 24n, end: 32n }]);
   symbol.value = 0xffff_ffffn;
   assert.deepEqual(collectElfCodeExclusions(opts, 32, []), []);
 });
@@ -89,7 +90,7 @@ void test("sectionless reserved indices and TLS offsets remain excluded after su
   await decodeElfSymbolNames({ ...relocationFixture().elf, symbolTables: opts.symbolTables! });
 
   assert.deepEqual(collectElfCodeExclusions(opts, 32, []), []);
-  opts.symbolTables![0]!.entries = [{ ...symbol, sectionIndex: 0x10000 }];
+  opts.symbolTables![0]!.entries = [{ ...symbol, sectionIndex: 0x10000, rawSectionIndex: 0xffff }];
   assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 0x1008n, end: 0x1010n }]);
 });
 
@@ -139,7 +140,7 @@ void test("ELF relocatable and unresolved relocation records do not imply dynami
   assert.deepEqual(collectElfCodeExclusions(opts, 32, []), []);
 });
 
-void test("nonallocated and ambiguous relocatable sections cannot suppress executable bytes", () => {
+void test("ET_REL data in two sections with the same VA is scoped by file offset", () => {
   const opts = elfIsaDataOptions(62);
   opts.symbolTables![0]!.entries[0]!.info = 0x11;
   opts.sections[0]!.flags = 0n;
@@ -150,7 +151,7 @@ void test("nonallocated and ambiguous relocatable sections cannot suppress execu
   assert.deepEqual(collectElfCodeExclusions(opts, 32, []), []);
   opts.sections[0]!.flags = 6n;
   opts.sections.push({ ...opts.sections[0]!, index: 4, name: ".text.other", offset: 16n });
-  assert.deepEqual(collectElfCodeExclusions(opts, 32, []), []);
+  assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 8n, end: 16n }]);
 });
 
 void test("linked data sections retain their addresses even when nonexecutable sections overlap", () => {
@@ -167,8 +168,8 @@ for (const [flags, address] of [[2n, 0x1000n], [4n, 0xff0n], [4n, 0x1010n]]) {
     const opts = elfIsaDataOptions(62);
     opts.fileType = 1;
     Object.assign(opts.symbolTables![0]!.entries[0]!, { info: 0x11, value: 8n });
-    opts.sections.push({ ...opts.sections[0]!, index: 4, flags: flags!, addr: address! });
+    opts.sections.push({ ...opts.sections[0]!, index: 4, flags: flags!, addr: address!, offset: 16n });
 
-    assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 0x1008n, end: 0x1010n }]);
+    assert.deepEqual(collectElfCodeExclusions(opts, 32, []), [{ start: 8n, end: 16n }]);
   });
 }

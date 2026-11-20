@@ -12,6 +12,7 @@ import {
 } from "./executable-regions.js";
 import type { ElfSampledSection } from "./disassembly-sampling.js";
 import { createCodeExclusionIndex } from "../code-exclusions.js";
+import { collectElfObjectCodeSeeds } from "./disassembly-object-seeds.js";
 
 type ElfSeedAddResult = "added" | "duplicate" | "notExecutable" | "zero" | "data";
 
@@ -27,6 +28,7 @@ export const collectElfInstructionSetSeeds = async (
   sampledSections: Pick<ElfSampledSection, "vaddrStart" | "label">[],
   issues: string[], crossedData = createCodeExclusionIndex(opts.dataRanges)
 ): Promise<ElfInstructionSetSeeds | null> => {
+  if (opts.fileType === 1) return collectElfObjectCodeSeeds(opts.symbolTables ?? [], regions, crossedData);
   const requestedEntrypointVaddr = typeof opts.entrypointVaddr === "bigint" ? opts.entrypointVaddr : 0n;
   const seedSources: ElfDisassemblySeedSourceStats[] = [];
   let fallbackSource: string | null = null;

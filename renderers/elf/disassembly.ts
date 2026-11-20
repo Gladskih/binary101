@@ -82,8 +82,9 @@ const renderDisassemblySummary = (disasm: NonNullable<ElfParseResult["disassembl
   }
 };
 
-const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, out: string[]): void => {
-  if (!disasm.seedSummary) return;
+const renderSeedSummary = (elf: ElfParseResult, out: string[]): void => {
+  const disasm = elf.disassembly;
+  if (!disasm?.seedSummary) return;
   const seeds = disasm.seedSummary;
   const dimZero = (value: number): string => (value ? escapeHtml(String(value)) : `<span class="dim">0</span>`);
   const entryText = `0x${seeds.entrypointVaddr.toString(16)}`;
@@ -92,8 +93,10 @@ const renderSeedSummary = (disasm: NonNullable<ElfParseResult["disassembly"]>, o
   out.push(
     `<div class="smallNote dim">Seeds are candidate start addresses for control-flow guided sampling (entry point, constructor arrays, function symbols, unwind tables, etc.). Only seeds inside executable segments/sections are used.</div>`
   );
+  const entry = elf.header?.type === 1 ? "Relocatable code is sampled within each section" :
+    `Entry point: ${escapeHtml(entryText)}`;
   out.push(
-    `<div class="smallNote">Entry point: ${escapeHtml(entryText)}${
+    `<div class="smallNote">${entry}${
       seeds.fallbackSource ? `; fallback: ${escapeHtml(seeds.fallbackSource)}` : ""
     }</div>`
   );
@@ -155,7 +158,7 @@ export const renderInstructionSetsContent = (elf: ElfParseResult, out: string[])
   renderInstructionSetHeader(disasm, out);
   // AAELF64 ELF Header: EM_AARCH64.
   if (elf.header?.machine === 183) {
-    renderAarch64InstructionSets(disasm, out);
+    renderAarch64InstructionSets(elf, out);
     return;
   }
   if (!disasm) {
@@ -163,16 +166,18 @@ export const renderInstructionSetsContent = (elf: ElfParseResult, out: string[])
     return;
   }
   renderDisassemblySummary(disasm, out);
-  renderSeedSummary(disasm, out);
+  renderSeedSummary(elf, out);
+  const addressLabel = elf.header?.type === 1 ? "file offsets" : "virtual addresses";
   out.push(renderX86SpecialInstructions(disasm.specialInstructions ?? [], finding =>
     finding.sampleAddresses.map(address => `<code>0x${address.toString(16)}</code>`).join(" ") ||
-      "Unavailable", "Example virtual addresses",
-    "Virtual address examples show up to three locations per instruction."));
+      "Unavailable", `Example ${addressLabel}`,
+    "Examples show up to three locations per instruction."));
   renderKnownFeatureCounts(disasm, out);
   renderOtherFeatureCounts(disasm, out);
 };
 
-const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out: string[]): void => {
+const renderAarch64InstructionSets = (elf: ElfParseResult, out: string[]): void => {
+  const disasm = elf.disassembly;
   out.push(`<div class="smallNote">AArch64 instruction-set requirements</div>`);
   out.push(`<div class="smallNote dim">LLVM opcode feature gates preserve “and” / “or” alternatives. ` +
     `Grouped Arm labels are not separate requirements. No recorded gate does not prove base-ISA validity; ` +
@@ -183,10 +188,10 @@ const renderAarch64InstructionSets = (disasm: ElfParseResult["disassembly"], out
     return;
   }
   renderDisassemblySummary(disasm, out);
-  renderSeedSummary(disasm, out);
+  renderSeedSummary(elf, out);
   if (disasm.decoderVersion) out.push(`<div class="smallNote dim">${escapeHtml(disasm.decoderVersion)}</div>`);
   out.push(renderAarch64SpecialInstructions(disasm.aarch64SpecialInstructions ?? [],
-    "Example virtual addresses"));
+    elf.header.type === 1 ? "Example file offsets" : "Example virtual addresses"));
   if (!disasm.instructionSets.length) {
     out.push(`<div class="smallNote dim">No instruction-set requirements were detected in the sampled bytes.</div>`);
   }

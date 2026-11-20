@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzeElfInstructionSets, type AnalyzeElfInstructionSetOptions } from "../../../../../analyzers/elf/disassembly.js";
-import type { ElfProgramHeader } from "../../../../../analyzers/elf/types.js";
+import type { ElfProgramHeader, ElfSectionHeader } from "../../../../../analyzers/elf/types.js";
 import { MockFile } from "../../../../helpers/mock-file.js";
 
 const ph = (overrides: Partial<ElfProgramHeader>): ElfProgramHeader =>
@@ -48,6 +48,73 @@ void test("ELF32 counts sites and limits examples to three addresses", async () 
     { categories: ["io-privilege"], instruction: "CLI", count: 4,
       sampleAddresses: [0x1000n, 0x1001n, 0x1002n] }
   ]);
+});
+
+void test("x32 ELF decodes AMD64 instructions in long mode", async () => {
+  // AMD64 MOV r64, imm64 (REX.W+B) followed by RET, in an ELFCLASS32 object.
+  const code = Uint8Array.of(0x49, 0xb8, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0xc3);
+  const report = await analyzeElfInstructionSets(new MockFile(code), {
+    machine: 62, is64Bit: false, littleEndian: true, entrypointVaddr: 0x1000n,
+    programHeaders: [ph({ flags: 1, vaddr: 0x1000n, filesz: BigInt(code.length) })], sections: []
+  });
+
+  assert.equal(report.bitness, 64);
+  assert.equal(report.instructionCount, 2);
+  assert.equal(report.invalidInstructionCount, 0);
+  assert.deepEqual(report.issues, []);
+});
+
+const executableSection = (index: number, offset: bigint, size: bigint): ElfSectionHeader => ({
+  index, name: `.text.${index}`, type: 1, typeName: "SHT_PROGBITS", nameOff: 0,
+  flags: 6n, flagNames: ["ALLOC", "EXECINSTR"], addr: 0n, offset, size,
+  link: 0, info: 0, addralign: 1n, entsize: 0n
+});
+
+void test("ET_REL samples separate code sections at the same sh_addr", async () => {
+  // RET in section 1, unreachable padding, then VADDPS ymm0,ymm0,ymm0 and RET in section 2.
+  const code = Uint8Array.of(0, 0xc3, 0, 0xc5, 0xfc, 0x58, 0xc0, 0xc3);
+  const report = await analyzeElfInstructionSets(new MockFile(code), {
+    fileType: 1, machine: 62, is64Bit: true, littleEndian: true, entrypointVaddr: 0n,
+    programHeaders: [], sections: [executableSection(1, 1n, 1n), executableSection(2, 3n, 5n)]
+  });
+
+  assert.equal(report.bytesDecoded, 6);
+  assert.equal(report.instructionCount, 3);
+  assert.ok(report.instructionSets.some(set => set.id === "AVX"));
+});
+
+void test("ET_REL uses function offsets and ignores apparent cross-section branches", async () => {
+  // Section 1 has two bytes of padding and JMP +1, aiming past the RET in section 2.
+  const code = Uint8Array.of(0, 0xfa, 0xfa, 0xeb, 1, 0xc3, 0xfa, 0xc3);
+  const report = await analyzeElfInstructionSets(new MockFile(code), {
+    fileType: 1, machine: 62, is64Bit: true, littleEndian: true, entrypointVaddr: 0n,
+    programHeaders: [],
+    sections: [executableSection(1, 1n, 4n), executableSection(2, 5n, 3n)],
+    symbolTables: [{ sectionIndex: 3, issues: [], entries: [
+      { name: "launch", value: 2n, size: 2n, sectionIndex: 1, info: 0x12, other: 0 },
+      { name: "stop", value: 0n, size: 1n, sectionIndex: 2, info: 0x12, other: 0 }
+    ] }]
+  });
+
+  assert.equal(report.instructionCount, 2);
+  assert.deepEqual(report.specialInstructions, []);
+  assert.equal(report.seedSummary?.fallbackSource, null);
+  assert.equal(report.seedSummary?.sources[0]?.added, 2);
+});
+
+void test("ELF x86 ISA rejects unsupported machine and header layout combinations", async () => {
+  const file = new MockFile(Uint8Array.of(0xc3));
+  const options: AnalyzeElfInstructionSetOptions = {
+    machine: 3, is64Bit: true, littleEndian: true, entrypointVaddr: 0x1000n, sections: [],
+    programHeaders: [ph({ flags: 1, vaddr: 0x1000n })]
+  };
+  const invalidClass = await analyzeElfInstructionSets(file, options);
+  const invalidEncoding = await analyzeElfInstructionSets(file, { ...options, littleEndian: false });
+
+  assert.equal(invalidClass.bytesSampled, 0);
+  assert.match(invalidClass.issues.join(" "), /EM_386 requires the ELF32 file class/);
+  assert.equal(invalidEncoding.bytesSampled, 0);
+  assert.match(invalidEncoding.issues.join(" "), /Big-endian ELF is not supported/);
 });
 
 void test("ELF retains findings before truncated instructions and ignores ordinary code", async () => {

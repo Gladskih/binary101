@@ -32,6 +32,7 @@ type ControlFlowDecodeStateVaddr = {
   yieldEveryInstructions: number;
   signal?: AbortSignal;
   onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
+  followEdge?: (from: bigint, to: bigint) => boolean;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
   bytesDecoded: number;
   instructionCount: number;
@@ -75,12 +76,20 @@ const getDecoderForVaddr = (
   return null;
 };
 
-const addControlFlowWork = (state: ControlFlowDecodeStateVaddr, vaddr: bigint | null): void => {
-  if (vaddr == null) return;
+const addControlFlowWork = (state: ControlFlowDecodeStateVaddr, vaddr: bigint): void => {
   if (state.visited.has(vaddr) || state.queued.has(vaddr)) return;
   if (!getDecoderForVaddr(state.decoders, vaddr)) return;
   state.queue.push(vaddr);
   state.queued.add(vaddr);
+};
+
+const queueDecodedBranch = (
+  state: ControlFlowDecodeStateVaddr, instr: InstanceType<IcedX86Module["Instruction"]>
+): void => {
+  const rawTarget = getNearBranchTarget(instr, state.iced.OpKind);
+  if (rawTarget == null) return;
+  const target = BigInt.asUintN(64, rawTarget);
+  if (!state.followEdge || state.followEdge(instr.ip, target)) addControlFlowWork(state, target);
 };
 
 const countInstructionFeatures = (
@@ -134,8 +143,7 @@ const decodeLinearRun = async (
     state.onInstruction?.(instr);
     if (!isUd2Trap) countInstructionFeatures(state, instr);
     if (state.iced.FlowControl["UnconditionalBranch"] === instr.flowControl) {
-      const target = getNearBranchTarget(instr, state.iced.OpKind);
-      addControlFlowWork(state, target == null ? null : BigInt.asUintN(64, target));
+      queueDecodedBranch(state, instr);
       break;
     }
     if (
@@ -143,8 +151,7 @@ const decodeLinearRun = async (
       state.iced.FlowControl["Call"] === instr.flowControl ||
       state.iced.FlowControl["XbeginXabortXend"] === instr.flowControl
     ) {
-      const target = getNearBranchTarget(instr, state.iced.OpKind);
-      addControlFlowWork(state, target == null ? null : BigInt.asUintN(64, target));
+      queueDecodedBranch(state, instr);
     } else if (
       state.iced.FlowControl["IndirectBranch"] === instr.flowControl ||
       state.iced.FlowControl["Return"] === instr.flowControl ||
@@ -179,6 +186,7 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
   issues: string[];
   signal?: AbortSignal;
   onInstruction?: (instruction: InstanceType<IcedX86Module["Instruction"]>) => void;
+  followEdge?: (from: bigint, to: bigint) => boolean;
   onYield?: (snapshot: DisassemblyYieldSnapshot) => Promise<void>;
 }): Promise<DisassemblyYieldSnapshot> {
   const bytesSampled = opts.sections.reduce((sum, entry) => sum + entry.data.length, 0);
@@ -206,6 +214,7 @@ export async function disassembleControlFlowForInstructionSetsVaddr(opts: {
     yieldEveryInstructions: opts.yieldEveryInstructions,
     ...(opts.signal ? { signal: opts.signal } : {}),
     ...(opts.onInstruction ? { onInstruction: opts.onInstruction } : {}),
+    ...(opts.followEdge ? { followEdge: opts.followEdge } : {}),
     ...(opts.onYield ? { onYield: opts.onYield } : {}),
     bytesDecoded: 0,
     instructionCount: 0,
