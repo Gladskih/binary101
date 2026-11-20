@@ -188,7 +188,8 @@ const parsePeLoaderDirectories = async (context: PeWindowsParseContext) => {
     ),
     boundImports: await parseBoundImports(reader, core.dataDirs, core.rvaToOff),
     delayImports: await peVariant.parseDelayImports(
-      reader, core.dataDirs, core.rvaToOff, { sizeOfImage: core.opt.SizeOfImage }
+      reader, core.dataDirs, core.rvaToOff,
+      { sizeOfImage: core.opt.SizeOfImage, imageBase: core.opt.ImageBase }
     ),
     loadcfg: await peVariant.parseAndEnrichLoadConfig(
       reader, core.dataDirs, core.rvaToOff, core.opt.ImageBase,
