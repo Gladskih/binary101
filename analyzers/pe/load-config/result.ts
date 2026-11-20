@@ -58,5 +58,5 @@ export const createPeLoadConfigResult = (warnings: string[] = []): PeLoadConfig 
   GuardMemcpyFunctionPointer: 0n,
   UmaFunctionPointers: 0n,
   GuardFlags: 0,
-  ...(warnings.length ? { warnings } : {})
+  ...(warnings.length ? { warnings, unavailableFields: ["Size"] } : {})
 });

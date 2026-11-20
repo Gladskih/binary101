@@ -66,6 +66,8 @@ export type PeLoadConfigTables = {
 
 export interface PeLoadConfig {
   Size: number;
+  /** Fields whose bytes are outside the readable part of the declared structure. */
+  unavailableFields?: string[];
   TimeDateStamp: number;
   Major: number;
   Minor: number;
@@ -174,22 +176,28 @@ const readLoadConfigBytes = async (
   );
 };
 
-const createFieldReader = (view: DataView, warnings: string[]): LoadConfigFieldReader => {
+const createFieldReader = (
+  view: DataView, warnings: string[], unavailableFields: string[]
+): LoadConfigFieldReader => {
   const declaredSize = view.getUint32(0, true);
-  const withinDeclared = (endExclusive: number): boolean => !declaredSize || declaredSize >= endExclusive;
-  const has = (offset: number, byteLength: number): boolean =>
-    view.byteLength >= offset + byteLength && withinDeclared(offset + byteLength);
+  const limit = Math.min(view.byteLength, declaredSize || view.byteLength);
+  const has = (offset: number, byteLength: number, fieldName: string): boolean => {
+    if (offset + byteLength <= limit) return true;
+    unavailableFields.push(fieldName);
+    return false;
+  };
   return {
     Size: declaredSize,
-    TimeDateStamp: view.byteLength >= 8 ? view.getUint32(4, true) : 0,
-    Major: view.byteLength >= 10 ? view.getUint16(8, true) : 0,
-    Minor: view.byteLength >= 12 ? view.getUint16(10, true) : 0,
-    readU16: offset => (has(offset, 2) ? view.getUint16(offset, true) : 0),
-    readU32: offset => (has(offset, 4) ? view.getUint32(offset, true) : 0),
-    readU32AsBigInt: offset => (has(offset, 4) ? BigInt(view.getUint32(offset, true)) : 0n),
-    readU64: offset => (has(offset, 8) ? view.getBigUint64(offset, true) : 0n),
+    TimeDateStamp: has(4, 4, "TimeDateStamp") ? view.getUint32(4, true) : 0,
+    Major: has(8, 2, "Major") ? view.getUint16(8, true) : 0,
+    Minor: has(10, 2, "Minor") ? view.getUint16(10, true) : 0,
+    readU16: (offset, fieldName) => has(offset, 2, fieldName) ? view.getUint16(offset, true) : 0,
+    readU32: (offset, fieldName) => has(offset, 4, fieldName) ? view.getUint32(offset, true) : 0,
+    readU32AsBigInt: (offset, fieldName) =>
+      has(offset, 4, fieldName) ? BigInt(view.getUint32(offset, true)) : 0n,
+    readU64: (offset, fieldName) => has(offset, 8, fieldName) ? view.getBigUint64(offset, true) : 0n,
     readU64Count: (offset, fieldName) =>
-      (has(offset, 8) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0)
+      has(offset, 8, fieldName) ? toSafeCount(fieldName, view.getBigUint64(offset, true), warnings) : 0
   };
 };
 
@@ -220,7 +228,9 @@ const parseLoadConfigDirectoryWithBuilder = async (
   if (declaredSize > 0 && view.byteLength < Math.min(declaredSize, knownSize)) {
     warnings.push("LOAD_CONFIG bytes available in file are smaller than the Size field.");
   }
-  const result = buildLoadConfig(createFieldReader(view, warnings));
+  const unavailableFields: string[] = [];
+  const result = buildLoadConfig(createFieldReader(view, warnings, unavailableFields));
+  if (unavailableFields.length) result.unavailableFields = unavailableFields;
   if (warnings.length) result.warnings = warnings;
   if (notes.length) result.notes = notes;
   return result;
