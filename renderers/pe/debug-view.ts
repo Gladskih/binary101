@@ -45,7 +45,7 @@ const renderDebugIntro = (out: string[]): void => {
   out.push(
     `<div class="smallNote">IMAGE_DEBUG_DIRECTORY is an index of debug payloads. Each entry says ` +
       `what format is present, how large it is, and where the payload lives in the file. ` +
-      `Storage tells you whether the payload is mapped through a section or only exists in raw file layout.</div>`
+      `Storage describes how the complete payload relates to the loaded image and the file on disk.</div>`
   );
 };
 

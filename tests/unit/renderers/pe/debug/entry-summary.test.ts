@@ -6,12 +6,19 @@ import {
   getDebugStorageInfo,
   getEntrySummary
 } from "../../../../../renderers/pe/debug-entry-summary.js";
+import { createRvaToOffsetMapper } from "../../../../../analyzers/pe/sections/rva-mapper.js";
 import { createDebugViewEntry } from "../../../../fixtures/pe-debug-view-subject.js";
 import {
   createBasePe,
   createPeSection,
   createPeWithSections
 } from "../../../../fixtures/pe-renderer-headers-fixture.js";
+
+const createStorageSubject = (section = createPeSection("S0"),
+  fileSize = section.pointerToRawData + section.sizeOfRawData) => ({
+  ...createPeWithSections(section), fileSize,
+  rvaToOff: createRvaToOffsetMapper([section], fileSize, 0, 0)
+});
 
 void test("getDebugStorageInfo distinguishes empty entries from unresolved payloads", () => {
   const pe = createBasePe();
@@ -40,12 +47,67 @@ void test("getEntrySummary explains empty and nonempty ILTCG entries", () => {
 
 void test("getDebugStorageInfo reports mapped section-backed payloads", () => {
   const section = createPeSection("S0");
-  const pe = createPeWithSections(section);
+  const pe = createStorageSubject(section);
 
   const result = getDebugStorageInfo(pe, createDebugViewEntry(2, section.virtualAddress, section.pointerToRawData, 4));
 
   assert.equal(result.label, "MAPPED");
-  assert.match(result.description, /section-backed/i);
+  assert.match(result.description, /RVA maps the full payload/i);
+});
+
+void test("getDebugStorageInfo accepts a complete payload addressed only by RVA", () => {
+  const section = createPeSection("S0");
+  const pe = createStorageSubject(section);
+  const entry = createDebugViewEntry(2, section.virtualAddress, 0);
+
+  const result = getDebugStorageInfo(pe, entry);
+
+  assert.equal(result.label, "MAPPED");
+});
+
+void test("getDebugStorageInfo rejects a file pointer that disagrees with the RVA", () => {
+  const section = createPeSection("S0");
+  const pe = createStorageSubject(section);
+  const entry = createDebugViewEntry(2, section.virtualAddress, section.pointerToRawData + 1);
+
+  const result = getDebugStorageInfo(pe, entry);
+
+  assert.equal(result.label, "INCONSISTENT");
+  assert.match(result.description, /same file range/i);
+});
+
+void test("getDebugStorageInfo requires the complete payload to be mapped by the RVA", () => {
+  const section = createPeSection("S0");
+  const pe = createStorageSubject(section);
+  const lastMappedByte = section.virtualSize - 1;
+  const entry = createDebugViewEntry(2,
+    section.virtualAddress + lastMappedByte, section.pointerToRawData + lastMappedByte, 2);
+
+  const result = getDebugStorageInfo(pe, entry);
+
+  assert.equal(result.label, "INCONSISTENT");
+  assert.match(result.description, /same file range/i);
+});
+
+void test("getDebugStorageInfo detects a file pointer whose payload extends beyond EOF", () => {
+  const section = createPeSection("S0");
+  const pe = createStorageSubject(section, section.pointerToRawData + 1);
+  const entry = createDebugViewEntry(2, section.virtualAddress, section.pointerToRawData, 2);
+
+  const result = getDebugStorageInfo(pe, entry);
+
+  assert.equal(result.label, "UNRESOLVED");
+  assert.match(result.description, /file bounds/i);
+});
+
+void test("getDebugStorageInfo reports an unmappable RVA without a file pointer as unresolved", () => {
+  const section = createPeSection("S0");
+  const pe = createStorageSubject(section);
+  const entry = createDebugViewEntry(2, section.virtualAddress + section.virtualSize, 0);
+
+  const result = getDebugStorageInfo(pe, entry);
+
+  assert.equal(result.label, "UNRESOLVED");
 });
 
 void test("getDebugStorageInfo reports unmapped file-only payloads", () => {
@@ -64,7 +126,7 @@ void test("getDebugStorageInfo reports inconsistent RVA and section coverage", (
   const result = getDebugStorageInfo(pe, createDebugViewEntry(17, 0, section.pointerToRawData, 4));
 
   assert.equal(result.label, "INCONSISTENT");
-  assert.match(result.description, /disagree/i);
+  assert.match(result.description, /supplies no RVA/i);
 });
 
 void test("getEntrySummary describes decoded payload families", () => {

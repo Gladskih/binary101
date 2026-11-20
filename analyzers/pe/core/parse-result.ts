@@ -79,6 +79,7 @@ interface PeParseResultBase {
 }
 
 export interface PeWindowsParseResult extends PeParseResultBase {
+  fileSize: number;
   sanitizerEvidence?: SanitizerEvidence[];
   debug: PeDebugSection | null;
   opt: PeWindowsOptionalHeader;

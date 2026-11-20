@@ -3,27 +3,38 @@
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
 import type { PeDebugDirectoryEntry } from "../../analyzers/pe/debug/directory.js";
 import { IMAGE_DEBUG_TYPE_ILTCG } from "../../analyzers/pe/debug/types.js";
+import { contiguousRvaOffset } from "../../analyzers/pe/rva-mapping.js";
 import { getDebugTypeInfo } from "./debug-type-info.js";
 
 type DebugStorageInfo = { label: string; description: string };
-type FileRange = { start: number; end: number };
 
-const getDebugRawRange = (pe: PeWindowsParseResult, entry: PeDebugDirectoryEntry): FileRange | null => {
-  if ((entry.sizeOfData >>> 0) === 0) return null;
-  const rawStart = entry.pointerToRawData || (
-    entry.addressOfRawData ? pe.rvaToOff(entry.addressOfRawData) : null
-  );
-  return rawStart == null || rawStart < 0
-    ? null
-    : { start: rawStart, end: rawStart + (entry.sizeOfData >>> 0) };
+const UNRESOLVED_STORAGE: DebugStorageInfo = {
+  label: "UNRESOLVED",
+  description: "The raw data location does not resolve to a complete file range."
 };
 
-const isRangeCoveredBySection = (pe: PeWindowsParseResult, range: FileRange): boolean =>
-  pe.sections.some(section => {
-    const start = section.pointerToRawData >>> 0;
-    const end = start + (section.sizeOfRawData >>> 0);
-    return range.start >= start && range.end <= end;
-  });
+// PE Debug Directory: the RVA and file pointer describe the same payload.
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#debug-directory-image-only
+const getRvaStorageInfo = (
+  pe: PeWindowsParseResult, entry: PeDebugDirectoryEntry
+): DebugStorageInfo => {
+  const offset = contiguousRvaOffset(pe.rvaToOff, entry.addressOfRawData, entry.sizeOfData, pe.fileSize);
+  if (entry.pointerToRawData && offset !== entry.pointerToRawData) {
+    return {
+      label: "INCONSISTENT",
+      description: "The RVA and file pointer do not resolve to the same file range for the full payload."
+    };
+  }
+  return offset == null ? UNRESOLVED_STORAGE : {
+    label: "MAPPED",
+    description: "The RVA maps the full payload into the image."
+  };
+};
+
+const overlapsSectionData = (pe: PeWindowsParseResult, start: number, size: number): boolean =>
+  pe.sections.some(section => section.sizeOfRawData > 0 &&
+    start < section.pointerToRawData + section.sizeOfRawData &&
+    start + size > section.pointerToRawData);
 
 export const getDebugStorageInfo = (
   pe: PeWindowsParseResult,
@@ -35,30 +46,23 @@ export const getDebugStorageInfo = (
       description: "SizeOfData is zero; this debug entry has no payload to locate."
     };
   }
-  const rawRange = getDebugRawRange(pe, entry);
-  if (!rawRange) {
+  if (entry.pointerToRawData && entry.sizeOfData > pe.fileSize - entry.pointerToRawData) {
     return {
       label: "UNRESOLVED",
-      description: "The raw data location does not resolve to a file range."
+      description: "The payload range at the file pointer exceeds the file bounds."
     };
   }
-  const hasRva = (entry.addressOfRawData >>> 0) !== 0;
-  const coveredBySection = isRangeCoveredBySection(pe, rawRange);
-  if (hasRva && coveredBySection) {
+  if (entry.addressOfRawData) return getRvaStorageInfo(pe, entry);
+  if (!entry.pointerToRawData) return UNRESOLVED_STORAGE;
+  if (overlapsSectionData(pe, entry.pointerToRawData, entry.sizeOfData)) {
     return {
-      label: "MAPPED",
-      description: "Payload is section-backed and has a non-zero RVA, so it is mapped into the image."
-    };
-  }
-  if (!hasRva && !coveredBySection) {
-    return {
-      label: "UNMAPPED",
-      description: "Payload is addressed only by file pointer and is not covered by a section header."
+      label: "INCONSISTENT",
+      description: "The file range overlaps section data, but the entry supplies no RVA."
     };
   }
   return {
-    label: "INCONSISTENT",
-    description: "RVA presence and section coverage disagree, so the payload is not cleanly mapped/unmapped."
+    label: "UNMAPPED",
+    description: "The file pointer locates the payload outside section data, and the entry supplies no RVA."
   };
 };
 

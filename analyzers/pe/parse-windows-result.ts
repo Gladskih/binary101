@@ -69,6 +69,7 @@ export const buildWindowsPeResult = (
 ): PeWindowsParseResult => {
   return {
     ...buildWindowsPeIdentity(context, directories, imageArtifacts),
+    fileSize: context.file.size,
     debug: buildWindowsPeDebug(debugArtifacts, directories.clr),
     ...(debugArtifacts.coffDebug ? { coffDebug: debugArtifacts.coffDebug } : {}),
     imports: directories.importResult,

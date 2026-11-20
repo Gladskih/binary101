@@ -7,6 +7,7 @@ import type {
   PeVcFeatureInfo
 } from "../../analyzers/pe/debug/directory.js";
 import type { PeWindowsParseResult } from "../../analyzers/pe/index.js";
+import { createRvaToOffsetMapper } from "../../analyzers/pe/sections/rva-mapper.js";
 import type { PeSection } from "../../analyzers/pe/types.js";
 import {
   POGO_SIGNATURE_LTCG,
@@ -84,8 +85,11 @@ export const createDebugViewPogo = (
   entries
 });
 
-export const createPeWithDebugViewSection = (): PeWindowsParseResult =>
-  createPeWithSections(createPeSection("S0"));
+export const createPeWithDebugViewSection = (): PeWindowsParseResult => {
+  const pe = createPeWithSections(createPeSection("S0"));
+  pe.rvaToOff = createRvaToOffsetMapper(pe.sections, pe.fileSize, 0, 0);
+  return pe;
+};
 
 export const createMappedDebugViewEntry = (
   section: PeSection,
