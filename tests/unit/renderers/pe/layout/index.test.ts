@@ -104,9 +104,9 @@ void test("renderDelayImports renders function names and ordinals", () => {
   assert.ok(html.includes("delay warning"));
   assert.ok(html.includes("Foo"));
   assert.ok(html.includes("ORD 5"));
-  assert.ok(html.includes("dlattrRva"));
-  assert.ok(html.includes("PE format page"));
-  assert.ok(html.includes("delayimp.h"));
+  assert.match(html, /Stored address format<\/dt><dd>RVA/);
+  assert.match(html, /RvaBased/);
+  assert.doesNotMatch(html, /official docs conflict/);
 });
 
 void test("renderSanity renders issues and omits a clean result", () => {

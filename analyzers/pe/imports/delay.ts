@@ -17,7 +17,7 @@ import {
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32; // Microsoft PE format: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 // MSVC delayimp.h: dlattrRva marks VC7+ descriptors whose fields are RVAs instead of pointers.
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
-const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
+export const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
 interface DelayImportImageMapping {
   sizeOfImage: number;
   imageBase?: bigint;

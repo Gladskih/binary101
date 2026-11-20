@@ -11,6 +11,7 @@ import {
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import { renderPeDiagnosticBody, renderPeDiagnostics } from "./diagnostics.js";
+import { renderDelayImportAddressFields } from "./delay-import-addresses.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
@@ -21,11 +22,6 @@ type PeDelayImportsSection = NonNullable<PeWindowsParseResult["delayImports"]>;
 // IMAGE_SCN_MEM_EXECUTE marks executable section contents.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
-// MSVC delayimp.h / "Understand the delay load helper function":
-// dlattrRva marks VC7+ delay descriptors whose fields are RVAs.
-// https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
-const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
-
 const getEntrypointSanityIssue = (pe: PeParseResult): string | null => {
   const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
   const sections = Array.isArray(pe.sections) ? pe.sections : [];
@@ -56,29 +52,6 @@ export const getPeSanityIssues = (pe: PeParseResult): string[] => [
   ...(isPeWindowsParseResult(pe) && pe.debug?.warning ? [pe.debug.warning] : []),
   ...singleIssue(getEntrypointSanityIssue(pe))
 ];
-
-const renderDelayImportAttributes = (attributes: number): string => {
-  const normalized = attributes >>> 0;
-  const unknownBits = normalized & ~DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA;
-  const notes = (normalized & DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA) !== 0
-    ? [
-        "dlattrRva set: MSVC delayimp.h / \"Understand the delay load helper function\" say this marks VC7+ delay descriptors whose fields are RVAs.",
-        "Microsoft's PE format page separately says the Delay-Load Attributes field must be zero, so the official docs conflict."
-      ]
-    : normalized === 0
-      ? [
-          "Value 0 matches the PE format page, which says the Delay-Load Attributes field must be zero.",
-          "MSVC delayimp.h / \"Understand the delay load helper function\" also define bit 0 as dlattrRva for VC7+ RVA-based descriptors, so Microsoft's own sources disagree here."
-        ]
-    : [
-        "dlattrRva is clear, but the value is not zero.",
-        "The PE format page says this field should be zero, while MSVC delayimp.h / \"Understand the delay load helper function\" reserve bit 0 for dlattrRva."
-      ];
-  if (unknownBits !== 0) {
-    notes.push(`Unknown or undocumented attribute bits remain set: ${hex(unknownBits, 8)}.`);
-  }
-  return `${hex(normalized, 8)}<div class="smallNote">${notes.map(escapeHtml).join("<br/>")}</div>`;
-};
 
 export const formatBaseRelocationSummary = (count: number): string =>
   `${count} parsed ${count === 1 ? "entry" : "entries"}`;
@@ -144,7 +117,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
     const fnCount = entry.functions?.length || 0;
     out.push(renderCollectionStart(`<b>${dll}</b> \u2014 ${fnCount} function(s)`, Math.max(1, fnCount)));
     out.push(`<dl style="margin-top:.35rem">`);
-    out.push(`<dt>Attributes</dt><dd>${renderDelayImportAttributes(entry.Attributes)}</dd>`);
+    out.push(renderDelayImportAddressFields(entry.Attributes));
     out.push(`<dt>ModuleHandleRVA</dt><dd>${hex(entry.ModuleHandleRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportAddressTableRVA</dt><dd>${hex(entry.ImportAddressTableRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportNameTableRVA</dt><dd>${hex(entry.ImportNameTableRVA >>> 0, 8)}</dd>`);

@@ -35,6 +35,7 @@ import {
   directIatReferenceCounts
 } from "./direct-iat-references.js";
 import { renderImportFunctionTable } from "./import-function-table.js";
+import { renderDelayImportAddressFields } from "./delay-import-addresses.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
 
@@ -158,10 +159,7 @@ const renderDelayImportsContent = (pe: PeWindowsParseResult, out: string[]): voi
     out.push(renderCollectionStart(`<b>${dll}</b> - ${entry.functions?.length || 0} function(s)`, Math.max(1, entry.functions?.length ?? 0)));
     out.push(`<dl style="margin-top:.35rem">`);
     if (moduleNote) out.push(renderDefinitionRow("DLL-name note", moduleNote));
-    out.push(renderDefinitionRow("Attributes", hex(entry.Attributes >>> 0, 8),
-      "Bit 0 (RvaBased) identifies address fields stored as RVAs. If clear, fields store legacy VAs."));
-    out.push(renderDefinitionRow("Stored address format", entry.Attributes & 1 ? "RVA" : "Legacy VA",
-      "The RVAs below are image-relative. Legacy values are converted using the preferred image base."));
+    out.push(renderDelayImportAddressFields(entry.Attributes));
     out.push(renderDefinitionRow("ModuleHandleRVA", hex(entry.ModuleHandleRVA >>> 0, 8), "Delay-load module-handle slot."));
     out.push(renderDefinitionRow("ModuleHandle section", describeSectionForRva(pe, entry.ModuleHandleRVA), "Section containing the delay-load module-handle slot."));
     out.push(renderDefinitionRow("ImportAddressTableRVA", hex(entry.ImportAddressTableRVA >>> 0, 8), "Delay-load IAT used by the helper."));
