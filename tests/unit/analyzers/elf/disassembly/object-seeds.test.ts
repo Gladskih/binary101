@@ -45,3 +45,19 @@ void test("a reserved index and an equally numbered extended physical section ar
   assert.deepEqual(seeds.entrypoints, [0x43n]);
   assert.equal(seeds.seedSummary.sources[0]?.skippedNotExecutable, 1);
 });
+
+void test("blocked function sites and fallback starts remain excluded", () => {
+  const regions = [codeRegion(1, 0x40n), codeRegion(2, 0x50n)];
+  const tables = [
+    { sectionIndex: 3, issues: [], entries: [symbol({ info: 1 })] },
+    { sectionIndex: 4, issues: [], entries: [symbol(), symbol({ value: 1n })] }
+  ];
+  const crossedData = createCodeExclusionIndex([{ start: 0x40n, end: 0x42n }]);
+  const seeds = collectElfObjectCodeSeeds(tables, regions, crossedData);
+
+  assert.deepEqual(seeds.entrypoints, [0x50n]);
+  assert.deepEqual(seeds.seedSummary.sources, [{
+    source: "Function symbols in section #4", candidates: 2, added: 0,
+    skippedNotExecutable: 0, skippedZero: 0, skippedDuplicate: 0, skippedData: 2
+  }]);
+});
