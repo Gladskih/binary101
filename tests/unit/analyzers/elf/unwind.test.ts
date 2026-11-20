@@ -41,7 +41,8 @@ for (const order of ["little", "big"] as const) {
 
 void test("warns when .eh_frame reaches the PT_LOAD boundary without a terminator", async () => {
   const fixture = elfSegmentUnwindFixture();
-  fixture.elf.programHeaders[0]!.filesz = 44n; // Exactly one CIE and FDE fit before the boundary.
+  // Skip 16 bytes before .eh_frame. The remaining 44 bytes fit the CIE and FDE.
+  Object.assign(fixture.elf.programHeaders[0]!, { offset: 48n, vaddr: 4080n, filesz: 60n });
 
   const [unwind] = await parseElfUnwind(fixture.file(), fixture.elf);
 
@@ -81,6 +82,7 @@ void test("uses the .eh_frame displacement within PT_LOAD", async () => {
 
 for (const [name, change] of [
   ["outside mapped bytes", { vaddr: 4097n }],
+  ["at the exclusive end of PT_LOAD", { offset: 0n, vaddr: 4032n, filesz: 64n }],
   ["only mapped by PT_NOTE", { type: 4 }],
   ["outside the memory extent", { memsz: 32n }],
   ["outside the file", { offset: 1000n }]
@@ -102,6 +104,31 @@ void test("warns when load segments disagree about where .eh_frame is stored", a
 
   assert.equal(unwind?.fdes.length, 0);
   assert.match(unwind.issues.join(" "), /unambiguous file-backed PT_LOAD mapping/);
+});
+
+void test("uses the shorter of two file-backed mappings of the same .eh_frame address", async () => {
+  const fixture = elfSegmentUnwindFixture();
+  // The shorter alias contains the CIE and the FDE length, but no FDE body.
+  fixture.elf.programHeaders.push({ ...fixture.elf.programHeaders[0]!, index: 2, filesz: 24n });
+
+  const [unwind] = await parseElfUnwind(fixture.file(), fixture.elf);
+
+  assert.equal(unwind?.cies.length, 1);
+  assert.deepEqual(unwind?.fdes, []);
+  assert.deepEqual(unwind?.issues, [
+    ".eh_frame at 0x18: Unwind record is truncated or has an invalid length."
+  ]);
+});
+
+void test("distinguishes a truncated .eh_frame pointer from an omitted pointer", async () => {
+  const fixture = elfSegmentUnwindFixture();
+  fixture.elf.programHeaders[1]!.filesz -= 1n;
+
+  const [unwind] = await parseElfUnwind(fixture.file(), fixture.elf);
+
+  assert.deepEqual(unwind?.cies, []);
+  assert.match(unwind.issues.join(" "), /eh_frame_ptr encoding or the operand is truncated/);
+  assert.doesNotMatch(unwind.issues.join(" "), /does not supply an .eh_frame address/);
 });
 
 void test("a truncated PT_GNU_EH_FRAME range reports an issue without opening frames", async () => {

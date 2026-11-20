@@ -72,6 +72,8 @@ void test("rejects a PC signing state whose factored PC falls outside the AArch6
   assert.equal(set(0xffff_ffff_ffff_ffffn, 1n), false);
   assert.equal(set(4n, -1n), true);
   assert.deepEqual(rules.returnAddressState, { signingPc: 0n });
+  assert.equal(set(0xffff_ffff_ffff_fffbn, 1n), true);
+  assert.deepEqual(rules.returnAddressState, { signingPc: 0xffff_ffff_ffff_ffffn });
 });
 
 void test("AArch64 signing toggles reject a state belonging to the other toggle", () => {
@@ -86,6 +88,7 @@ void test("AArch64 signing toggles reject a state belonging to the other toggle"
   assert.equal(rules.returnAddressState, "signed-sp");
   assert.equal(applyElfCfiRule(rules, withPc, -8n, location), false);
   assert.equal(apply(rules, "AARCH64_set_ra_state", [1n, "bad offset"]), false);
+  assert.equal(apply(rules, "AARCH64_set_ra_state", ["1", 0n]), false);
 });
 
 for (const operation of ["def_cfa", "def_cfa_sf", "def_cfa_register", "def_cfa_offset",

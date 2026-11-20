@@ -79,7 +79,7 @@ type CfiCodeLocation = { location: bigint; codeAlignment: bigint };
 const setReturnAddressState = (rules: DwarfCfiRules, operands: (bigint | DwarfCfiExpression)[],
   location: CfiCodeLocation | undefined): boolean => {
   const [state, offset] = operands;
-  if (typeof state !== "bigint" || typeof offset !== "bigint") return false;
+  if (typeof offset !== "bigint") return false;
   if (state === 0n) rules.returnAddressState = "unsigned";
   else if (state === 1n) rules.returnAddressState = "signed-sp";
   else if (state === 2n && location) {
