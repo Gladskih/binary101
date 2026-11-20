@@ -18,6 +18,8 @@ import {
   verifyAuthenticodeFileDigest
 } from "./digest.js";
 import { verifyPkcs7Signatures } from "./pkijs.js";
+import { decodePkcs7 } from "./pkcs7.js";
+import { ContentInfo } from "./pkijs-runtime.js";
 import { mergeWarnings } from "./pkijs-support.js";
 import type { PeDataDirectory } from "../types.js";
 
@@ -110,7 +112,23 @@ export {
 };
 export type { PeAuthenticodeBestEffortCore, PeAuthenticodeParsedCore };
 
-export const verifyAuthenticode = async (
+// Bound the total CMS verifications and the depth of overlapping nested payloads.
+const MAX_NESTED_SIGNATURES = 16;
+const MAX_NESTED_DEPTH = 4;
+
+const cacheDigestLookup = (compute: DigestLookup): DigestLookup => {
+  const digests = new Map<string, Promise<string | null>>();
+  return algorithm => {
+    const key = typeof algorithm === "string" ? algorithm : algorithm.name;
+    const cached = digests.get(key);
+    if (cached) return cached;
+    const computed = compute(algorithm);
+    digests.set(key, computed);
+    return computed;
+  };
+};
+
+export const verifyAuthenticode = (
   reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,
@@ -120,45 +138,48 @@ export const verifyAuthenticode = async (
   getComputedDigest?: DigestLookup,
   trustStore?: AuthenticodeTrustStoreSnapshot
 ): Promise<NonNullable<AuthenticodeInfo["verification"]>> => {
-  const warnings: string[] = [];
-  const verification: NonNullable<AuthenticodeInfo["verification"]> = {
-    trustGaps: createTrustGaps(trustStore)
+  const digestLookup = getComputedDigest ?? cacheDigestLookup(algorithm =>
+    computePeAuthenticodeDigest(reader, core, securityDir, algorithm, digestFunction));
+  let remaining = MAX_NESTED_SIGNATURES;
+  const verifySignature = async (
+    signature: AuthenticodeInfo, bytes: Uint8Array, depth: number
+  ): Promise<NonNullable<AuthenticodeInfo["verification"]>> => {
+    const { nestedSignaturePayloads, ...cms } = await verifyPkcs7Signatures(bytes, trustStore);
+    const warnings = [...(cms.warnings ?? [])];
+    const nestedSignatures: NonNullable<NonNullable<AuthenticodeInfo["verification"]>["nestedSignatures"]> = [];
+    for (const nested of nestedSignaturePayloads ?? []) {
+      if (remaining === 0 || depth === MAX_NESTED_DEPTH) {
+        warnings.push("Additional nested signatures exceed the analysis limit.");
+        break;
+      }
+      remaining -= 1;
+      const child = decodePkcs7(nested.bytes);
+      if (child.contentType !== ContentInfo.SIGNED_DATA) {
+        warnings.push(`Signer ${nested.signerIndex + 1}: nested signature is missing SignedData ContentInfo.`);
+        continue;
+      }
+      nestedSignatures.push({ signerIndex: nested.signerIndex, signature: {
+        ...child, verification: await verifySignature(child, nested.bytes, depth + 1)
+      } });
+    }
+    const digest = await verifyAuthenticodeFileDigest(reader, core, securityDir, signature,
+      undefined, digestLookup);
+    const mergedWarnings = mergeWarnings([...warnings, ...(digest.warnings ?? [])]);
+    return {
+      ...cms,
+      ...(digest.computedFileDigest ? { computedFileDigest: digest.computedFileDigest } : {}),
+      ...(digest.fileDigestMatches != null ? { fileDigestMatches: digest.fileDigestMatches } : {}),
+      checks: [createDigestCheck(signature, digest), ...(cms.checks ?? [])],
+      trustGaps: createTrustGaps(trustStore),
+      ...(nestedSignatures.length ? { nestedSignatures } : {}),
+      ...(mergedWarnings ? { warnings: mergedWarnings } : {})
+    };
   };
-  const checks: AuthenticodeVerificationCheck[] = [];
-
-  const signatureVerification = await verifyPkcs7Signatures(payload, trustStore);
-  if (signatureVerification.checks?.length) checks.push(...signatureVerification.checks);
-  if (signatureVerification.signerVerifications?.length) {
-    verification.signerVerifications = signatureVerification.signerVerifications;
-  }
-  if (signatureVerification.trustPolicy) {
-    verification.trustPolicy = signatureVerification.trustPolicy;
-  }
-  if (signatureVerification.warnings?.length) warnings.push(...signatureVerification.warnings);
-
-  const digestVerification = await verifyAuthenticodeFileDigest(
-    reader,
-    core,
-    securityDir,
-    auth,
-    digestFunction,
-    getComputedDigest
-  );
-  if (digestVerification.computedFileDigest) {
-    verification.computedFileDigest = digestVerification.computedFileDigest;
-  }
-  if (digestVerification.fileDigestMatches != null) {
-    verification.fileDigestMatches = digestVerification.fileDigestMatches;
-  }
-  checks.unshift(createDigestCheck(auth, digestVerification));
-  if (digestVerification.warnings?.length) warnings.push(...digestVerification.warnings);
-
-  if (checks.length) verification.checks = checks;
-  const mergedWarnings = mergeWarnings(warnings);
-  return mergedWarnings ? { ...verification, warnings: mergedWarnings } : verification;
+  return verifySignature(auth, payload, 0);
 };
 
 export const verifyAuthenticodeWithBundledTrust = (
+
   reader: FileRangeReader,
   core: PeAuthenticodeBestEffortCore | PeAuthenticodeParsedCore,
   securityDir: PeDataDirectory | undefined,

@@ -28,7 +28,41 @@ import {
 type VerificationSummary = Pick<
   AuthenticodeVerificationInfo,
   "checks" | "signerVerifications" | "trustPolicy" | "warnings"
->;
+> & { nestedSignaturePayloads?: Array<{ signerIndex: number; bytes: Uint8Array }> };
+
+// Microsoft SPC_NESTED_SIGNATURE_OBJID contains additional PKCS#7 ContentInfo values.
+// https://github.com/mtrojnar/osslsigncode/blob/master/osslsigncode.c#L1501-L1532
+const NESTED_SIGNATURE_OID = "1.3.6.1.4.1.311.2.4.1";
+const NESTED_SIGNATURE_LIMIT = 16;
+
+const nestedSignatureValues = function* (signedData: SignedData) {
+  for (const [signerIndex, signer] of signedData.signerInfos.entries()) {
+    for (const attribute of signer.unsignedAttrs?.attributes ?? []) {
+      if (attribute.type !== NESTED_SIGNATURE_OID) continue;
+      for (const value of attribute.values) yield { signerIndex, value };
+    }
+  }
+};
+
+const collectNestedSignaturePayloads = (
+  signedData: SignedData, warnings: string[]
+): NonNullable<VerificationSummary["nestedSignaturePayloads"]> => {
+  const payloads: NonNullable<VerificationSummary["nestedSignaturePayloads"]> = [];
+  let valuesRead = 0;
+  for (const { signerIndex, value } of nestedSignatureValues(signedData)) {
+    if (valuesRead === NESTED_SIGNATURE_LIMIT) {
+      warnings.push("Additional nested signature attributes exceed the per-signature analysis limit.");
+      break;
+    }
+    valuesRead += 1;
+    // ASN1.js retains the original encoded value in valueBeforeDecodeView.
+    const bytes = typeof value === "object" && value !== null && "valueBeforeDecodeView" in value
+      ? value.valueBeforeDecodeView : undefined;
+    if (bytes instanceof Uint8Array && bytes.length) payloads.push({ signerIndex, bytes });
+    else warnings.push(`Signer ${signerIndex + 1}: nested signature is missing encoded ContentInfo.`);
+  }
+  return payloads;
+};
 
 type Pkcs7VerificationState = {
   signedData: SignedData;
@@ -253,12 +287,14 @@ export const verifyPkcs7Signatures = async (
   }
 
   appendCertificatePathWarnings(checks, warnings);
+  const nestedSignaturePayloads = collectNestedSignaturePayloads(signedData, warnings);
   const mergedWarnings = mergeWarnings(warnings);
   const trustPolicy = await evaluateAuthenticodeTrustPolicy(certificates, trustStore);
   return {
     ...(checks.length ? { checks } : {}),
     ...(signerVerifications.length ? { signerVerifications } : {}),
     ...(trustPolicy ? { trustPolicy } : {}),
+    ...(nestedSignaturePayloads.length ? { nestedSignaturePayloads } : {}),
     ...(mergedWarnings ? { warnings: mergedWarnings } : {})
   };
 };

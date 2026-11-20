@@ -155,6 +155,7 @@ export interface AuthenticodeVerificationInfo {
   checks?: AuthenticodeVerificationCheck[];
   trustPolicy?: AuthenticodeTrustPolicyInfo;
   trustGaps?: AuthenticodeTrustGap[];
+  nestedSignatures?: Array<{ signerIndex: number; signature: AuthenticodeInfo }>;
   warnings?: string[];
 }
 

@@ -33,6 +33,7 @@ const hasVerificationData = (
     !!verification.trustPolicy?.certificates.length ||
     !!verification.trustPolicy?.warnings?.length ||
     !!verification.trustGaps?.length ||
+    !!verification.nestedSignatures?.length ||
     !!verification.warnings?.length);
 
 const attachVerification = (
