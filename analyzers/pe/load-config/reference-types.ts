@@ -42,6 +42,12 @@ export type PeArm64RuntimeFunctionEntry = { beginRva: number } & (
   { unwindKind: "chained"; targetPdataRva: number }
 );
 
+export type PeX64RuntimeFunctionEntry = {
+  beginRva: number;
+  endRva: number;
+  unwindData: number;
+};
+
 type PeChpeMetadataBase = {
   rva: number;
   version: number;
@@ -70,6 +76,7 @@ export type PeChpeArm64EcMetadata = PeChpeMetadataBase & {
   osArm64xDispatchFptrRva: number;
   auxiliaryIatCopyRva: number;
   extraRfeEntries: PeArm64RuntimeFunctionEntry[];
+  extraX64RuntimeFunctions?: PeX64RuntimeFunctionEntry[];
   auxiliaryDelayloadIatRva?: number;
   auxiliaryDelayloadIatCopyRva?: number;
   hybridImageInfoBitfield?: number;

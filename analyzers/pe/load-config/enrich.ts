@@ -51,6 +51,7 @@ type LoadConfigEnrichmentStrategy = Readonly<{
   parseDynamicRelocations: DynamicRelocationParser;
   readSafeSehTable: SafeSehTableReader | null;
   pointerBytes: PePointerBytes;
+  machine: number | undefined;
 }>;
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
@@ -94,11 +95,12 @@ const readAndAttachReferences = async (
   sizeOfHeaders: number,
   rvaToOff: RvaToOffset,
   imageBase: bigint,
-  pointerBytes: PePointerBytes
+  pointerBytes: PePointerBytes,
+  machine?: number
 ): Promise<void> => {
   try {
     const references = await parseLoadConfigReferences(
-      reader, sections, sizeOfHeaders, rvaToOff, imageBase, pointerBytes, loadConfig
+      reader, sections, sizeOfHeaders, rvaToOff, imageBase, pointerBytes, loadConfig, machine
     );
     loadConfig.references = references;
     mergeLoadConfigWarnings(loadConfig, references.warnings ?? []);
@@ -199,7 +201,8 @@ const enrichLoadConfig = async (
     loadConfig, reader, sections, rvaToOff, imageBase, strategy.parseDynamicRelocations
   );
   await readAndAttachReferences(
-    loadConfig, reader, sections, sizeOfHeaders, rvaToOff, imageBase, strategy.pointerBytes
+    loadConfig, reader, sections, sizeOfHeaders, rvaToOff, imageBase, strategy.pointerBytes,
+    strategy.machine
   );
   return loadConfig;
 };
@@ -208,13 +211,15 @@ export const createLoadConfigEnricher = (
   parseLoadConfigDirectory: LoadConfigParser,
   parseDynamicRelocationsFromLoadConfig: DynamicRelocationParser,
   readSafeSehHandlerTable: SafeSehTableReader | null,
-  pointerBytes: PePointerBytes
+  pointerBytes: PePointerBytes,
+  machine?: number
 ): LoadConfigEnricher => {
   const strategy: LoadConfigEnrichmentStrategy = {
     parseDirectory: parseLoadConfigDirectory,
     parseDynamicRelocations: parseDynamicRelocationsFromLoadConfig,
     readSafeSehTable: readSafeSehHandlerTable,
-    pointerBytes
+    pointerBytes,
+    machine
   };
   return (reader, directories, rvaToOff, imageBase, sizeOfImage, sizeOfHeaders, sections) =>
     enrichLoadConfig(

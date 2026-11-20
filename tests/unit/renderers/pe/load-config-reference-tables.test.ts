@@ -204,3 +204,23 @@ void test("getLoadConfigReferenceTableModel covers every Load Config reference t
   assert.equal(ranges?.sortValueAt(1, 0), "");
   assert.equal(runtimeFunctions?.sortValueAt(3, 0), "");
 });
+
+void test("the ARM64X Extra RFE table shows the three x64 fields", () => {
+  const references = createTableReferences();
+  assert.ok(references.chpeMetadata?.kind === "arm64ec");
+  references.chpeMetadata.extraRfeEntries = [];
+  references.chpeMetadata.extraX64RuntimeFunctions = [
+    { beginRva: 0x1000, endRva: 0x1060, unwindData: 0x2000 }
+  ];
+
+  const table = getLoadConfigReferenceTableModel(
+    references, LOAD_CONFIG_REFERENCE_TABLE_IDS.chpeRuntimeFunctions
+  );
+
+  assert.deepEqual(table?.columns.map(column => column.label), [
+    "#", "Begin RVA", "End RVA (exclusive)", "UnwindData"
+  ]);
+  assert.deepEqual(table?.rowAt(0)?.cells.map(cell => cell.html), [
+    "0", "0x00001000", "0x00001060", "0x00002000"
+  ]);
+});

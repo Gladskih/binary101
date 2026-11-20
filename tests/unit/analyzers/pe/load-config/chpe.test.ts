@@ -20,7 +20,7 @@ const METADATA_RVA = 0x40;
 // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/COFF.h
 // https://github.com/winsiderss/systeminformer/blob/master/phnt/include/ntimage.h
 
-const parseMetadata = async (bytes: Uint8Array, pointerBytes: PePointerBytes) => {
+const parseMetadata = async (bytes: Uint8Array, pointerBytes: PePointerBytes, machine?: number) => {
   const warnings: string[] = [];
   const notes: string[] = [];
   const metadata = await parseChpeMetadata(
@@ -30,7 +30,8 @@ const parseMetadata = async (bytes: Uint8Array, pointerBytes: PePointerBytes) =>
     pointerBytes,
     warnings,
     notes,
-    IMAGE_BASE + BigInt(METADATA_RVA)
+    IMAGE_BASE + BigInt(METADATA_RVA),
+    machine
   );
   return { metadata, warnings, notes };
 };
@@ -237,3 +238,30 @@ void test("parseChpeMetadata handles x86 v1, v2, invalid pointers, and truncated
   assert.ok(truncatedX86.warnings.some(warning => warning.includes("CHPE x86 metadata is truncated")));
   assert.ok(truncatedArm.warnings.some(warning => warning.includes("CHPE ARM64EC metadata is truncated")));
 });
+
+// ARM64X uses raw ARM64 in production and may also be identified by its own machine constant.
+for (const machine of [0xaa64, 0xa64e]) {
+  void test(`parseChpeMetadata uses x64 records for original ARM64X machine 0x${machine.toString(16)}`, async () => {
+    const bytes = new Uint8Array(0x200).fill(0);
+    const view = new DataView(bytes.buffer);
+    const tableRva = 0x100;
+    view.setUint32(METADATA_RVA, 1, true);
+    view.setUint32(METADATA_RVA + 64, tableRva, true);
+    // LLD assigns the x64 .pdata to ExtraRFETable in the original ARM64X view.
+    // https://github.com/llvm/llvm-project/blob/main/lld/COFF/Writer.cpp#L2371-L2377
+    view.setUint32(METADATA_RVA + 68, 12, true);
+    view.setUint32(tableRva, 0x1000, true);
+    view.setUint32(tableRva + 4, 0x1060, true);
+    view.setUint32(tableRva + 8, 0x2000, true);
+
+    const result = await parseMetadata(bytes, PE32_PLUS_POINTER_BYTES, machine);
+
+    const metadata = expectDefined(result.metadata);
+    assert.ok(metadata.kind === "arm64ec");
+    assert.deepEqual(metadata.extraX64RuntimeFunctions, [
+      { beginRva: 0x1000, endRva: 0x1060, unwindData: 0x2000 }
+    ]);
+    assert.deepEqual(metadata.extraRfeEntries, []);
+    assert.deepEqual(result.warnings, []);
+  });
+}
