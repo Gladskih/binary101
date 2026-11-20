@@ -1,5 +1,6 @@
 "use strict";
 
+import type { ResourceTypeIdentity } from "../tree-types.js";
 import type { ResourceLangEntry } from "../core.js";
 import type { MuiResourceConfiguration } from "../mui-config.js";
 import type { TypeLibraryAnalysis } from "../../type-library/types.js";
@@ -266,7 +267,6 @@ export type ResourcePreviewWithIssues = Partial<ResourcePreviewData> & {
 
 export type ResourceLangWithPreview = ResourceLangEntry & ResourcePreviewWithIssues;
 
-export type ResourceDetailGroup = {
-  typeName: string;
+export type ResourceDetailGroup = ResourceTypeIdentity & {
   entries: Array<{ id: number | null; name: string | null; langs: ResourceLangWithPreview[] }>;
 };

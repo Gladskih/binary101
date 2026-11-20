@@ -8,7 +8,7 @@ import { renderPeDiagnostics } from "./diagnostics.js";
 import { renderPreviewCell, renderPreviewSummary } from "./resource-preview-cell.js";
 import { createRegistryTableModel } from "./resource-registry-table.js";
 import { formatWindowsLanguageName } from "./windows-language-names.js";
-import { resourceAnchor, renderResourceConnections, getResourcePreviewModel } from "./resource-preview-context.js";
+import { resourceAnchor, resourceGroupLabel, renderResourceConnections, getResourcePreviewModel } from "./resource-preview-context.js";
 import type { ResourcePreviewContext } from "./resource-preview-context.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 import {
@@ -256,7 +256,7 @@ const renderResourceDirectories = (resources: PeResources, out: string[]): void 
 const renderResourceDetails = (resources: PeResources, out: string[]): void => {
   if (!resources.detail?.length) return;
   resources.detail.forEach((group, groupIndex) => {
-    const typeName = escapeHtml(group.typeName || "(unknown)");
+    const typeName = escapeHtml(resourceGroupLabel(group));
     const entryCount = flattenResourcePreviewRows(group).length;
     out.push(
       renderCollectionStart(`<b>${typeName}</b> - ${entryCount} entr${entryCount === 1 ? "y" : "ies"}`, Math.max(1, entryCount), ` data-pe-resource-group="${groupIndex}" style="margin-top:.75rem"`)

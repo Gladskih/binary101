@@ -67,3 +67,26 @@ void test("retains ambiguity between multiple neutral variants", () => {
   assert.equal(resolution.kind,"ambiguous");
   assert.equal(resolution.targets.length,2);
 });
+
+void test("resolves RT_ICON references by ordinal and preserves the like-named custom key", () => {
+  const named = { ...createPreviewDetailGroup("ICON", 7, createPreviewLangEntry()), typeKey: "ICON" };
+  // RT_ICON is ordinal 3 in WinUser.h.
+  const numeric = { ...createPreviewDetailGroup("ICON", 7, createPreviewLangEntry()), typeKey: 3 };
+  const catalog = indexResourceLeaves([named, numeric]);
+
+  assert.deepEqual(resolveResourceReference(catalog, "ICON", 7, 1033), {
+    kind: "exact", targets: [{ group: 1, entry: 0, language: 0 }]
+  });
+});
+
+void test("retains an RT_STRING block without claiming that an empty slot defines a string", () => {
+  const catalog = indexResourceLeaves([
+    createPreviewDetailGroup("STRING", 1, {
+      ...createPreviewLangEntry(), stringTable: [{ id: 7, text: "" }, { id: 8, text: "Label" }]
+    })
+  ]);
+
+  assert.equal(resolveResourceContent(catalog, "STRING", 7, 1033).kind, "missing");
+  assert.equal(resolveResourceContent(catalog, "STRING", 8, 1033).kind, "exact");
+  assert.equal(resolveResourceReference(catalog, "STRING", 1, 1033).kind, "exact");
+});

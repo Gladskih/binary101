@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderPreviewCell } from "../../../../../../renderers/pe/resource-preview-cell.js";
+import { renderPreviewCell, renderPreviewSummary } from "../../../../../../renderers/pe/resource-preview-cell.js";
 import { IMAGE_FILE_MACHINE_AMD64 } from "../../../../../../analyzers/coff/machine.js";
 import type { ResourceLangWithPreview } from "../../../../../../analyzers/pe/resources/preview/types.js";
 import {
@@ -180,4 +180,17 @@ void test("renderPreviewCell renders parsed manifest metadata alongside text pre
   assert.match(manifestHtml, /amd64 arm64/);
   assert.match(manifestHtml, /requireAdministrator/);
   assert.match(manifestHtml, /uiAccess/);
+});
+
+void test("shows empty string-table slots without counting them as filled strings", () => {
+  const preview = {
+    ...createBaseLang(),
+    previewKind: "stringTable" as const,
+    stringTable: [{ id: 6, text: "" }, { id: 7, text: "Actual text" }]
+  };
+  const html = renderPreviewCell(preview);
+
+  assert.match(html, /#6.+Empty or absent/);
+  assert.match(html, /#7.+Actual text/);
+  assert.equal(renderPreviewSummary(preview), "1 string with text");
 });

@@ -32,22 +32,24 @@ const addResourceTopEntry = (
 const appendResourceDetail = (
   collections: ResourcePathCollections,
   typeName: string,
+  typeKey: number | string | null,
   paths: ResourceLeafPath[]
 ): ResourcePathCollections => {
   const entries = createResourceDetailEntries(paths);
   if (!entries.length) return collections;
-  const existingIndex = collections.detail.findIndex(detail => detail.typeName === typeName);
+  const existingIndex = typeKey == null ? -1 :
+    collections.detail.findIndex(detail => detail.typeKey === typeKey);
   if (existingIndex === -1) {
     return {
       ...collections,
-      detail: [...collections.detail, { typeName, entries }]
+      detail: [...collections.detail, { typeName, typeKey, entries }]
     };
   }
   const existing = collections.detail[existingIndex]!;
   return {
     ...collections,
     detail: collections.detail.map((detail, index) => index === existingIndex
-      ? { typeName, entries: [...existing.entries, ...entries] }
+      ? { ...existing, entries: [...existing.entries, ...entries] }
       : detail)
   };
 };
@@ -123,7 +125,9 @@ export const buildResourcePathCollections = async (
       // (type -> name/ID -> language), not deeper valid paths.
       typePaths.paths.filter(path => path.nodes.length === 3).length
     );
-    collections = appendResourceDetail(collections, typeName, typePaths.paths);
+    collections = appendResourceDetail(
+      collections, typeName, typeNode.node.id ?? typeNode.node.name, typePaths.paths
+    );
   }
   return collections;
 };

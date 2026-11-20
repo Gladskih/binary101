@@ -12,6 +12,7 @@ import {
   IMAGE_FILE_MACHINE_I386
 } from "../../../../analyzers/coff/machine.js";
 import {
+  createManifestIncidentalValues,
   createClrHeaderFixture,
   createManifestResourcesFixture
 } from "../../../fixtures/pe-manifest-preview-fixture.js";
@@ -72,13 +73,16 @@ void test("analyzeManifestConsistency returns validated checks when the manifest
   assert.deepEqual(validation?.warnings, []);
 });
 
-void test("collectManifestWarnings reports conflicting embedded manifest metadata", () => {
+void test("collectManifestWarnings reports conflicting metadata among variants of one manifest", () => {
+  const resourceId = createManifestIncidentalValues().nextResourceId();
   const subject = createManifestResourcesFixture([
     {
+      resourceId,
       processorArchitecture: "amd64",
       requestedExecutionLevel: "asInvoker"
     },
     {
+      resourceId,
       processorArchitecture: "x86",
       requestedExecutionLevel: "requireAdministrator"
     }
@@ -127,4 +131,15 @@ void test("attachManifestValidation annotates manifest resource previews", () =>
 
   assert.equal(manifestLang?.manifestValidation?.status, "consistent");
   assert.ok(manifestLang?.manifestValidation?.validated.length);
+});
+
+void test("does not compare fields across distinct activation-context manifests", () => {
+  // IDs 1 and 2 select different activation contexts.
+  // https://learn.microsoft.com/en-us/windows/win32/sbscs/using-side-by-side-assemblies-as-a-resource
+  const subject = createManifestResourcesFixture([
+    { resourceId: 1, processorArchitecture: "amd64", requestedExecutionLevel: "asInvoker" },
+    { resourceId: 2, processorArchitecture: "*", requestedExecutionLevel: null }
+  ]);
+
+  assert.deepEqual(collectManifestWarnings(subject.resources, IMAGE_FILE_MACHINE_AMD64, null), []);
 });

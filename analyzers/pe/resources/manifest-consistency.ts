@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "./type-names.js";
 import { getManifestProcessorArchitectureForMachine } from "../constants.js";
 import type { PeClrHeader } from "../clr/types.js";
 import { getCanonicalPeMachine } from "../machine.js";
@@ -20,7 +21,7 @@ const COMIMAGE_FLAGS_ILONLY = 0x00000001;
 const DOCUMENTED_MANIFEST_ARCHITECTURES = new Set(["x86", "amd64", "arm", "arm64", "*"]);
 
 interface ManifestResourceEntry {
-  resourceId: number | null;
+  resourceKey: number | string | null;
   lang: number | null;
   manifestInfo: ResourceManifestPreview;
 }
@@ -36,20 +37,21 @@ const normalizeArchitecture = (value: string | null | undefined): string | null 
 };
 
 const describeManifestEntry = (entry: ManifestResourceEntry): string => {
-  const idPart = entry.resourceId != null ? `ID ${entry.resourceId}` : "unnamed ID";
+  const key = entry.resourceKey;
+  const idPart = typeof key === "string" ? `name "${key}"` : key == null ? "unnamed ID" : `ID ${key}`;
   const langPart = entry.lang != null ? `LANG ${entry.lang}` : "LANG neutral";
   return `${idPart} / ${langPart}`;
 };
 
 const getManifestEntries = (resources: PeResources | null): ManifestResourceEntry[] => {
   if (!resources?.detail?.length) return [];
-  const manifestGroup = resources.detail.find(group => group.typeName === "MANIFEST");
+  const manifestGroup = resources.detail.find(group => resourceDecoderType(group) === "MANIFEST");
   if (!manifestGroup?.entries?.length) return [];
   return manifestGroup.entries.flatMap(entry =>
     entry.langs.flatMap(lang =>
       lang.manifestInfo
         ? [{
-            resourceId: entry.id,
+            resourceKey: entry.name ?? entry.id,
             lang: lang.lang,
             manifestInfo: lang.manifestInfo
           }]
@@ -138,6 +140,29 @@ const addConflictingValueFindings = (
   warnings.add(`Embedded manifest resources disagree on ${fieldName}. ${details}`);
 };
 
+const addLanguageVariantFindings = (
+  entries: ManifestResourceEntry[], validated: Set<string>, warnings: Set<string>
+): void => {
+  // Different IDs can configure different activation contexts.
+  // https://learn.microsoft.com/en-us/windows/win32/sbscs/using-side-by-side-assemblies-as-a-resource
+  const variants = new Map<number | string, ManifestResourceEntry[]>();
+  for (const entry of entries) {
+    if (entry.resourceKey == null) continue;
+    const group = variants.get(entry.resourceKey) ?? [];
+    group.push(entry);
+    variants.set(entry.resourceKey, group);
+  }
+  for (const group of variants.values()) {
+    if (group.length < 2) continue;
+    addConflictingValueFindings(group,
+      entry => normalizeArchitecture(entry.manifestInfo.processorArchitecture),
+      "processorArchitecture", validated, warnings);
+    addConflictingValueFindings(group,
+      entry => normalizeText(entry.manifestInfo.requestedExecutionLevel)?.toLowerCase() || null,
+      "requestedExecutionLevel", validated, warnings);
+  }
+};
+
 export const analyzeManifestConsistency = (
   resources: PeResources | null,
   machine: number,
@@ -149,20 +174,7 @@ export const analyzeManifestConsistency = (
   const warnings = new Set<string>();
   addProcessorArchitectureFindings(entries, machine, validated, warnings);
   addSupportedArchitecturesFindings(entries, clr, validated, warnings);
-  addConflictingValueFindings(
-    entries,
-    entry => normalizeArchitecture(entry.manifestInfo.processorArchitecture),
-    "processorArchitecture",
-    validated,
-    warnings
-  );
-  addConflictingValueFindings(
-    entries,
-    entry => normalizeText(entry.manifestInfo.requestedExecutionLevel)?.toLowerCase() || null,
-    "requestedExecutionLevel",
-    validated,
-    warnings
-  );
+  addLanguageVariantFindings(entries, validated, warnings);
   return {
     status: warnings.size ? "warnings" : "consistent",
     checkedCount: validated.size + warnings.size,
@@ -184,7 +196,7 @@ export const attachManifestValidation = (
   if (!resources || !manifestValidation) return resources;
   let touched = false;
   const detail = resources.detail.map(group => {
-    if (group.typeName !== "MANIFEST") return group;
+    if (resourceDecoderType(group) !== "MANIFEST") return group;
     touched = true;
     return {
       ...group,

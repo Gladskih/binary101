@@ -1,3 +1,4 @@
+import { resourceDecoderType } from "./type-names.js";
 import { indexResourceLeaves, resolveResourceAlternatives, resolveResourceContent, resourceAt } from "./resource-index.js";
 import type { ResourceCatalog, ResourceLocation, ResourceResolution } from "./resource-index.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview, ResourceXmlTreeNode } from "./preview/types.js";
@@ -134,7 +135,7 @@ const leafLinks = (
   links.push(...matchingResourceLinks(catalog, source, leaf));
   links.push(...imageAndFontLinks(catalog, source, leaf),
     ...compiledRibbonLinks(catalog, source, leaf), ...eventMessageLinks(catalog, source, leaf));
-  if (group.typeName === "RIBBON_XML" && leaf.xmlTree) {
+  if (resourceDecoderType(group) === "RIBBON_XML" && leaf.xmlTree) {
     links.push(...xmlImageLinks(catalog, source, leaf.xmlTree));
   }
 

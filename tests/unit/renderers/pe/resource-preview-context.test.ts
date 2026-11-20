@@ -47,3 +47,12 @@ void test("renders unconfirmed outgoing links and missing images without picking
   assert.match(renderResourceConnections(context),/Resource references/);
   assert.match(renderResourceConnections({...context,source:{group:1,entry:0,language:0}}),/Used by/);
 });
+
+void test("labels a custom type that shares a predefined type name", () => {
+  const context = linkedDialogPreview();
+  const target = { group: 1, entry: 0, language: 0 };
+  const menu = context.catalog.detail[target.group]!;
+  menu.typeKey = "MENU";
+
+  assert.match(resourceLocationLabel(context.catalog, target), /^MENU \(named type\)/);
+});

@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "../analyzers/pe/resources/type-names.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { ResourceCatalog } from "../analyzers/pe/resources/resource-index.js";
 import type { ResourceLangWithPreview } from "../analyzers/pe/resources/preview/types.js";
@@ -29,7 +30,7 @@ const findPeFileIconDataUrl = (result: ParseForUiResult): string | null => {
   if (result.analyzer !== "pe" || !("resources" in result.parsed)) return null;
   const resources = result.parsed.resources;
   if (!resources) return null;
-  const iconGroup = resources.detail.find(group => group.typeName === "GROUP_ICON");
+  const iconGroup = resources.detail.find(group => resourceDecoderType(group) === "GROUP_ICON");
   if (!iconGroup) return null;
   const catalog = indexResourceLeaves(resources.detail);
   for (const entry of iconGroup.entries) {

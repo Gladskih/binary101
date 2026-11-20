@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "./type-names.js";
 import { indexResourceLeaves, resolveResourceReference, resourceAt } from "./resource-index.js";
 import type { ResourceCatalog } from "./resource-index.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./preview/types.js";
@@ -75,13 +76,14 @@ export const collectResourceCrossChecks = (detail: ResourceDetailGroup[]): Resou
   const catalog = indexResourceLeaves(detail);
   const checks: ResourceCrossCheck[] = [];
   for (const group of detail) for (const entry of group.entries) {
+    const type = resourceDecoderType(group);
     for (const lang of entry.langs) {
       const subject = label(entry.id, entry.name, lang.lang);
-      if (group.typeName === "DIALOG" && lang.dialogPreview) {
+      if (type === "DIALOG" && lang.dialogPreview) {
         const check = checkDialogMenu(lang.dialogPreview.menu, catalog, lang.lang, subject);
         if (check) checks.push(check);
       }
-      checks.push(...checkMatchingDialog(catalog, group.typeName, entry.name ?? entry.id, lang, subject));
+      checks.push(...checkMatchingDialog(catalog, type, entry.name ?? entry.id, lang, subject));
     }
   }
   return checks;
