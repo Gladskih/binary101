@@ -2,7 +2,9 @@
 // numbers from becoming unexplained conditions in the table walkers.
 // https://gabi.xinuos.com/elf/02-eheader.html (e_type, e_machine)
 export const ELF_FILE_TYPE = { REL: 1, EXEC: 2, DYN: 3 } as const;
-export const ELF_MACHINE_ID = { I386: 3, MIPS: 8, X86_64: 62, AARCH64: 183, RISCV: 243 } as const;
+export const ELF_MACHINE_ID = {
+  I386: 3, MIPS: 8, X86_64: 62, TI_C6000: 140, AARCH64: 183, RISCV: 243
+} as const;
 
 // https://gabi.xinuos.com/elf/03-sheader.html (sh_type, sh_flags)
 export const ELF_SECTION_TYPE = {
@@ -12,7 +14,7 @@ export const ELF_SECTION_TYPE = {
   CREL: 0x40000014, ANDROID_REL: 0x60000001, ANDROID_RELA: 0x60000002,
   ANDROID_RELR: 0x6fffff00, AARCH64_AUTH_RELR: 0x70000004
 } as const;
-export const ELF_SECTION_FLAG = { ALLOC: 0x2n } as const;
+export const ELF_SECTION_FLAG = { ALLOC: 0x2n, TLS: 0x400n } as const;
 
 // https://gabi.xinuos.com/elf/07-pheader.html (p_type)
 export const ELF_SEGMENT_TYPE = { LOAD: 1, DYNAMIC: 2 } as const;

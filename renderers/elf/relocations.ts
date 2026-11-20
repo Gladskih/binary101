@@ -22,7 +22,7 @@ export const createElfRelocationSummaryModel = (
     return row ? [row.label, row.detail, String(row.count), `${(100 * row.count / total).toFixed(1)}%`] : [];
   };
   return { id: tableId(kind), pageSize: 100, rowCount: rows.length,
-    columns: [labels[kind], "Meaning", "Records", "Share of all relocations"].map((label, index) => ({
+    columns: [labels[kind], "Meaning", "Decoded relocations", "Share of all relocations"].map((label, index) => ({
       label, className: index >= 2 ? "peNumeric" : ""
     })),
     rowAt: index => rows[index] ? { cells: values(index).map((value, column) => ({
@@ -48,11 +48,11 @@ export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void =
   if (!relocations) return;
   const summary = summarizeElfRelocations(elf);
   out.push(renderElfSectionStart(`Relocations (${relocations.entries.length})`));
-  out.push(`<p>${relocations.entries.length} relocation records in ${relocations.tables.length} tables; ` +
-    `${summary.symbols.length} distinct referenced symbols.</p>`);
-  out.push(`<p class="smallNote">Counts describe linker/loader work, not executed instructions. ` +
-    `Undefined symbols require lookup; their providers and runtime addresses are not inferred. ` +
-    `REL/RELR addends stay in target bytes. CREL is an experimental LLVM format.</p>`);
+  out.push(`<p>Decoded relocations: ${relocations.entries.length} across ${relocations.tables.length} tables. ` +
+    `Distinct referenced symbols: ${summary.symbols.length}.</p>`);
+  out.push(`<p class="smallNote">A RELR word can expand to multiple relocation sites. ` +
+    `The REL format stores implicit addends in the target bytes. ` +
+    `Symbol providers and runtime addresses depend on the loader. CREL is an experimental LLVM format.</p>`);
   for (const kind of Object.keys(labels) as ElfRelocationSummaryKind[]) {
     if (!summary[kind].length) continue;
     out.push(`<h4>${escapeHtml(labels[kind])} distribution</h4>`);

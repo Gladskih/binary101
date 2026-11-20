@@ -1,7 +1,8 @@
 import type { ElfParseResult } from "./types.js";
 
 export type ElfRelocationImage = Pick<ElfParseResult,
-  "header" | "sections" | "programHeaders" | "is64" | "littleEndian" | "fileSize" | "dynSymbols">;
+  "ident" | "header" | "sections" | "programHeaders" | "is64" | "littleEndian" | "fileSize" |
+  "dynSymbols">;
 export type ElfRelocationEncoding = "REL" | "RELA" | "RELR" |
   "ANDROID_REL" | "ANDROID_RELA" | "CREL" | "AUTH_RELR";
 
@@ -22,6 +23,7 @@ export interface ElfRelocationSymbol {
   name: string;
   value: bigint;
   sectionIndex: number;
+  rawSectionIndex?: number;
 }
 
 export interface ElfRelocationTarget {

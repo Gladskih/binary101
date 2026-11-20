@@ -6,6 +6,8 @@ import { elfFileRange, elfVirtualRange, readElfRelocationString } from
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import { ELF_DYNAMIC_TAG as DT, ELF_SECTION_TYPE as SECTION, ELF_SYMBOL_INDEX } from "./abi-constants.js";
+import { declaredDynamicSymbolRange } from "./dynsym-range.js";
+import { elfSymbolSectionFields } from "./symbol-section-index.js";
 
 // gABI Symbol table: Elf32_Sym / Elf64_Sym, SHN_XINDEX, SHT_SYMTAB_SHNDX.
 // https://gabi.xinuos.com/elf/05-symtab.html
@@ -34,12 +36,16 @@ const dynamicStrings = (
   tags.has(DT.STRTAB) && tags.has(DT.STRSZ)
     ? elfVirtualRange(elf.programHeaders, tags.get(DT.STRTAB)!, tags.get(DT.STRSZ)!, reader.size) : null;
 
-const dynamicSymbolSize = (elf: ElfRelocationImage, tags: Map<number, bigint>,
-  stride: number): bigint | null => {
+const dynamicSymbolSize = (reader: FileRangeReader, elf: ElfRelocationImage,
+  tags: Map<number, bigint>, stride: number, issues: string[]): bigint | null => {
+  const address = tags.get(DT.SYMTAB);
+  if (address == null) return null;
   const section = elf.sections.find(section => section.type === SECTION.DYNSYM &&
-    section.addr === tags.get(DT.SYMTAB));
+    section.addr === address);
   if (section) return section.entsize === BigInt(stride) ? section.size : 0n;
-  if (tags.has(DT.SYMTABSZ)) return tags.get(DT.SYMTABSZ)!;
+  const declaredSize = tags.get(DT.SYMTABSZ);
+  if (declaredSize != null) return BigInt(declaredDynamicSymbolRange(
+    elf.programHeaders, address, declaredSize, stride, reader.size, issues)?.size ?? 0);
   // Reuse the count already established from dynamic hashes; don't scan them again.
   // A section-derived count is only applicable to its own table (checked above).
   if (!elf.sections.some(section => section.type === SECTION.DYNSYM) &&
@@ -47,20 +53,17 @@ const dynamicSymbolSize = (elf: ElfRelocationImage, tags: Map<number, bigint>,
   return null;
 };
 
-const withinDynamicSymbols = (elf: ElfRelocationImage, tags: Map<number, bigint>,
-  index: number, stride: number): boolean => {
-  const size = dynamicSymbolSize(elf, tags, stride);
-  return size == null || (size >= 0n && size % BigInt(stride) === 0n &&
-    BigInt(index + 1) * BigInt(stride) <= size);
-};
+const withinDynamicSymbols = (size: bigint | null, index: number, stride: number): boolean =>
+  size == null || (size >= 0n && size % BigInt(stride) === 0n &&
+  BigInt(index + 1) * BigInt(stride) <= size);
 
 const locateDynamicSymbol = (
   reader: FileRangeReader, elf: ElfRelocationImage, tags: Map<number, bigint>, index: number,
-  stride: number
+  stride: number, size: bigint | null
 ): SymbolLocation | null => {
   const address = tags.get(DT.SYMTAB);
   if (address == null || tags.get(DT.SYMENT) !== BigInt(stride)) return null;
-  if (!withinDynamicSymbols(elf, tags, index, stride)) return null;
+  if (!withinDynamicSymbols(size, index, stride)) return null;
   const stringsAddress = tags.get(DT.STRTAB);
   if (stringsAddress != null && stringsAddress > address &&
     address + BigInt(index + 1) * BigInt(stride) > stringsAddress) return null;
@@ -73,17 +76,17 @@ const locateDynamicSymbol = (
 
 const locateSymbol = (
   reader: FileRangeReader, elf: ElfRelocationImage, table: ElfRelocationTable,
-  tags: Map<number, bigint>, index: number, stride: number
+  tags: Map<number, bigint>, index: number, stride: number, dynamicSize: bigint | null
 ): SymbolLocation | null => {
   if (!Number.isSafeInteger(index) || index < 0 || index > ELF_SYMBOL_INDEX.MAX) return null;
   return table.symbolTableIndex != null ? locateSectionSymbol(reader, elf, table, index, stride) :
-    locateDynamicSymbol(reader, elf, tags, index, stride);
+    locateDynamicSymbol(reader, elf, tags, index, stride, dynamicSize);
 };
 
 const extendedSectionIndex = async (
   reader: FileRangeReader, elf: ElfRelocationImage, table: ElfRelocationTable,
   index: number, issues: string[], layout: ElfBinaryLayout, tags: Map<number, bigint>
-): Promise<number> => {
+): Promise<number | null> => {
   const section = elf.sections.find(item => item.type === SECTION.SYMTAB_SHNDX && item.link === table.symbolTableIndex);
   const width = BigInt(ELF_SYMBOL_INDEX.BYTE_SIZE);
   const address = tags.get(DT.SYMTAB_SHNDX);
@@ -94,7 +97,7 @@ const extendedSectionIndex = async (
   const value = range ? layout.readSectionIndex(await reader.read(range.offset, ELF_SYMBOL_INDEX.BYTE_SIZE)) : null;
   if (value != null && value >= 0xff00) return value; // gABI SHN_LORESERVE.
   issues.push(`Relocation symbol #${index} has an invalid SHN_XINDEX reference.`);
-  return ELF_SYMBOL_INDEX.XINDEX;
+  return null;
 };
 
 const readSymbol = async (
@@ -107,10 +110,8 @@ const readSymbol = async (
     return null;
   }
   const nameOffset = record.nameOffset;
-  let sectionIndex = record.sectionIndex;
-  if (sectionIndex === ELF_SYMBOL_INDEX.XINDEX) {
-    sectionIndex = await extendedSectionIndex(reader, elf, table, index, issues, layout, tags);
-  }
+  const extendedIndex = record.sectionIndex === ELF_SYMBOL_INDEX.XINDEX
+    ? await extendedSectionIndex(reader, elf, table, index, issues, layout, tags) : null;
   const strings = location.strings;
   let name = "";
   if (!strings || nameOffset >= strings.size) {
@@ -119,7 +120,7 @@ const readSymbol = async (
     name = await readElfRelocationString(reader, BigInt(strings.offset + nameOffset),
       BigInt(strings.size - nameOffset), issues);
   }
-  return { name, value: record.value, sectionIndex };
+  return { name, value: record.value, ...elfSymbolSectionFields(record.sectionIndex, extendedIndex) };
 };
 
 export const createElfRelocationSymbolReader = (
@@ -128,15 +129,15 @@ export const createElfRelocationSymbolReader = (
 ): ((table: ElfRelocationTable, index: number) => Promise<ElfRelocationSymbol | null>) => {
   // Cache by physical symbol record, so aliases of .dynsym share decoded names.
   const cache = new Map<number, ElfRelocationSymbol | null>();
+  const dynamicSize = dynamicSymbolSize(reader, elf, tags, layout.symbolEntrySize, issues);
   let reportedBoundary = false;
   return async (table, index) => {
-    const location = locateSymbol(reader, elf, table, tags, index, layout.symbolEntrySize);
+    const location = locateSymbol(reader, elf, table, tags, index, layout.symbolEntrySize, dynamicSize);
     if (!location) {
       issues.push(`Relocation symbol #${index} is outside its symbol table or PT_LOAD.`);
       return null;
     }
-    if (table.symbolTableIndex == null && !reportedBoundary &&
-      dynamicSymbolSize(elf, tags, layout.symbolEntrySize) == null) {
+    if (table.symbolTableIndex == null && !reportedBoundary && dynamicSize == null) {
       issues.push("ELF dynamic symbol table has no established size; references are only bounded by PT_LOAD and DT_STRTAB.");
       reportedBoundary = true;
     }

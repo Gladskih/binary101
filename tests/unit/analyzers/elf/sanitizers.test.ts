@@ -182,6 +182,18 @@ void test("rejects reserved section indices at the boundary", () => {
   assert.deepEqual(analyzeElfSanitizers(elf), []);
 });
 
+void test("uses mapped sanitizer definitions only for real extended section references", () => {
+  const elf = sanitizerElfDefinitions();
+  // Raw SHN_ABS and actual section #65521 must not alias.
+  elf.sections[1]!.index = 0xfff1;
+  const table = elf.symbolTables![0]!;
+  table.entries = table.entries.map(symbol => ({ ...symbol, sectionIndex: 0xfff1 }));
+  assert.deepEqual(analyzeElfSanitizers(elf), []);
+
+  table.entries = table.entries.map(symbol => ({ ...symbol, rawSectionIndex: 0xffff }));
+  assert.equal(analyzeElfSanitizers(elf).length, 2);
+});
+
 void test("rejects a non-load segment, a negative file offset and a function before the segment", () => {
   const elf = sanitizerElfSegmentDefinitions();
   elf.programHeaders[0]!.type = 2; // PT_DYNAMIC is not an executable mapping.

@@ -28,7 +28,9 @@ void test("reads extended section indices and shares symbols with relocations", 
   const cache = new Map<number, ElfRelocationSymbol>();
   const result = await parseElfSymbolTables(fixture.file(), fixture.elf, cache);
   assert.equal(result[0]?.entries[1]?.sectionIndex, 65536);
-  assert.deepEqual(cache.get(280), { name: "target", value: 4n, sectionIndex: 65536 });
+  assert.deepEqual(cache.get(280), {
+    name: "target", value: 4n, sectionIndex: 65536, rawSectionIndex: 0xffff
+  });
 });
 
 void test("warns about invalid entry sizes", async () => {

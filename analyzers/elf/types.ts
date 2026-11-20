@@ -149,6 +149,7 @@ export interface ElfDynamicSymbol {
   visibility: number;
   visibilityName: string;
   shndx: number;
+  rawSectionIndex?: number;
 }
 
 export interface ElfDynamicSymbolInfo {

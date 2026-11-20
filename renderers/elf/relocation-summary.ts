@@ -1,6 +1,7 @@
 import type { ElfParseResult, ElfSectionHeader } from "../../analyzers/elf/types.js";
 import type { ElfRelocation, ElfRelocationSymbol, ElfRelocationTable } from "../../analyzers/elf/relocation-types.js";
 import { elfRelocationTypeName } from "../../analyzers/elf/relocation-names.js";
+import { elfSymbolSectionReference } from "../../analyzers/elf/symbol-section-index.js";
 
 export interface ElfRelocationSummaryRow {
   label: string; detail: string; count: number; symbol?: ElfRelocationSymbol;
@@ -19,8 +20,9 @@ const symbolState = (entry: ElfRelocation): string => {
   if (!entry.symbol) return "Unresolved symbol reference";
   // gABI SHN_UNDEF/ABS/COMMON: a definition need not belong to a section.
   if (entry.symbol.sectionIndex === 0) return "Undefined; requires symbol lookup";
-  if (entry.symbol.sectionIndex === 0xfff1) return "Absolute definition";
-  if (entry.symbol.sectionIndex === 0xfff2) return "Common definition";
+  const index = entry.symbol.rawSectionIndex ?? entry.symbol.sectionIndex;
+  if (index === 0xfff1) return "Absolute definition";
+  if (index === 0xfff2) return "Common definition";
   return "Defined in this file";
 };
 
@@ -35,7 +37,9 @@ const targetStorage = (entry: ElfRelocation): string => entry.target ?
 
 const symbolLabel = (sections: Map<number, ElfSectionHeader>, entry: ElfRelocation): string => {
   if (!entry.symbol) return "Unresolved symbol";
-  return entry.symbol.name || sections.get(entry.symbol.sectionIndex)?.name || "Unnamed symbol";
+  const { name, sectionIndex, rawSectionIndex } = entry.symbol;
+  const index = elfSymbolSectionReference(sectionIndex, rawSectionIndex);
+  return name || (index == null ? undefined : sections.get(index)?.name) || "Unnamed symbol";
 };
 
 const symbolTableIdentity = (sections: Map<number, ElfSectionHeader>, table: ElfRelocationTable): string | number => {
@@ -46,6 +50,14 @@ const symbolTableIdentity = (sections: Map<number, ElfSectionHeader>, table: Elf
 const typeLabel = (machine: number, table: ElfRelocationTable, entry: ElfRelocation): string =>
   entry.type == null ? table.encoding === "AUTH_RELR" ? "Authenticated relative (RELR)" :
     "Relative (RELR)" : elfRelocationTypeName(machine, entry.type);
+
+// gABI 6.2: RELR encodes locations where the loader adjusts a stored value.
+// https://gabi.xinuos.com/elf/06-reloc.html#relative-relocation-table
+const encodingMeaning = (encoding: ElfRelocationTable["encoding"], addend: bigint | null): string => {
+  if (encoding === "RELR") return "Adjusts stored value by load base";
+  if (encoding === "AUTH_RELR") return "Packed authenticated relative sites";
+  return addend == null ? "Addend in target bytes" : "Explicit addend";
+};
 
 export const summarizeElfRelocations = (elf: ElfParseResult): ElfRelocationSummary => {
   const types = new Map<string, ElfRelocationSummaryRow>();
@@ -58,8 +70,8 @@ export const summarizeElfRelocations = (elf: ElfParseResult): ElfRelocationSumma
     const type = typeLabel(elf.header.machine, table, entry);
     const binding = entry.symbolIndex ? "Symbol reference" : "No symbol reference";
     addRow(types, `${type}:${binding}`, type, binding);
-    const addend = entry.addend == null ? "Addend in target bytes" : "Explicit addend";
-    addRow(formats, `${table.encoding}:${addend}`, table.encoding, addend);
+    const meaning = encodingMeaning(table.encoding, entry.addend);
+    addRow(formats, `${table.encoding}:${meaning}`, table.encoding, meaning);
     const target = targetLabel(sections, entry);
     const storage = targetStorage(entry);
     addRow(targets, `${entry.target?.sectionIndex}:${target}:${storage}`, target, storage);

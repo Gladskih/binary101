@@ -79,6 +79,7 @@ for (const [bits, order, shndxOffset] of [
     const result = await parseElfDynamicSymbols({ file: fixture.file(), ...fixture.elf });
 
     assert.equal(result?.exportSymbols[0]?.shndx, 0x10000);
+    assert.equal(result?.exportSymbols[0]?.rawSectionIndex, 0xffff);
     assert.deepEqual(result?.issues, []);
   });
 }

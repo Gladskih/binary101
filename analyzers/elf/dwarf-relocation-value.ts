@@ -1,6 +1,7 @@
 import type { ElfRelocation, ElfRelocationImage } from "./relocation-types.js";
 import type { ElfSectionHeader } from "./types.js";
 import type { ElfDwarfRelocationKind } from "./dwarf-relocation-types.js";
+import { elfSymbolSectionReference } from "./symbol-section-index.js";
 
 // gABI 6 / 5: ET_REL symbols are section-relative; SHN_ABS is absolute.
 // https://gabi.xinuos.com/elf/06-reloc.html
@@ -9,8 +10,9 @@ const symbolValue = (entry: ElfRelocation, elf: ElfRelocationImage,
   if (entry.symbolIndex === 0) return 0n;
   const symbol = entry.symbol;
   if (!symbol || !symbol.sectionIndex) return "Unresolved DWARF relocation symbol";
-  if (symbol.sectionIndex === 0xfff1) return symbol.value; // SHN_ABS, gABI 5.
-  const section = sections.get(symbol.sectionIndex);
+  if ((symbol.rawSectionIndex ?? symbol.sectionIndex) === 0xfff1) return symbol.value;
+  const index = elfSymbolSectionReference(symbol.sectionIndex, symbol.rawSectionIndex);
+  const section = index == null ? undefined : sections.get(index);
   if (!section) return "DWARF relocation symbol has an unavailable section";
   return symbol.value + (elf.header.type === 1 ? section.addr : 0n);
 };

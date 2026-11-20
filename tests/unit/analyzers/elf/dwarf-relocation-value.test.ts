@@ -53,3 +53,14 @@ void test("relocation symbols distinguish ET_REL section bases, absolute values,
   entry.symbol!.sectionIndex = 7;
   assert.match(String(elfDwarfRelocationValue(entry, kind, elf, new Map(), 0n, 0n, 0n)), /unavailable section/);
 });
+
+void test("DWARF relocations apply the base of an extended section whose index equals SHN_ABS", () => {
+  const { elf, relocations } = createDwarfRelocationFixture();
+  const kind: ElfDwarfRelocationKind = { width: 4, operation: "absolute", overflow: "unsigned" };
+  const sections = new Map([[0xfff1, relocationSection(0xfff1, { addr: 4096n })]]);
+  const entry = relocations.entries[0]!;
+  // Raw SHN_XINDEX means the resolved value #65521 identifies an actual section.
+  entry.symbol = { ...entry.symbol!, rawSectionIndex: 0xffff, sectionIndex: 0xfff1 };
+
+  assert.equal(elfDwarfRelocationValue(entry, kind, elf, sections, 0n, 0n, 0n), 4112n);
+});

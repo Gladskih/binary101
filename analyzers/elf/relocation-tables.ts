@@ -4,7 +4,7 @@ import { elfVirtualRange } from "./relocation-reader.js";
 import type { ElfSectionHeader } from "./types.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
-import { ELF_DYNAMIC_TAG as DT, ELF_SECTION_TYPE } from "./abi-constants.js";
+import { ELF_DYNAMIC_TAG as DT, ELF_MACHINE_ID, ELF_SECTION_TYPE } from "./abi-constants.js";
 import { collectElfCrelDynamicTable } from "./relocation-crel-table.js";
 
 // gABI sections/dynamic: SHT_RELA=4, SHT_REL=9, SHT_RELR=19;
@@ -19,12 +19,21 @@ const validSectionRange = (section: ElfSectionHeader, fileSize: number, stride: 
   (section.entsize === BigInt(stride) || (stride === 1 && section.entsize === 0n)) &&
   section.offset >= 0n && section.size >= 0n && section.offset <= BigInt(fileSize);
 
-const sectionEncoding = (section: ElfSectionHeader, machine: number): ElfRelocationEncoding | undefined =>
+const sectionEncoding = (
+  section: ElfSectionHeader, elf: ElfRelocationImage
+): ElfRelocationEncoding | undefined =>
   ({ [ELF_SECTION_TYPE.RELA]: "RELA", [ELF_SECTION_TYPE.REL]: "REL",
     [ELF_SECTION_TYPE.RELR]: "RELR", [ELF_SECTION_TYPE.ANDROID_RELR]: "RELR",
-    [ELF_SECTION_TYPE.ANDROID_REL]: "ANDROID_REL", [ELF_SECTION_TYPE.ANDROID_RELA]: "ANDROID_RELA",
+    // ELFOSABI_HPUX=1 assigns those IDs to SHT_HP_DLKM and SHT_HP_COMDAT.
+    // https://gabi.xinuos.com/elf/b-osabi.html
+    // https://ftp.parisc-linux.org/docs/arch/elf-64-hp.pdf
+    ...(elf.ident.osabi !== 1 ? {
+      [ELF_SECTION_TYPE.ANDROID_REL]: "ANDROID_REL", [ELF_SECTION_TYPE.ANDROID_RELA]: "ANDROID_RELA"
+    } as const : {}),
     [ELF_SECTION_TYPE.CREL]: "CREL",
-    ...(machine === 183 ? { [ELF_SECTION_TYPE.AARCH64_AUTH_RELR]: "AUTH_RELR" as const } : {})
+    ...(elf.header.machine === ELF_MACHINE_ID.AARCH64 ? {
+      [ELF_SECTION_TYPE.AARCH64_AUTH_RELR]: "AUTH_RELR" as const
+    } : {})
   } as const)[section.type];
 
 const sectionByteSize = (
@@ -47,7 +56,7 @@ const sectionTables = (
   elf: ElfRelocationImage, issues: string[], layout: ElfBinaryLayout
 ): ElfRelocationTable[] =>
   elf.sections.flatMap(section => {
-    const encoding = sectionEncoding(section, elf.header.machine);
+    const encoding = sectionEncoding(section, elf);
     if (!encoding || section.size === 0n) return [];
     const source = section.name || `section #${section.index}`;
     const stride = entrySize(encoding, layout);
@@ -126,14 +135,20 @@ export const collectElfRelocationTables = (
     dynamicTable(elf, tags, "REL", "DT_REL", [DT.REL, DT.RELSZ, DT.RELENT], issues, layout),
     dynamicTable(elf, tags, "RELA", "DT_RELA", [DT.RELA, DT.RELASZ, DT.RELAENT], issues, layout),
     dynamicTable(elf, tags, "RELR", "DT_RELR", [DT.RELR, DT.RELRSZ, DT.RELRENT], issues, layout),
-    dynamicTable(elf, tags, "ANDROID_REL", "DT_ANDROID_REL",
-      [DT.ANDROID_REL, DT.ANDROID_RELSZ, DT.ANDROID_REL], issues, layout),
-    dynamicTable(elf, tags, "ANDROID_RELA", "DT_ANDROID_RELA",
-      [DT.ANDROID_RELA, DT.ANDROID_RELASZ, DT.ANDROID_RELA], issues, layout),
+    // TI C6000 assigns these address-tag IDs to DT_C6000_GSTR_OFFSET and DT_C6000_PRELINKED.
+    // https://www.ti.com/lit/an/sprab89b/sprab89b.pdf (table 14-4)
+    ...(elf.header.machine !== ELF_MACHINE_ID.TI_C6000 ? [
+      dynamicTable(elf, tags, "ANDROID_REL", "DT_ANDROID_REL",
+        [DT.ANDROID_REL, DT.ANDROID_RELSZ, DT.ANDROID_REL], issues, layout),
+      dynamicTable(elf, tags, "ANDROID_RELA", "DT_ANDROID_RELA",
+        [DT.ANDROID_RELA, DT.ANDROID_RELASZ, DT.ANDROID_RELA], issues, layout)
+    ] : []),
     dynamicTable(elf, tags, "RELR", "DT_ANDROID_RELR",
       [DT.ANDROID_RELR, DT.ANDROID_RELRSZ, DT.ANDROID_RELRENT], issues, layout),
-    ...(elf.header.machine === 183 ? [dynamicTable(elf, tags, "AUTH_RELR", "DT_AARCH64_AUTH_RELR",
-      [DT.AARCH64_AUTH_RELR, DT.AARCH64_AUTH_RELRSZ, DT.AARCH64_AUTH_RELRENT], issues, layout)] : []),
+    ...(elf.header.machine === ELF_MACHINE_ID.AARCH64 ? [
+      dynamicTable(elf, tags, "AUTH_RELR", "DT_AARCH64_AUTH_RELR",
+        [DT.AARCH64_AUTH_RELR, DT.AARCH64_AUTH_RELRSZ, DT.AARCH64_AUTH_RELRENT], issues, layout)
+    ] : []),
     collectElfCrelDynamicTable(elf, tags, issues),
     pltTable(elf, tags, issues, layout)
   ];

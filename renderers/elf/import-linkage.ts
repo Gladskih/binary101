@@ -44,7 +44,7 @@ const versionedTables = (elf: ElfParseResult): Set<number> => {
 const recordedVersion = (elf: ElfParseResult, link: ElfImportLink,
   requirements: Map<number, string[]>, tables: Set<number>): string => {
   const entry = elf.relocations?.entries[link.relocationIndex];
-  if (!entry?.symbolIndex || entry.symbol?.sectionIndex !== 0) return "-";
+  if (!entry?.symbolIndex || (entry.symbol?.sectionIndex !== 0 && link.kind !== "COPY relocation")) return "-";
   // Versym indices belong to the dynamic symbol table, not an arbitrary SYMTAB.
   if (!tables.has(entry.tableIndex)) return "Unknown (symbol table identity)";
   const index = elf.symbolVersions?.symbols[entry.symbolIndex];
@@ -62,8 +62,14 @@ const linkValues = (elf: ElfParseResult, link: ElfImportLink,
     entry.type == null ? "Unknown" : elfRelocationTypeName(elf.header.machine, entry.type),
     table?.sources.join(", ") ?? "Unknown",
     link.sections.map(index => names.get(index) ?? `#${index}`).join(", ") || "-",
-    link.relroSegments.length ? "Covered" : "Not covered",
+    relroCoverage(link),
     link.issues.join(" ") || "-"];
+};
+
+const relroCoverage = (link: ElfImportLink): string => {
+  if (!link.relroSegments.length) return "Not covered";
+  return link.kind === "COPY relocation" || link.kind === "Other symbol relocation"
+    ? "Target address covered" : "Covered";
 };
 
 export const createElfImportLinkageModel = (elf: ElfParseResult): PagedSortableTableModel => {
@@ -117,6 +123,9 @@ export const renderElfImportLinkage = (elf: ElfParseResult, out: string[]): void
     `not observed runtime page protection. ` +
     `Other symbol relocations may include data, TLS and architecture-specific operations. ` +
     `Missing code evidence does not mean a symbol is unused. Register-based targets are not resolved.</p>`);
+  if (report.links.some(link => link.kind === "COPY relocation")) out.push(
+    `<p class="smallNote">For a COPY relocation, this file defines the destination storage. ` +
+    `The dynamic linker copies initial bytes from a symbol definition in another object.</p>`);
   if (report.links.length) out.push(renderAutoPagedSortableTable(createElfImportLinkageModel(elf)));
   else out.push(`<p>No matching runtime relocation links were decoded.</p>`);
   if (report.issues.length) out.push(`<p>Analysis contains incomplete or anomalous input:</p><ul>` +

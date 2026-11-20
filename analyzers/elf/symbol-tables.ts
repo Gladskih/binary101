@@ -5,6 +5,8 @@ import { elfFileRange } from "./relocation-reader.js";
 import { createElfStringTableReader } from "./string-table.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
+import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
+import { elfSymbolSectionFields } from "./symbol-section-index.js";
 
 export interface ElfStaticSymbol extends ElfRelocationSymbol {
   size: bigint;
@@ -23,13 +25,14 @@ export interface ElfSymbolTable {
 const readExtendedIndex = async (
   reader: FileRangeReader, section: ElfSectionHeader | undefined,
   index: number, elf: ElfParseResult, issues: string[]
-): Promise<number> => {
+): Promise<number | null> => {
   const range = section?.entsize === 4n && BigInt(index + 1) * 4n <= section.size
     ? elfFileRange(section.offset + BigInt(index) * 4n, 4n, reader.size) : null;
   const view = range ? await reader.read(range.offset, 4) : null;
-  if (view?.byteLength === 4) return view.getUint32(0, elf.littleEndian);
+  const value = view?.byteLength === 4 ? view.getUint32(0, elf.littleEndian) : null;
+  if (value != null && value >= 0xff00) return value; // SHN_LORESERVE, gABI 3.1.
   issues.push(`Symbol #${index} has an invalid SHN_XINDEX reference.`);
-  return 0xffff;
+  return null;
 };
 
 const staticTableRange = (
@@ -68,9 +71,10 @@ const readStaticTable = async (
       result.issues.push(`Symbol #${index} is truncated.`);
       break;
     }
+    const extendedIndex = record.sectionIndex === ELF_SYMBOL_INDEX.XINDEX
+      ? await readExtendedIndex(reader, extended, index, elf, result.issues) : null;
     const symbol = { name: await readName(record.nameOffset) ?? "", value: record.value,
-      sectionIndex: record.sectionIndex === 0xffff
-        ? await readExtendedIndex(reader, extended, index, elf, result.issues) : record.sectionIndex };
+      ...elfSymbolSectionFields(record.sectionIndex, extendedIndex) };
     cache.set(offset, symbol);
     result.entries.push({ ...symbol, size: record.size, info: record.info, other: record.other });
   }

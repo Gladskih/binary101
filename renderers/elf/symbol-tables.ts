@@ -1,6 +1,6 @@
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfParseResult, ElfSectionHeader } from "../../analyzers/elf/types.js";
-import type { ElfSymbolTable } from "../../analyzers/elf/symbol-tables.js";
+import type { ElfStaticSymbol, ElfSymbolTable } from "../../analyzers/elf/symbol-tables.js";
 import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-state.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
@@ -21,7 +21,7 @@ const symbolValues = (table: ElfSymbolTable, index: number,
       symbol.info & 15] ?? ((symbol.info & 15) === 10 ? "GNU_IFUNC" : String(symbol.info & 15)),
     ["DEFAULT", "INTERNAL", "HIDDEN", "PROTECTED"][symbol.other & 3]!,
     `0x${symbol.value.toString(16)}`, String(symbol.size),
-    symbolSectionName(symbol.sectionIndex, names)];
+    symbolSectionName(symbol, names)];
 };
 
 export const createElfSymbolTableModel = (table: ElfSymbolTable,
@@ -54,8 +54,12 @@ export const renderElfSymbolTables = (elf: ElfParseResult, out: string[], onlyIn
   }
 };
 
-function symbolSectionName(index: number, names: Map<number, string>): string {
-  return ({ 0: "UND", 65521: "ABS", 65522: "COMMON" } as Record<number, string>)[
-      index] ?? `${index}${names.has(index)
-        ? ` (${names.get(index)})` : ""}`;
+function symbolSectionName(symbol: ElfStaticSymbol, names: Map<number, string>): string {
+  const { sectionIndex, rawSectionIndex } = symbol;
+  // Reserved values apply to the raw 16-bit field, not its 32-bit extended index.
+  const reserved = ({ 0: "UND", 65521: "ABS", 65522: "COMMON",
+    65535: "XINDEX (unresolved)" } as Record<number, string>)[sectionIndex];
+  if (rawSectionIndex == null && reserved) return reserved;
+  const name = names.get(sectionIndex);
+  return name ? `${sectionIndex} (${name})` : String(sectionIndex);
 }

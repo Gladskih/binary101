@@ -37,3 +37,12 @@ void test("ignores absent symbols and unhashed indices", () => {
     exportSymbols: symbols.exportSymbols.map(symbol => ({ ...symbol, index: 0 })) }, 64);
   assert.deepEqual(hash.issues, []);
 });
+
+void test("does not report undefined symbols as missing from an empty GNU hash", () => {
+  const hash = table();
+  hash.buckets[0] = 0;
+  hash.chains.length = 0;
+  const imports = symbols.exportSymbols.map(symbol => ({ ...symbol, shndx: 0 }));
+  validateElfHashSymbols([hash], { ...symbols, importSymbols: imports, exportSymbols: [] }, 64);
+  assert.deepEqual(hash.issues, []);
+});

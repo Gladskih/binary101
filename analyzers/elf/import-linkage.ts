@@ -4,7 +4,7 @@ import { elfRelocationTypeName } from "./relocation-names.js";
 import { ELF_FILE_TYPE, ELF_SECTION_TYPE, ELF_SECTION_FLAG } from "./abi-constants.js";
 
 export type ElfImportLinkKind = "PLT slot" | "GOT slot" |
-  "IFUNC resolver slot" | "Other symbol relocation";
+  "IFUNC resolver slot" | "COPY relocation" | "Other symbol relocation";
 
 export interface ElfImportLink {
   relocationIndex: number;
@@ -103,7 +103,7 @@ const describeLink = (elf: ElfParseResult, entry: ElfRelocation,
   if (load.length === 1 && !(load[0]!.flags & 2)) {
     issues.push("Target is in a PT_LOAD segment without PF_W.");
   }
-  if (kind === "Other symbol relocation") {
+  if (kind === "Other symbol relocation" || kind === "COPY relocation") {
     issues.push("Write size is unknown; placement checks cover only the target address.");
   }
   // PT_GNU_RELRO describes intended protection; actual mprotect rounds to runtime pages.
@@ -116,6 +116,29 @@ const describeLink = (elf: ElfParseResult, entry: ElfRelocation,
     issues };
 };
 
+const classifyLink = (entry: ElfRelocation, name: string, slotWidth: bigint | undefined):
+ElfImportLinkKind | null => {
+  // COPY refers to storage defined in the executable and copies data from another object.
+  // https://github.com/bminor/glibc/blob/master/sysdeps/x86_64/dl-machine.h#L425-L431
+  if (name.endsWith("_COPY")) return "COPY relocation";
+  return (slotWidth == null ? null : slotKind(name)) ?? (entry.symbol?.sectionIndex === 0 && entry.type !== 0
+    ? "Other symbol relocation" : null);
+};
+
+const reportLinkAnomalies = (elf: ElfParseResult, entry: ElfRelocation,
+  link: ElfImportLink): void => {
+  const { kind, issues } = link;
+  if (kind === "IFUNC resolver slot" && entry.symbolIndex !== 0) {
+    issues.push("IRELATIVE expects symbol index zero.");
+  } else if (kind !== "IFUNC resolver slot" && kind !== "Other symbol relocation" &&
+    (!entry.symbolIndex || !entry.symbol)) {
+    issues.push(`${kind === "COPY relocation" ? "COPY" : "Slot"} relocation has no decoded symbol reference.`);
+  }
+  if (kind === "PLT slot" && !elf.relocations?.tables[entry.tableIndex]?.sources.includes("DT_JMPREL")) {
+    issues.push("PLT slot is not identified by DT_JMPREL.");
+  }
+};
+
 export const analyzeElfImportLinkage = (elf: ElfParseResult): ElfImportLinkage | null => {
   if (elf.header.type !== ELF_FILE_TYPE.EXEC && elf.header.type !== ELF_FILE_TYPE.DYN) return null;
   if (!elf.dynamic && !elf.dynSymbols && !elf.relocations) return null;
@@ -123,24 +146,16 @@ export const analyzeElfImportLinkage = (elf: ElfParseResult): ElfImportLinkage |
     ...(elf.dynSymbols?.issues ?? []), ...(elf.symbolVersions?.issues ?? [])];
   const links: ElfImportLink[] = [];
   validatePltGot(elf, issues);
-  const width = slotMachines.get(elf.header.machine);
+  const slotWidth = slotMachines.get(elf.header.machine);
   for (const [index, entry] of (elf.relocations?.entries ?? []).entries()) {
     if (!runtimeTable(elf, entry)) continue;
     const name = entry.type == null ? "" : elfRelocationTypeName(elf.header.machine, entry.type);
-    const kind = width == null ? null : slotKind(name);
-    if (!kind && (!entry.symbol || entry.symbol.sectionIndex !== 0 || entry.type === 0)) continue;
-    const link = describeLink(elf, entry, index, kind ?? "Other symbol relocation",
-      kind ? width || (elf.is64 ? 8n : 4n) : 1n);
-    if (kind !== "IFUNC resolver slot" && kind && (!entry.symbolIndex || !entry.symbol)) {
-      link.issues.push("Slot relocation has no decoded symbol reference.");
-    }
-    if (kind === "IFUNC resolver slot" && entry.symbolIndex !== 0) {
-      link.issues.push("IRELATIVE expects symbol index zero.");
-    }
-    const table = elf.relocations!.tables[entry.tableIndex]!;
-    if (kind === "PLT slot" && !table.sources.includes("DT_JMPREL")) {
-      link.issues.push("PLT slot is not identified by DT_JMPREL.");
-    }
+    const kind = classifyLink(entry, name, slotWidth);
+    if (!kind) continue;
+    const width = kind === "COPY relocation" || kind === "Other symbol relocation"
+      ? 1n : slotWidth || (elf.is64 ? 8n : 4n);
+    const link = describeLink(elf, entry, index, kind, width);
+    reportLinkAnomalies(elf, entry, link);
     links.push(link);
   }
   return { binding: bindingPolicy(elf, issues), links, issues: [...new Set(issues)] };

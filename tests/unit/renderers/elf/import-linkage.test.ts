@@ -63,6 +63,20 @@ void test("does not attach a global versym index to a different symbol table", (
     "Unknown (symbol table identity)");
 });
 
+void test("shows version requirements on COPY relocations with defined destinations", () => {
+  const elf = linkedImage();
+  const entry = elf.relocations!.entries[0]!;
+  entry.type = 5; // x86-64 psABI R_X86_64_COPY.
+  entry.symbol = { name: "stdout", sectionIndex: 5, value: entry.offset };
+  elf.relocations!.tables[0]!.sources = ["DT_RELA"];
+  elf.importLinkage = analyzeElfImportLinkage(elf)!;
+  const model = createElfImportLinkageModel(elf);
+
+  assert.equal(model.sortValueAt(0, 2), "COPY relocation");
+  assert.equal(model.sortValueAt(0, 1), "<LIBC_1> (<libc.so>)");
+  assert.match(model.sortValueAt(0, 7), /only the target address/);
+});
+
 void test("rejects non-DYNSYM and conflicting dynamic symbol table addresses for versions", () => {
   const elf = linkedImage();
   elf.relocations!.tables[0]!.symbolTableIndex = 2;

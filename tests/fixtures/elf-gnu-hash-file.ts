@@ -42,11 +42,13 @@ export type ElfGnuHashDynamicFixture = {
   symbolVaddr: bigint;
 };
 
-export const createElfGnuHashDynamicFixture = (): ElfGnuHashDynamicFixture => {
+export const createElfGnuHashDynamicFixture = (
+  mode: "has-symbols" | "empty" | "declared-size" = "has-symbols"
+): ElfGnuHashDynamicFixture => {
   const totalSize = 0x180;
   const loadOffset = 0x40;
   const loadVaddr = 0x3040n;
-  const strtabOffset = 0x40;
+  const strtabOffset = mode === "empty" ? 0xf0 : 0x40;
   const gnuHashOffset = 0x80;
   const symtabOffset = 0xc0;
   const dynamicOffset = 0x120;
@@ -66,13 +68,15 @@ export const createElfGnuHashDynamicFixture = (): ElfGnuHashDynamicFixture => {
   gnuHash.setUint32(0x08, 1, true); // bloom_size
   gnuHash.setUint32(0x0c, 0, true); // bloom_shift
   gnuHash.setBigUint64(0x10, 0n, true); // bloom[0]
-  gnuHash.setUint32(0x18, 1, true); // buckets[0] -> symbol #1
-  gnuHash.setUint32(0x1c, 1, true); // chains[0] with end-of-chain bit set
+  if (mode !== "empty") {
+    gnuHash.setUint32(0x18, 1, true); // buckets[0] -> symbol #1
+    gnuHash.setUint32(0x1c, 1, true); // chains[0] with end-of-chain bit set
+  }
 
   const symtab = new DataView(bytes.buffer, symtabOffset, 0x30);
   symtab.setUint32(0x18, 1, true); // st_name -> symbolName
   symtab.setUint8(0x1c, 0x12); // STB_GLOBAL | STT_FUNC
-  symtab.setUint16(0x1e, 1, true); // defined
+  symtab.setUint16(0x1e, mode === "empty" ? 0 : 1, true); // gABI SHN_UNDEF or section #1.
   symtab.setBigUint64(0x20, symbolVaddr, true); // st_value
 
   const dynamic = new DataView(bytes.buffer, dynamicOffset, dynamicSize);
@@ -80,7 +84,9 @@ export const createElfGnuHashDynamicFixture = (): ElfGnuHashDynamicFixture => {
   writeDyn64(dynamic, 1, DT_STRSZ, BigInt(strtabBytes.length));
   writeDyn64(dynamic, 2, DT_SYMTAB, loadVaddr + BigInt(symtabOffset - loadOffset));
   writeDyn64(dynamic, 3, DT_SYMENT, 24n);
-  writeDyn64(dynamic, 4, DT_GNU_HASH, loadVaddr + BigInt(gnuHashOffset - loadOffset));
+  // gABI 8.3: DT_SYMTABSZ (39) supplies the table size without a hash.
+  if (mode === "declared-size") writeDyn64(dynamic, 4, 39, BigInt(symtab.byteLength));
+  else writeDyn64(dynamic, 4, DT_GNU_HASH, loadVaddr + BigInt(gnuHashOffset - loadOffset));
   writeDyn64(dynamic, 5, DT_NULL, 0n);
 
   return {

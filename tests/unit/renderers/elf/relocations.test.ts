@@ -31,6 +31,9 @@ void test("renders escaped aggregate cells, numeric sort values and visible warn
   assert.equal(model.sortValueAt(99, 3), "");
   assert.equal(model.rowAt(99), null);
   assert.equal(model.columns[0]?.label, "Relocation type");
+  assert.equal(model.columns[2]?.label, "Decoded relocations");
+  assert.match(out.join(""), /Decoded relocations: 1 across/);
+  assert.match(out.join(""), /A RELR word can expand to multiple relocation sites/);
   assert.equal(getElfPagedTableModel(elf, "elf-relocations-targets")?.rowCount, 1);
   assert.equal(getElfRelocationSummaryModel(elf, "unknown"), null);
 });

@@ -45,6 +45,19 @@ void test("renders unknown symbol encodings and escapes names and warnings", () 
   assert.match(out.join(""), /&lt;warning>/);
 });
 
+void test("distinguishes an extended section index from a reserved st_shndx value", async () => {
+  const fixture = relocationFixture();
+  // SHN_XINDEX selects a 32-bit word. 0xfff1 there names a real section, not SHN_ABS.
+  fixture.view.setUint16(286, 0xffff, true);
+  fixture.view.setUint32(604, 0xfff1, true);
+  fixture.elf.sections.push(relocationSection(4, { type: 18, link: 2,
+    offset: 600n, size: 8n, entsize: 4n }), relocationSection(0xfff1, { name: ".extended" }));
+  const [table] = await parseElfSymbolTables(fixture.file(), fixture.elf);
+  const model = createElfSymbolTableModel(table!, fixture.elf.sections);
+
+  assert.equal(model.rowAt(1)?.cells[7]?.html, "65521 (.extended)");
+});
+
 void test("omits absent static symbols", () => {
   const out: string[] = [];
   renderElfSymbolTables(relocationFixture().elf, out);

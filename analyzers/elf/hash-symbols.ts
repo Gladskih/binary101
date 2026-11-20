@@ -14,8 +14,8 @@ export const validateElfHashSymbols = (
   tables: ElfHashTable[], symbols: ElfDynamicSymbolInfo | null, wordBits: 32 | 64
 ): void => {
   if (!symbols) return;
-  for (const table of tables.filter(item => item.kind === "gnu" && !item.issues.length)) {
-    if (table.kind !== "gnu") continue;
+  for (const table of tables) {
+    if (table.kind !== "gnu" || table.issues.length || !table.chains.length) continue;
     for (const symbol of [...symbols.importSymbols, ...symbols.exportSymbols]) {
       if (symbol.index < table.symbolOffset) continue;
       const hash = gnuHash(symbol.name);

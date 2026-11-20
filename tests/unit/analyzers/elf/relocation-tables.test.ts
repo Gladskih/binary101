@@ -47,6 +47,35 @@ void test("merges section and dynamic aliases, retaining provenance", () => {
   assert.equal(tables[0]?.symbolTableIndex, 2);
 });
 
+void test("HP-UX section types sharing Android relocation IDs are not relocation tables", () => {
+  const fixture = dynamicRelocationFixture(64, "big");
+  // ELFOSABI_HPUX=1. HP ELF-64 v1.4 assigns these types to HP_DLKM and HP_COMDAT.
+  // https://ftp.parisc-linux.org/docs/arch/elf-64-hp.pdf
+  fixture.elf.ident.osabi = 1;
+  fixture.elf.sections.push(
+    relocationSection(4, { type: 0x60000001, offset: 64n, size: 4n }),
+    relocationSection(5, { type: 0x60000002, offset: 72n, size: 4n })
+  );
+  const issues: string[] = [];
+
+  assert.deepEqual(collectElfRelocationTables(fixture.elf, new Map(), issues), []);
+  assert.deepEqual(issues, []);
+});
+
+void test("TI C6000 dynamic tags sharing Android IDs do not declare relocation tables", () => {
+  const fixture = dynamicRelocationFixture(32);
+  fixture.elf.header.machine = 140; // EM_TI_C6000, https://gabi.xinuos.com/elf/a-emachine.html
+  // DT_C6000_GSTR_OFFSET and DT_C6000_PRELINKED (TI C6000 ABI table 14-4).
+  // https://www.ti.com/lit/an/sprab89b/sprab89b.pdf
+  fixture.tags.set(0x6000000f, 32n).set(0x60000011, 298n);
+  const issues: string[] = [];
+
+  const tables = collectElfRelocationTables(fixture.elf, fixture.tags, issues);
+
+  assert.deepEqual(tables.map(table => table.encoding), ["RELA"]);
+  assert.deepEqual(issues, []);
+});
+
 for (const fields of [
   { offset: -1n }, { offset: 1025n }, { size: -1n }, { entsize: 0n },
   { entsize: 23n }, { offset: 1n << 63n }
@@ -159,8 +188,14 @@ void test("collects Android APS2, legacy RELR and machine-specific authenticated
   fixture.tags.set(0x6fffe000, 0x10c0n).set(0x6fffe001, 8n).set(0x6fffe003, 8n);
   fixture.tags.set(0x70000012, 0x10e0n).set(0x70000011, 8n).set(0x70000013, 8n);
   const issues: string[] = [];
-  assert.deepEqual(collectElfRelocationTables(fixture.elf, fixture.tags, issues).map(table => table.encoding),
+
+  const tables = collectElfRelocationTables(fixture.elf, fixture.tags, issues);
+
+  assert.deepEqual(tables.map(table => table.encoding),
     ["RELA", "ANDROID_REL", "ANDROID_RELA", "RELR", "AUTH_RELR"]);
+  assert.deepEqual(tables.map(table => table.sources[0]), [
+    "DT_RELA", "DT_ANDROID_REL", "DT_ANDROID_RELA", "DT_ANDROID_RELR", "DT_AARCH64_AUTH_RELR"
+  ]);
   assert.deepEqual(issues, []);
 });
 

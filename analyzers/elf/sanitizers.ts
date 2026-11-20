@@ -2,6 +2,7 @@ import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { SanitizerDependency, SanitizerEvidence, SanitizerSymbol } from "../sanitizers/types.js";
 import { analyzeSanitizerEvidence } from "../sanitizers/evidence.js";
 import { SANITIZER_ABI_SYMBOLS } from "../sanitizers/abi-catalog.js";
+import { elfSymbolSectionReference } from "./symbol-section-index.js";
 
 const executableSections = (elf: ElfParseResult): ReadonlyMap<number, ElfSectionHeader> =>
   new Map(elf.sections.filter(section =>
@@ -11,7 +12,8 @@ const executableSections = (elf: ElfParseResult): ReadonlyMap<number, ElfSection
   ).map(section => [section.index, section]));
 
 const definitionIsMapped = (elf: ElfParseResult, sections: ReadonlyMap<number, ElfSectionHeader>,
-  sectionIndex: number, value: bigint): boolean => {
+  sectionIndex: number | null, value: bigint): boolean => {
+  if (sectionIndex == null) return false;
   const section = sections.get(sectionIndex);
   if (section) {
     // ET_REL=1: st_value is a section offset, otherwise a virtual address (gABI 5).
@@ -19,7 +21,7 @@ const definitionIsMapped = (elf: ElfParseResult, sections: ReadonlyMap<number, E
     return offset >= 0n && offset < section.size;
   }
   // Stripped ELF files may have no section headers; use file-backed executable PT_LOADs.
-  return elf.sections.length === 0 && sectionIndex > 0 && sectionIndex < 0xff00 &&
+  return elf.sections.length === 0 &&
     elf.programHeaders.some(segment => segment.type === 1 && (segment.flags & 1) !== 0 &&
       segment.offset >= 0n && segment.offset + segment.filesz <= BigInt(elf.fileSize) &&
       value >= segment.vaddr && value - segment.vaddr < segment.filesz);
@@ -27,7 +29,7 @@ const definitionIsMapped = (elf: ElfParseResult, sections: ReadonlyMap<number, E
 
 const elfSymbol = (elf: ElfParseResult, sections: ReadonlyMap<number, ElfSectionHeader>,
   name: string, info: number, sectionIndex: number, value: bigint,
-  source: string): SanitizerSymbol | null => {
+  source: string, rawSectionIndex?: number): SanitizerSymbol | null => {
   if (!SANITIZER_ABI_SYMBOLS.has(name)) return null;
   // STT_NOTYPE=0, STT_FUNC=2; STB_LOCAL/GLOBAL/WEAK=0/1/2 (gABI 5).
   // https://gabi.xinuos.com/elf/05-symtab.html
@@ -36,7 +38,7 @@ const elfSymbol = (elf: ElfParseResult, sections: ReadonlyMap<number, ElfSection
     return { name, source, kind: "reference" };
   }
   return (info & 15) === 2 && [0, 1, 2].includes(info >> 4) &&
-    definitionIsMapped(elf, sections, sectionIndex, value)
+    definitionIsMapped(elf, sections, elfSymbolSectionReference(sectionIndex, rawSectionIndex), value)
     ? { name, source, kind: "definition" } : null;
 };
 
@@ -46,7 +48,7 @@ function* elfSymbols(elf: ElfParseResult): IterableIterator<SanitizerSymbol> {
     for (const records of [elf.dynSymbols.importSymbols, elf.dynSymbols.exportSymbols]) {
       for (const record of records) {
         const symbol = elfSymbol(elf, sections, record.name, record.bind * 16 + record.type,
-          record.shndx, record.value, "ELF dynamic symbols");
+          record.shndx, record.value, "ELF dynamic symbols", record.rawSectionIndex);
         if (symbol) yield symbol;
       }
     }
@@ -55,7 +57,8 @@ function* elfSymbols(elf: ElfParseResult): IterableIterator<SanitizerSymbol> {
     if (table.issues.length) continue;
     for (const record of table.entries) {
       const symbol = elfSymbol(elf, sections, record.name, record.info,
-        record.sectionIndex, record.value, `ELF symbol table #${table.sectionIndex}`);
+        record.sectionIndex, record.value, `ELF symbol table #${table.sectionIndex}`,
+        record.rawSectionIndex);
       if (symbol) yield symbol;
     }
   }

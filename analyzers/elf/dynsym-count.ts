@@ -121,7 +121,7 @@ export async function readDynsymCountFromGnuHash(opts: {
     opts.issues.push("DT_GNU_HASH buckets are truncated.");
     return null;
   }
-  if (nbuckets === 0) return symoffset;
+  if (nbuckets === 0) return null;
 
   const buckets = await readSliceView(opts.file, location.fileOffset + bucketsOffset, bucketBytes);
   if (!buckets || buckets.byteLength < bucketBytes) {
@@ -134,10 +134,12 @@ export async function readDynsymCountFromGnuHash(opts: {
     const bucket = buckets.getUint32(index * 4, opts.littleEndian);
     if (bucket > maxBucket) maxBucket = bucket;
   }
-  if (maxBucket === 0) return symoffset;
+  // GNU ld records symoffset=1 even when the table contains no hashed symbols.
+  // https://gnu.googlesource.com/binutils-gdb/+/4d9e2e53b9f93b0ae33ba948ae3d2825b3424441/bfd/elflink.c#7563
+  if (maxBucket === 0) return null;
   if (maxBucket < symoffset) {
     opts.issues.push("DT_GNU_HASH bucket value precedes symoffset.");
-    return symoffset;
+    return null;
   }
 
   const chainStartIndex = maxBucket - symoffset;

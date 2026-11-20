@@ -5,14 +5,10 @@ import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import { ELF_FILE_TYPE, ELF_SECTION_TYPE, ELF_SECTION_FLAG, ELF_SEGMENT_TYPE } from "./abi-constants.js";
 
-// gABI §6: ET_REL r_offset is section-relative; ET_EXEC/ET_DYN use virtual addresses.
-// SHT_NOBITS has memory storage but no file bytes.
-// https://gabi.xinuos.com/elf/06-reloc.html
 const sectionTarget = (
-  elf: ElfRelocationImage, table: ElfRelocationTable, offset: bigint, width: bigint, issues: string[],
-  logicalSizes: Map<number, bigint>
+  section: ElfSectionHeader | undefined, offset: bigint, width: bigint, fileSize: number,
+  issues: string[], logicalSizes: Map<number, bigint>
 ): ElfRelocationTarget | null => {
-  const section = elf.sections.find(item => item.index === table.targetSectionIndex);
   if (section && compressedSection(section)) {
     return compressedTarget(section.index, offset, width, logicalSizes, issues);
   }
@@ -20,11 +16,19 @@ const sectionTarget = (
     issues.push(`Relocation target ${offset} is outside its target section.`);
     return null;
   }
-  return fileBackedTarget(section, offset, width, elf.fileSize, issues);
+  return fileBackedTarget(section, offset, width, fileSize, issues);
 };
 
 const compressedSection = (section: ElfSectionHeader): boolean =>
   (section.flags & 0x800n) !== 0n || (section.name ?? "").startsWith(".zdebug_");
+
+const allocatedSection = (section: ElfSectionHeader): boolean =>
+  (section.flags & ELF_SECTION_FLAG.ALLOC) !== 0n;
+
+// TLS zero-fill is part of the per-thread template and may share an address
+// with a different section in PT_LOAD. https://gabi.xinuos.com/elf/07-pheader.html
+const tlsZeroFill = (section: ElfSectionHeader): boolean =>
+  section.type === ELF_SECTION_TYPE.NOBITS && (section.flags & ELF_SECTION_FLAG.TLS) !== 0n;
 
 const fileBackedTarget = (section: ElfSectionHeader, offset: bigint, width: bigint,
   fileSize: number, issues: string[]): ElfRelocationTarget => {
@@ -51,7 +55,7 @@ const compressedTarget = (sectionIndex: number, offset: bigint, width: bigint,
 const virtualTarget = (
   elf: ElfRelocationImage, offset: bigint, width: bigint, issues: string[]
 ): ElfRelocationTarget | null => {
-  const section = elf.sections.find(item => (item.flags & ELF_SECTION_FLAG.ALLOC) !== 0n &&
+  const section = elf.sections.find(item => allocatedSection(item) && !tlsZeroFill(item) &&
     offset >= item.addr && offset + width <= item.addr + item.size);
   const range = elfVirtualRange(elf.programHeaders, offset, width, elf.fileSize);
   const memory = elf.programHeaders.some(item => item.type === ELF_SEGMENT_TYPE.LOAD &&
@@ -71,7 +75,20 @@ export const locateElfRelocationTarget = (
 ): ElfRelocationTarget | null => {
   // RELR fixes a whole address-sized slot. Unknown symbolic types only identify a site;
   // their write width belongs to the processor-specific relocation evaluator.
-  const width = table.encoding === "RELR" || table.encoding === "AUTH_RELR" ? BigInt(layout.wordSize) : 1n;
-  return elf.header.type === ELF_FILE_TYPE.REL ? sectionTarget(elf, table, offset, width, issues, logicalSizes) :
-    virtualTarget(elf, offset, width, issues);
+  const width = table.encoding === "RELR" || table.encoding === "AUTH_RELR" ?
+    BigInt(layout.wordSize) : 1n;
+  const section = table.targetSectionIndex == null ? undefined :
+    elf.sections[table.targetSectionIndex];
+  if (elf.header.type === ELF_FILE_TYPE.REL) {
+    return sectionTarget(section, offset, width, elf.fileSize, issues, logicalSizes);
+  }
+  // GNU ld --emit-relocs retains sh_info for link-time relocations in debug sections.
+  // gABI §6 gives linked r_offset as an address, and §3 gives non-ALLOC sections sh_addr=0.
+  // https://sourceware.org/binutils/docs/ld/Options.html
+  // https://gabi.xinuos.com/elf/06-reloc.html
+  if (section && !allocatedSection(section) &&
+    (elf.header.type === ELF_FILE_TYPE.EXEC || elf.header.type === ELF_FILE_TYPE.DYN)) {
+    return sectionTarget(section, offset - section.addr, width, elf.fileSize, issues, logicalSizes);
+  }
+  return virtualTarget(elf, offset, width, issues);
 };

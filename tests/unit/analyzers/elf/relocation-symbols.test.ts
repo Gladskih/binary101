@@ -78,12 +78,12 @@ void test("SHN_XINDEX follows the linked SHT_SYMTAB_SHNDX with bounds checks", a
   fixture.elf.sections.push(relocationSection(4, {
     type: 18, offset: 448n, size: 8n, entsize: 4n, link: 2
   }));
-  fixture.view.setUint32(452, 70000, true);
+  fixture.view.setUint32(452, 0xfff1, true); // Section #65521, which collides with raw SHN_ABS.
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
 
-  assert.equal((await createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, issues)(
-    relocationTable(), 1))?.sectionIndex, 70000);
+  assert.deepEqual(await createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, issues)(
+    relocationTable(), 1), { name: "target", value: 4n, sectionIndex: 0xfff1, rawSectionIndex: 0xffff });
   fixture.elf.sections[4]!.size = 4n;
   assert.equal((await createElfRelocationSymbolReader(reader, fixture.elf, fixture.tags, issues)(
     relocationTable(), 1))?.sectionIndex, 0xffff);
@@ -189,7 +189,7 @@ void test("dynamic references honor a matching DYNSYM section or a previously pa
   assert.equal(await fromHashes(relocationTable({ symbolTableIndex: null }), 2), null);
 });
 
-for (const size of [-1n, 25n]) {
+for (const size of [-1n, 25n, 24n * 1024n]) {
   void test(`invalid DT_SYMTABSZ ${size} never enables a neighboring symbol read`, async () => {
     const fixture = dynamicRelocationFixture();
     fixture.tags.set(39, size);

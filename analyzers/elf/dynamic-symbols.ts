@@ -12,6 +12,9 @@ import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import { createElfDynamicIndexReader } from "./dynamic-symbol-indices.js";
 import type { ElfHashTable } from "./hash-types.js";
+import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
+import { declaredDynamicSymbolRange } from "./dynsym-range.js";
+import { elfSymbolSectionFields } from "./symbol-section-index.js";
 
 // gABI p_type/sh_type and d_tag definitions:
 // https://gabi.xinuos.com/elf/03-sheader.html
@@ -117,11 +120,12 @@ const parseDynsym = async (
     if (name == null) continue;
     const shndx = await readSectionIndex(index, sectionIndex);
     if (shndx == null) continue;
-    symbolCache.set(symtab.offset + index * layout.symbolEntrySize,
-      { name, value, sectionIndex: shndx });
+    const section = elfSymbolSectionFields(sectionIndex, shndx);
+    symbolCache.set(symtab.offset + index * layout.symbolEntrySize, { name, value, ...section });
     out.push({ index, name, value, size, bind, bindName: decodeBind(bind),
       type, typeName: decodeType(type), visibility,
-      visibilityName: decodeVisibility(visibility), shndx });
+      visibilityName: decodeVisibility(visibility), shndx,
+      ...(section.rawSectionIndex === undefined ? {} : { rawSectionIndex: section.rawSectionIndex }) });
   }
   return out.sort((left, right) => left.index - right.index);
 };
@@ -170,35 +174,35 @@ const parseDynsymFromDynamicTags = async (opts: {
   is64: boolean;
   littleEndian: boolean;
   issues: string[];
-}, parsedEntries?: ElfDynamicEntry[], hashes?: ElfHashTable[]):
+}, entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
 Promise<DynamicSymbolTables | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
-  const entries = parsedEntries ?? await readElfDynamicEntries(
-    createFileRangeReader(opts.file, 0, opts.file.size), opts, opts.issues);
   const tags = dynsymTags(entries, selectElfBinaryLayout(opts).symbolEntrySize, opts.issues);
   if (!tags) return null;
-  const symbolCount = await dynamicHashCount(opts, entries, hashes) ??
-    inferDynsymCount(tags.symtabVaddr, tags.strtabVaddr, tags.entrySize, opts.issues);
-  if (symbolCount == null || symbolCount <= 0) return null;
-  return readDynamicSymbolTables(opts, tags, symbolCount);
+  const symtab = await locateDynamicSymbolTable(opts, tags, entries, hashes);
+  if (!symtab) return null;
+  const strtab = elfVirtualRange(opts.programHeaders, tags.strtabVaddr, tags.strsz, opts.file.size);
+  if (!strtab) opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
+  return strtab ? { symtab, strtab } : null;
 };
 
-const readDynamicSymbolTables = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
-  tags: NonNullable<ReturnType<typeof dynsymTags>>, symbolCount: number) => {
-  const { symtabVaddr, strtabVaddr, strsz, entrySize } = tags;
-  const symtabByteSize = BigInt(symbolCount) * BigInt(entrySize);
-  const symbols = elfVirtualRange(opts.programHeaders, symtabVaddr, symtabByteSize, opts.file.size);
-  const strings = elfVirtualRange(opts.programHeaders, strtabVaddr, strsz, opts.file.size);
-  if (!symbols) opts.issues.push("DT_SYMTAB is outside a file-backed PT_LOAD range.");
-  if (!strings) opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
-  if (!symbols || !strings) return null;
-  const symtab = readTableRange(opts.file, BigInt(symbols.offset), symtabByteSize,
-    "DT_SYMTAB", opts.issues);
-  const strtab = readTableRange(opts.file, BigInt(strings.offset), strsz,
-    "DT_STRTAB", opts.issues);
-  if (!symtab) return null;
-  return { symtab, strtab };
+const locateDynamicSymbolTable = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
+  { symtabVaddr, strtabVaddr, entrySize }: NonNullable<ReturnType<typeof dynsymTags>>,
+  entries: ElfDynamicEntry[], hashes: ElfHashTable[] | undefined): Promise<TableRange | null> => {
+  const declaredSize = entries.find(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTABSZ)?.value;
+  if (declaredSize != null) return declaredDynamicSymbolRange(
+    opts.programHeaders, symtabVaddr, declaredSize, entrySize, opts.file.size, opts.issues);
+  const count = await dynamicHashCount(opts, entries, hashes) ??
+    inferDynsymCount(symtabVaddr, strtabVaddr, entrySize, opts.issues);
+  if (!count) {
+    opts.issues.push("Dynamic symbol table size could not be determined.");
+    return null;
+  }
+  const range = elfVirtualRange(opts.programHeaders, symtabVaddr,
+    BigInt(count) * BigInt(entrySize), opts.file.size);
+  if (!range) opts.issues.push("DT_SYMTAB is outside a file-backed PT_LOAD range.");
+  return range;
 };
 
 const dynsymTags = (entries: ElfDynamicEntry[], expectedSize: number, issues: string[]) => {
@@ -274,8 +278,10 @@ Promise<ElfDynamicSymbolInfo | null> {
 
 const hashSymbolCount = (tables: ElfHashTable[] | undefined): number | null => {
   const valid = tables?.filter(table => !table.issues.length);
-  const sysv = valid?.find(table => table.kind === "sysv");
+  const sysv = valid?.find(table => table.kind === "sysv" && table.chains.length > 0);
   if (sysv) return sysv.chains.length;
-  const gnu = valid?.find(table => table.kind === "gnu");
+  // GNU ld's empty hash still advertises a symbol offset of one.
+  // https://gnu.googlesource.com/binutils-gdb/+/4d9e2e53b9f93b0ae33ba948ae3d2825b3424441/bfd/elflink.c#7563
+  const gnu = valid?.find(table => table.kind === "gnu" && table.chains.length > 0);
   return gnu?.kind === "gnu" ? gnu.symbolOffset + gnu.chains.length : null;
 };

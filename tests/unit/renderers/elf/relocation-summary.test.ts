@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderElfRelocations } from "../../../../renderers/elf/relocations.js";
-import { relocationFixture, relocationTable } from "../../../fixtures/elf-relocations.js";
+import { relocationFixture, relocationSection, relocationTable } from "../../../fixtures/elf-relocations.js";
 
 void test("renders human-readable aggregates without address or addend rows", () => {
   const { elf } = relocationFixture();
@@ -77,6 +77,21 @@ void test("absent summaries have no groups", () => {
     { types: [], formats: [], targets: [], symbols: [] });
 });
 
+void test("summary distinguishes absolute and extended-section definitions of the same index", () => {
+  const { elf } = relocationFixture();
+  // gABI SHN_ABS=0xfff1 as an encoded halfword, but #65521 through SHN_XINDEX is a section.
+  elf.sections.push(relocationSection(0xfff1, { name: ".extended" }));
+  const absolute = { name: "", value: 0n, sectionIndex: 0xfff1 };
+  elf.relocations = { tables: [relocationTable()], entries: [
+    summaryEntry({ symbol: absolute }),
+    summaryEntry({ symbolIndex: 2, symbol: { ...absolute, rawSectionIndex: 0xffff } })
+  ], issues: [] };
+  const rows = summarizeElfRelocations(elf).symbols;
+
+  assert.ok(rows.some(row => row.label === "Unnamed symbol" && row.detail === "Absolute definition"));
+  assert.ok(rows.some(row => row.label === ".extended" && row.detail === "Defined in this file"));
+});
+
 void test("all distributions report exact counts, labels, storage and binding semantics", () => {
   const { elf } = relocationFixture();
   elf.relocations = { tables: [relocationTable(), relocationTable({ encoding: "RELR" }),
@@ -96,8 +111,8 @@ void test("all distributions report exact counts, labels, storage and binding se
   ]);
   assert.deepEqual(summary.formats, [
     { label: "RELA", detail: "Explicit addend", count: 4 },
-    { label: "AUTH_RELR", detail: "Addend in target bytes", count: 1 },
-    { label: "RELR", detail: "Addend in target bytes", count: 1 }
+    { label: "AUTH_RELR", detail: "Packed authenticated relative sites", count: 1 },
+    { label: "RELR", detail: "Adjusts stored value by load base", count: 1 }
   ]);
   assert.deepEqual(summary.targets, [
     { label: ".debug_info", detail: "File-backed", count: 3 },

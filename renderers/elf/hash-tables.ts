@@ -44,8 +44,11 @@ export const renderElfHashTables = (elf: ElfParseResult, out: string[], onlyInde
     if (onlyIndex != null && index !== onlyIndex) continue;
     out.push(renderElfSectionStart(`${table.kind === "gnu" ? "GNU" : "System V"} symbol hash table`));
     out.push(`<p>${table.buckets.length} buckets; ${table.chains.length} chain words.</p>`);
-    if (table.kind === "gnu") out.push(`<p>First hashed symbol: ${table.symbolOffset}; ` +
-      `Bloom shift: ${table.bloomShift}; Bloom words: ${table.bloom.length}.</p>`);
+    if (table.kind === "gnu") out.push(`<p>Symbol offset (symoffset): ${table.symbolOffset}; ` +
+      `Bloom shift: ${table.bloomShift}; Bloom words: ${table.bloom.length}.</p>`,
+      table.buckets.length && !table.chains.length && !table.issues.length
+        ? `<p class="smallNote">Empty GNU hash. Its symbol offset alone cannot establish the dynamic symbol count.</p>`
+        : "");
     out.push(`<p class="smallNote">Buckets identify the first symbol. System V chains link ` +
       `to the next symbol index; zero ends a chain. GNU chains store hashes, not symbol indices.</p>`);
     out.push(renderAutoPagedSortableTable(createElfHashTableModel(table, symbolNames(elf))));
