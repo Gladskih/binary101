@@ -1,5 +1,6 @@
 import { renderCollectionStart, renderCollectionEnd } from "../counted-collection.js";
 import { dwarfExpressionText } from "../dwarf/expressions.js";
+import { dwarfReturnAddressStateText } from "../dwarf/cfi-rules.js";
 import { escapeHtml } from "../../html-utils.js";
 import { evaluateElfCfi } from "../../analyzers/elf/cfi-state.js";
 import type { ElfCfaRule, ElfCfiRegisterRule } from "../../analyzers/elf/cfi-state-types.js";
@@ -21,7 +22,7 @@ export const renderElfCfiState = (cie: ElfUnwindCie, fde: ElfUnwindFde): string 
   const rows = evaluation.rows.map(row => `<tr><td class="peNumeric">0x${row.location.toString(16)}</td>` +
     `<td>${escapeHtml(cfaText(row.cfa))}</td><td>${escapeHtml(Object.entries(row.registers)
       .map(([register, rule]) => `r${register}: ${registerText(rule)}`).join("; "))}</td>` +
-    `<td>${row.returnAddressSigned ? "Signed" : "Unsigned"}</td>` +
+    `<td>${dwarfReturnAddressStateText(row.returnAddressState)}</td>` +
     `<td class="peNumeric">${row.argumentSize}</td></tr>`).join("");
   const issues = evaluation.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
   return renderCollectionStart(`${evaluation.rows.length} unwind rule rows`, evaluation.rows.length) +

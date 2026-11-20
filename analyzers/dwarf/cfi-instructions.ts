@@ -58,6 +58,10 @@ const instructionDescriptor = (opcode: number, machine: number): [string, string
     return [({ 64: "advance_loc", 128: "offset", 192: "restore" } as Record<number, string>)[primary]!,
       primary === 128 ? ["uleb"] : []];
   }
+  // Arm DWARF ABI vendor CFA operations (0x2b is Alpha, 0x2c is deprecated).
+  // https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#call-frame-instructions
+  if (machine === 183 && opcode === 0x2b) return ["AARCH64_set_ra_state", ["uleb", "sleb"]];
+  if (machine === 183 && opcode === 0x2c) return ["AARCH64_negate_ra_state_with_pc", []];
   if (opcode === 0x2d) return architectureInstruction(machine);
   if (opcode === 0x1d && machine === 8) return ["MIPS_advance_loc8", ["8"]];
   return instructions[opcode];

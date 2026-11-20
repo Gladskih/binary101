@@ -5,10 +5,11 @@ export type DwarfCfiRegisterRule = { kind: "undefined" | "same_value" } |
   { kind: "offset" | "val_offset"; offset: bigint } |
   { kind: "register"; register: bigint } |
   { kind: "expression" | "val_expression"; expression: DwarfCfiExpression };
+export type DwarfReturnAddressState = "unsigned" | "signed-sp" | { signingPc: bigint };
 export interface DwarfCfiRules {
   cfa: DwarfCfaRule;
   registers: Record<string, DwarfCfiRegisterRule>;
-  returnAddressSigned: boolean;
+  returnAddressState: DwarfReturnAddressState;
   argumentSize: bigint;
 }
 export interface DwarfCfiRow extends DwarfCfiRules { location: bigint }

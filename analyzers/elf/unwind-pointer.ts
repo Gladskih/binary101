@@ -54,3 +54,22 @@ export const readElfUnwindLocation = async (
   const operand = await readPointerOperand(cursor, encoding, addressSize, sectionAddress);
   return operand ? operand.base + operand.value : null;
 };
+
+// .eh_frame_hdr uses its own address as the DW_EH_PE_datarel base.
+// https://raw.githubusercontent.com/llvm/llvm-project/main/libunwind/src/EHHeaderParser.hpp
+export const readElfEhFrameHeaderValue = async (
+  cursor: DwarfCursor, encoding: number, addressSize: number, headerAddress: bigint
+): Promise<bigint | null> => {
+  if (encoding === 0xff) return null;
+  if (encoding & 0x80) {
+    cursor.fail(".eh_frame_hdr requires a direct address encoding");
+    return null;
+  }
+  const application = encoding & 0x70;
+  if (application === 0x30) {
+    const value = await encodedInteger(cursor, encoding & 15, addressSize);
+    return value == null ? null : headerAddress + value;
+  }
+  const operand = await readPointerOperand(cursor, encoding, addressSize, headerAddress);
+  return operand ? operand.base + operand.value : null;
+};

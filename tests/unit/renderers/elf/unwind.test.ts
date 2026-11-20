@@ -3,7 +3,21 @@ import { test } from "node:test";
 import { createElfUnwindTableModel, renderElfUnwind } from "../../../../renderers/elf/unwind.js";
 import { getElfPagedTableModel } from "../../../../renderers/elf/paged-tables.js";
 import { parseElfUnwind } from "../../../../analyzers/elf/unwind.js";
-import { elfUnwindFixture } from "../../../fixtures/elf-unwind.js";
+import { elfSegmentUnwindFixture, elfUnwindFixture } from "../../../fixtures/elf-unwind.js";
+import { getElfLazySections } from "../../../../renderers/elf/lazy-sections.js";
+
+void test("sectionless AArch64 unwind links to its FDEs and shows the recorded signing PC", async () => {
+  const fixture = elfSegmentUnwindFixture();
+  fixture.elf.header.machine = 183;
+  fixture.bytes.set([0x2b, 2, 1], 102); // SP+PC, one code alignment unit ahead.
+  fixture.elf.unwind = await parseElfUnwind(fixture.file(), fixture.elf);
+
+  const panel = getElfLazySections(fixture.elf).find(section => section.key === "unwind-0");
+  const model = getElfPagedTableModel(fixture.elf, "elf-unwind-segment-1");
+  assert.match(panel?.title ?? "", /PT_GNU_EH_FRAME #1/);
+  assert.equal(model?.rowCount, 1);
+  assert.match(model.rowAt(0)?.cells[5]?.html ?? "", /Signed with SP \+ PC \(0x2002\)/);
+});
 
 void test("renders CIE metadata and paged FDE instructions", async () => {
   const fixture = elfUnwindFixture();

@@ -6,7 +6,7 @@ import { dwarfCodeRanges } from "../../analyzers/dwarf/code-ranges.js";
 import type { DwarfAnalysis } from "../../analyzers/dwarf/types.js";
 import type { DwarfFrameFde } from "../../analyzers/dwarf/frame-types.js";
 import { renderAutoPagedSortableTable, type PagedSortableTableModel } from "../paged-sortable-table.js";
-import { dwarfCfaRuleText, dwarfRegisterRuleText } from "./cfi-rules.js";
+import { dwarfCfaRuleText, dwarfRegisterRuleText, dwarfReturnAddressStateText } from "./cfi-rules.js";
 
 export const createDwarfFrameRuleTableModel = (dwarf: DwarfAnalysis,
   fde: DwarfFrameFde): PagedSortableTableModel => {
@@ -16,7 +16,7 @@ export const createDwarfFrameRuleTableModel = (dwarf: DwarfAnalysis,
     const row = rows[index];
     return row ? [`+${row.location - fde.start} bytes`, dwarfCfaRuleText(row.cfa),
       Object.entries(row.registers).map(([register, rule]) => `register ${register}: ${dwarfRegisterRuleText(rule)}`).join("; "),
-      row.returnAddressSigned ? "signed" : "unsigned", String(row.argumentSize)] : [];
+      dwarfReturnAddressStateText(row.returnAddressState), String(row.argumentSize)] : [];
   };
   return { id: `dwarf-frame-rules-${fde.offset}`, pageSize: 100, rowCount: rows.length,
     columns: ["Position in region", "Frame address", "Caller register recovery", "Return address", "Argument bytes"]

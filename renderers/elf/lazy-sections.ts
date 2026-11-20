@@ -10,7 +10,7 @@ import { renderElfSymbols } from "./symbols.js";
 import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
-import { renderElfUnwind } from "./unwind.js";
+import { elfUnwindTitle, renderElfUnwind } from "./unwind.js";
 import { renderElfLsda } from "./lsda.js";
 import { renderElfArmEhabi } from "./arm-ehabi.js";
 import { renderElfHashTables } from "./hash-tables.js";
@@ -68,7 +68,8 @@ const addTables = (elf: ElfParseResult, add: AddSection): void => {
     renderElfSymbolTables, index));
   if (elf.sectionGroups?.length) add("groups", "Section groups / COMDAT", renderElfSectionGroups);
   elf.unwind?.forEach((section, index) => add(`unwind-${index}`,
-    `${names.get(section.sectionIndex) ?? "Unwind"}: call frame information`, renderElfUnwind, index));
+    elfUnwindTitle(section, section.sectionIndex == null ? undefined : names.get(section.sectionIndex)),
+    renderElfUnwind, index));
   if (elf.lsdas?.length) add("lsda", "Exception tables (.gcc_except_table)", renderElfLsda);
   addArchitecture(elf, add);
 };

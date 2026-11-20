@@ -28,3 +28,16 @@ export const elfUnwindFixture = (order: "little" | "big" = "little") => {
   fixture.bytes.set([0, 0x41, 0x86, 2, 0, 0, 0, 0], 100);
   return fixture;
 };
+
+export const elfSegmentUnwindFixture = (order: "little" | "big" = "little") => {
+  const fixture = elfUnwindFixture(order);
+  const load = { index: 0, type: 1, typeName: "PT_LOAD", offset: 64n, vaddr: 4096n,
+    paddr: 4096n, filesz: 72n, memsz: 72n, flags: 4, flagNames: ["R"], align: 4n };
+  fixture.elf.sections = [];
+  fixture.elf.programHeaders = [load, { ...load, index: 1, type: 0x6474e550,
+    typeName: "GNU_EH_FRAME", offset: 128n, vaddr: 4160n, filesz: 8n, memsz: 8n }];
+  // .eh_frame_hdr v1, PC-relative sdata4 .eh_frame pointer, omitted index.
+  fixture.bytes.set([1, 0x1b, 0xff, 0xff], 128);
+  fixture.view.setInt32(132, 4096 - 4164, order === "little");
+  return fixture;
+};

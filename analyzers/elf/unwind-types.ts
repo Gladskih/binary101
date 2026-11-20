@@ -28,9 +28,11 @@ export interface ElfUnwindFde extends DwarfCfiProgram<DwarfCfiExpression> {
   lsda: ElfUnwindPointer | null;
 }
 
-export interface ElfUnwindSection {
-  sectionIndex: number;
+export type ElfUnwindSection = (
+  { sectionIndex: number; programHeaderIndex?: never } |
+  { sectionIndex: null; programHeaderIndex: number }
+) & {
   cies: ElfUnwindCie[];
   fdes: ElfUnwindFde[];
   issues: string[];
-}
+};

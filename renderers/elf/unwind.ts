@@ -45,7 +45,7 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
     return fde ? [`0x${fde.offset.toString(16)}`, `0x${fde.cieOffset.toString(16)}`,
       pointerText(fde.start), String(fde.range), pointerText(fde.lsda), String(fde.instructions.length)] : [];
   };
-  return { id: `elf-unwind-${section.sectionIndex}`, pageSize: 100, rowCount: section.fdes.length,
+  return { id: elfUnwindTableId(section), pageSize: 100, rowCount: section.fdes.length,
     columns: ["FDE offset", "CIE offset", "PC start", "PC bytes", "LSDA", "CFI"]
       .map((label, column) => ({ label, className: column < 5 ? "peNumeric" : "" })),
     rowAt: index => section.fdes[index] ? { cells: values(index).map((value, column) => ({
@@ -57,8 +57,9 @@ export const createElfUnwindTableModel = (section: ElfUnwindSection): PagedSorta
 };
 
 const renderUnwindSection = (elf: ElfParseResult, section: ElfUnwindSection, out: string[]): void => {
-  out.push(renderElfSectionStart(`${unwindSectionName(elf, section.sectionIndex)}: call frame information`));
-  if (unwindSectionName(elf, section.sectionIndex) === ".debug_frame" && elf.dwarf?.frames) {
+  const name = elf.sections.find(item => item.index === section.sectionIndex)?.name;
+  out.push(renderElfSectionStart(elfUnwindTitle(section, name)));
+  if (name === ".debug_frame" && elf.dwarf?.frames) {
     out.push(renderDwarfFrames(elf.dwarf), renderElfSectionEnd());
     return;
   }
@@ -93,6 +94,10 @@ export const renderElfUnwind = (elf: ElfParseResult, out: string[], onlyIndex?: 
   }
 };
 
-function unwindSectionName(elf: ElfParseResult, index: number): string {
-  return elf.sections.find(item => item.index === index)?.name ?? "Unwind";
-}
+export const elfUnwindTitle = (section: ElfUnwindSection, name: string | undefined): string =>
+  `${section.sectionIndex === null
+    ? `.eh_frame via PT_GNU_EH_FRAME #${section.programHeaderIndex}` : name ?? "Unwind"}: call frame information`;
+
+export const elfUnwindTableId = (section: ElfUnwindSection): string =>
+  section.sectionIndex === null
+    ? `elf-unwind-segment-${section.programHeaderIndex}` : `elf-unwind-${section.sectionIndex}`;

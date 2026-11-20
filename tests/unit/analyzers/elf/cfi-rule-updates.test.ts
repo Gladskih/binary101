@@ -4,7 +4,7 @@ import { applyElfCfiRule } from "../../../../analyzers/elf/cfi-rule-updates.js";
 import type { ElfCfiRules } from "../../../../analyzers/elf/cfi-state-types.js";
 
 const state = (): ElfCfiRules => ({ cfa: { register: 7n, offset: 8n }, registers: {},
-  returnAddressSigned: false, argumentSize: 0n });
+  returnAddressState: "unsigned", argumentSize: 0n });
 const apply = (rules: ElfCfiRules, operation: string, operands: (bigint | string)[] = []) =>
   applyElfCfiRule(rules, { offset: 0, operation, operands }, -8n);
 
@@ -56,10 +56,36 @@ void test("applies GNU and AArch64 rule extensions", () => {
   assert.equal(apply(rules, "GNU_args_size", [32n]), true);
   assert.equal(rules.argumentSize, 32n);
   assert.equal(apply(rules, "AARCH64_negate_ra_state"), true);
-  assert.equal(rules.returnAddressSigned, true);
+  assert.equal(rules.returnAddressState, "signed-sp");
   assert.equal(apply(rules, "AARCH64_negate_ra_state"), true);
-  assert.equal(rules.returnAddressSigned, false);
+  assert.equal(rules.returnAddressState, "unsigned");
   assert.equal(apply(rules, "nop"), true);
+});
+
+void test("rejects a PC signing state whose factored PC falls outside the AArch64 address width", () => {
+  const rules = state();
+  const set = (location: bigint, offset: bigint) => applyElfCfiRule(rules,
+    { offset: 0, operation: "AARCH64_set_ra_state", operands: [2n, offset] }, -8n,
+    { location, codeAlignment: 4n });
+
+  assert.equal(set(0n, -1n), false);
+  assert.equal(set(0xffff_ffff_ffff_ffffn, 1n), false);
+  assert.equal(set(4n, -1n), true);
+  assert.deepEqual(rules.returnAddressState, { signingPc: 0n });
+});
+
+void test("AArch64 signing toggles reject a state belonging to the other toggle", () => {
+  const rules = state();
+  const withPc = { offset: 0, operation: "AARCH64_negate_ra_state_with_pc", operands: [] };
+  const location = { location: 0x1000n, codeAlignment: 4n };
+
+  assert.equal(applyElfCfiRule(rules, withPc, -8n), false);
+  assert.equal(applyElfCfiRule(rules, withPc, -8n, location), true);
+  assert.equal(apply(rules, "AARCH64_negate_ra_state"), false);
+  assert.equal(apply(rules, "AARCH64_set_ra_state", [1n, 0n]), true);
+  assert.equal(rules.returnAddressState, "signed-sp");
+  assert.equal(applyElfCfiRule(rules, withPc, -8n, location), false);
+  assert.equal(apply(rules, "AARCH64_set_ra_state", [1n, "bad offset"]), false);
 });
 
 for (const operation of ["def_cfa", "def_cfa_sf", "def_cfa_register", "def_cfa_offset",

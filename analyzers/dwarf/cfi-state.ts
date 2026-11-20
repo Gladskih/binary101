@@ -6,9 +6,11 @@ type Fde = CfiProgram & { start: bigint | null; range: bigint };
 import type { DwarfCfiRules, DwarfCfiRow, DwarfCfiEvaluation } from "./cfi-state-types.js";
 import { applyDwarfCfiRule } from "./cfi-rule-updates.js";
 
-const emptyRules = (): DwarfCfiRules => ({ cfa: null, registers: {}, returnAddressSigned: false, argumentSize: 0n });
+const emptyRules = (): DwarfCfiRules => ({
+  cfa: null, registers: {}, returnAddressState: "unsigned", argumentSize: 0n
+});
 const copyRules = (rules: DwarfCfiRules): DwarfCfiRules => ({ cfa: rules.cfa,
-  registers: { ...rules.registers }, returnAddressSigned: rules.returnAddressSigned,
+  registers: { ...rules.registers }, returnAddressState: rules.returnAddressState,
   argumentSize: rules.argumentSize });
 const isLocation = (operation: string): boolean =>
   ["set_loc", "advance_loc", "advance_loc1", "advance_loc2", "advance_loc4", "MIPS_advance_loc8"].includes(operation);
@@ -24,7 +26,8 @@ const restoreRegister = (rules: DwarfCfiRules, defaults: DwarfCfiRules,
 };
 
 const updateState = (rules: DwarfCfiRules, defaults: DwarfCfiRules, stack: DwarfCfiRules[],
-  instruction: DwarfCfiInstruction<DwarfCfiExpression>, alignment: bigint, issues: string[]): boolean => {
+  instruction: DwarfCfiInstruction<DwarfCfiExpression>, cie: Cie, location: bigint,
+  issues: string[]): boolean => {
   switch (instruction.operation) {
     case "remember_state":
       stack.push(copyRules(rules));
@@ -36,15 +39,16 @@ const updateState = (rules: DwarfCfiRules, defaults: DwarfCfiRules, stack: Dwarf
       return true;
     }
     case "restore": case "restore_extended": return restoreRegister(rules, defaults, instruction);
-    default: return applyDwarfCfiRule(rules, instruction, alignment);
+    default: return applyDwarfCfiRule(rules, instruction, cie.dataAlignment,
+      { location, codeAlignment: cie.codeAlignment });
   }
 };
 
-const initialRules = (cie: Cie, issues: string[]): DwarfCfiRules | null => {
+const initialRules = (cie: Cie, location: bigint, issues: string[]): DwarfCfiRules | null => {
   const rules = emptyRules();
   const stack: DwarfCfiRules[] = [];
   for (const instruction of cie.instructions) {
-    if (!updateState(rules, emptyRules(), stack, instruction, cie.dataAlignment, issues)) {
+    if (!updateState(rules, emptyRules(), stack, instruction, cie, location, issues)) {
       issues.push(`Unsupported or invalid CIE instruction ${instruction.operation}.`);
       return null;
     }
@@ -77,7 +81,7 @@ export const evaluateDwarfCfi = (cie: Cie, fde: Fde): DwarfCfiEvaluation => {
     result.issues.push("CIE instructions are incomplete. Initial recovery rules are unavailable.");
     return result;
   }
-  const defaults = initialRules(cie, result.issues);
+  const defaults = initialRules(cie, fde.start, result.issues);
   if (!defaults) return result;
   return evaluateFde(cie, fde, fde.start, defaults, result);
 };
@@ -93,7 +97,7 @@ const evaluateFde = (cie: Cie, fde: Fde, start: bigint,
       if (next == null) return result;
       if (next > row.location) result.rows.push(row);
       row = { ...copyRules(row), location: next };
-    } else if (!updateState(row, defaults, stack, instruction, cie.dataAlignment, result.issues)) {
+    } else if (!updateState(row, defaults, stack, instruction, cie, row.location, result.issues)) {
       result.issues.push(`Unsupported or invalid CFI instruction ${instruction.operation}.`);
       return result;
     }

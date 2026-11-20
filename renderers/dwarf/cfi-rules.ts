@@ -1,5 +1,12 @@
 import type { DwarfCfaRule, DwarfCfiExpression, DwarfCfiRegisterRule } from "../../analyzers/dwarf/cfi-state-types.js";
 import { dwarfExpressionText } from "./expressions.js";
+import type { DwarfReturnAddressState } from "../../analyzers/dwarf/cfi-state-types.js";
+
+export const dwarfReturnAddressStateText = (state: DwarfReturnAddressState): string => {
+  if (state === "unsigned") return "Unsigned";
+  if (state === "signed-sp") return "Signed with SP";
+  return `Signed with SP + PC (0x${state.signingPc.toString(16)})`;
+};
 
 const expressionText = (expression: DwarfCfiExpression): string =>
   typeof expression === "string" ? expression : dwarfExpressionText(expression);

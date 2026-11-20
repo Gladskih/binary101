@@ -65,7 +65,6 @@ const updates: Readonly<Record<string, RuleUpdate>> = {
     setRegister(rules, operands[0], { kind: "register", register: operands[1] }),
   expression: registerExpression("expression"), val_expression: registerExpression("val_expression"),
   nop: () => true,
-  AARCH64_negate_ra_state: rules => { rules.returnAddressSigned = !rules.returnAddressSigned; return true; },
   GNU_args_size: (rules, operands) => {
     if (typeof operands[0] !== "bigint") return false;
     rules.argumentSize = operands[0];
@@ -73,5 +72,36 @@ const updates: Readonly<Record<string, RuleUpdate>> = {
   }
 };
 
+type CfiCodeLocation = { location: bigint; codeAlignment: bigint };
+
+// Arm DWARF ABI: signing with SP+PC carries the signing instruction's address.
+// https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#call-frame-instructions
+const setReturnAddressState = (rules: DwarfCfiRules, operands: (bigint | DwarfCfiExpression)[],
+  location: CfiCodeLocation | undefined): boolean => {
+  const [state, offset] = operands;
+  if (typeof state !== "bigint" || typeof offset !== "bigint") return false;
+  if (state === 0n) rules.returnAddressState = "unsigned";
+  else if (state === 1n) rules.returnAddressState = "signed-sp";
+  else if (state === 2n && location) {
+    const signingPc = location.location + offset * location.codeAlignment;
+    if (signingPc < 0n || signingPc > 0xffff_ffff_ffff_ffffn) return false;
+    rules.returnAddressState = { signingPc };
+  } else return false;
+  return true;
+};
+
 export const applyDwarfCfiRule = (rules: DwarfCfiRules, instruction: DwarfCfiInstruction<DwarfCfiExpression>,
-  alignment: bigint): boolean => updates[instruction.operation]?.(rules, instruction.operands, alignment) ?? false;
+  alignment: bigint, location?: CfiCodeLocation): boolean => {
+  switch (instruction.operation) {
+    case "AARCH64_set_ra_state": return setReturnAddressState(rules, instruction.operands, location);
+    case "AARCH64_negate_ra_state":
+      if (typeof rules.returnAddressState !== "string") return false;
+      rules.returnAddressState = rules.returnAddressState === "unsigned" ? "signed-sp" : "unsigned";
+      return true;
+    case "AARCH64_negate_ra_state_with_pc":
+      if (!location || rules.returnAddressState === "signed-sp") return false;
+      return setReturnAddressState(rules,
+        [rules.returnAddressState === "unsigned" ? 2n : 0n, 0n], location);
+    default: return updates[instruction.operation]?.(rules, instruction.operands, alignment) ?? false;
+  }
+};

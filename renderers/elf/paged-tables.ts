@@ -12,7 +12,7 @@ import { getElfRelocationSummaryModel } from "./relocations.js";
 import { createElfImportLinkageModel } from "./import-linkage.js";
 import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
-import { createElfUnwindTableModel } from "./unwind.js";
+import { createElfUnwindTableModel, elfUnwindTableId } from "./unwind.js";
 import { createElfHashTableModel } from "./hash-tables.js";
 import { createElfAttributeTableModel } from "./attributes.js";
 import { createElfMipsOptionModel } from "./mips.js";
@@ -55,7 +55,7 @@ const tableResolvers: TableResolver[] = [
     return section ? createElfAttributeTableModel(section) : null;
   },
   (elf, id) => {
-    const section = elf.unwind?.find(section => id === `elf-unwind-${section.sectionIndex}`);
+    const section = elf.unwind?.find(section => id === elfUnwindTableId(section));
     return section ? createElfUnwindTableModel(section) : null;
   },
   (elf, id) => {

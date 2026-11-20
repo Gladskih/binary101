@@ -49,3 +49,22 @@ void test("debug_frame set_loc retains its plain target-sized address operand", 
   assert.deepEqual(result.instructions[0]?.operands, [0x12345678n]);
   assert.deepEqual(result.issues, []);
 });
+
+void test("decodes AArch64 CFI state and signed offset operands only on AArch64", async () => {
+  const bytes = [0x2b, 2, 0x7f, 0x2c]; // Arm DWARF ABI section 4.4.
+  const arm = await readInstructions(bytes, 183);
+  const x86 = await readInstructions(bytes);
+
+  assert.deepEqual(arm.instructions.map(i => [i.operation, i.operands]),
+    [["AARCH64_set_ra_state", [2n, -1n]], ["AARCH64_negate_ra_state_with_pc", []]]);
+  assert.deepEqual(arm.issues, []);
+  assert.deepEqual(x86.instructions, []);
+  assert.match(x86.issues.join(" "), /Unknown CFI opcode 0x2b/);
+});
+
+void test("a truncated AArch64 CFI offset does not become a valid state instruction", async () => {
+  const result = await readInstructions([0x2b, 2, 0x80], 183);
+
+  assert.deepEqual(result.instructions, []);
+  assert.match(result.issues.join(" "), /truncated/i);
+});
