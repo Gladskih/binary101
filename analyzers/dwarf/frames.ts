@@ -24,9 +24,12 @@ const readFde = async (cursor: DwarfCursor, offset: number, cie: DwarfFrameCie,
   const range = await cursor.unsigned(addressSize);
   if (cursor.failed) return null;
   validateFdeRange(cursor, offset, addressSize, start!, range!);
-  return { offset, cieOffset: cie.offset, start: start!, segment, range: range!,
-    instructions: cie.encoding ? await readDwarfFrameInstructions(cursor, addressSize,
-      format, byteOrder, machine, issues) : [] };
+  const instructions = cie.encoding ? await readDwarfFrameInstructions(cursor, addressSize,
+    format, byteOrder, machine, issues) : [];
+  const fde: DwarfFrameFde = { offset, cieOffset: cie.offset, start: start!, segment,
+    range: range!, instructions };
+  if (cursor.failed) fde.instructionsIncomplete = true;
+  return fde;
 };
 
 export const readDwarfFrames = async (source: DwarfSectionSource, byteOrder: "little" | "big",
@@ -61,7 +64,7 @@ const decodePendingFrames = async (frames: DwarfFrames, pending: PendingFrame[],
     if (!fde) continue;
     frames.fdes.push(fde);
     if (!cie.encoding) continue;
-    for (const issue of evaluateDwarfCfi({ ...cie.encoding, instructions: cie.instructions }, fde).issues) {
+    for (const issue of evaluateDwarfCfi({ ...cie.encoding, ...cie }, fde).issues) {
       cursor.notice(issue);
     }
   }

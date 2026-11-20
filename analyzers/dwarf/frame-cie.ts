@@ -32,7 +32,9 @@ export const readDwarfFrameCie = async (cursor: DwarfCursor, offset: number, for
   }
   const encoding = await readEncoding(cursor, version, addressSize);
   if (!encoding) return null;
-  return { offset, version, augmentation, encoding,
-    instructions: await readDwarfFrameInstructions(cursor, encoding.addressSize, format,
-      byteOrder, machine, issues) };
+  const instructions = await readDwarfFrameInstructions(cursor, encoding.addressSize, format,
+    byteOrder, machine, issues);
+  const cie: DwarfFrameCie = { offset, version, augmentation, encoding, instructions };
+  if (cursor.failed) cie.instructionsIncomplete = true;
+  return cie;
 };

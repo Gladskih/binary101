@@ -1,7 +1,8 @@
-import type { DwarfCfiInstruction, DwarfFrameEncoding } from "./frame-types.js";
+import type { DwarfCfiInstruction, DwarfCfiProgram, DwarfFrameEncoding } from "./frame-types.js";
 import type { DwarfCfiExpression } from "./cfi-state-types.js";
-type Cie = Pick<DwarfFrameEncoding, "codeAlignment" | "dataAlignment"> & { instructions: DwarfCfiInstruction<DwarfCfiExpression>[] };
-type Fde = { start: bigint | null; range: bigint; instructions: DwarfCfiInstruction<DwarfCfiExpression>[] };
+type CfiProgram = DwarfCfiProgram<DwarfCfiExpression>;
+type Cie = Pick<DwarfFrameEncoding, "codeAlignment" | "dataAlignment"> & CfiProgram;
+type Fde = CfiProgram & { start: bigint | null; range: bigint };
 import type { DwarfCfiRules, DwarfCfiRow, DwarfCfiEvaluation } from "./cfi-state-types.js";
 import { applyDwarfCfiRule } from "./cfi-rule-updates.js";
 
@@ -72,6 +73,10 @@ export const evaluateDwarfCfi = (cie: Cie, fde: Fde): DwarfCfiEvaluation => {
     result.issues.push("CFI rows require a resolved direct FDE start address.");
     return result;
   }
+  if (cie.instructionsIncomplete) {
+    result.issues.push("CIE instructions are incomplete. Initial recovery rules are unavailable.");
+    return result;
+  }
   const defaults = initialRules(cie, result.issues);
   if (!defaults) return result;
   return evaluateFde(cie, fde, fde.start, defaults, result);
@@ -93,6 +98,12 @@ const evaluateFde = (cie: Cie, fde: Fde, start: bigint,
       return result;
     }
   }
-  if (row.location < end) result.rows.push(row);
+  finishFde(row, end, fde, result);
   return result;
+};
+
+const finishFde = (row: DwarfCfiRow, end: bigint, fde: Fde, result: DwarfCfiEvaluation): void => {
+  if (fde.instructionsIncomplete) {
+    result.issues.push(`FDE instructions are incomplete. Recovery rules end before PC 0x${row.location.toString(16)}.`);
+  } else if (row.location < end) result.rows.push(row);
 };

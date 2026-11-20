@@ -19,18 +19,38 @@ const encodedInteger = async (
   return value == null ? null : format >= 10 ? BigInt.asIntN(size * 8, value) : value;
 };
 
-export const readElfUnwindPointer = async (
+const readPointerOperand = async (
   cursor: DwarfCursor, encoding: number, addressSize: number, sectionAddress: bigint
-): Promise<ElfUnwindPointer | null> => {
-  if (encoding === 0xff) return null;
+): Promise<{ value: bigint; base: bigint } | null> => {
   const application = encoding & 0x70;
   if (application !== 0 && application !== 0x10) {
     cursor.fail(`Unsupported unwind pointer base 0x${application.toString(16)}`);
     return null;
   }
-  const position = cursor.position;
+  const base = application === 0x10 ? sectionAddress + BigInt(cursor.position) : 0n;
   const value = await encodedInteger(cursor, encoding & 15, addressSize);
-  if (value == null) return null;
-  return { address: value !== 0n && application === 0x10
-    ? sectionAddress + BigInt(position) + value : value, indirect: (encoding & 0x80) !== 0 };
+  return value == null ? null : { value, base };
+};
+
+export const readElfUnwindPointer = async (
+  cursor: DwarfCursor, encoding: number, addressSize: number, sectionAddress: bigint
+): Promise<ElfUnwindPointer | null> => {
+  if (encoding === 0xff) return null;
+  const operand = await readPointerOperand(cursor, encoding, addressSize, sectionAddress);
+  return operand ? { address: operand.value === 0n ? 0n : operand.base + operand.value,
+    indirect: (encoding & 0x80) !== 0 } : null;
+};
+
+// libunwind decodes DW_CFA_set_loc using the CIE's FDE pointer encoding. A relative
+// location includes its base even for a zero displacement. Indirect addresses need memory.
+// https://raw.githubusercontent.com/llvm/llvm-project/main/libunwind/src/DwarfParser.hpp
+export const readElfUnwindLocation = async (
+  cursor: DwarfCursor, encoding: number, addressSize: number, sectionAddress: bigint
+): Promise<bigint | null> => {
+  if (encoding & 0x80) {
+    cursor.fail("CFI set_loc requires a direct address encoding");
+    return null;
+  }
+  const operand = await readPointerOperand(cursor, encoding, addressSize, sectionAddress);
+  return operand ? operand.base + operand.value : null;
 };

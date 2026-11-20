@@ -1,4 +1,4 @@
-import type { DwarfCfiInstruction } from "../dwarf/frame-types.js";
+import type { DwarfCfiInstruction, DwarfCfiProgram } from "../dwarf/frame-types.js";
 import type { DwarfCfiExpression } from "../dwarf/cfi-state-types.js";
 export interface ElfUnwindPointer {
   address: bigint;
@@ -7,7 +7,7 @@ export interface ElfUnwindPointer {
 
 export type ElfCfiInstruction = DwarfCfiInstruction<DwarfCfiExpression>;
 
-export interface ElfUnwindCie {
+export interface ElfUnwindCie extends DwarfCfiProgram<DwarfCfiExpression> {
   offset: number;
   version: number;
   augmentation: string;
@@ -18,16 +18,14 @@ export interface ElfUnwindCie {
   fdeEncoding: number;
   lsdaEncoding: number;
   personality: ElfUnwindPointer | null;
-  instructions: ElfCfiInstruction[];
 }
 
-export interface ElfUnwindFde {
+export interface ElfUnwindFde extends DwarfCfiProgram<DwarfCfiExpression> {
   offset: number;
   cieOffset: number;
   start: ElfUnwindPointer | null;
   range: bigint;
   lsda: ElfUnwindPointer | null;
-  instructions: ElfCfiInstruction[];
 }
 
 export interface ElfUnwindSection {

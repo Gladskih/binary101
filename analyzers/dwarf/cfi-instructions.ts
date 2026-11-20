@@ -17,17 +17,21 @@ const instructions: Record<number, [string, string[]]> = {
   0x2e: ["GNU_args_size", ["uleb"]], 0x2f: ["GNU_negative_offset_extended", ["uleb", "uleb"]]
 };
 
+type ReadAddress = (cursor: DwarfCursor) => Promise<bigint | null>;
+
 const operand = async <Value>(
-  cursor: DwarfCursor, kind: string, addressSize: number, expression: (cursor: DwarfCursor) => Promise<Value | null>
+  cursor: DwarfCursor, kind: string, readAddress: ReadAddress,
+  expression: (cursor: DwarfCursor) => Promise<Value | null>
 ): Promise<bigint | Value | null> => {
   if (kind === "uleb") return cursor.uleb();
   if (kind === "sleb") return cursor.sleb();
   if (kind === "expression") return expression(cursor);
-  return cursor.unsigned(kind === "address" ? addressSize : Number(kind));
+  if (kind === "address") return readAddress(cursor);
+  return cursor.unsigned(Number(kind));
 };
 
 const instruction = async <Value>(
-  cursor: DwarfCursor, addressSize: number, machine: number,
+  cursor: DwarfCursor, readAddress: ReadAddress, machine: number,
   expression: (cursor: DwarfCursor) => Promise<Value | null>
 ): Promise<DwarfCfiInstruction<Value> | null> => {
   const offset = cursor.position;
@@ -41,7 +45,7 @@ const instruction = async <Value>(
   }
   const operands: Array<bigint | Value> = primary ? [BigInt(opcode & 63)] : [];
   for (const kind of descriptor[1]) {
-    const value = await operand(cursor, kind, addressSize, expression);
+    const value = await operand(cursor, kind, readAddress, expression);
     if (value == null) return null;
     operands.push(value);
   }
@@ -66,11 +70,12 @@ const architectureInstruction = (machine: number): [string, string[]] | undefine
 
 export const readDwarfCfiInstructions = async <Value>(
   cursor: DwarfCursor, addressSize: number, machine: number,
-  expression: (cursor: DwarfCursor) => Promise<Value | null>
+  expression: (cursor: DwarfCursor) => Promise<Value | null>,
+  readAddress: ReadAddress = target => target.unsigned(addressSize)
 ): Promise<DwarfCfiInstruction<Value>[]> => {
   const result: DwarfCfiInstruction<Value>[] = [];
   while (cursor.position < cursor.end && !cursor.failed) {
-    const next = await instruction(cursor, addressSize, machine, expression);
+    const next = await instruction(cursor, readAddress, machine, expression);
     if (!next) break;
     result.push(next);
   }

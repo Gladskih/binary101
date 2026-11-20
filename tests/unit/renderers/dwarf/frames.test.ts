@@ -42,3 +42,15 @@ void test("frame models handle absent encodings and empty analyses", async () =>
   assert.equal(renderDwarfFrames(dwarf), "");
   assert.equal(createDwarfFrameTableModel(dwarf).rowCount, 0);
 });
+
+void test("recovery tables describe partial coverage beside the verified prefix", async () => {
+  const fixture = createDwarfFrameFixture();
+  const dwarf = await analyzeDwarf(fixture.file, fixture.sections, true);
+  const fde = dwarf.frames!.fdes[0]!;
+  fde.instructionsIncomplete = true;
+
+  const rules = createDwarfFrameRuleTableModel(dwarf, fde);
+
+  assert.equal(rules.rowCount, 1);
+  assert.match(renderDwarfFrames(dwarf), /Recovery rules cover only the decoded prefix/);
+});

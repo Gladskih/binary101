@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElfUnwind } from "../../../../analyzers/elf/unwind.js";
+import { evaluateElfCfi } from "../../../../analyzers/elf/cfi-state.js";
 import { elfUnwindFixture } from "../../../fixtures/elf-unwind.js";
 import { relocationSection } from "../../../fixtures/elf-relocations.js";
 
@@ -56,6 +57,45 @@ void test("warns on unknown CFI instructions", async () => {
   fixture.bytes[101] = 0x3f;
   const result = await parseElfUnwind(fixture.file(), fixture.elf);
   assert.match(result[0]!.issues.join(" "), /CFI/);
+});
+
+void test("CFI recovery stops at the last known location before an unsupported AArch64 opcode", async () => {
+  const fixture = elfUnwindFixture();
+  fixture.elf.header.machine = 183;
+  // Arm DWARF ABI §4.4: DW_CFA_AARCH64_negate_ra_state_with_pc is unsupported.
+  fixture.bytes[102] = 0x2c;
+
+  const [section] = await parseElfUnwind(fixture.file(), fixture.elf);
+  const evaluation = evaluateElfCfi(section!.cies[0]!, section!.fdes[0]!);
+
+  assert.deepEqual(evaluation.rows.map(row => row.location), [8192n]);
+  assert.match(evaluation.issues.join(" "), /FDE.*incomplete.*0x2001/i);
+});
+
+void test("an incomplete CIE cannot supply initial rules to a complete FDE", async () => {
+  const fixture = elfUnwindFixture();
+  fixture.bytes[81] = 0x3f; // Unassigned extended CFI opcode in DWARF 5 Table 7.24.
+
+  const [section] = await parseElfUnwind(fixture.file(), fixture.elf);
+  const evaluation = evaluateElfCfi(section!.cies[0]!, section!.fdes[0]!);
+
+  assert.deepEqual(evaluation.rows, []);
+  assert.match(evaluation.issues.join(" "), /CIE.*incomplete/i);
+});
+
+void test("eh_frame set_loc uses the CIE's PC-relative four-byte encoding on ELF64", async () => {
+  const fixture = elfUnwindFixture();
+  // LLVM libunwind DwarfParser.hpp reads DW_CFA_set_loc in the CIE pointer encoding.
+  // The signed four-byte displacement is relative to the operand at section offset 38.
+  fixture.bytes[101] = 1;
+  fixture.view.setInt32(102, 8200 - (4096 + 38), true);
+
+  const [section] = await parseElfUnwind(fixture.file(), fixture.elf);
+  const fde = section!.fdes[0]!;
+
+  assert.deepEqual(section!.issues, []);
+  assert.deepEqual(fde.instructions[0]?.operands, [8200n]);
+  assert.deepEqual(evaluateElfCfi(section!.cies[0]!, fde).rows.map(row => row.location), [8192n, 8200n]);
 });
 
 void test("reads debug_frame CIE identifiers and absolute CIE offsets", async () => {

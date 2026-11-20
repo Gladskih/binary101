@@ -40,3 +40,12 @@ void test("architecture-specific CFI opcodes cannot be guessed for another machi
   assert.deepEqual(result.instructions, []);
   assert.match(result.issues.join(" "), /Unknown CFI/);
 });
+
+void test("debug_frame set_loc retains its plain target-sized address operand", async () => {
+  // DWARF 5 §6.4.2.1: set_loc uses an address, here the fixture's 32-bit 0x12345678.
+  const result = await readInstructions([1, 0x78, 0x56, 0x34, 0x12]);
+
+  assert.equal(result.instructions[0]?.operation, "set_loc");
+  assert.deepEqual(result.instructions[0]?.operands, [0x12345678n]);
+  assert.deepEqual(result.issues, []);
+});

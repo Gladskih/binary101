@@ -31,6 +31,8 @@ export const readElfUnwindFde = async (
     cursor.fail("FDE PC range is negative");
     return null;
   }
-  return { offset, cieOffset: cie.offset, start, range: range.address, lsda,
-    instructions: await readElfCfiInstructions(cursor, cie.addressSize, machine) };
+  const instructions = await readElfCfiInstructions(cursor, cie.addressSize, machine, sectionAddress, cie.fdeEncoding);
+  const fde: ElfUnwindFde = { offset, cieOffset: cie.offset, start, range: range.address, lsda, instructions };
+  if (cursor.failed) fde.instructionsIncomplete = true;
+  return fde;
 };

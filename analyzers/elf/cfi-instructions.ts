@@ -1,6 +1,7 @@
 import type { DwarfCursor } from "../dwarf/cursor.js";
 import { readDwarfCfiInstructions } from "../dwarf/cfi-instructions.js";
 import type { ElfCfiInstruction } from "./unwind-types.js";
+import { readElfUnwindLocation } from "./unwind-pointer.js";
 
 const expression = async (cursor: DwarfCursor): Promise<string | null> => {
   const size = await cursor.uleb();
@@ -20,5 +21,6 @@ const expression = async (cursor: DwarfCursor): Promise<string | null> => {
 };
 
 export const readElfCfiInstructions = async (
-  cursor: DwarfCursor, addressSize: number, machine: number
-): Promise<ElfCfiInstruction[]> => readDwarfCfiInstructions(cursor, addressSize, machine, expression);
+  cursor: DwarfCursor, addressSize: number, machine: number, sectionAddress = 0n, encoding = 0
+): Promise<ElfCfiInstruction[]> => readDwarfCfiInstructions(cursor, addressSize, machine, expression,
+  target => readElfUnwindLocation(target, encoding, addressSize, sectionAddress));

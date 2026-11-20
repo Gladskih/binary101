@@ -5,6 +5,10 @@ export type DwarfCfiInstruction<Value = DwarfExpressionOperation[]> = {
   operation: string;
   operands: Array<bigint | Value>;
 };
+export type DwarfCfiProgram<Value = DwarfExpressionOperation[]> = {
+  instructions: DwarfCfiInstruction<Value>[];
+  instructionsIncomplete?: true;
+};
 export type DwarfFrameEncoding = {
   addressSize: number;
   segmentSize: number;
@@ -12,19 +16,17 @@ export type DwarfFrameEncoding = {
   dataAlignment: bigint;
   returnRegister: bigint;
 };
-export type DwarfFrameCie = {
+export type DwarfFrameCie = DwarfCfiProgram & {
   offset: number;
   version: number;
   augmentation: string;
   encoding: DwarfFrameEncoding | null;
-  instructions: DwarfCfiInstruction[];
 };
-export type DwarfFrameFde = {
+export type DwarfFrameFde = DwarfCfiProgram & {
   offset: number;
   cieOffset: number;
   start: bigint;
   segment: bigint | null;
   range: bigint;
-  instructions: DwarfCfiInstruction[];
 };
 export type DwarfFrames = { cies: DwarfFrameCie[]; fdes: DwarfFrameFde[] };

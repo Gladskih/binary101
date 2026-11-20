@@ -37,6 +37,16 @@ void test("renders an unreadable unwind section with a warning", () => {
   assert.match(out.join(""), /truncated/);
 });
 
+void test("renders the decoded set_loc operand as an address", async () => {
+  const fixture = elfUnwindFixture();
+  const [section] = await parseElfUnwind(fixture.file(), fixture.elf);
+  Object.assign(section!.fdes[0]!.instructions[0]!, { operation: "set_loc", operands: [8200n] });
+
+  const model = createElfUnwindTableModel(section!);
+
+  assert.match(model.rowAt(0)!.cells[5]!.html, /set_loc<\/td><td>0x2008<\/td>/);
+});
+
 void test("omits absent unwind information", () => {
   const out: string[] = [];
   renderElfUnwind(elfUnwindFixture().elf, out);

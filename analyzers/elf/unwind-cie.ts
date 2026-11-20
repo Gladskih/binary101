@@ -71,6 +71,7 @@ export const readElfUnwindCie = async (
     fdeEncoding: 0, lsdaEncoding: 0xff, personality: null, instructions: [] };
   await readAugmentation(cursor, cie, sectionAddress);
   if (cursor.failed) return null;
-  cie.instructions = await readElfCfiInstructions(cursor, size, machine);
+  cie.instructions = await readElfCfiInstructions(cursor, size, machine, sectionAddress, cie.fdeEncoding);
+  if (cursor.failed) cie.instructionsIncomplete = true;
   return cie;
 };

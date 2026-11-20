@@ -23,3 +23,15 @@ void test("ELF unwind reuses decoded debug-frame instructions", async () => {
   frames.fdes[0]!.segment = 0n;
   assert.equal(elfDwarfFrames(frames, 7).fdes.length, 1);
 });
+
+void test("ELF preserves the incomplete CFI marker from shared debug frames", async () => {
+  const source = dwarfMacroSources([{ name: ".debug_frame", bytes: createDwarfFrameBytes() }]).get(".debug_frame")!;
+  const frames = await readDwarfFrames(source, "little", 4, 3, []);
+  frames.cies[0]!.instructionsIncomplete = true;
+  frames.fdes[0]!.instructionsIncomplete = true;
+
+  const section = elfDwarfFrames(frames, 7);
+
+  assert.equal(section.cies[0]?.instructionsIncomplete, true);
+  assert.equal(section.fdes[0]?.instructionsIncomplete, true);
+});

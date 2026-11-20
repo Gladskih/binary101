@@ -9,16 +9,24 @@ import type { PagedSortableTableModel } from "../../ui/paged-sortable-table-stat
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderElfCfiState } from "./cfi-state.js";
+import { formatElfHex } from "./value-format.js";
 
 const pointerText = (pointer: ElfUnwindPointer | null): string => pointer
   ? `${pointer.indirect ? "Indirect at " : ""}0x${pointer.address.toString(16)}` : "—";
 
+const formatOperand = (operation: string, operand: ElfCfiInstruction["operands"][number]): string => {
+  if (Array.isArray(operand)) return dwarfExpressionText(operand);
+  if (operation === "set_loc" && typeof operand === "bigint") return formatElfHex(operand);
+  return String(operand);
+};
+
 const instructionsHtml = (instructions: ElfCfiInstruction[]): string => {
   if (!instructions.length) return "—";
   return `${renderCollectionStart(`${instructions.length} instructions`, instructions.length)}<table class="table">` +
-    `<thead><tr><th>Offset</th><th>Operation</th><th>Encoded operands</th></tr></thead><tbody>` +
+    `<thead><tr><th>Offset</th><th>Operation</th><th>Operands</th></tr></thead><tbody>` +
     instructions.map(item => `<tr><td class="peNumeric">0x${item.offset.toString(16)}</td>` +
-      `<td>${escapeHtml(item.operation)}</td><td>${escapeHtml(item.operands.map(operand => Array.isArray(operand) ? dwarfExpressionText(operand) : String(operand)).join(", "))}</td></tr>`)
+      `<td>${escapeHtml(item.operation)}</td>` +
+      `<td>${escapeHtml(item.operands.map(operand => formatOperand(item.operation, operand)).join(", "))}</td></tr>`)
       .join("") + `</tbody></table>${renderCollectionEnd(instructions.length)}`;
 };
 
@@ -57,7 +65,8 @@ const renderUnwindSection = (elf: ElfParseResult, section: ElfUnwindSection, out
   // https://github.com/ARM-software/abi-aa/blob/main/aadwarf64/aadwarf64.rst#dwarf-register-names
   if (elf.header.machine === 183) out.push(`<p class="smallNote">AArch64 DWARF registers: ` +
     `r0–r30 = x0–x30; r30 = link register; r31 = sp; r64–r95 = v0–v31.</p>`);
-  out.push(`<p class="smallNote">CFI operands are encoded values; offsets use the CIE alignment factors. ` +
+  out.push(`<p class="smallNote">CFI offsets are shown as encoded values and use the CIE alignment factors. ` +
+    `The set_loc operand is a decoded address. ` +
     `Indirect pointers identify pointer storage. DWARF expressions are shown as bytes.</p>`);
   if (section.cies.length) {
     out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +

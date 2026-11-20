@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readDwarfFrames } from "../../../../analyzers/dwarf/frames.js";
+import { evaluateDwarfCfi } from "../../../../analyzers/dwarf/cfi-state.js";
 import { createDwarfFrameBytes } from "../../../fixtures/dwarf-frame-fixture.js";
 import { dwarfMacroSources } from "../../../fixtures/dwarf-macro-fixture.js";
 import { concatenateBytes, encodeDwarf32Unit, encodeDwarf64Unit, encodeUint32,
@@ -140,4 +141,17 @@ void test("unwind state errors are surfaced during analysis", async () => {
 
   assert.equal(result.frames.fdes.length, 1);
   assert.match(result.issues.join(" "), /stack underflow/);
+});
+
+void test("debug frames preserve recovery only before a truncated CFI instruction", async () => {
+  // DWARF 5 Table 7.24: advance_loc by four, then def_cfa with its operands absent.
+  const { frames, issues } = await readFrames(concatenateBytes(knownCie,
+    fde(concatenateBytes(encodeUint32(4096), encodeUint32(16), [0x44, 0x0c]))));
+  const [cie] = frames.cies;
+
+  const evaluation = evaluateDwarfCfi({ ...cie!.encoding!, ...cie! }, frames.fdes[0]!);
+
+  assert.deepEqual(evaluation.rows.map(row => row.location), [4096n]);
+  assert.match(issues.join(" "), /Truncated/);
+  assert.match(issues.join(" "), /FDE.*incomplete.*0x1004/i);
 });

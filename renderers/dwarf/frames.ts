@@ -11,7 +11,7 @@ import { dwarfCfaRuleText, dwarfRegisterRuleText } from "./cfi-rules.js";
 export const createDwarfFrameRuleTableModel = (dwarf: DwarfAnalysis,
   fde: DwarfFrameFde): PagedSortableTableModel => {
   const cie = dwarf.frames?.cies.find(cie => cie.offset === fde.cieOffset);
-  const rows = cie?.encoding ? evaluateDwarfCfi({ ...cie.encoding, instructions: cie.instructions }, fde).rows : [];
+  const rows = cie?.encoding ? evaluateDwarfCfi({ ...cie.encoding, ...cie }, fde).rows : [];
   const values = (index: number): string[] => {
     const row = rows[index];
     return row ? [`+${row.location - fde.start} bytes`, dwarfCfaRuleText(row.cfa),
@@ -39,7 +39,9 @@ const functionNames = (dwarf: DwarfAnalysis): Map<bigint, string> => {
 
 const recoveryRules = (dwarf: DwarfAnalysis, fde: DwarfFrameFde): string => {
   const model = createDwarfFrameRuleTableModel(dwarf, fde);
-  return model.rowCount ? renderAutoPagedSortableTable(model) : "Recovery rules are unavailable";
+  if (!model.rowCount) return "Recovery rules are unavailable";
+  const notice = fde.instructionsIncomplete ? "<p>Recovery rules cover only the decoded prefix.</p>" : "";
+  return notice + renderAutoPagedSortableTable(model);
 };
 
 export const createDwarfFrameTableModel = (dwarf: DwarfAnalysis): PagedSortableTableModel => {
