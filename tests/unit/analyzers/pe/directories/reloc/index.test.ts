@@ -185,7 +185,7 @@ void test("parseBaseRelocations warns when a relocation block size runs past the
   assert.ok(parsed.warnings?.some(warning => /trunc/i.test(warning)));
 });
 
-void test("parseBaseRelocations does not expose the second HIGHADJ slot as an independent relocation", async () => {
+void test("parseBaseRelocations retains the second HIGHADJ slot on its relocation entry", async () => {
   const bytes = new Uint8Array(0x80).fill(0);
   const directoryOffset = 0x20;
   const view = new DataView(bytes.buffer);
@@ -211,5 +211,5 @@ void test("parseBaseRelocations does not expose the second HIGHADJ slot as an in
   // and is not a standalone relocation entry.
   assert.strictEqual(defined.totalEntries, 1);
   assert.strictEqual(defined.blocks[0]?.count, 1);
-  assert.deepStrictEqual(defined.blocks[0]?.entries, [{ type: 4, offset: 1 }]);
+  assert.deepStrictEqual(defined.blocks[0]?.entries, [{ type: 4, offset: 1, highAdjLowWord: 0x1234 }]);
 });

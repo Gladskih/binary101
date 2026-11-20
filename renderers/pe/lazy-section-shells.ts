@@ -13,7 +13,7 @@ import { getPeAppHostSectionDescriptor } from "./apphost-section-descriptor.js";
 import { PE_OVERLAY_PANEL_ID, getUnexplainedOverlaySize } from "./overlay.js";
 import { PE_PACKER_SECTIONS, pePackerSectionDescriptors } from "./packer-sections.js";
 import { getPePayloadLazySectionDescriptors } from "./payload-section-descriptors.js";
-import { getPeSanityIssues } from "./layout.js";
+import { formatBaseRelocationSummary, getPeSanityIssues } from "./layout.js";
 import { getPeDebugSectionDescriptor } from "./debug-section-descriptor.js";
 import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 export const PE_LAZY_SECTION_KEYS = {
@@ -215,7 +215,7 @@ const addWindowsDirectoryDescriptors = (
   });
   if (pe.reloc) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.reloc,
-    summary: plural(pe.reloc.totalEntries, "entry", "entries"),
+    summary: formatBaseRelocationSummary(pe.reloc.totalEntries),
     title: "Base relocations"
   });
   if (pe.msvcEh) descriptors.push({ key: PE_LAZY_SECTION_KEYS.msvcEh,

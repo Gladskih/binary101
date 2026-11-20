@@ -3,6 +3,7 @@ import { renderCollectionStart, renderCollectionEnd } from "../counted-collectio
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
+import { IMAGE_REL_BASED_ABSOLUTE } from "../../analyzers/pe/directories/reloc.js";
 import {
   isPeRomParseResult,
   isPeWindowsParseResult,
@@ -79,23 +80,32 @@ const renderDelayImportAttributes = (attributes: number): string => {
   return `${hex(normalized, 8)}<div class="smallNote">${notes.map(escapeHtml).join("<br/>")}</div>`;
 };
 
+export const formatBaseRelocationSummary = (count: number): string =>
+  `${count} parsed ${count === 1 ? "entry" : "entries"}`;
+
+const renderBaseRelocationRows = (reloc: PeRelocSection, out: string[]): void => {
+  out.push(`<p class="smallNote">The loader skips ABSOLUTE entries, which can pad a block. ` +
+    `Parsed entry counts include them. HIGHADJ uses two WORDs and counts as one entry.</p>`);
+  out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th scope="col" class="num">#</th><th scope="col">Page RVA</th>` +
+    `<th scope="col" class="num">Block size</th><th scope="col" class="num">Parsed entries</th>` +
+    `<th scope="col" class="num">ABSOLUTE (no-op)</th></tr></thead><tbody>`);
+  reloc.blocks.forEach((block, index) => {
+    const absoluteEntries = block.entries.reduce((count, entry) =>
+      count + Number(entry.type === IMAGE_REL_BASED_ABSOLUTE), 0);
+    out.push(`<tr><td class="num">${index + 1}</td><td>${hex(block.pageRva, 8)}</td>` +
+      `<td class="num">${humanSize(block.size)}</td><td class="num">${block.count}</td>` +
+      `<td class="num">${absoluteEntries}</td></tr>`);
+  });
+  out.push(`</tbody></table></div>`);
+};
+
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
-  out.push(
-    renderPeSectionStart(
-      "Base relocations",
-      `${reloc.totalEntries ?? 0} entr${(reloc.totalEntries ?? 0) === 1 ? "y" : "ies"}`
-    )
-  );
+  out.push(renderPeSectionStart("Base relocations", formatBaseRelocationSummary(reloc.totalEntries)));
   if (reloc.warnings?.length) {
     out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
   }
-  if (reloc.blocks?.length) {
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
-    reloc.blocks.forEach((block, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
-    });
-    out.push(`</tbody></table>`);
-  }
+  if (reloc.blocks?.length) renderBaseRelocationRows(reloc, out);
   out.push(renderPeSectionEnd());
 }
 

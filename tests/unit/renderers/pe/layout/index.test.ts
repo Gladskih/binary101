@@ -14,16 +14,21 @@ import { createBasePe, createPeSection } from "../../../../fixtures/pe-renderer-
 
 const assertSanityAbsent = (html: string): void => assert.equal(html, "");
 
-void test("renderReloc wraps relocation table in details", () => {
+void test("renderReloc identifies ABSOLUTE slots separately from parsed entry counts", () => {
   const reloc: Parameters<typeof renderReloc>[0] = {
     totalEntries: 3,
-    blocks: [{ pageRva: 0x1000, size: 12, count: 1, entries: [] }]
+    blocks: [{ pageRva: 0x1000, size: 16, count: 3, entries: [
+      // PE base relocation type 0 is skipped even if its offset bits are set.
+      { type: 0, offset: 1 }, { type: 3, offset: 2 }, { type: 4, offset: 3, highAdjLowWord: 0 }
+    ] }]
   };
   const out: string[] = [];
   renderReloc(reloc, out);
   const html = out.join("");
-  assert.match(html, /<summary[^>]*><b>Base relocations<\/b> - 3 entries<\/summary>/);
-  assert.ok(html.includes("Page RVA"));
+  assert.match(html, /<summary[^>]*><b>Base relocations<\/b> - 3 parsed entries<\/summary>/);
+  assert.match(html, /Parsed entries<\/th><th[^>]*>ABSOLUTE \(no-op\)<\/th>/);
+  assert.match(html, /<td[^>]*>3<\/td><td[^>]*>1<\/td><\/tr>/);
+  assert.match(html, /HIGHADJ uses two WORDs and counts as one entry/);
 });
 
 void test("renderException renders pdata stats", () => {
