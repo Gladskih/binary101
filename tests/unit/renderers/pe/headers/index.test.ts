@@ -70,7 +70,7 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.match(html, /<h4[^>]*>Optional header<\/h4>/);
   assert.match(
     html,
-    /<summary[^>]*><b>Data directories<\/b> - 1 present, 2 entries<\/summary>/
+    /<summary[^>]*><b>Data directories<\/b> - 1 declared, 2 entries<\/summary>/
   );
   assert.match(html, /<table class="table peDataDirectoryTable">/);
   assert.match(
