@@ -271,7 +271,7 @@ const createWindowsPe = (): PeWindowsParseResult => ({
   }],
   entrySection: null,
   rvaToOff: () => null,
-  imageEnd: 0,
+  fileSize: 0x3000, imageEnd: 0,
   imageSizeMismatch: false,
   hasCert: false,
   debug: null,

@@ -207,9 +207,9 @@ const renderSignerNode = (
   );
 };
 
-export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): string => {
-  const auth = certificate.authenticode;
-  if (!auth) return "";
+const renderSignatureNode = (
+  auth: AuthenticodeInfo, title: string, structuralWarnings = auth.warnings
+): string => {
   const signers = auth.signers ?? [];
   const signerVerifications = auth.verification?.signerVerifications ?? [];
   const signerCount = Math.max(signers.length, signerVerifications.length, auth.signerCount ?? 0);
@@ -217,20 +217,19 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
     ...Array.from({ length: signerCount }, (_, index) =>
       renderSignerNode(auth, signers[index], signerVerifications[index], index)
     ),
+    ...(auth.verification?.nestedSignatures?.map(({ signerIndex, signature }, index) =>
+      renderSignatureNode(signature, `Nested signature ${index + 1} (Signer ${signerIndex + 1})`)
+    ) ?? []),
     renderAdditionalCertificatesNode(auth),
     renderTrustGapsNode(auth.verification?.trustGaps),
     renderWarningsNode("Trust snapshot warnings", auth.verification?.trustPolicy?.warnings),
     renderWarningsNode("Verification warnings", auth.verification?.warnings),
-    renderWarningsNode("Structural warnings", certificate.warnings)
+    renderWarningsNode("Structural warnings", structuralWarnings)
   ]
     .filter(Boolean)
     .join("");
-  return (
-    `<div class="peSecuritySection">` +
-    `<div class="smallNote"><b>Certificate tree</b></div>` +
-    `<div class="peSecurityTreeForest"><ul class="peSecurityTree">` +
-    renderTreeNode(
-      "Authenticode",
+  return renderTreeNode(
+      title,
       filterBadges([
         createRoleBadge("PKCS#7", "signer"),
         createCheckBadge(auth, "file-digest-match", "Digest"),
@@ -250,7 +249,13 @@ export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): strin
         renderTreeMeta("Computed digest", auth.verification?.computedFileDigest)
       ],
       children
-    ) +
-    `</ul></div></div>`
   );
+};
+
+export const renderAuthenticodeTree = (certificate: ParsedWinCertificate): string => {
+  const auth = certificate.authenticode;
+  if (!auth) return "";
+  return `<div class="peSecuritySection"><div class="smallNote"><b>Certificate tree</b></div>` +
+    `<div class="peSecurityTreeForest"><ul class="peSecurityTree">` +
+    renderSignatureNode(auth, "Authenticode", certificate.warnings) + `</ul></div></div>`;
 };

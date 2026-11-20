@@ -1,3 +1,4 @@
+import { resourceDecoderType } from "../analyzers/pe/resources/type-names.js";
 import type { ParseForUiResult } from "../analyzers/index.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "../analyzers/pe/resources/preview/types.js";
 import type { ResourceLocation } from "../analyzers/pe/resources/resource-index.js";
@@ -34,10 +35,11 @@ const selectedResource = (button: HTMLButtonElement, resources: PeResources): Re
 
 const decodeResource = async (data: Uint8Array, selection: ResourceSelection) => {
   const { group, leaf } = selection;
-  if (group.typeName === "FONT") return addFontPreview(data, group.typeName);
+  const type = resourceDecoderType(group);
+  if (type === "FONT") return addFontPreview(data, type);
   const decoder = new Map([["BITMAP", addBitmapPreview], ["ICON", addIconPreview],
-    ["CURSOR", addCursorPreview]]).get(group.typeName);
-  const detected = decoder ? decoder(data, group.typeName) : await addHeuristicResourcePreview(data, leaf.codePage);
+    ["CURSOR", addCursorPreview]]).get(type);
+  const detected = decoder ? decoder(data, type) : await addHeuristicResourcePreview(data, leaf.codePage);
   const nested = detected?.preview?.embeddedDocument;
   return nested ? inspectEmbeddedDocument(data, nested.format) : detected;
 };

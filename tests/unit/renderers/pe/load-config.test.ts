@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderLoadConfig } from "../../../../renderers/pe/load-config.js";
+import { parseLoadConfigDirectory64 } from "../../../../analyzers/pe/load-config/index.js";
+import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
 import { createPeLoadConfigResult } from "../../../../analyzers/pe/load-config/result.js";
 import type { PeWindowsParseResult } from "../../../../analyzers/pe/index.js";
 
@@ -23,6 +25,29 @@ const makePe = (
   sections: [],
   loadcfg
 }) as unknown as PeWindowsParseResult;
+
+void test("renderLoadConfig distinguishes absent tail fields from stored zeroes", async () => {
+  // IMAGE_LOAD_CONFIG_DIRECTORY64: GuardMemcpyFunctionPointer is at 0x138 and
+  // UmaFunctionPointers begins just after the structure used by acledit.dll, at 0x140.
+  const bytes = new Uint8Array(0x140);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, bytes.length, true);
+  view.setBigUint64(0x18, 4096n, true); // DeCommitFreeBlockThreshold, in bytes.
+  view.setBigUint64(0x40, 5n, true); // ProcessAffinityMask, with bits 0 and 2 set.
+  const file = new File([bytes], "load-config");
+  const lc = await parseLoadConfigDirectory64(createFileRangeReader(file, 0, file.size),
+    [{ name: "LOAD_CONFIG", rva: 0x1000, size: bytes.length }], rva => rva - 0x1000);
+  assert.ok(lc);
+
+  const out: string[] = [];
+  renderLoadConfig(makePe(lc), out);
+  const html = out.join("");
+
+  assert.match(html, />GuardMemcpyFunctionPointer<\/dt><dd>-/);
+  assert.match(html, />UmaFunctionPointers<\/dt><dd>Unavailable/);
+  assert.match(html, />DeCommitFreeBlockThreshold<\/dt><dd>4 KB \(4096 bytes\)/);
+  assert.match(html, />ProcessAffinityMask<\/dt><dd>0x5</);
+});
 
 void test("renderLoadConfig renders GuardFlags names and CFG function-table entry size", () => {
   const loadcfg = createPeLoadConfigResult();

@@ -4,7 +4,7 @@ import { createImportFunctionNameDecoder, type DecodeImportFunctionName } from "
 import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import { toHex32 } from "../../../binary-utils.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import { isRvaRangeInsideSizeOfImage } from "../layout/rva-limits.js";
+import { isRvaField, isRvaRangeInsideSizeOfImage } from "../layout/rva-limits.js";
 import { readMappedNullTerminatedAsciiString } from "../strings/mapped-ascii-string.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 import {
@@ -17,9 +17,10 @@ import {
 const IMAGE_DELAYLOAD_DESCRIPTOR_SIZE = 32; // Microsoft PE format: IMAGE_DELAYLOAD_DESCRIPTOR is eight DWORDs.
 // MSVC delayimp.h: dlattrRva marks VC7+ descriptors whose fields are RVAs instead of pointers.
 // https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
-const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
+export const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
 interface DelayImportImageMapping {
   sizeOfImage: number;
+  imageBase?: bigint;
 }
 
 type DelayImportReadState = {
@@ -126,9 +127,32 @@ const readDelayImportDescriptor = async (
   };
 };
 
+const rebaseLegacyAddress = (
+  address: bigint, base: bigint | undefined, warnings: Set<string>
+): number => {
+  if (address === 0n) return 0;
+  const rva = base == null ? -1 : Number(address - base);
+  if (isRvaField(rva) && rva !== 0) return rva;
+  warnings.add(`Delay import VA 0x${address.toString(16)} cannot be resolved using the preferred image base.`);
+  return 0;
+};
+
+const resolveDelayImportDescriptor = (
+  descriptor: DelayImportDescriptor, rebase: (address: bigint) => number
+): DelayImportDescriptor => ({
+  ...descriptor,
+  DllNameRVA: rebase(BigInt(descriptor.DllNameRVA)),
+  ModuleHandleRVA: rebase(BigInt(descriptor.ModuleHandleRVA)),
+  ImportAddressTableRVA: rebase(BigInt(descriptor.ImportAddressTableRVA)),
+  ImportNameTableRVA: rebase(BigInt(descriptor.ImportNameTableRVA)),
+  BoundImportAddressTableRVA: rebase(BigInt(descriptor.BoundImportAddressTableRVA)),
+  UnloadInformationTableRVA: rebase(BigInt(descriptor.UnloadInformationTableRVA))
+});
+
 const readDelayImportFunctions = async (
   state: DelayImportReadState,
-  descriptor: DelayImportDescriptor
+  descriptor: DelayImportDescriptor,
+  rebase?: (address: bigint) => number
 ): Promise<{ functions: PeDelayImportFunction[]; terminated: boolean }> => {
   const intRva = descriptor.ImportNameTableRVA >>> 0;
   const intOff = intRva ? state.rvaToOff(intRva) : null;
@@ -144,7 +168,8 @@ const readDelayImportFunctions = async (
     intRva,
     state.warnings,
     maxThunkEntries,
-    state.decodeName
+    state.decodeName,
+    rebase
   );
   if (!thunkTable.terminated) state.warnings.add("Delay-load thunk table is not terminated by a null entry.");
   return thunkTable;
@@ -194,26 +219,26 @@ const parseDelayImportsWithThunkReader = async (
     }
     if (remaining <= 0) break;
     const descriptorSize = Math.min(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE, remaining);
-    const descriptor = await readDelayImportDescriptor(reader, rvaToOff, descriptorRva, descriptorSize);
-    if (!descriptor) {
+    const rawDescriptor = await readDelayImportDescriptor(reader, rvaToOff, descriptorRva, descriptorSize);
+    if (!rawDescriptor) {
       warnings.add("Delay import descriptor truncated.");
       descriptorScanStopped = true;
       break;
     }
-    if (descriptor.allZero) {
+    if (rawDescriptor.allZero) {
       descriptorTableTerminated = true;
       break;
     }
-    collectDelayImportDescriptorWarnings(warnings, descriptor);
-    if (!descriptor.DllNameRVA) {
-      continue;
-    }
-    const nameOff = rvaToOff(descriptor.DllNameRVA);
-    if (descriptor.DllNameRVA && nameOff == null) warnings.add("Delay import name RVA does not map to file data.");
-    const thunkTable = await readDelayImportFunctions(state, descriptor);
+    collectDelayImportDescriptorWarnings(warnings, rawDescriptor);
+    if (!rawDescriptor.DllNameRVA) continue;
+    const rebase = (rawDescriptor.Attributes & DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA) === 0
+      ? (address: bigint) => rebaseLegacyAddress(address, mapping?.imageBase, warnings)
+      : undefined;
+    const descriptor = rebase ? resolveDelayImportDescriptor(rawDescriptor, rebase) : rawDescriptor;
+    const thunkTable = await readDelayImportFunctions(state, descriptor, rebase);
     entries.push({
       name:
-        nameOff != null
+        descriptor.DllNameRVA !== 0
           ? await readDelayImportName(reader, rvaToOff, descriptor.DllNameRVA, warnings)
           : "",
       Attributes: descriptor.Attributes,

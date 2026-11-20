@@ -2,6 +2,7 @@
 
 import type {
   PeArm64RuntimeFunctionEntry,
+  PeX64RuntimeFunctionEntry,
   PeChpeCodeMapEntry,
   PeChpeEntryPointRange,
   PeChpeRedirection,
@@ -150,9 +151,12 @@ const chpeRedirectionModel = (references: PeLoadConfigReferences): PagedSortable
 };
 
 const runtimeFunctionCells = (
-  entry: PeArm64RuntimeFunctionEntry,
+  entry: PeArm64RuntimeFunctionEntry | PeX64RuntimeFunctionEntry,
   index: number
 ): PagedSortableTableCell[] => {
+  if ("unwindData" in entry) return [
+    numberCell(index), hexCell(entry.beginRva), hexCell(entry.endRva), hexCell(entry.unwindData)
+  ];
   const common = [numberCell(index), hexCell(entry.beginRva), textCell(entry.unwindKind)];
   if (entry.unwindKind === "exception") {
     return [...common, hexCell(entry.exceptionInformationRva), ...Array.from({ length: 6 }, () => textCell("-"))];
@@ -170,19 +174,21 @@ const runtimeFunctionCells = (
 
 const runtimeFunctionModel = (references: PeLoadConfigReferences): PagedSortableTableModel | null => {
   const metadata = references.chpeMetadata;
-  const entries = metadata?.kind === "arm64ec" ? metadata.extraRfeEntries : undefined;
-  if (!entries?.length) return null;
+  if (metadata?.kind !== "arm64ec") return null;
+  const entries = metadata.extraX64RuntimeFunctions ?? metadata.extraRfeEntries;
+  if (!entries.length) return null;
   return {
     id: LOAD_CONFIG_REFERENCE_TABLE_IDS.chpeRuntimeFunctions,
     pageSize: LOAD_CONFIG_REFERENCE_PAGE_SIZE,
     rowCount: entries.length,
-    columns: [
-      { className: "num", label: "#" }, { className: "num", label: "Begin RVA" },
-      { label: "Unwind kind" }, { className: "num", label: "Exception/reserved data" },
-      { className: "num", label: "Function bytes" }, { className: "num", label: "RegF field" },
-      { className: "num", label: "RegI count" }, { label: "Homes parameters" },
-      { label: "Chain/return" }, { className: "num", label: "Frame bytes" }
-    ],
+    columns: metadata.extraX64RuntimeFunctions
+      ? ["#", "Begin RVA", "End RVA (exclusive)", "UnwindData"].map(label => ({ className: "num", label }))
+      : [{ className: "num", label: "#" }, { className: "num", label: "Begin RVA" },
+        { label: "Unwind kind" }, { className: "num", label: "Exception/reserved data" },
+        { className: "num", label: "Function bytes" }, { className: "num", label: "RegF field" },
+        { className: "num", label: "RegI count" }, { label: "Homes parameters" },
+        { label: "Chain/return" }, { className: "num", label: "Frame bytes" }
+      ],
     rowAt: index => entries[index] ? { cells: runtimeFunctionCells(entries[index], index) } : null,
     sortValueAt: (index, columnIndex) => entries[index]
       ? sortValue(runtimeFunctionCells(entries[index], index), columnIndex) : ""

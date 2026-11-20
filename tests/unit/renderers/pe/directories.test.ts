@@ -169,11 +169,14 @@ void test("renderExports renders entries directly without a nested show wrapper"
     version: 0,
     dllName: "demo.dll",
     Base: 1,
-    NumberOfFunctions: 1,
-    NumberOfNames: 1,
+    NumberOfFunctions: 2,
+    NumberOfNames: 2,
     namePointerTable: 0,
     ordinalTable: 0,
-    entries: [{ ordinal: 1, names: ["Demo", "Alias<demo>"], rva: 0x1234, forwarder: null }],
+    entries: [
+      { ordinal: 1, names: ["Demo", "Alias<demo>"], rva: 0x1234, forwarder: null },
+      { ordinal: 2, names: [], rva: 0, forwarder: null }
+    ],
     issues: []
   };
   const out: string[] = [];
@@ -181,6 +184,9 @@ void test("renderExports renders entries directly without a nested show wrapper"
   const html = out.join("");
 
   assert.ok(html.includes("Export directory"));
+  assert.match(html, />EAT slots<\/dt><dd>2<\/dd>/);
+  assert.match(html, />Recovered targets<\/dt><dd>1<\/dd>/);
+  assert.match(html, />Name pointers<\/dt><dd>2<\/dd>/);
   assert.ok(html.includes("Demo"));
   assert.ok(html.includes("Alias&lt;demo>"));
   assert.ok(!html.includes("Show entries"));

@@ -175,7 +175,8 @@ export const parseLoadConfigReferences = async (
   rvaToOff: RvaToOffset,
   imageBase: bigint,
   pointerBytes: PePointerBytes,
-  loadConfig: PeLoadConfig
+  loadConfig: PeLoadConfig,
+  machine?: number
 ): Promise<PeLoadConfigReferences> => {
   const warnings: string[] = [];
   const notes: string[] = [];
@@ -192,7 +193,7 @@ export const parseLoadConfigReferences = async (
     "SecurityCookie", loadConfig.SecurityCookie
   );
   const chpeMetadata = await parseChpeMetadata(
-    reader, mapping, imageBase, pointerBytes, warnings, notes, loadConfig.CHPEMetadataPointer
+    reader, mapping, imageBase, pointerBytes, warnings, notes, loadConfig.CHPEMetadataPointer, machine
   );
   const enclaveConfiguration = await parseEnclaveConfiguration(
     reader, mapping, imageBase, pointerBytes,

@@ -60,7 +60,8 @@ const renderStringTablePreview = (langEntry: ResourcePreviewWithIssues): string 
     .map(entry =>
       `<tr><td class="mono peNumeric">` +
       `${entry.id != null ? `#${escapeHtml(entry.id)}` : "(index)"}</td>` +
-      `<td dir="auto">${escapeHtml(entry.text || "")}</td></tr>`
+      `<td dir="auto">${entry.text ? escapeHtml(entry.text) :
+        '<span class="smallNote">Empty or absent</span>'}</td></tr>`
     )
     .join("");
   return `<table class="table peResourceNestedTable peResourceTextTable">` +
@@ -84,7 +85,10 @@ const renderMessageTablePreview = (langEntry: ResourcePreviewWithIssues): string
 };
 const countSummary = (entry: ResourcePreviewWithIssues): string | null => {
   if (entry.previewKind === "dialog" && entry.dialogPreview) return `${entry.dialogPreview.controls.length} controls`;
-  if (entry.previewKind === "stringTable" && entry.stringTable) return `${entry.stringTable.length} strings`;
+  if (entry.previewKind === "stringTable" && entry.stringTable) {
+    const count = entry.stringTable.filter(slot => slot.text.length > 0).length;
+    return `${count} string${count === 1 ? "" : "s"} with text`;
+  }
   if (entry.previewKind === "messageTable" && entry.messageTable) return `${entry.messageTable.messages.length} messages`;
   return null;
 };

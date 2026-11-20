@@ -93,6 +93,7 @@ export const createBasePe = (): PeWindowsParseResult =>
     resources: null,
     imageEnd: 0,
     imageSizeMismatch: false,
+    fileSize: 0x1000,
     hasCert: false,
     signature: "PE"
   }) as PeWindowsParseResult;

@@ -39,6 +39,12 @@ export interface ResourceDirectoryInfo {
   idEntries: number;
 }
 
+export interface ResourceTypeIdentity {
+  typeName: string;
+  // A displayed name can match a predefined ordinal's label.
+  typeKey?: number | string | null;
+}
+
 export interface ResourceTree {
   base: number;
   limitEnd: number;
@@ -48,6 +54,6 @@ export interface ResourceTree {
   directories?: ResourceDirectoryInfo[];
   paths?: ResourceLeafPath[];
   top: Array<{ typeName: string; kind: "name" | "id"; leafCount: number }>;
-  detail: Array<{ typeName: string; entries: ResourceDetailEntry[] }>;
+  detail: Array<ResourceTypeIdentity & { entries: ResourceDetailEntry[] }>;
   view: (offset: number, length: number) => Promise<DataView>;
 }

@@ -1,3 +1,4 @@
+import { resourceDecoderType } from "../type-names.js";
 import { indexResourceLeaves, resolveResourceReference, resourceAt } from "../resource-index.js";
 import type { ResourceCatalog, ResourceLocation } from "../resource-index.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./types.js";
@@ -36,7 +37,7 @@ const resolveGroup = (catalog: ResourceCatalog, leaf: ResourceLangWithPreview): 
 
 export const linkImageGroupPreviews = (detail: ResourceDetailGroup[]): ResourceDetailGroup[] => {
   const catalog = indexResourceLeaves(detail);
-  return detail.map(group => group.typeName !== "GROUP_ICON" && group.typeName !== "GROUP_CURSOR"
+  return detail.map(group => resourceDecoderType(group) !== "GROUP_ICON" && resourceDecoderType(group) !== "GROUP_CURSOR"
     ? group : { ...group, entries: group.entries.map(entry => ({ ...entry,
       langs: entry.langs.map(leaf => resolveGroup(catalog, leaf)) })) });
 };

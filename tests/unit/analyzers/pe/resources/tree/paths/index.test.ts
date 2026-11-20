@@ -99,6 +99,7 @@ void test("buildResourcePathCollections builds canonical detail entries with fil
   assert.deepStrictEqual(result.top, [{ typeName: "ICON", kind: "id", leafCount: 2 }]);
   assert.deepStrictEqual(result.detail, [{
     typeName: "ICON",
+    typeKey: 3,
     entries: [{
       id: 1,
       name: null,
@@ -215,7 +216,7 @@ void test("buildResourcePathCollections labels invalid named top-level types gen
   assert.deepStrictEqual(result.top, [{ typeName: "(named)", kind: "name", leafCount: 0 }]);
 });
 
-void test("buildResourcePathCollections merges detail entries for repeated type names", async () => {
+void test("buildResourcePathCollections merges detail entries for repeated type keys", async () => {
   const result = await buildResourcePathCollections(
     [directoryEntry(99, 0x20, true), directoryEntry(99, 0x60, true)],
     async rel => {
@@ -235,6 +236,7 @@ void test("buildResourcePathCollections merges detail entries for repeated type 
 
   assert.deepStrictEqual(result.detail, [{
     typeName: "TYPE_99",
+    typeKey: 99,
     entries: [
       {
         id: 1,

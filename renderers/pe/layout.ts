@@ -3,6 +3,7 @@ import { renderCollectionStart, renderCollectionEnd } from "../counted-collectio
 
 import { humanSize, hex } from "../../binary-utils.js";
 import { escapeHtml } from "../../html-utils.js";
+import { IMAGE_REL_BASED_ABSOLUTE } from "../../analyzers/pe/directories/reloc.js";
 import {
   isPeRomParseResult,
   isPeWindowsParseResult,
@@ -10,6 +11,7 @@ import {
   type PeWindowsParseResult
 } from "../../analyzers/pe/index.js";
 import { renderPeDiagnosticBody, renderPeDiagnostics } from "./diagnostics.js";
+import { renderDelayImportAddressFields } from "./delay-import-addresses.js";
 import { renderPeSectionEnd, renderPeSectionStart } from "./collapsible-section.js";
 
 type PeRelocSection = NonNullable<PeWindowsParseResult["reloc"]>;
@@ -20,11 +22,6 @@ type PeDelayImportsSection = NonNullable<PeWindowsParseResult["delayImports"]>;
 // IMAGE_SCN_MEM_EXECUTE marks executable section contents.
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-flags
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000;
-// MSVC delayimp.h / "Understand the delay load helper function":
-// dlattrRva marks VC7+ delay descriptors whose fields are RVAs.
-// https://learn.microsoft.com/en-us/cpp/build/reference/understanding-the-helper-function
-const DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA = 0x1;
-
 const getEntrypointSanityIssue = (pe: PeParseResult): string | null => {
   const entrypointRva = pe.opt?.AddressOfEntryPoint ? (pe.opt.AddressOfEntryPoint >>> 0) : 0;
   const sections = Array.isArray(pe.sections) ? pe.sections : [];
@@ -56,46 +53,32 @@ export const getPeSanityIssues = (pe: PeParseResult): string[] => [
   ...singleIssue(getEntrypointSanityIssue(pe))
 ];
 
-const renderDelayImportAttributes = (attributes: number): string => {
-  const normalized = attributes >>> 0;
-  const unknownBits = normalized & ~DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA;
-  const notes = (normalized & DELAY_IMPORT_ATTRIBUTE_DLATTR_RVA) !== 0
-    ? [
-        "dlattrRva set: MSVC delayimp.h / \"Understand the delay load helper function\" say this marks VC7+ delay descriptors whose fields are RVAs.",
-        "Microsoft's PE format page separately says the Delay-Load Attributes field must be zero, so the official docs conflict."
-      ]
-    : normalized === 0
-      ? [
-          "Value 0 matches the PE format page, which says the Delay-Load Attributes field must be zero.",
-          "MSVC delayimp.h / \"Understand the delay load helper function\" also define bit 0 as dlattrRva for VC7+ RVA-based descriptors, so Microsoft's own sources disagree here."
-        ]
-    : [
-        "dlattrRva is clear, but the value is not zero.",
-        "The PE format page says this field should be zero, while MSVC delayimp.h / \"Understand the delay load helper function\" reserve bit 0 for dlattrRva."
-      ];
-  if (unknownBits !== 0) {
-    notes.push(`Unknown or undocumented attribute bits remain set: ${hex(unknownBits, 8)}.`);
-  }
-  return `${hex(normalized, 8)}<div class="smallNote">${notes.map(escapeHtml).join("<br/>")}</div>`;
+export const formatBaseRelocationSummary = (count: number): string =>
+  `${count} parsed ${count === 1 ? "entry" : "entries"}`;
+
+const renderBaseRelocationRows = (reloc: PeRelocSection, out: string[]): void => {
+  out.push(`<p class="smallNote">The loader skips ABSOLUTE entries, which can pad a block. ` +
+    `Parsed entry counts include them. HIGHADJ uses two WORDs and counts as one entry.</p>`);
+  out.push(`<div class="tableWrap"><table class="table"><thead><tr>` +
+    `<th scope="col" class="num">#</th><th scope="col">Page RVA</th>` +
+    `<th scope="col" class="num">Block size</th><th scope="col" class="num">Parsed entries</th>` +
+    `<th scope="col" class="num">ABSOLUTE (no-op)</th></tr></thead><tbody>`);
+  reloc.blocks.forEach((block, index) => {
+    const absoluteEntries = block.entries.reduce((count, entry) =>
+      count + Number(entry.type === IMAGE_REL_BASED_ABSOLUTE), 0);
+    out.push(`<tr><td class="num">${index + 1}</td><td>${hex(block.pageRva, 8)}</td>` +
+      `<td class="num">${humanSize(block.size)}</td><td class="num">${block.count}</td>` +
+      `<td class="num">${absoluteEntries}</td></tr>`);
+  });
+  out.push(`</tbody></table></div>`);
 };
 
 export function renderReloc(reloc: PeRelocSection, out: string[]): void {
-  out.push(
-    renderPeSectionStart(
-      "Base relocations",
-      `${reloc.totalEntries ?? 0} entr${(reloc.totalEntries ?? 0) === 1 ? "y" : "ies"}`
-    )
-  );
+  out.push(renderPeSectionStart("Base relocations", formatBaseRelocationSummary(reloc.totalEntries)));
   if (reloc.warnings?.length) {
     out.push(renderPeDiagnostics("Base relocation warnings", reloc.warnings));
   }
-  if (reloc.blocks?.length) {
-    out.push(`<table class="table" style="margin-top:.35rem"><thead><tr><th>#</th><th>Page RVA</th><th>Block size</th><th>Entries</th></tr></thead><tbody>`);
-    reloc.blocks.forEach((block, index) => {
-      out.push(`<tr><td>${index + 1}</td><td>${hex(block.pageRva, 8)}</td><td>${humanSize(block.size)}</td><td>${block.count}</td></tr>`);
-    });
-    out.push(`</tbody></table>`);
-  }
+  if (reloc.blocks?.length) renderBaseRelocationRows(reloc, out);
   out.push(renderPeSectionEnd());
 }
 
@@ -134,7 +117,7 @@ export function renderDelayImports(di: PeDelayImportsSection, out: string[]): vo
     const fnCount = entry.functions?.length || 0;
     out.push(renderCollectionStart(`<b>${dll}</b> \u2014 ${fnCount} function(s)`, Math.max(1, fnCount)));
     out.push(`<dl style="margin-top:.35rem">`);
-    out.push(`<dt>Attributes</dt><dd>${renderDelayImportAttributes(entry.Attributes)}</dd>`);
+    out.push(renderDelayImportAddressFields(entry.Attributes));
     out.push(`<dt>ModuleHandleRVA</dt><dd>${hex(entry.ModuleHandleRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportAddressTableRVA</dt><dd>${hex(entry.ImportAddressTableRVA >>> 0, 8)}</dd>`);
     out.push(`<dt>ImportNameTableRVA</dt><dd>${hex(entry.ImportNameTableRVA >>> 0, 8)}</dd>`);

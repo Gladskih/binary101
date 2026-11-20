@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "../type-names.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./types.js";
 
 const validateDirectory = (
@@ -16,12 +17,12 @@ const validateDirectory = (
 
 export const validateFontReferences = (detail: ResourceDetailGroup[]): ResourceDetailGroup[] => {
   const fonts = new Map<number, ResourceLangWithPreview[]>();
-  for (const group of detail.filter(group => group.typeName === "FONT")) {
+  for (const group of detail.filter(group => resourceDecoderType(group) === "FONT")) {
     for (const entry of group.entries) {
       if (entry.id != null) fonts.set(entry.id, entry.langs);
     }
   }
-  return detail.map(group => group.typeName !== "FONTDIR" ? group : {
+  return detail.map(group => resourceDecoderType(group) !== "FONTDIR" ? group : {
     ...group, entries: group.entries.map(entry => ({
       ...entry, langs: entry.langs.map(lang => {
         const issues = validateDirectory(lang, fonts);

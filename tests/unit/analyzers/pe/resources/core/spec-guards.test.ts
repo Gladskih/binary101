@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { parseResources } from "../../../../../../analyzers/pe/resources/index.js";
 import { buildResourceTree } from "../../../../../../analyzers/pe/resources/core.js";
 import { MockFile } from "../../../../../helpers/mock-file.js";
 import {
@@ -9,7 +10,8 @@ import {
   IMAGE_RESOURCE_DATA_ENTRY_SIZE,
   IMAGE_RESOURCE_DIRECTORY_ENTRY_SIZE,
   IMAGE_RESOURCE_DIRECTORY_SIZE,
-  resourceNameString
+  resourceNameString,
+  resourceSubdirectory
 } from "../../../../../helpers/pe-resource-fixture.js";
 
 const FIXTURE_RESOURCE_RVA = 1;
@@ -230,4 +232,33 @@ void test("buildResourceTree warns when a resource name string offset is not wor
 
   assert.deepStrictEqual(tree.top, [{ typeName: generatedName, kind: "name", leafCount: 0 }]);
   assert.match((tree.issues || []).join(" "), /word-aligned|aligned/i);
+});
+
+void test("keeps numeric RT_DIALOG separate from a custom type named DIALOG", async () => {
+  const fixture = createResourceDirectoryFixture(0x100);
+  fixture.writeDirectory(0, 1, 1);
+  fixture.writeDirectoryEntry(0x10, resourceNameString(0xd0), resourceSubdirectory(0x20));
+  // RT_DIALOG is ordinal 5 in the Windows SDK WinUser.h.
+  fixture.writeDirectoryEntry(0x18, 5, resourceSubdirectory(0x38));
+  fixture.writeDirectory(0x20, 0, 1);
+  fixture.writeDirectoryEntry(0x30, 1, resourceSubdirectory(0x50));
+  fixture.writeDirectory(0x38, 0, 1);
+  fixture.writeDirectoryEntry(0x48, 1, resourceSubdirectory(0x68));
+  fixture.writeDirectory(0x50, 0, 1);
+  fixture.writeDirectoryEntry(0x60, 0x409, 0x80);
+  fixture.writeDirectory(0x68, 0, 1);
+  fixture.writeDirectoryEntry(0x78, 0x409, 0x90);
+  fixture.writeUtf16Label(0xd0, "DIALOG");
+  const text = new TextEncoder().encode("Custom text");
+  fixture.bytes.set(text, 0xe0);
+  fixture.writeDataEntry(0x80, 0xe1, text.length, 0);
+  fixture.writeDataEntry(0x90, 0xf1, 4, 0);
+
+  const parsed = await parseResources(new MockFile(fixture.bytes),
+    buildFixtureResourceDirectory(fixture.bytes.length), rva => rva - FIXTURE_RESOURCE_RVA);
+
+  assert.deepEqual(parsed?.detail.map(group => group.typeKey), ["DIALOG", 5]);
+  assert.deepEqual(parsed?.detail.map(group => group.entries.length), [1, 1]);
+  assert.equal(parsed?.detail[0]?.entries[0]?.langs[0]?.previewIssues, undefined);
+  assert.match(parsed?.detail[1]?.entries[0]?.langs[0]?.previewIssues?.join(" ") ?? "", /DIALOG/);
 });

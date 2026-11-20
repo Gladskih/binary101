@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "./type-names.js";
 import type { PeResources } from "./index.js";
 import type { ResourceCrossCheck } from "./resource-consistency.js";
 
@@ -13,7 +14,7 @@ const IMAGE_FILE_DLL = 0x2000;
 const versionChecks = (resources: PeResources, characteristics: number): ResourceCrossCheck[] => {
   const checks: ResourceCrossCheck[] = [];
   for (const group of resources.detail) {
-    if (group.typeName !== "VERSION") continue;
+    if (resourceDecoderType(group) !== "VERSION") continue;
     for (const entry of group.entries) for (const lang of entry.langs) {
       const fileType = lang.versionInfo?.fixedFileInfo?.fileType;
       const declared = versionTypes.get(fileType ?? -1);

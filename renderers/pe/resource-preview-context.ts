@@ -4,6 +4,7 @@ import { resolveResourceAlternatives, resourceAt } from "../../analyzers/pe/reso
 import type { ResourceLink } from "../../analyzers/pe/resources/resource-links.js";
 import { resolveImageGroupTarget } from "../../analyzers/pe/resources/preview/image-group-links.js";
 import { escapeHtmlText } from "../../html-utils.js";
+import { resourceDecoderType } from "../../analyzers/pe/resources/type-names.js";
 import type { PeResources } from "../../analyzers/pe/resources/index.js";
 import { indexResourceLeaves } from "../../analyzers/pe/resources/resource-index.js";
 import { collectResourceLinks } from "../../analyzers/pe/resources/resource-links.js";
@@ -42,11 +43,15 @@ export const getResourcePreviewModel = (resources: PeResources): Omit<ResourcePr
 export const resourceAnchor = (location: ResourceLocation): string =>
   `pe-resource-${location.group}-${location.entry}-${location.language}`;
 
+export const resourceGroupLabel = (group: PeResources["detail"][number]): string =>
+  group.typeName && typeof group.typeKey === "string" && !resourceDecoderType(group)
+    ? `${group.typeName} (named type)` : group.typeName || "(unknown)";
+
 export const resourceLocationLabel = (catalog: ResourceCatalog, location: ResourceLocation): string => {
   const group = catalog.detail[location.group];
   const entry = group?.entries[location.entry];
   if (!group || !entry) return "Resource (unavailable)";
-  return `${group.typeName} ${entry.name ?? `#${entry.id ?? "?"}`} / ` +
+  return `${resourceGroupLabel(group)} ${entry.name ?? `#${entry.id ?? "?"}`} / ` +
     `LANG ${entry.langs[location.language]?.lang ?? "neutral"}`;
 };
 
@@ -80,6 +85,11 @@ export const resolvedResourceImage = (
 const sameLocation = (left: ResourceLocation, right: ResourceLocation): boolean =>
   left.group === right.group && left.entry === right.entry && left.language === right.language;
 
+const formatResolution = (link: ResourceLink): string => {
+  if (link.resolution.kind !== "missing") return link.resolution.kind;
+  return link.targetKind === "string" ? "No nonempty string found in this file" : "Not present in this file";
+};
+
 export const renderResourceConnections = (context: ResourcePreviewContext): string => {
   const outgoing = context.outgoing ? context.outgoing.get(resourceAnchor(context.source)) ?? [] :
     context.links.filter(link => sameLocation(link.source, context.source));
@@ -90,7 +100,7 @@ export const renderResourceConnections = (context: ResourcePreviewContext): stri
     `${link.resolution.targets.map(target => resourceNavigationLink(context.catalog, target)).join(", ") ||
       escapeHtmlText(`${link.types.join(" / ")} ${typeof link.key === "number" ? "#" : ""}${link.key}`)}` +
     `</td><td>${link.evidence === "convention" ? "Convention; " : ""}` +
-    `${link.resolution.kind === "missing" ? "Not present in this file" : link.resolution.kind}</td></tr>`);
+    `${formatResolution(link)}</td></tr>`);
   rows.push(...incoming.map(link => `<tr><td>Used by: ${escapeHtmlText(link.relation)}</td>` +
     `<td>${resourceNavigationLink(context.catalog, link.source)}</td>` +
     `<td>${escapeHtmlText(link.resolution.kind)}</td></tr>`));

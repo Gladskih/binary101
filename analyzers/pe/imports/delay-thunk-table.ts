@@ -33,7 +33,8 @@ export type ReadDelayThunkFunctions = (
   importNameTableRva: number,
   warnings: Set<string>,
   maxThunkEntries: (entrySize: number) => number,
-  decodeName?: DecodeImportFunctionName
+  decodeName?: DecodeImportFunctionName,
+  rebaseName?: (address: bigint) => number
 ) => Promise<DelayThunkTable>;
 
 const readDelayImportHintName = async (
@@ -77,7 +78,8 @@ export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
   importNameTableRva,
   warnings,
   maxThunkEntries,
-  decodeName = createImportFunctionNameDecoder(message => warnings.add(message))
+  decodeName = createImportFunctionNameDecoder(message => warnings.add(message)),
+  rebaseName
 ) => {
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA32_SIZE); index += 1) {
@@ -101,7 +103,10 @@ export const readDelayThunkFunctions32: ReadDelayThunkFunctions = async (
       functions.push({ ordinal: value & IMAGE_ORDINAL_MASK32 });
       continue;
     }
-    functions.push(await readDelayImportHintName(reader, rvaToOff, value, warnings, decodeName));
+    const hintNameRva = rebaseName ? rebaseName(BigInt(value)) : value;
+    functions.push(hintNameRva
+      ? await readDelayImportHintName(reader, rvaToOff, hintNameRva, warnings, decodeName)
+      : { name: "" });
   }
   return { functions, terminated: false };
 };
@@ -112,7 +117,8 @@ export const readDelayThunkFunctions64: ReadDelayThunkFunctions = async (
   importNameTableRva,
   warnings,
   maxThunkEntries,
-  decodeName = createImportFunctionNameDecoder(message => warnings.add(message))
+  decodeName = createImportFunctionNameDecoder(message => warnings.add(message)),
+  rebaseName
 ) => {
   const functions: PeDelayImportFunction[] = [];
   for (let index = 0; index < maxThunkEntries(IMAGE_THUNK_DATA64_SIZE); index += 1) {
@@ -136,18 +142,13 @@ export const readDelayThunkFunctions64: ReadDelayThunkFunctions = async (
       functions.push({ ordinal: Number(value & IMAGE_ORDINAL_MASK64) });
       continue;
     }
-    if ((value & IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64) !== 0n) {
+    if (!rebaseName && (value & IMAGE_DELAY_IMPORT_NAME_RESERVED_MASK64) !== 0n) {
       warnings.add("Delay import name thunk has reserved bits set.");
     }
-    functions.push(
-      await readDelayImportHintName(
-        reader,
-        rvaToOff,
-        Number(value & IMAGE_DELAY_IMPORT_NAME_MASK64),
-        warnings,
-        decodeName
-      )
-    );
+    const hintNameRva = rebaseName ? rebaseName(value) : Number(value & IMAGE_DELAY_IMPORT_NAME_MASK64);
+    functions.push(hintNameRva || !rebaseName
+      ? await readDelayImportHintName(reader, rvaToOff, hintNameRva, warnings, decodeName)
+      : { name: "" });
   }
   return { functions, terminated: false };
 };

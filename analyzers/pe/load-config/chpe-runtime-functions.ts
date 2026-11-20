@@ -1,12 +1,13 @@
 "use strict";
 
+import { AMD64_RUNTIME_FUNCTION_ENTRY_SIZE } from "../exception/amd64/directory.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import {
   addReferenceMessage,
   readMappedReferenceTable,
   type PeRvaMapping
 } from "./reference-reader.js";
-import type { PeArm64RuntimeFunctionEntry } from "./reference-types.js";
+import type { PeArm64RuntimeFunctionEntry, PeX64RuntimeFunctionEntry } from "./reference-types.js";
 
 // Microsoft ARM64 exception handling, ".pdata records" and "Packed unwind data".
 // https://learn.microsoft.com/en-us/cpp/build/arm64-exception-handling?view=msvc-170
@@ -54,6 +55,20 @@ const decodeEntry = (view: DataView, offset: number): PeArm64RuntimeFunctionEntr
   };
 };
 
+const readExtraRuntimeFunctionTable = async (
+  reader: FileRangeReader, mapping: PeRvaMapping, warnings: string[], notes: string[],
+  tableRva: number, byteSize: number, entrySize: number
+) => {
+  if (byteSize % entrySize !== 0) {
+    addReferenceMessage(warnings,
+      `LOAD_CONFIG: CHPE ExtraRFETableSize ${byteSize} is not divisible by ${entrySize}.`);
+  }
+  const count = Math.floor(byteSize / entrySize);
+  return { count, view: await readMappedReferenceTable(
+    reader, mapping, warnings, notes, "CHPE ExtraRFETable", tableRva, count, entrySize
+  ) };
+};
+
 export const parseChpeRuntimeFunctions = async (
   reader: FileRangeReader,
   mapping: PeRvaMapping,
@@ -62,14 +77,26 @@ export const parseChpeRuntimeFunctions = async (
   tableRva: number,
   byteSize: number
 ): Promise<PeArm64RuntimeFunctionEntry[]> => {
-  if (byteSize % ENTRY_SIZE !== 0) {
-    addReferenceMessage(warnings,
-      `LOAD_CONFIG: CHPE ExtraRFETableSize ${byteSize} is not divisible by ${ENTRY_SIZE}.`);
-  }
-  const count = Math.floor(byteSize / ENTRY_SIZE);
-  const view = await readMappedReferenceTable(
-    reader, mapping, warnings, notes, "CHPE ExtraRFETable", tableRva, count, ENTRY_SIZE
+  const { view, count } = await readExtraRuntimeFunctionTable(
+    reader, mapping, warnings, notes, tableRva, byteSize, ENTRY_SIZE
+  );
+  return view ? Array.from({ length: count }, (_, index) => decodeEntry(view, index * ENTRY_SIZE)) : [];
+};
+
+export const parseChpeX64RuntimeFunctions = async (
+  reader: FileRangeReader, mapping: PeRvaMapping, warnings: string[], notes: string[],
+  tableRva: number, byteSize: number
+): Promise<PeX64RuntimeFunctionEntry[]> => {
+  const { view, count } = await readExtraRuntimeFunctionTable(
+    reader, mapping, warnings, notes, tableRva, byteSize, AMD64_RUNTIME_FUNCTION_ENTRY_SIZE
   );
   if (!view) return [];
-  return Array.from({ length: count }, (_, index) => decodeEntry(view, index * ENTRY_SIZE));
+  return Array.from({ length: count }, (_, index) => {
+    const offset = index * AMD64_RUNTIME_FUNCTION_ENTRY_SIZE;
+    return {
+      beginRva: view.getUint32(offset, true),
+      endRva: view.getUint32(offset + 4, true),
+      unwindData: view.getUint32(offset + 8, true)
+    };
+  });
 };

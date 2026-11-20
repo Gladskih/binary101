@@ -1,5 +1,6 @@
 "use strict";
 
+import { resourceDecoderType } from "../type-names.js";
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./types.js";
 
 export interface ResourceLeafRecord {
@@ -16,7 +17,7 @@ export const buildResourceLeafIndex = (
   typeName: string
 ): ResourceLeafIndex => {
   const index = new Map<number, ResourceLeafRecord[]>();
-  const group = detail.find(entry => entry.typeName === typeName);
+  const group = detail.find(entry => resourceDecoderType(entry) === typeName);
   if (!group) return index;
   for (const entry of group.entries) {
     if (entry.id == null) continue;

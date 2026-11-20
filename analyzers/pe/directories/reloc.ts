@@ -4,12 +4,13 @@ import { readMappedRvaPrefix } from "../rva-byte-reader.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import type { PeDataDirectory, RvaToOffset } from "../types.js";
 
-const IMAGE_REL_BASED_RESERVED = 6;
-const IMAGE_REL_BASED_HIGHADJ = 4;
-export const IMAGE_REL_BASED_DIR64 = 10;
 // Microsoft PE "Base Relocation Types" and "Base Relocation Block":
 // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#base-relocation-types
+export const IMAGE_REL_BASED_ABSOLUTE = 0;
 export const IMAGE_REL_BASED_HIGHLOW = 3;
+const IMAGE_REL_BASED_HIGHADJ = 4;
+const IMAGE_REL_BASED_RESERVED = 6;
+export const IMAGE_REL_BASED_DIR64 = 10;
 export const BASE_RELOCATION_PAGE_SIZE = 0x1000;
 // Microsoft PE/COFF: IMAGE_BASE_RELOCATION consists of an 8-byte header followed by WORD entries.
 const IMAGE_BASE_RELOCATION_HEADER_SIZE = 8;
@@ -18,6 +19,8 @@ const IMAGE_BASE_RELOCATION_ENTRY_SIZE = Uint16Array.BYTES_PER_ELEMENT;
 export interface PeBaseRelocationEntry {
   type: number;
   offset: number;
+  /** Uninterpreted low 16 bits stored in the WORD following HIGHADJ, when readable. */
+  highAdjLowWord?: number;
 }
 
 export interface PeBaseRelocationBlock {
@@ -38,18 +41,23 @@ const parseRelocationEntries = async (
   addWarning: (message: string) => void
 ): Promise<PeBaseRelocationEntry[]> => {
   const entries: PeBaseRelocationEntry[] = [];
-  let skipPayload = false;
+  let pendingHighAdj: PeBaseRelocationEntry | undefined;
   for (let index = 0; index < wordCount;) {
     // Bound temporary memory to the shared reader's 64 KiB window.
     const requestedWords = Math.min(wordCount - index, 32768);
     const view = await readMappedRvaPrefix(reader, rva + index * 2, requestedWords * 2, rvaToOff);
     for (let offset = 0; offset + 2 <= view.byteLength; offset += 2) {
-      if (skipPayload) { skipPayload = false; continue; }
       const raw = view.getUint16(offset, true);
+      if (pendingHighAdj) {
+        pendingHighAdj.highAdjLowWord = raw;
+        pendingHighAdj = undefined;
+        continue;
+      }
       const type = raw >>> 12;
       if (type === IMAGE_REL_BASED_RESERVED) addWarning("Base relocation entry uses reserved type 6.");
-      entries.push({ type, offset: raw & 0xfff });
-      skipPayload = type === IMAGE_REL_BASED_HIGHADJ;
+      const entry: PeBaseRelocationEntry = { type, offset: raw & 0xfff };
+      entries.push(entry);
+      if (type === IMAGE_REL_BASED_HIGHADJ) pendingHighAdj = entry;
     }
     if (view.byteLength < requestedWords * 2) {
       addWarning("Base relocation entries are truncated or no longer map to file data.");
@@ -57,7 +65,7 @@ const parseRelocationEntries = async (
     }
     index += requestedWords;
   }
-  if (skipPayload) addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
+  if (pendingHighAdj) addWarning("Base relocation HIGHADJ entry is missing its second WORD payload.");
   return entries;
 };
 

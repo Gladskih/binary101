@@ -50,7 +50,7 @@ export const writeDelayImportDescriptor = (
 ): void => {
   view.setUint32(
     descriptorOffset + DELAYLOAD_DESCRIPTOR_FIELD_OFFSET.attributes,
-    fields.attributes ?? 0,
+    fields.attributes ?? 1,
     true
   );
   view.setUint32(

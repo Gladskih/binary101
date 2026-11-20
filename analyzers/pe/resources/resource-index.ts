@@ -1,4 +1,5 @@
 import type { ResourceDetailGroup, ResourceLangWithPreview } from "./preview/types.js";
+import { resourceTypeReferenceKey } from "./type-names.js";
 
 export interface ResourceLocation { group: number; entry: number; language: number }
 export interface ResourceCatalog {
@@ -11,26 +12,29 @@ export interface ResourceResolution {
   targets: ResourceLocation[];
 }
 
-const key = (type: string, name: number | string): string => JSON.stringify([type, name]);
+const key = (type: number | string, name: number | string): string => JSON.stringify([type, name]);
 
 export const indexResourceLeaves = (detail: ResourceDetailGroup[]): ResourceCatalog => {
   const byKey = new Map<string, ResourceLocation[]>();
   const byContent = new Map<string, ResourceLocation[]>();
   detail.forEach((group, groupIndex) => group.entries.forEach((entry, entryIndex) => {
     const name = entry.name ?? entry.id;
-    if (name === null) return;
-    const locations = byKey.get(key(group.typeName, name)) ?? [];
+    if (name === null || group.typeKey === null) return;
+    const type = group.typeKey ?? resourceTypeReferenceKey(group.typeName);
+    const locations = byKey.get(key(type, name)) ?? [];
     entry.langs.forEach((leaf, language) => {
       const location = { group: groupIndex, entry: entryIndex, language };
       locations.push(location);
-      for (const item of [...(leaf.stringTable ?? []), ...(leaf.messageTable?.messages ?? [])]) {
+      // Empty STRING slots can represent either absent or zero-length strings.
+      const strings = (leaf.stringTable ?? []).filter(item => item.text.length > 0);
+      for (const item of [...strings, ...(leaf.messageTable?.messages ?? [])]) {
         if (item.id === null) continue;
-        const contentKey = key(group.typeName, item.id);
+        const contentKey = key(type, item.id);
         const contents = byContent.get(contentKey) ?? [];
         contents.push(location); byContent.set(contentKey, contents);
       }
     });
-    byKey.set(key(group.typeName, name), locations);
+    byKey.set(key(type, name), locations);
   }));
   return { detail, byKey, byContent };
 };
@@ -57,11 +61,13 @@ const resolveLanguage = (
 
 export const resolveResourceReference = (
   catalog: ResourceCatalog, type: string, name: number | string, language: number | null
-): ResourceResolution => resolveLanguage(catalog, catalog.byKey.get(key(type, name)) ?? [], language);
+): ResourceResolution => resolveLanguage(catalog,
+  catalog.byKey.get(key(resourceTypeReferenceKey(type), name)) ?? [], language);
 
 export const resolveResourceContent = (
   catalog: ResourceCatalog, type: "STRING" | "MESSAGETABLE", id: number, language: number | null
-): ResourceResolution => resolveLanguage(catalog, catalog.byContent.get(key(type, id)) ?? [], language);
+): ResourceResolution => resolveLanguage(catalog,
+  catalog.byContent.get(key(resourceTypeReferenceKey(type), id)) ?? [], language);
 
 export const resolveResourceAlternatives = (catalog: ResourceCatalog, types: string[],
   name: number | string, language: number | null): ResourceResolution => {

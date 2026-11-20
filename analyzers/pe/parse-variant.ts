@@ -34,7 +34,8 @@ export const selectPeVariantParsers = (
           parseLoadConfigDirectory64,
           parseDynamicRelocationsFromLoadConfig64,
           null,
-          PE32_PLUS_POINTER_BYTES
+          PE32_PLUS_POINTER_BYTES,
+          canonicalMachine
         ),
         parseImportDirectory: parseImportDirectory64,
         parseTlsDirectory: parseTlsDirectory64,

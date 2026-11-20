@@ -4,6 +4,7 @@ import type { FileRangeReader } from "../../../file-range-reader.js";
 import { addBitmapPreview } from "./bitmap.js";
 import { addCursorPreview } from "./cursor.js";
 import { addImageGroupPreview } from "./image-group.js";
+import { resourceDecoderType } from "../type-names.js";
 import { collectResourceLinks } from "../resource-links.js";
 import { linkImageGroupPreviews } from "./image-group-links.js";
 import { deferLargeResourceMedia } from "./deferred-media.js";
@@ -176,16 +177,17 @@ const decodeDetailPreviews = async (
   const readRegistry = createRegistryResourceReader(reader);
   const decoded: ResourceGroupPreviewDecode[] = [];
   for (const group of detail) {
+    const groupType = resourceDecoderType(group);
     const entries: ResourceGroupPreviewDecode = [];
     for (const entry of group.entries) {
       const languages: ResourceEntryPreviewDecode = [];
       for (const langEntry of entry.langs) {
-        languages.push(await (isRegistryResource(group.typeName) ||
-          (group.typeName === "RCDATA" && entry.name?.toLowerCase().endsWith(".rgs"))
+        languages.push(await (isRegistryResource(groupType) ||
+          (groupType === "RCDATA" && entry.name?.toLowerCase().endsWith(".rgs"))
           ? readRegistry(langEntry as ResourceLangWithPreview)
           : decodeResourceLeafPreview(
           reader,
-          group.typeName,
+          groupType,
           entry.id,
           langEntry as ResourceLangWithPreview,
           muiResource,

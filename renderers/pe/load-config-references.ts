@@ -126,11 +126,13 @@ const renderChpeMetadata = (references: PeLoadConfigReferences): string => {
   const runtimeFunctions = renderReferenceTable(
     references, LOAD_CONFIG_REFERENCE_TABLE_IDS.chpeRuntimeFunctions
   );
+  const runtimeArchitecture = metadata.kind === "arm64ec" && metadata.extraX64RuntimeFunctions
+    ? "x64" : "ARM64";
   return `<h4>CHPE metadata</h4>${renderRows(rows)}` +
     `${codeMap ? `<h5>Code map</h5>${codeMap}` : ""}` +
     `${entryPoints ? `<h5>Code ranges to entry points</h5>${entryPoints}` : ""}` +
     `${redirections ? `<h5>Redirections</h5>${redirections}` : ""}` +
-    `${runtimeFunctions ? `<h5>Extra ARM64 runtime functions</h5>${runtimeFunctions}` : ""}`;
+    `${runtimeFunctions ? `<h5>Extra ${runtimeArchitecture} runtime functions</h5>${runtimeFunctions}` : ""}`;
 };
 
 const renderEnclaveConfiguration = (references: PeLoadConfigReferences, pointerWidth: number): string => {

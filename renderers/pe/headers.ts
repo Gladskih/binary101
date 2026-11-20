@@ -11,7 +11,8 @@ import {
   CHAR_FLAGS,
   DLL_FLAGS
 } from "../../analyzers/pe/constants.js";
-import type { PeParseResult } from "../../analyzers/pe/index.js";
+import { isPeWindowsParseResult, type PeParseResult } from "../../analyzers/pe/index.js";
+import { IMAGE_DEBUG_TYPE_REPRO } from "../../analyzers/pe/debug/types.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
@@ -34,8 +35,8 @@ const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
   EXPORT: "Function addresses and names exported by the image.",
   IMPORT: "Modules and symbols that this image depends on at load time.",
   RESOURCE: "Version, icons, dialogs, manifests, and other embedded data.",
-  EXCEPTION: "Unwind info for x64 structured exception handling.",
-  SECURITY: "WIN_CERTIFICATE / Authenticode signatures, stored outside mapped image.",
+  EXCEPTION: "Architecture-specific function records used for exception handling and unwinding.",
+  SECURITY: "Embedded WIN_CERTIFICATE records stored outside the mapped image.",
   BASERELOC: "Fixups applied when image is not loaded at preferred base.",
   DEBUG: "CodeView/RSDS pointers to PDBs and other debug records.",
   ARCHITECTURE: "Reserved slot; should be zero by the PE specification.",
@@ -54,7 +55,7 @@ const dataDirectoryMeaning = (name: string): string =>
 
 const renderDataDirectoryStatus = (present: boolean): string =>
   `<span class="peDataDirectoryStatus peDataDirectoryStatus--${present ? "present" : "absent"}" ` +
-  `aria-label="${present ? "Present" : "Absent"}" title="${present ? "Present" : "Absent"}"></span>`;
+  `aria-label="${present ? "Declared" : "Absent"}" title="${present ? "Declared" : "Absent"}"></span>`;
 
 const renderDataDirectorySize = (size: number): string =>
   `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
@@ -67,7 +68,7 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   out.push(
     renderPeSectionStart(
       "Data directories",
-      `${presentCount} present, ${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
+      `${presentCount} declared, ${pe.dirs.length} entr${pe.dirs.length === 1 ? "y" : "ies"}`
     )
   );
   out.push(
@@ -76,7 +77,7 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
     `<th class="peDataDirectoryTable__status" aria-label="Status"></th>` +
     `<th class="peDataDirectoryTable__index">#</th>` +
     `<th class="peDataDirectoryTable__directory">Directory</th>` +
-    `<th class="peDataDirectoryTable__rva">RVA</th>` +
+    `<th class="peDataDirectoryTable__rva">Address</th>` +
     `<th class="peDataDirectoryTable__size">Size</th>` +
     `<th class="peDataDirectoryTable__meaning">Meaning</th>` +
     `</tr></thead><tbody>`
@@ -84,6 +85,7 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   pe.dirs.forEach(directory => {
     const present = directory.rva !== 0 || directory.size !== 0;
     const meaning = dataDirectoryMeaning(directory.name);
+    const addressKind = directory.name === "SECURITY" ? "File offset" : "RVA";
     out.push(
       `<tr class="peDataDirectoryTable__row${
         present ? "" : " peDataDirectoryTable__row--absent"
@@ -95,7 +97,7 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
       `<th scope="row" class="peDataDirectoryTable__directory" ` +
       `data-sort-value="${escapeHtml(directory.name)}">${escapeHtml(directory.name)}</th>` +
       `<td class="peNumeric peDataDirectoryTable__rva" data-sort-value="${directory.rva}">` +
-      `${hex(directory.rva, 8)}</td>` +
+      `${hex(directory.rva, 8)} <span class="smallNote">${addressKind}</span></td>` +
       `<td class="peNumeric peDataDirectoryTable__size peDataDirectorySize" ` +
       `data-sort-value="${directory.size}">` +
       `${renderDataDirectorySize(directory.size)}</td>` +
@@ -149,6 +151,23 @@ const renderChecksumHtml = (checkSum: number): string => [
   `</div>`
 ].join("");
 
+const renderCoffTimestamp = (pe: PeParseResult): string => {
+  const raw = hex(pe.coff.TimeDateStamp, 8);
+  // .NET PE/COFF Specification Addendum, "Deterministic PE/COFF File".
+  // https://github.com/dotnet/runtime/blob/main/docs/design/specs/PE-COFF.md
+  if (isPeWindowsParseResult(pe) &&
+      pe.debug?.entries?.some(entry => entry.type === IMAGE_DEBUG_TYPE_REPRO)) {
+    return renderDefinitionRow("TimeDateStamp", raw,
+      "The REPRO debug marker indicates a reproducible build. Read this value as a build stamp.");
+  }
+  // Microsoft PE Format, "General Concepts", defines both values as no timestamp.
+  if (pe.coff.TimeDateStamp === 0 || pe.coff.TimeDateStamp === 0xffffffff) {
+    return renderDefinitionRow("TimeDateStamp", `${raw} (no timestamp)`);
+  }
+  return renderDefinitionRow("TimeDateStamp", `${raw} (${isoOrDash(pe.coff.TimeDateStamp)})`,
+    "Raw COFF stamp and its interpretation as Unix seconds. Some toolchains store a build stamp.");
+};
+
 export function renderHeaders(pe: PeParseResult, out: string[]): void {
   renderDosHeader(pe, out);
 
@@ -161,7 +180,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
   out.push(`<dl>`);
   renderMachineRows(pe, out);
   out.push(renderDefinitionRow("NumberOfSections", `${pe.coff.NumberOfSections}`, "Number of section headers that immediately follow the optional header."));
-  out.push(renderDefinitionRow("TimeDateStamp", isoOrDash(pe.coff.TimeDateStamp), "Link time as Unix epoch. Toolchains sometimes set this to reproducible values."));
+  out.push(renderCoffTimestamp(pe));
   out.push(renderDefinitionRow("PointerToSymbolTable", hex(pe.coff.PointerToSymbolTable, 8), "COFF symbol table pointer (deprecated, usually 0)."));
   out.push(renderDefinitionRow("NumberOfSymbols", String(pe.coff.NumberOfSymbols), "COFF symbol count (deprecated)."));
   out.push(renderDefinitionRow("SizeOfOptionalHeader", `${pe.coff.SizeOfOptionalHeader} bytes`, "Size of the optional header (standard + Windows-specific)."));
@@ -170,7 +189,8 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
 
   const oh = pe.opt;
   const entrySectionInfo = pe.entrySection
-    ? `Usually points into section ${pe.entrySection.name || "(unnamed)"} (index ${pe.entrySection.index}).`
+    ? `Entry-point RVA falls in section ${pe.entrySection.name || "(unnamed)"} ` +
+      `(index ${pe.entrySection.index}).`
     : "Should point into one of the mapped code sections.";
   out.push(renderInlineHeaderTitle("Optional header"));
   out.push(`<dl>`);
@@ -213,7 +233,7 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
       hex(oh.AddressOfEntryPoint, 8),
       oh.Magic === ROM_OPTIONAL_HEADER_MAGIC
         ? "Entry-point address stored in IMAGE_ROM_OPTIONAL_HEADER."
-        : "RVA of entry point. Zero for DLLs without a preferred entry."
+        : "RVA of the image entry point. Zero means the image has no entry point."
     )
   );
   out.push(renderDefinitionRow("EntrySection", pe.entrySection ? escapeHtml(pe.entrySection.name || "(unnamed)") : "-", entrySectionInfo));

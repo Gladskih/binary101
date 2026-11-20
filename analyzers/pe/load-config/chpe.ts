@@ -1,5 +1,6 @@
 "use strict";
 
+import { IMAGE_FILE_MACHINE_ARM64, IMAGE_FILE_MACHINE_ARM64X } from "../../coff/machine.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
 import {
   addReferenceMessage,
@@ -18,7 +19,7 @@ import type {
   PeChpeRedirection,
   PeChpeX86Metadata
 } from "./reference-types.js";
-import { parseChpeRuntimeFunctions } from "./chpe-runtime-functions.js";
+import { parseChpeRuntimeFunctions, parseChpeX64RuntimeFunctions } from "./chpe-runtime-functions.js";
 
 // LLVM's upstream COFF definitions provide the ARM64EC metadata fields, entry
 // layouts, v2 extension, and low-bit range type encoding used below.
@@ -185,7 +186,8 @@ const parseArm64EcMetadata = async (
   mapping: PeRvaMapping,
   warnings: string[],
   notes: string[],
-  rva: number
+  rva: number,
+  machine?: number
 ): Promise<PeChpeArm64EcMetadata | null> => {
   const initialView = await readMappedReferenceView(
     reader, mapping, warnings, notes, "CHPE ARM64EC metadata", rva, ARM64EC_V1_SIZE
@@ -204,18 +206,27 @@ const parseArm64EcMetadata = async (
   [
     metadata.codeMap,
     metadata.entryPointRanges,
-    metadata.redirections,
-    metadata.extraRfeEntries
+    metadata.redirections
   ] = await Promise.all([
     readArm64EcCodeMap(reader, mapping, warnings, notes, metadata.codeMapRva, metadata.codeMapCount),
     readEntryPointRanges(reader, mapping, warnings, notes, metadata.codeRangesToEntryPointsRva,
       metadata.codeRangesToEntryPointsCount),
     readRedirections(reader, mapping, warnings, notes, metadata.redirectionMetadataRva,
-      metadata.redirectionMetadataCount),
-    parseChpeRuntimeFunctions(
-      reader, mapping, warnings, notes, metadata.extraRfeTableRva, metadata.extraRfeTableSize
-    )
+      metadata.redirectionMetadataCount)
   ]);
+  // LLD stores x64 .pdata in the original ARM64X view and ARM64 .pdata in the EC view.
+  // https://github.com/llvm/llvm-project/blob/main/lld/COFF/Writer.cpp#L2371-L2377
+  // A raw ARM64 image with CHPE metadata is the native view of ARM64X.
+  // https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/Object/COFF.h#L887-L897
+  if (machine === IMAGE_FILE_MACHINE_ARM64 || machine === IMAGE_FILE_MACHINE_ARM64X) {
+    metadata.extraX64RuntimeFunctions = await parseChpeX64RuntimeFunctions(
+      reader, mapping, warnings, notes, metadata.extraRfeTableRva, metadata.extraRfeTableSize
+    );
+  } else {
+    metadata.extraRfeEntries = await parseChpeRuntimeFunctions(
+      reader, mapping, warnings, notes, metadata.extraRfeTableRva, metadata.extraRfeTableSize
+    );
+  }
   return metadata;
 };
 
@@ -271,11 +282,12 @@ export const parseChpeMetadata = async (
   pointerBytes: PePointerBytes,
   warnings: string[],
   notes: string[],
-  pointerVa: bigint
+  pointerVa: bigint,
+  machine?: number
 ): Promise<PeChpeMetadata | null> => {
   const rva = referencePointerRva(imageBase, warnings, "CHPEMetadataPointer", pointerVa);
   if (rva == null) return null;
   return pointerBytes === PE32_POINTER_BYTES
     ? parseX86Metadata(reader, mapping, warnings, notes, rva)
-    : parseArm64EcMetadata(reader, mapping, warnings, notes, rva);
+    : parseArm64EcMetadata(reader, mapping, warnings, notes, rva, machine);
 };

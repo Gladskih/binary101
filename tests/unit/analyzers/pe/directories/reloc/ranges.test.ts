@@ -52,8 +52,23 @@ void test("HIGHADJ consumes its payload across the bounded read window", async (
   const parsed = await parseBaseRelocations(new MockFile(bytes),
     [{ name: "BASERELOC", rva: 0x1000, size: bytes.length }], rva => rva - 0x1000);
   assert.equal(parsed?.totalEntries, 32769);
-  assert.deepEqual(parsed?.blocks[0]?.entries.slice(-2), [{ type: 4, offset: 1 }, { type: 3, offset: 2 }]);
+  assert.deepEqual(parsed?.blocks[0]?.entries.slice(-2), [
+    { type: 4, offset: 1, highAdjLowWord: 0x6000 }, { type: 3, offset: 2 }
+  ]);
   assert.equal(parsed?.warnings, undefined);
+});
+
+void test("HIGHADJ preserves a zero low WORD as an operand", async () => {
+  const bytes = relocationFile();
+  const view = new DataView(bytes.buffer);
+  // PE base relocation types: the WORD after HIGHADJ is data even when it looks like ABSOLUTE.
+  view.setUint16(24, 0x4001, true);
+  view.setUint16(26, 0, true);
+  const parsed = await parseBaseRelocations(new MockFile(bytes),
+    [{ name: "BASERELOC", rva: 16, size: 12 }], rva => rva);
+
+  assert.deepEqual(parsed?.blocks[0]?.entries, [{ type: 4, offset: 1, highAdjLowWord: 0 }]);
+  assert.equal(parsed?.totalEntries, 1);
 });
 
 void test("a trailing HIGHADJ reports the missing payload without losing the entry", async () => {

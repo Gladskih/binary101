@@ -177,33 +177,6 @@ void test("parseDelayImports handles truncated hint/name strings", async () => {
   assert.ok(definedResult.warning?.toLowerCase().includes("name string truncated"));
 });
 
-void test("parseDelayImports treats descriptor fields as RVA when Attributes is zero", async () => {
-  const layout = createDelayImportLayout(0x40);
-  const descriptorOffset = layout.reserve(IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2);
-  const dllNameRva = layout.reserve("kernel32.dll".length + 1);
-  const intRva = layout.reserve(IMAGE_THUNK_DATA32_SIZE * 2);
-  const hintNameRva = layout.reserve(imageImportByNameSize("Func"));
-  const bytes = new Uint8Array(layout.size()).fill(0);
-  const dv = new DataView(bytes.buffer);
-  writeDelayImportDescriptor(dv, descriptorOffset, {
-    dllNameRva,
-    importNameTableRva: intRva
-  });
-  writeThunkTable32(dv, intRva, [hintNameRva, 0]);
-  writeImportByName(bytes, dv, hintNameRva, 0x10, "Func");
-  writeDelayImportName(bytes, dllNameRva, "kernel32.dll");
-
-  const result = await parseDelayImports32(
-    new MockFile(bytes),
-    [{ name: "DELAY_IMPORT", rva: descriptorOffset, size: IMAGE_DELAYLOAD_DESCRIPTOR_SIZE * 2 }],
-    value => value
-  );
-
-  const definedResult = expectDefined(result);
-  const entry = expectDefined(definedResult.entries[0]);
-  assert.deepEqual(entry.functions, [{ hint: 0x10, name: "Func" }]);
-});
-
 void test("parseDelayImports warns when a mapped DLL name offset falls past EOF", async () => {
   const bytes = new Uint8Array(128).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -278,7 +251,7 @@ void test("parseDelayImports warns when Delay-Load Attributes set unknown bits",
   const dllNameRva = 0x60;
   const thunkTableRva = 0x70;
   writeDelayImportDescriptor(dv, descriptorOffset, {
-    attributes: 0x2,
+    attributes: 0x3, // RvaBased plus one reserved bit.
     dllNameRva,
     importNameTableRva: thunkTableRva
   });
