@@ -90,57 +90,6 @@ void test("parseElfNotes reports truncated note payloads", async () => {
   assert.ok(notes.issues.some(issue => issue.includes("truncated")));
 });
 
-void test("parseElfNotes deduplicates notes when PT_NOTE overlaps SHT_NOTE ranges", async () => {
-  const bytes = new Uint8Array(0x40).fill(0);
-  const dv = new DataView(bytes.buffer);
-
-  dv.setUint32(0x00, 4, true);
-  dv.setUint32(0x04, 4, true);
-  dv.setUint32(0x08, 3, true);
-  bytes.set(new TextEncoder().encode("GNU\0"), 0x0c);
-  bytes.set([0x11, 0x22, 0x33, 0x44], 0x10);
-
-  dv.setUint32(0x14, 4, true);
-  dv.setUint32(0x18, 16, true);
-  dv.setUint32(0x1c, 1, true);
-  bytes.set(new TextEncoder().encode("GNU\0"), 0x20);
-  dv.setUint32(0x24, 0, true);
-  dv.setUint32(0x28, 1, true);
-  dv.setUint32(0x2c, 2, true);
-  dv.setUint32(0x30, 3, true);
-
-  const file = new MockFile(bytes, "overlap-notes.bin", "application/x-elf");
-  const notes = await parseElfNotes({
-    file,
-    programHeaders: [
-      {
-        type: 4,
-        typeName: "PT_NOTE",
-        offset: 0n,
-        vaddr: 0n,
-        paddr: 0n,
-        filesz: 0x34n,
-        memsz: 0x34n,
-        flags: 0,
-        flagNames: [],
-        align: 4n,
-        index: 0
-      } as ElfProgramHeader
-    ],
-    sections: [
-      makeSection({ type: 7, name: ".note.gnu.build-id", offset: 0n, size: 0x14n, index: 0 }),
-      makeSection({ type: 7, name: ".note.gnu.abi-tag", offset: 0x14n, size: 0x20n, index: 1 })
-    ],
-    littleEndian: true
-  });
-
-  assert.ok(notes);
-  assert.equal(notes.entries.length, 2);
-  assert.equal(
-    notes.entries.filter(entry => entry.typeName === "NT_GNU_BUILD_ID").length,
-    1
-  );
-});
 void test("rejects note ranges outside the file or safe integer space", async () => {
   const parsed = await parseElfNotes({ file: new File([new Uint8Array(16)], "note-ranges"),
     programHeaders: [], littleEndian: true, sections: [
@@ -169,9 +118,11 @@ void test("preserves complete note records, padding and empty headers at the exa
     sections: [makeSection({ type: 7, size: 32n, index: 7 }),
       makeSection({ type: 7, size: 32n, name: "duplicate" }), makeSection({ type: 1, size: 32n })] });
   assert.deepEqual(parsed, { issues: [], entries: [
-    { source: "SHT_NOTE section #7", name: "GNU", type: 3, typeName: "NT_GNU_BUILD_ID",
+    { source: "SHT_NOTE section #7", sourceAliases: ["Section \"duplicate\""],
+      name: "GNU", type: 3, typeName: "NT_GNU_BUILD_ID",
       description: "GNU build ID", value: "abcdef", descSize: 3 },
-    { source: "SHT_NOTE section #7", name: "", type: 0, typeName: null,
+    { source: "SHT_NOTE section #7", sourceAliases: ["Section \"duplicate\""],
+      name: "", type: 0, typeName: null,
       description: null, value: null, descSize: 0 }
   ] });
 });
@@ -189,6 +140,33 @@ void test("discovers notes through program headers and ignores unrelated or empt
   assert.deepEqual(parsed?.issues, []);
   assert.equal(await parseElfNotes({ file: bigEndianNotes(), littleEndian: false,
     programHeaders: [noteSegment(1, 32n)], sections: [makeSection({ type: 7, size: 0n })] }), null);
+});
+
+const propertyThenEmptyNote = () => {
+  // glibc elf.h: NT_GNU_PROPERTY_TYPE_0 (5) may hold GNU_PROPERTY_NO_COPY_ON_PROTECTED
+  // (2) with an empty property payload. The empty second note belongs only to PT_NOTE.
+  const bytes = new Uint8Array(36);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(0, 4, true);
+  view.setUint32(4, 8, true);
+  view.setUint32(8, 5, true);
+  bytes.set(new TextEncoder().encode("GNU\0"), 12);
+  view.setUint32(16, 2, true);
+  return new File([bytes], "property-note");
+};
+
+void test("notes preserve all section and program headers that describe the same records", async () => {
+  const file = propertyThenEmptyNote();
+  const parsed = await parseElfNotes({ file, littleEndian: true,
+    sections: [makeSection({ type: 7, size: 24n, index: 2 })],
+    programHeaders: [noteSegment(4, BigInt(file.size)), { ...noteSegment(0x6474e553, 24n), index: 6 }] });
+
+  assert.equal(parsed?.entries.length, 2);
+  assert.equal(parsed?.entries[0]?.source, "SHT_NOTE section #2");
+  assert.deepEqual(parsed?.entries[0]?.properties, [{ type: 2, value: 0n }]);
+  assert.deepEqual(parsed?.entries[0]?.sourceAliases, ["PT_NOTE segment #5", "PT_GNU_PROPERTY segment #6"]);
+  assert.equal(parsed?.entries[1]?.source, "PT_NOTE segment #5");
+  assert.equal(parsed?.entries[1]?.sourceAliases, undefined);
 });
 
 void test("reports truncated names, preserves exact-end names and warns about clipped ranges", async () => {

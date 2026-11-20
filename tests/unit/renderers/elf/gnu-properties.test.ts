@@ -26,11 +26,13 @@ void test("renders GNU properties as a table", () => {
   const fixture = relocationFixture();
   fixture.elf.notes = { entries: [{ source: "<note>", name: "GNU", type: 5,
     typeName: null, description: null, value: null, descSize: 16,
+    sourceAliases: ["PT_NOTE segment #1", "PT_GNU_PROPERTY segment #2"],
     properties: [{ type: 0xc0000002, value: 3n }] }], issues: [] };
   const out: string[] = [];
   renderElfGnuProperties(fixture.elf, out);
   assert.match(out.join(""), /<table/);
   assert.match(out.join(""), /&lt;note>/);
+  assert.match(out.join(""), /PT_NOTE segment #1, PT_GNU_PROPERTY segment #2/);
   assert.match(out.join(""), /SHSTK/);
 });
 

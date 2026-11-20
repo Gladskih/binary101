@@ -1,7 +1,7 @@
 import { isPeWindowsParseResult, parsePe } from "./pe/index.js";
 import { parseCoffObject } from "./coff/index.js";
 import { parseJpeg } from "./jpeg/index.js";
-import { parseElf } from "./elf/index.js";
+import { parseElfReport } from "./elf/index.js";
 import { parseMachO } from "./macho/index.js";
 import { parseFb2 } from "./fb2/index.js";
 import { isGifSignature, parseGif } from "./gif/index.js";
@@ -61,7 +61,7 @@ const tryContainerHeaderFormats = async (file: File, dv: DataView): Promise<Pars
     if (lnk) return { analyzer: "lnk", parsed: lnk };
   }
   if (probeElf(dv)) {
-    const elf = await parseElf(file);
+    const elf = await parseElfReport(file);
     if (elf) return { analyzer: "elf", parsed: elf };
   }
   if (probeMachO(dv, file.size)) {

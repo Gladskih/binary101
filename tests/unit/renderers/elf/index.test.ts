@@ -2,8 +2,24 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { renderElf, renderHeader } from "../../../../renderers/elf/index.js";
+import { renderElf } from "../../../../renderers/elf/index.js";
+import { renderHeader } from "../../../../renderers/elf/header.js";
 import type { ElfParseResult } from "../../../../analyzers/elf/types.js";
+import { renderElfLazy } from "../../../../renderers/elf/lazy-sections.js";
+
+void test("partial ELF header displays available fields and a notice without analysis panels", () => {
+  const html = renderElfLazy({
+    incompleteHeader: true,
+    ident: { classByte: 2, className: "ELF64", dataByte: 1, dataName: "LSB", osabi: 0, abiVersion: 0 },
+    header: { type: 3, machine: 62, phoff: 64n },
+    issues: ["ELF64 header is truncated."]
+  });
+
+  assert.match(html, /x86-64/);
+  assert.match(html, /Unavailable<\/span> @ 0x40/);
+  assert.match(html, /ELF64 header is truncated/);
+  assert.doesNotMatch(html, /elfInstructionSets|0 entries @ 0x0/);
+});
 
 const createRendererElfSubject = (): ElfParseResult =>
   ({

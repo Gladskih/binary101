@@ -59,7 +59,7 @@ export const enhanceAnalysisPagedTables = (
     enhancePeDisassemblyPagedTables(root, result.parsed, snapshots);
   } else if (result.analyzer === "coff") {
     enhanceCoffPagedTables(root, result.parsed, snapshots);
-  } else if (result.analyzer === "elf") {
+  } else if (result.analyzer === "elf" && !("incompleteHeader" in result.parsed)) {
     enhanceElfPagedTables(root, result.parsed, snapshots);
   } else if (result.analyzer === "wasm") {
     enhancePagedSortableTables(root, tableId => getWasmPagedTableModel(result.parsed, tableId), snapshots);

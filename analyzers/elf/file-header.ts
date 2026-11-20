@@ -1,26 +1,11 @@
 import { ELF_MACHINE_OPTIONS } from "./legacy-machine-types.js";
 import { ELF_CLASS, ELF_DATA, ELF_TYPE, decodeOption } from "./constants.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
+import { readElfHeaderPrefix } from "./file-header-record.js";
 import type { ElfFileHeaderRecord } from "./binary-layout-types.js";
-import type { ElfHeader, ElfIdent, ElfParseResult } from "./types.js";
+import type { ElfHeader, ElfIdent, ElfReport } from "./types.js";
 
 const ELF_MAGIC = 0x7f454c46;
-const emptyElfHeader = (): ElfHeader => ({
-  type: 0,
-  typeName: null,
-  machine: 0,
-  machineName: null,
-  entry: 0n,
-  phoff: 0n,
-  shoff: 0n,
-  flags: 0,
-  ehsize: 0,
-  phentsize: 0,
-  phnum: 0,
-  shentsize: 0,
-  shnum: 0,
-  shstrndx: 0
-});
 function parseIdent(dv: DataView, issues: string[]): ElfIdent {
   const cls = dv.getUint8(4);
   const data = dv.getUint8(5);
@@ -48,24 +33,26 @@ function describeElfHeader(record: ElfFileHeaderRecord, issues: string[]): ElfHe
   };
 }
 
-export const readElfFileHeader = async (file: File): Promise<ElfParseResult | null> => {
-  const view = new DataView(await file.slice(0, Math.min(file.size, 4096)).arrayBuffer());
-  // sizeof(Elf32_Ehdr); a complete ELF identification alone is not a parseable file.
-  if (view.byteLength < 0x34 || view.getUint32(0, false) !== ELF_MAGIC) return null;
+export const readElfFileHeader = async (file: File): Promise<ElfReport | null> => {
+  // gABI 2: 16-byte e_ident and a maximum fixed ELF header size of 64 bytes.
+  const view = new DataView(await file.slice(0, 64).arrayBuffer());
+  if (view.byteLength < 16 || view.getUint32(0, false) !== ELF_MAGIC) return null;
   const issues: string[] = [];
   const ident = parseIdent(view, issues);
-  const result: ElfParseResult = { ident, header: emptyElfHeader(), sections: [], programHeaders: [],
-    issues, is64: ident.classByte === 2, littleEndian: ident.dataByte === 1, fileSize: file.size };
-  if (!isSupportedElfIdent(ident)) return result;
-  const layout = selectElfBinaryLayout(result);
+  if (!isSupportedElfIdent(ident)) return { incompleteHeader: true, ident, header: {}, issues };
+  const is64 = ident.classByte === 2;
+  const littleEndian = ident.dataByte === 1;
+  const layout = selectElfBinaryLayout({ is64, littleEndian });
   const record = layout.readHeader(view);
-  if (!record) {
-    issues.push(`ELF${result.is64 ? "64" : "32"} header is truncated: ` +
-      `expected at least ${layout.headerSize} bytes, got ${view.byteLength}.`);
-    return result;
+  if (record) {
+    return { ident, header: describeElfHeader(record, issues), sections: [], programHeaders: [],
+      issues, is64, littleEndian, fileSize: file.size };
   }
-  result.header = describeElfHeader(record, issues);
-  return result;
+  issues.push(`ELF${is64 ? "64" : "32"} header is truncated: ` +
+    `expected at least ${layout.headerSize} bytes, got ${view.byteLength}.`);
+  const { version, ...header } = readElfHeaderPrefix(view, layout.byteOrder, is64 ? 8 : 4);
+  if (version !== undefined && version !== 1) issues.push(`Unexpected ELF header version ${version}.`);
+  return { incompleteHeader: true, ident, header, issues };
 };
 
 export const isSupportedElfIdent = (ident: ElfIdent): boolean =>

@@ -247,6 +247,7 @@ void test("parseForUi parses ZIP EOCD", async () => {
 void test("parseForUi parses ELF header and sections", async () => {
   await assertParsed(createElfFile(), "elf", elf => {
     assert.strictEqual(elf.ident.className, "ELF64");
+    assert.ok(!("incompleteHeader" in elf));
     assert.ok(Array.isArray(elf.sections));
   });
 });

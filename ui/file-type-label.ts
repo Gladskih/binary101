@@ -1,7 +1,7 @@
 "use strict";
 
 import type { ParseForUiResult } from "../analyzers/index.js";
-import type { ElfParseResult } from "../analyzers/elf/types.js";
+import type { ElfReport } from "../analyzers/elf/types.js";
 import { peSubtypeLabel } from "../analyzers/pe/subtype-labels.js";
 
 type TooltipAdder = (element: HTMLElement, message: string) => void;
@@ -43,9 +43,9 @@ const setFileSubtypeLabel = (
 
 export { setFileBinaryTypeLabel, setFileSubtypeLabel };
 
-function elfSubtypeLabel(elf: ElfParseResult | null): string | null {
+function elfSubtypeLabel(elf: ElfReport | null): string | null {
   // DF_1_PIE: https://github.com/bminor/glibc/blob/master/elf/elf.h
-  if (elf?.header.type === 3 &&
+  if (elf && !("incompleteHeader" in elf) && elf.header.type === 3 &&
     ((elf.dynamic?.flags1 ?? 0) & 0x08000000) !== 0) {
     return "Position-independent executable (PIE)";
   }

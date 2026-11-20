@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseElf } from "../../../../analyzers/elf/index.js";
+import { parseElf, parseElfReport } from "../../../../analyzers/elf/index.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
 
@@ -64,20 +64,20 @@ void test("parseElf stops before decoding an unsupported ELF class", async () =>
   const bytes = new Uint8Array(64);
   writeElfHeader(bytes);
   bytes[4] = 0; // gABI ELFCLASSNONE is invalid.
-  const parsed = expectDefined(await parseElf(new MockFile(bytes)));
+  const parsed = expectDefined(await parseElfReport(new MockFile(bytes)));
   assert.match(parsed.issues.join(" "), /Unsupported ELF class 0/);
-  assert.equal(parsed.header.machine, 0);
-  assert.deepEqual(parsed.sections, []);
+  assert.ok("incompleteHeader" in parsed);
+  assert.equal(parsed.header.machine, undefined);
 });
 
 void test("parseElf stops before decoding an unsupported data encoding", async () => {
   const bytes = new Uint8Array(64);
   writeElfHeader(bytes);
   bytes[5] = 3; // gABI reserves encodings other than ELFDATA2LSB/ELFDATA2MSB.
-  const parsed = expectDefined(await parseElf(new MockFile(bytes)));
+  const parsed = expectDefined(await parseElfReport(new MockFile(bytes)));
   assert.match(parsed.issues.join(" "), /Unsupported ELF data encoding 3/);
-  assert.equal(parsed.header.machine, 0);
-  assert.deepEqual(parsed.programHeaders, []);
+  assert.ok("incompleteHeader" in parsed);
+  assert.equal(parsed.header.machine, undefined);
 });
 
 void test("parseElf notes program headers that sit outside the file", async () => {
@@ -118,7 +118,7 @@ void test("parseElf surfaces version mismatches and truncated section name table
   assert.ok(definedParsed.issues.some(msg => msg.includes("Section name table is truncated or falls outside the file.")));
 });
 
-void test("parseElf reports truncated ELF64 headers instead of throwing", async () => {
+void test("parseElfReport reports truncated ELF64 headers instead of throwing", async () => {
   const bytes = new Uint8Array(0x34).fill(0);
   const dv = new DataView(bytes.buffer);
   dv.setUint32(0, 0x7f454c46, false);
@@ -129,10 +129,12 @@ void test("parseElf reports truncated ELF64 headers instead of throwing", async 
   dv.setUint16(0x12, 0x3e, true); // x86-64
   dv.setUint32(0x14, 1, true); // header version
 
-  const parsed = await parseElf(new MockFile(bytes, "elf64-short.bin", "application/x-elf"));
+  const parsed = await parseElfReport(new MockFile(bytes, "elf64-short.bin", "application/x-elf"));
   const definedParsed = expectDefined(parsed);
-  assert.equal(definedParsed.programHeaders.length, 0);
-  assert.equal(definedParsed.sections.length, 0);
+  assert.ok("incompleteHeader" in definedParsed);
+  assert.equal(definedParsed.header.type, 2);
+  assert.equal(definedParsed.header.machine, 62);
+  assert.equal(definedParsed.header.phnum, undefined);
   assert.ok(definedParsed.issues.some(msg => msg.includes("ELF64 header is truncated")));
 });
 

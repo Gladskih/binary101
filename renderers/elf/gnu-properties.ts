@@ -39,7 +39,8 @@ const describeX86Property = (type: number, value: bigint): string => {
 
 export const renderElfGnuProperties = (elf: ElfParseResult, out: string[]): void => {
   const rows = elf.notes?.entries.flatMap(note => (note.properties ?? []).map(property =>
-    `<tr><td>${escapeHtml(note.source)}</td><td>0x${property.type.toString(16)}</td>` +
+    `<tr><td>${escapeHtml([note.source, ...note.sourceAliases ?? []].join(", "))}</td>` +
+    `<td>0x${property.type.toString(16)}</td>` +
     `<td>${escapeHtml(describeElfGnuProperty(property, elf.header.machine))}</td></tr>`)) ?? [];
   if (!rows.length) return;
   out.push(`<h4>GNU properties</h4><div class="tableWrap"><table class="table">` +

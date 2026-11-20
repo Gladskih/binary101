@@ -10,6 +10,8 @@ interface FlagField {
   values: Array<{ value: number; name: string; description: string }>;
 }
 
+type ElfFlagContext = Pick<ElfHeader, "machine" | "flags">;
+
 // Numeric assignments are pinned in the data's source URLs. ABI-dependent meanings follow:
 // https://github.com/RTEMS/sourceware-mirror-binutils-gdb/blob/1f57adffdc6d586e8beb25b55ec13dc1407fdfb3/binutils/readelf.c
 // https://github.com/llvm/llvm-project/blob/llvmorg-23.1.3/llvm/lib/Object/ELFObjectFile.cpp
@@ -20,7 +22,7 @@ const gpuLayout = (ident: ElfIdent): number => {
   return [0, 65, 66].includes(ident.osabi) ? 3 : -1;
 };
 
-const fieldsForHeader = (header: ElfHeader, ident: ElfIdent): FlagField[] => {
+const fieldsForHeader = (header: ElfFlagContext, ident: ElfIdent): FlagField[] => {
   const context: Record<string, number> = {
     flags: header.flags, osabi: ident.osabi, abiVersion: ident.abiVersion,
     gpuLayout: gpuLayout(ident)
@@ -52,7 +54,7 @@ const renderField = (field: FlagField, flags: number): string => {
   return chips.join("");
 };
 
-export const renderElfHeaderFlags = (header: ElfHeader, ident: ElfIdent): string => {
+export const renderElfHeaderFlags = (header: ElfFlagContext, ident: ElfIdent): string => {
   const fields = fieldsForHeader(header, ident);
   const unknown = (header.flags & ~fields.reduce((mask, field) => mask | field.mask, 0)) >>> 0;
   return `<code>${toHex32(header.flags, 8)}</code>` +

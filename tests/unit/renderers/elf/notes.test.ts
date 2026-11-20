@@ -78,6 +78,7 @@ void test("notes remain accessible beyond the former display limit and escape co
 
 void test("note model preserves unknown fields, escapes control ranges and rejects missing rows", () => {
   const model = createElfNotesTableModel({ issues: [], entries: [{ source: "source",
+    sourceAliases: ["PT_NOTE segment #1", "PT_GNU_PROPERTY segment #2"],
     name: "\u001f ~\u007f\u009f\u00a0", type: 255, typeName: null,
     description: null, value: null, descSize: 0 }] });
   assert.equal(model.rowCount, 1);
@@ -92,6 +93,7 @@ void test("note model preserves unknown fields, escapes control ranges and rejec
   assert.equal(model.rowAt(0)?.cells[5]?.html, "0");
   assert.equal(model.rowAt(0)?.cells[5]?.className, "peNumeric");
   assert.equal(model.rowAt(0)?.cells[0]?.className, "elfNote__value");
+  assert.equal(model.rowAt(0)?.cells[0]?.html, "source, PT_NOTE segment #1, PT_GNU_PROPERTY segment #2");
   assert.equal(model.columns[1]?.className, "elfNote__value");
   assert.equal(model.columns[5]?.className, "peNumeric elfNote__value");
   assert.equal(model.sortValueAt(0, 2), "0xff");

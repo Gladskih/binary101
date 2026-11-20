@@ -1,6 +1,7 @@
-import type { ElfParseResult } from "../../analyzers/elf/types.js";
+import type { ElfParseResult, ElfReport } from "../../analyzers/elf/types.js";
 import { renderElfSanitizers } from "./sanitizers.js";
-import { renderHeader, renderProgramHeaders, renderSectionHeaders, renderIssues } from "./index.js";
+import { renderElf, renderProgramHeaders, renderSectionHeaders, renderIssues } from "./index.js";
+import { renderHeader } from "./header.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { renderInstructionSetsShell, renderInstructionSetsContent } from "./disassembly.js";
 import { renderElfLinking } from "./linking.js";
@@ -105,8 +106,9 @@ const supplementalSections = new Set([
   "embedded-resources", "instruction-sets", "issues", "native-aot", "sanitizers", "import-linkage"
 ]);
 
-export const renderElfLazy = (elf: ElfParseResult | null): string => elf
-  ? getElfLazySections(elf).map(section => {
+export const renderElfLazy = (elf: ElfReport | null): string => {
+  if (!elf || "incompleteHeader" in elf) return renderElf(elf);
+  return getElfLazySections(elf).map(section => {
     const html = (section.key === "instruction-sets"
       ? renderInstructionSetsShell()
       : renderElfSectionStart(section.title) + renderElfSectionEnd())
@@ -114,5 +116,5 @@ export const renderElfLazy = (elf: ElfParseResult | null): string => elf
         (section.key === "linking" && elf.dynamic ? `data-report-search-labels="` +
           `${Object.values(ELF_DYNAMIC_TAG_DESCRIPTIONS).map(([name]) => name).join("|")}" ` : ""));
     return supplementalSections.has(section.key) ? markSupplementalAnalysis(html) : html;
-  }).join("") + renderChecksWithoutFindings(elf)
-  : "";
+  }).join("") + renderChecksWithoutFindings(elf);
+};

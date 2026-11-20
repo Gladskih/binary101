@@ -3,7 +3,7 @@
 import type { PeParseResult } from "./pe/index.js";
 import type { CoffObjectParseResult } from "./coff/types.js";
 import type { JpegParseResult } from "./jpeg/types.js";
-import type { ElfParseResult } from "./elf/types.js";
+import type { ElfReport } from "./elf/types.js";
 import type { MachOParseResult } from "./macho/index.js";
 import type { Fb2ParseResult } from "./fb2/index.js";
 import type { GifParseResult } from "./gif/types.js";
@@ -77,7 +77,7 @@ type AnalyzerParseMap = {
   wasm: WasmParseResult;
   lnk: LnkParseResult;
   sqlite: SqliteParseResult;
-  elf: ElfParseResult;
+  elf: ElfReport;
   macho: MachOParseResult;
   coff: CoffObjectParseResult;
   pe: PeParseResult;

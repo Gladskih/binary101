@@ -62,9 +62,12 @@ export const PROGRAM_TYPES: ElfOptionEntry[] = [
   [5, "PT_SHLIB", "Reserved (should not appear)."],
   [6, "PT_PHDR", "Program header table itself."],
   [7, "PT_TLS", "Thread-local storage template."],
-  [0x6474e550, "GNU_EH_FRAME", "Exception handling frames (GNU)."],
+  [0x6474e550, "GNU_EH_FRAME", "GNU header and index for the .eh_frame unwind data."],
   [0x6474e551, "GNU_STACK", "Stack flags (GNU)."],
-  [0x6474e552, "GNU_RELRO", "Relocations read-only after relocations (GNU)."]
+  [0x6474e552, "GNU_RELRO", "Memory range intended to become read-only after relocations."],
+  // GNU segment extension defined in glibc <elf.h>.
+  // https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h
+  [0x6474e553, "PT_GNU_PROPERTY", "GNU property note exposed to the loader."]
 ];
 
 export const SECTION_TYPES: ElfOptionEntry[] = [
@@ -76,11 +79,16 @@ export const SECTION_TYPES: ElfOptionEntry[] = [
   [5, "SHT_HASH", "Symbol hash table."],
   [6, "SHT_DYNAMIC", "Dynamic linking information."],
   [7, "SHT_NOTE", "Auxiliary information notes."],
-  [8, "SHT_NOBITS", "Zero-initialized data (BSS)."],
-  [9, "SHT_REL", "Relocation entries without addends."],
+  [8, "SHT_NOBITS", "Section that occupies no bytes in the file, such as .bss."],
+  [9, "SHT_REL", "Relocation entries with implicit addends."],
   [10, "SHT_SHLIB", "Reserved (should not appear)."],
   [11, "SHT_DYNSYM", "Dynamic symbol table."],
   // ELF gABI §3: https://gabi.xinuos.com/elf/03-sheader.html
+  [14, "SHT_INIT_ARRAY", "Pointers to initialization functions."],
+  [15, "SHT_FINI_ARRAY", "Pointers to termination functions."],
+  [16, "SHT_PREINIT_ARRAY", "Pointers to functions called before other initialization functions."],
+  [17, "SHT_GROUP", "Group flags and the list of member section indices."],
+  [18, "SHT_SYMTAB_SHNDX", "Extended section indices for an associated symbol table."],
   [ELF_SECTION_TYPE.RELR, "SHT_RELR", "Packed relative relocations."],
   [0x6ffffff6, "GNU_HASH", "GNU-style hash table."],
   [0x6ffffff7, "GNU_LIBLIST", "Prelink library list."],

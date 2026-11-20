@@ -1,4 +1,4 @@
-import type { ElfParseResult } from "../analyzers/elf/types.js";
+import type { ElfParseResult, ElfReport } from "../analyzers/elf/types.js";
 import { getElfLazySections, type ElfLazySection } from "../renderers/elf/lazy-sections.js";
 import { getElfPagedTableModel } from "../renderers/elf/paged-tables.js";
 import { enhanceAccessibleTooltips } from "./accessible-tooltips.js";
@@ -64,8 +64,8 @@ const enhanceSection = (
   if (details.open) mount(body, state);
 };
 
-export const enhanceElfLazySections = (root: ParentNode, elf: ElfParseResult | null): void => {
-  if (!elf) return;
+export const enhanceElfLazySections = (root: ParentNode, elf: ElfReport | null): void => {
+  if (!elf || "incompleteHeader" in elf) return;
   const descriptors = new Map(getElfLazySections(elf).map(section => [section.key, section]));
   root.querySelectorAll<HTMLElement>("[data-elf-lazy-section]").forEach(section => {
     const descriptor = descriptors.get(section.dataset["elfLazySection"] ?? "");

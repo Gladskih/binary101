@@ -220,7 +220,8 @@ analysisValueElement.addEventListener("click", event => {
   if (elfAnalyzeButton) {
     event.preventDefault();
     if (!currentFile) return;
-    if (currentParseResult.analyzer !== "elf" || !currentParseResult.parsed) return;
+    if (currentParseResult.analyzer !== "elf" || !currentParseResult.parsed ||
+      "incompleteHeader" in currentParseResult.parsed) return;
     delete currentParseResult.parsed.disassembly;
     refreshElfInstructionSetsPanel(currentParseResult.parsed);
     elfDisassembly.start(currentFile, currentParseResult.parsed);

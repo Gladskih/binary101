@@ -11,21 +11,18 @@ import { renderElfAttributes } from "./attributes.js";
 import { renderElfMips } from "./mips.js";
 import { renderElfLsda } from "./lsda.js";
 import { renderElfArmEhabi } from "./arm-ehabi.js";
-import { renderElfHeaderFlags } from "./header-flags.js";
-import { renderHeaderOptions, renderMachine, renderOsAbi } from "./header-options.js";
+import { renderHeader } from "./header.js";
 
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
-import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
+import { escapeHtml } from "../../html-utils.js";
 import {
-  ELF_CLASS,
-  ELF_DATA,
-  ELF_TYPE,
   PROGRAM_TYPES,
   SECTION_TYPES
 } from "../../analyzers/elf/constants.js";
 import type {
   ElfOptionEntry,
   ElfParseResult,
+  ElfReport,
   ElfProgramHeader,
   ElfSectionHeader
 } from "../../analyzers/elf/types.js";
@@ -44,14 +41,14 @@ const SECTION_HINTS: Record<string, string> = {
   ".text": "Executable code (instructions).",
   ".plt": "Procedure linkage table (PLT). Usually small trampolines for dynamic linking.",
   ".got": "Global offset table (GOT). Runtime-resolved addresses for position-independent code.",
-  ".got.plt": "GOT entries used by PLT stubs for lazy binding.",
+  ".got.plt": "GOT entries used by PLT stubs.",
   ".dynsym": "Dynamic symbol table (exports/imports for the dynamic loader).",
   ".dynstr": "Strings for the dynamic symbol table.",
   ".dynamic": "Dynamic linking tags (DT_*).",
   ".rela.plt": "Relocations applied to PLT/GOT entries (with addends).",
-  ".rel.plt": "Relocations applied to PLT/GOT entries (no addends).",
+  ".rel.plt": "Relocations applied to PLT/GOT entries (implicit addends).",
   ".rela.dyn": "Relocations applied at load time (with addends).",
-  ".rel.dyn": "Relocations applied at load time (no addends).",
+  ".rel.dyn": "Relocations applied at load time (implicit addends).",
   ".eh_frame": "Unwind info for stack unwinding (exceptions/backtraces).",
   ".eh_frame_hdr": "Index into .eh_frame to accelerate unwinding.",
   ".init": "Initialization code (legacy).",
@@ -132,46 +129,6 @@ const formatSectionEntSize = (section: ElfSectionHeader): string => {
   return `<span title="sh_entsize: fixed size of one entry in this section table.">${value}</span>`;
 };
 
-export function renderHeader(elf: ElfParseResult, out: string[]): void {
-  // Field meanings: System V gABI, sections 2.1 and 2.2.
-  // https://gabi.xinuos.com/elf/02-eheader.html
-  const h = elf.header;
-  out.push(renderElfSectionStart(`ELF header`));
-  out.push(`<dl>`);
-  out.push(renderDefinitionRow("Class", renderHeaderOptions(elf.ident.classByte, ELF_CLASS),
-    "Selects the 32-bit or 64-bit layout of ELF structures."));
-  out.push(renderDefinitionRow("Data", renderHeaderOptions(elf.ident.dataByte, ELF_DATA),
-    "Specifies byte order for decoding multibyte numbers: little-endian or big-endian."));
-  out.push(renderDefinitionRow("OS ABI", renderOsAbi(elf.ident.osabi),
-    "Identifies operating system and binary interface conventions used by this file."));
-  out.push(renderDefinitionRow("ABI version", escapeHtml(elf.ident.abiVersion),
-    "Distinguishes binary interface revisions; its meaning depends on the selected OS ABI."));
-  out.push(renderDefinitionRow("Type", renderHeaderOptions(h.type, ELF_TYPE),
-    "Identifies the file's role: relocatable object, executable, shared object or core dump."));
-  out.push(renderDefinitionRow("Machine", renderMachine(h.machine),
-    "Identifies the target processor architecture used to interpret machine code."));
-  out.push(renderDefinitionRow("Flags (e_flags)", renderElfHeaderFlags(h, elf.ident),
-    "Processor-specific flags. Highlighted chips show set bits or the selected ABI/ISA value; " +
-    "dim chips show other defined choices for this architecture and ABI."));
-  out.push(renderDefinitionRow("Entry", formatElfHex(h.entry),
-    "Virtual address where execution starts. Zero means no entry point."));
-  const phText = `${h.phnum} entries @ ${formatElfHex(h.phoff)}`;
-  const shText = `${h.shnum} entries @ ${formatElfHex(h.shoff)}`;
-  out.push(renderDefinitionRow("Program headers", phText,
-    "Segment descriptions for loading. Shows the number of entries @ byte offset in the file."));
-  out.push(renderDefinitionRow("Section headers", shText,
-    "Section descriptions for linking and analysis. " +
-    "Shows the number of entries @ byte offset in the file."));
-  out.push(renderDefinitionRow("Header size", `${h.ehsize} bytes`,
-    "Size of the ELF header itself."));
-  out.push(renderDefinitionRow("PH entry size", `${h.phentsize} bytes`,
-    "Size of one program header record, used to locate successive records."));
-  out.push(renderDefinitionRow("SH entry size", `${h.shentsize} bytes`,
-    "Size of one section header record, used to locate successive records."));
-  out.push(`</dl>`);
-  out.push(renderElfSectionEnd());
-}
-
 export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.programHeaders?.length) return;
   out.push(renderElfSectionStart(`Program headers (${elf.programHeaders.length})`));
@@ -249,7 +206,7 @@ export function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
   out.push(renderElfSectionEnd());
 }
 
-export function renderIssues(elf: ElfParseResult, out: string[]): void {
+export function renderIssues(elf: Pick<ElfReport, "issues">, out: string[]): void {
   if (!elf.issues?.length) return;
   out.push(renderElfSectionStart(`Notices`));
   out.push(`<ul>`);
@@ -258,9 +215,14 @@ export function renderIssues(elf: ElfParseResult, out: string[]): void {
   out.push(renderElfSectionEnd());
 }
 
-export function renderElf(elf: ElfParseResult | null): string {
+export function renderElf(elf: ElfReport | null): string {
   if (!elf) return "";
   const out: string[] = [];
+  if ("incompleteHeader" in elf) {
+    renderHeader(elf, out);
+    renderIssues(elf, out);
+    return out.join("");
+  }
   renderInstructionSets(elf, out);
   renderHeader(elf, out);
   renderElfLinking(elf, out);

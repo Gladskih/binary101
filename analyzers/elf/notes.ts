@@ -32,41 +32,59 @@ const noteBounds = (view: DataView, offset: number, littleEndian: boolean,
   return { nameStart, nameEnd, descStart, descEnd };
 };
 
-const parseNotesFromRange = async (reader: FileRangeReader, littleEndian: boolean,
-  range: ReturnType<typeof noteRanges>[number], issues: string[], wordSize: 4 | 8,
-  coreMachine: number | undefined, seenNotes: Set<string>,
-  attributeRanges: Map<number, string>): Promise<ElfNoteEntry[]> => {
+type NoteRecord = { entry: ElfNoteEntry; aliases?: Set<string> };
+
+const addNoteSource = (note: NoteRecord, source: string): void => {
+  if (note.entry.source !== source) (note.aliases ??= new Set()).add(source);
+};
+
+const readNotePayload = async (reader: FileRangeReader,
+  bounds: NonNullable<ReturnType<typeof noteBounds>>, source: string, issues: string[]) => {
+  const nameBytes = await reader.readBytes(bounds.nameStart, bounds.nameEnd - bounds.nameStart);
+  const desc = await reader.readBytes(bounds.descStart, bounds.descEnd - bounds.descStart);
+  if (nameBytes.length !== bounds.nameEnd - bounds.nameStart ||
+    desc.length !== bounds.descEnd - bounds.descStart) {
+    issues.push(`${source}: note payload is truncated.`);
+    return null;
+  }
+  const name = readAsciiString(new DataView(nameBytes.buffer, nameBytes.byteOffset,
+    nameBytes.byteLength), 0, nameBytes.length);
+  return { nameBytes, name, desc };
+};
+
+const parseNotesFromRange = async (reader: FileRangeReader, opts: ElfNoteInput,
+  range: NoteRange, alignment: number, issues: string[],
+  decoded: Map<string, NoteRecord>): Promise<NoteRecord[]> => {
   const { source } = range;
-  const alignment = noteAlignment(range.align, source, issues);
-  if (alignment == null) return [];
-  const entries: ElfNoteEntry[] = [];
+  const { littleEndian } = opts;
+  const attributeRanges = new Map<number, string>();
+  const records: NoteRecord[] = [];
   let offset = 0;
   while (offset + 12 <= reader.size) {
     const view = await reader.read(offset, 12);
     if (view.byteLength < 12) { issues.push(`${source}: note header is truncated.`); break; }
-    const key = (range.offset + BigInt(offset)).toString();
     const bounds = noteBounds(view, offset, littleEndian, source, issues, alignment, reader.size);
     if (!bounds) break;
-    const type = view.getUint32(8, littleEndian);
+    const key = `${range.offset + BigInt(offset)}/${range.offset + BigInt(bounds.descStart)}`;
     offset = Math.ceil(bounds.descEnd / alignment) * alignment;
-    if (seenNotes.has(key)) continue;
-    seenNotes.add(key);
-    const nameBytes = await reader.readBytes(bounds.nameStart, bounds.nameEnd - bounds.nameStart);
-    const desc = await reader.readBytes(bounds.descStart, bounds.descEnd - bounds.descStart);
-    if (nameBytes.length !== bounds.nameEnd - bounds.nameStart ||
-      desc.length !== bounds.descEnd - bounds.descStart) {
-      issues.push(`${source}: note payload is truncated.`);
-      break;
+    const existing = decoded.get(key);
+    if (existing) {
+      addNoteSource(existing, source);
+      records.push(existing);
+      continue;
     }
-    const name = readAsciiString(new DataView(nameBytes.buffer, nameBytes.byteOffset,
-      nameBytes.byteLength), 0, nameBytes.length);
-    const entry: ElfNoteEntry = { source, name, type, descSize: desc.length,
+    const type = view.getUint32(8, littleEndian);
+    const payload = await readNotePayload(reader, bounds, source, issues);
+    if (!payload) break;
+    const entry: ElfNoteEntry = { source, name: payload.name, type, descSize: payload.desc.length,
       typeName: null, description: null, value: null };
-    decodeNote(entry, nameBytes, desc, wordSize, littleEndian ? "little" : "big",
-      coreMachine, attributeRanges, issues);
-    entries.push(entry);
+    decodeNote(entry, payload.nameBytes, payload.desc, opts.is64 ? 8 : 4, littleEndian ? "little" : "big",
+      opts.coreMachine, attributeRanges, issues);
+    const record = { entry };
+    decoded.set(key, record);
+    records.push(record);
   }
-  return entries;
+  return records;
 };
 
 const noteAlignment = (align: bigint, source: string, issues: string[]): number | null => {
@@ -77,18 +95,19 @@ const noteAlignment = (align: bigint, source: string, issues: string[]): number 
   return null;
 };
 
-const noteRanges = (sections: ElfSectionHeader[], headers: ElfProgramHeader[]) => {
+type NoteRange = { offset: bigint; size: bigint; align: bigint; source: string };
+
+const noteRanges = (sections: ElfSectionHeader[], headers: ElfProgramHeader[]): NoteRange[] => {
   const ranges = sections.filter(section => section.type === 7 && section.size > 0n)
     .map(section => ({ offset: section.offset, size: section.size, align: section.addralign,
       source: section.name ? `Section "${section.name}"` : `SHT_NOTE section #${section.index}` }));
   // SHT_NOTE=7; PT_NOTE=4; PT_GNU_PROPERTY=0x6474e553 (glibc elf.h).
   return ranges.concat(headers.filter(header => [4, 0x6474e553].includes(header.type) && header.filesz > 0n)
     .map(header => ({ offset: header.offset, size: header.filesz, align: header.align,
-      source: `PT_NOTE segment #${header.index}` })));
+      source: `${header.type === 4 ? "PT_NOTE" : "PT_GNU_PROPERTY"} segment #${header.index}` })));
 };
 
-const readNoteRange = (file: File,
-  range: ReturnType<typeof noteRanges>[number], issues: string[]): FileRangeReader | null => {
+const readNoteRange = (file: File, range: NoteRange, issues: string[]): FileRangeReader | null => {
   const start = toSafeIndex(range.offset, `${range.source} offset`, issues);
   const size = toSafeIndex(range.size, `${range.source} size`, issues);
   if (start == null || size == null || size <= 0) return null;
@@ -101,27 +120,32 @@ const readNoteRange = (file: File,
   return createFileRangeReader(file, start, available);
 };
 
-export async function parseElfNotes(opts: {
+type ElfNoteInput = {
   file: File; programHeaders: ElfProgramHeader[]; sections: ElfSectionHeader[];
   littleEndian: boolean; is64?: boolean; coreMachine?: number;
-}): Promise<ElfNotesInfo | null> {
+};
+
+export async function parseElfNotes(opts: ElfNoteInput): Promise<ElfNotesInfo | null> {
   const ranges = noteRanges(opts.sections, opts.programHeaders);
   if (!ranges.length) return null;
   const issues: string[] = [];
-  const dedupe = new Set<string>();
-  const seenNotes = new Set<string>();
-  const entries: ElfNoteEntry[] = [];
+  const parsedRanges = new Map<string, NoteRecord[]>();
+  const decoded = new Map<string, NoteRecord>();
   for (const range of ranges) {
-    const key = `${range.offset}-${range.size}`;
-    if (dedupe.has(key)) continue;
-    dedupe.add(key);
+    const alignment = noteAlignment(range.align, range.source, issues);
+    if (alignment == null) continue;
+    const key = `${range.offset}/${range.size}/${alignment}`;
+    const records = parsedRanges.get(key);
+    if (records) {
+      for (const note of records) addNoteSource(note, range.source);
+      continue;
+    }
     const reader = readNoteRange(opts.file, range, issues);
     if (!reader) continue;
-    const parsed = await parseNotesFromRange(reader, opts.littleEndian, range, issues,
-      opts.is64 ? 8 : 4, opts.coreMachine, seenNotes, new Map());
-    for (const entry of parsed) entries.push(entry);
+    parsedRanges.set(key, await parseNotesFromRange(reader, opts, range, alignment, issues, decoded));
   }
-  return { entries, issues };
+  return { entries: Array.from(decoded.values(), ({ entry, aliases }) =>
+    aliases ? { ...entry, sourceAliases: [...aliases] } : entry), issues };
 }
 
 function decodeNote(entry: ElfNoteEntry, nameBytes: Uint8Array, desc: Uint8Array,

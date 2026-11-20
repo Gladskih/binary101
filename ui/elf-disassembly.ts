@@ -171,7 +171,7 @@ export const createElfDisassemblyController = (
         if (opts.getCurrentFile() !== file) return;
 
         const current = opts.getCurrentParseResult();
-        if (current.analyzer !== "elf" || !current.parsed) return;
+        if (current.analyzer !== "elf" || !current.parsed || "incompleteHeader" in current.parsed) return;
         current.parsed.disassembly = report;
         setDisassemblyUiRunning(false);
         abortController = null;

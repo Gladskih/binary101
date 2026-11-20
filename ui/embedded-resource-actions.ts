@@ -7,6 +7,7 @@ import { resolveResourcePayload } from "../analyzers/embedded-resources/payload.
 const findEntry = (result: ParseForUiResult, button: HTMLButtonElement):
   { entry: EmbeddedResourceEntry; payload: ResourcePayload | null } | null => {
   if (result.analyzer !== "pe" && result.analyzer !== "elf") return null;
+  if ("incompleteHeader" in result.parsed) return null;
   const resource = result.parsed.embeddedResources?.bundles[Number(button.dataset["embeddedResourceBundle"])]?.resource;
   const entry = resource?.entries[Number(button.dataset["embeddedResourceEntry"])];
   return resource && entry ? { entry, payload: resolveResourcePayload(resource.format, entry) } : null;

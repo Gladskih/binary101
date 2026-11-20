@@ -49,6 +49,15 @@ export interface ElfHeader {
   shstrndx: number;
 }
 
+export interface ElfIncompleteHeader {
+  incompleteHeader: true;
+  ident: ElfIdent;
+  header: { [Field in keyof ElfHeader]?: ElfHeader[Field] | undefined };
+  issues: string[];
+}
+
+export type ElfReport = ElfParseResult | ElfIncompleteHeader;
+
 export interface ElfProgramHeader {
   type: number;
   typeName: string | null;
@@ -169,6 +178,7 @@ export interface ElfNoteEntry {
   kind?: "gnu-build-attribute";
   core?: ElfCoreNote;
   properties?: ElfGnuProperty[];
+  sourceAliases?: string[];
   source: string;
   name: string;
   type: number;

@@ -18,7 +18,7 @@ const findFirst = (entries: ElfNoteEntry[], predicate: (entry: ElfNoteEntry) => 
 };
 
 const noteValues = (entry: ElfNoteEntry): string[] => [
-  entry.source, entry.name, noteTypeName(entry),
+  [entry.source, ...entry.sourceAliases ?? []].join(", "), entry.name, noteTypeName(entry),
   entry.description ?? "—", entry.value ?? "—", String(entry.descSize)
 ];
 

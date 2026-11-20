@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderElfHeaderFlags } from "../../../../renderers/elf/header-flags.js";
 import { readElfFileHeader } from "../../../../analyzers/elf/file-header.js";
-import { renderHeader } from "../../../../renderers/elf/index.js";
+import { renderHeader } from "../../../../renderers/elf/header.js";
 import { createElfFile } from "../../../fixtures/elf-sample-file.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import type { ElfHeader, ElfIdent } from "../../../../analyzers/elf/types.js";
@@ -40,7 +40,7 @@ const fileWithFlags = (classByte: 1 | 2, dataByte: 1 | 2, flags: number): MockFi
 for (const [classByte, dataByte] of [[1, 1], [1, 2], [2, 1], [2, 2]] as const) {
   void test(`ELF class ${classByte}, byte order ${dataByte} preserves flags through the UI`, async () => {
     const elf = await readElfFileHeader(fileWithFlags(classByte, dataByte, 0x80000005));
-    assert.ok(elf);
+    assert.ok(elf && !("incompleteHeader" in elf));
     assert.equal(elf.header.flags, 0x80000005);
     const html = renderElfHeaderFlags(elf.header, elf.ident);
     assert.equal(chips(html).get("EF_RISCV_FLOAT_ABI_DOUBLE"), "sel");

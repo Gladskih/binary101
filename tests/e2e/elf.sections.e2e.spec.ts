@@ -2,6 +2,22 @@ import { openInspectionSection, toggleInspectionSection } from "./inspection-nav
 import { expect, test } from "@playwright/test";
 import { createElfFile } from "../fixtures/elf-sample-file.js";
 
+test("truncated ELF keeps the known header fields and shows unavailable values", async ({ page }) => {
+  const file = createElfFile();
+  await page.goto("/");
+  // The prefix ends immediately after e_machine, gABI ELF header.
+  await page.setInputFiles("#fileInput", {
+    name: "truncated.elf", mimeType: file.type, buffer: Buffer.from(file.data.subarray(0, 20))
+  });
+
+  await openInspectionSection(page, "ELF header");
+  await expect(page.getByText("Unavailable", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("x86-64", { exact: true })).toBeVisible();
+  await expect(page.locator("#elfInstructionSetsAnalyzeButton")).toHaveCount(0);
+  await openInspectionSection(page, "Notices");
+  await expect(page.getByText(/ELF64 header is truncated/)).toBeVisible();
+});
+
 for (const width of [390, 1280]) {
   test(`ELF sections stay lazy and hashes remain a file tool at width ${width}`, async ({ page }) => {
     const errors: string[] = [];

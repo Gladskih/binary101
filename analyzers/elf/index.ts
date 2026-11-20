@@ -1,17 +1,16 @@
 "use strict";
 
-import { readElfFileHeader, isSupportedElfIdent } from "./file-header.js";
+import { readElfFileHeader } from "./file-header.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import { parseElfMetadata } from "./metadata.js";
 import { parseProgramHeadersWithGuards, parseSectionHeadersWithNames,
   resolveExtendedHeaderCounts } from "./header-tables.js";
-import type { ElfParseResult } from "./types.js";
+import type { ElfParseResult, ElfReport } from "./types.js";
 
-export async function parseElf(file: File): Promise<ElfParseResult | null> {
+export async function parseElfReport(file: File): Promise<ElfReport | null> {
   const result = await readElfFileHeader(file);
-  if (!result || !isSupportedElfIdent(result.ident)) return result;
+  if (!result || "incompleteHeader" in result) return result;
   const layout = selectElfBinaryLayout(result);
-  if (file.size < layout.headerSize) return result;
   const { is64, littleEndian: little, issues } = result;
   const header = await resolveExtendedHeaderCounts(file, result.header,
     is64, little, issues, layout.sectionHeaderSize);
@@ -28,4 +27,10 @@ export async function parseElf(file: File): Promise<ElfParseResult | null> {
   result.sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, layout.sectionHeaderSize);
   await parseElfMetadata(file, result, layout);
   return result;
+}
+
+// Consumers that need an interpretable ELF image receive only complete fixed headers.
+export async function parseElf(file: File): Promise<ElfParseResult | null> {
+  const result = await parseElfReport(file);
+  return result && !("incompleteHeader" in result) ? result : null;
 }
