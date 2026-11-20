@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { DOMParser } from "@xmldom/xmldom";
 import { getPrologValidationTableModel, renderPrologValidation }
   from "../../../../renderers/pe/prolog-validation.js";
 import type { Amd64PrologReport } from "../../../../analyzers/pe/exception/amd64/prolog-types.js";
@@ -13,13 +14,14 @@ const report = (): Amd64PrologReport => ({ matchedCount: 1,
 
 void test("renders factual coverage and escapes instruction and fallback reason text", () => {
   const html = renderPrologValidation(report());
+  const document = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   assert.match(html, /Prologs with matching unwind state<\/dt><dd>1/);
   assert.match(html, /Prologs with discrepancies<\/dt><dd>1/);
   assert.match(html, /Prologs not fully checked<\/dt><dd>3/);
   assert.match(html, /Chained unwind context/);
   assert.match(html, /future-reason/);
-  assert.match(html, /&lt;script&gt;/);
-  assert.doesNotMatch(html, /<script>/);
+  assert.ok(html.includes("<div>&lt;script&gt;</div>"));
+  assert.equal(document.getElementsByTagName("script").length, 0);
   assert.match(html, /data-pe-special-rva="4096"/);
   assert.match(html, /Partial check:/);
 });
@@ -34,7 +36,7 @@ void test("resolves only the current prolog findings table", () => {
   assert.equal(model.sortValueAt(0, 3), "<script>");
   assert.equal(model.sortValueAt(1, 0), "");
   assert.equal(model.sortValueAt(0, 8), "");
-  assert.match(model.searchValueAt!(0), /operation-mismatch.*recover entry RSP.*<script>/);
+  assert.ok(model.searchValueAt!(0).includes("operation-mismatch recover entry RSP <script>"));
   assert.equal(model.searchValueAt!(1), "");
 });
 
