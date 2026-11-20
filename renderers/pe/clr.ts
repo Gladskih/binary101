@@ -11,9 +11,21 @@ import { renderCollectionStart, renderCollectionEnd } from "../counted-collectio
 
 const COMIMAGE_FLAGS_NATIVE_ENTRYPOINT = 0x00000010;
 
+// CoreCLR corhdr.h defines REQUIRED and PREFERRED as a two-bit field.
+// https://github.com/dotnet/runtime/blob/main/src/coreclr/inc/corhdr.h
+const COMIMAGE_FLAGS_32BITREQUIRED = 0x00000002;
+const COMIMAGE_FLAGS_32BITPREFERRED = 0x00020000;
+const CLR_ARCHITECTURE_MEANINGS: Record<number, string> = {
+  [0]: "Machine and ILONLY determine the architecture requirements.",
+  [COMIMAGE_FLAGS_32BITREQUIRED]: "Requires a 32-bit process.",
+  [COMIMAGE_FLAGS_32BITPREFERRED]: "Reserved combination of the two 32-bit flags.",
+  [COMIMAGE_FLAGS_32BITREQUIRED | COMIMAGE_FLAGS_32BITPREFERRED]:
+    "Prefers a 32-bit process when possible."
+};
+
 const CLR_IMAGE_FLAGS: Array<[number, string, string?]> = [
   [0x00000001, "ILONLY", "Contains only IL code (no native entrypoint)."],
-  [0x00000002, "32BITREQUIRED", "Requires a 32-bit process."],
+  [COMIMAGE_FLAGS_32BITREQUIRED, "32BITREQUIRED", "Interpret together with 32BITPREFERRED."],
   [0x00000004, "ILLIBRARY", "Image is an IL library."],
   [0x00000008, "STRONGNAMESIGNED", "Strong-name signed."],
   [
@@ -22,7 +34,7 @@ const CLR_IMAGE_FLAGS: Array<[number, string, string?]> = [
     "EntryPointToken is an RVA (native entrypoint)."
   ],
   [0x00010000, "TRACKDEBUGDATA", "Track debug data."],
-  [0x00020000, "32BITPREFERRED", "Prefer 32-bit (where supported)."]
+  [COMIMAGE_FLAGS_32BITPREFERRED, "32BITPREFERRED", "Interpret together with 32BITREQUIRED."]
 ];
 
 const TOKEN_TABLE_NAMES: Record<number, string> = {
@@ -58,6 +70,7 @@ const formatClrDirectory = (rva: number, size: number): string =>
   rva || size ? `RVA ${hex(rva, 8)} Size ${humanSize(size)}` : "-";
 
 const decodeEntryPointToken = (token: number): string => {
+  if (token === 0) return `${hex(token, 8)} (no managed entry point)`;
   const tableId = (token >>> 24) & 0xff;
   const rowId = token & 0x00ffffff;
   const tableName = TOKEN_TABLE_NAMES[tableId] || "UnknownTable";
@@ -228,7 +241,9 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
     renderDefinitionRow(
       "Flags",
       `<div class="mono">${escapeHtml(hex(clrHeader.Flags, 8))}</div>` +
-        renderFlagChips(clrHeader.Flags, CLR_IMAGE_FLAGS),
+        renderFlagChips(clrHeader.Flags, CLR_IMAGE_FLAGS) +
+        `<div class="smallNote">${CLR_ARCHITECTURE_MEANINGS[clrHeader.Flags &
+          (COMIMAGE_FLAGS_32BITREQUIRED | COMIMAGE_FLAGS_32BITPREFERRED)]}</div>`,
       "CLR image flags (COMIMAGE_FLAGS)."
     )
   );
@@ -245,7 +260,7 @@ export function renderClr(clrHeader: PeClrHeader, out: string[]): void {
       renderDefinitionRow(
         "EntryPointToken",
         escapeHtml(decodeEntryPointToken(clrHeader.EntryPointToken)),
-        "Managed method token (table id + RID) used as the startup entry point."
+        "MethodDef or File token identifying the managed entry point. Zero means no entry point."
       )
     );
   }
