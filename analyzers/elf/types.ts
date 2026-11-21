@@ -20,6 +20,7 @@ import type { GoBuildInfo } from "./go-build-info.js";
 import type { EmbeddedResourceAnalysis } from "../embedded-resources/types.js";
 import type { SanitizerEvidence } from "../sanitizers/types.js";
 import type { ElfImportLinkage } from "./import-linkage.js";
+import type { ElfMiniDebugInfo } from "./mini-debug-info.js";
 
 export type ElfOptionEntry = [number, string, string?];
 
@@ -115,6 +116,7 @@ export interface ElfParseResult {
   notes?: ElfNotesInfo;
   comment?: ElfCommentInfo;
   debugLink?: ElfDebugLinkInfo;
+  miniDebugInfo?: ElfMiniDebugInfo;
   dwarf?: DwarfAnalysis;
   nativeAot?: NativeAotMetadata;
   relocations?: ElfRelocationInfo;
@@ -157,6 +159,7 @@ export interface ElfDynamicSymbol {
   typeName: string;
   visibility: number;
   visibilityName: string;
+  other?: number;
   shndx: number;
   rawSectionIndex?: number;
 }

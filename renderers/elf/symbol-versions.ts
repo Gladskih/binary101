@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../html-utils.js";
 import type { ElfDynamicSymbol, ElfParseResult } from "../../analyzers/elf/types.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
+import { elfSymbolVersionHelp } from "./symbol-fields.js";
 
 export const createElfVersionedSymbolName = (
   elf: ElfParseResult
@@ -24,6 +25,7 @@ export const renderElfSymbolVersions = (elf: ElfParseResult, out: string[]): voi
   const info = elf.symbolVersions;
   if (!info) return;
   out.push(renderElfSectionStart("Symbol versions"));
+  out.push(`<p class="smallNote">${elfSymbolVersionHelp}</p>`);
   const rows = [
     ...info.definitions.map(item => ["Definition", item.index, item.names[0] ?? "",
       item.names.slice(1).join(", "), item.flags]),

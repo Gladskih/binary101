@@ -7,6 +7,7 @@ import { summarizeElfRelocations } from "./relocation-summary.js";
 import type { ElfRelocationSummary, ElfRelocationSummaryKind } from "./relocation-summary.js";
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
+import { renderElfRelocationRecords } from "./relocation-records.js";
 
 const labels = { types: "Relocation type", formats: "Encoding", targets: "Target section", symbols: "Referenced symbol" };
 const tableId = (kind: ElfRelocationSummaryKind): string =>
@@ -58,6 +59,7 @@ export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void =
     out.push(`<h4>${escapeHtml(labels[kind])} distribution</h4>`);
     out.push(renderAutoPagedSortableTable(createElfRelocationSummaryModel(summary, kind)));
   }
+  out.push(renderElfRelocationRecords(elf));
   if (relocations.issues.length) {
     out.push(`<p>Analysis is incomplete or contains anomalies:</p><ul>` +
       relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul>`);

@@ -6,11 +6,12 @@ import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
 import { renderElfSectionStart, renderElfSectionEnd } from "./collapsible-section.js";
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
+import { elfSymbolValueHelp, elfSymbolVisibilityText } from "./symbol-fields.js";
 
 // gABI 5: st_info binding/type nibbles, st_other visibility, reserved section indices.
 // https://gabi.xinuos.com/elf/05-symtab.html
 const symbolValues = (table: ElfSymbolTable, index: number,
-  names: Map<number, string>): string[] => {
+  names: Map<number, string>, machine: number): string[] => {
   const symbol = table.entries[index];
   if (!symbol) return [];
   return [String(index), symbol.name || ((symbol.info & 15) === 3
@@ -19,25 +20,26 @@ const symbolValues = (table: ElfSymbolTable, index: number,
       symbol.info >> 4] ?? String(symbol.info >> 4),
     ["NOTYPE", "OBJECT", "FUNC", "SECTION", "FILE", "COMMON", "TLS"][
       symbol.info & 15] ?? ((symbol.info & 15) === 10 ? "GNU_IFUNC" : String(symbol.info & 15)),
-    ["DEFAULT", "INTERNAL", "HIDDEN", "PROTECTED"][symbol.other & 3]!,
+    elfSymbolVisibilityText(["DEFAULT", "INTERNAL", "HIDDEN", "PROTECTED"][symbol.other & 3]!,
+      symbol.other, machine),
     `0x${symbol.value.toString(16)}`, String(symbol.size),
     symbolSectionName(symbol, names)];
 };
 
 export const createElfSymbolTableModel = (table: ElfSymbolTable,
-  sections: ElfSectionHeader[] = []): PagedSortableTableModel => {
+  sections: ElfSectionHeader[] = [], machine = 0, id = `elf-symbols-${table.sectionIndex}`): PagedSortableTableModel => {
   const names = new Map(sections.map(section => [section.index, section.name ?? ""]));
   return {
-    id: `elf-symbols-${table.sectionIndex}`, pageSize: 100, rowCount: table.entries.length,
+    id, pageSize: 100, rowCount: table.entries.length,
     columns: ["Index", "Name", "Bind", "Type", "Visibility", "Value", "Size", "Section"]
       .map((label, index) => ({ label, className: [0, 5, 6, 7].includes(index) ? "peNumeric" : "" })),
     rowAt: index => table.entries[index] ? {
-      cells: symbolValues(table, index, names).map((value, column) => ({ html: column === 1
+      cells: symbolValues(table, index, names, machine).map((value, column) => ({ html: column === 1
         ? renderSymbolName(value, getElfSymbolDisplayName(table.entries[index]!) || value)
         : escapeHtml(value),
         sortValue: value, className: [0, 5, 6, 7].includes(column) ? "peNumeric" : "" }))
     } : null,
-    sortValueAt: (index, column) => symbolValues(table, index, names)[column] ?? ""
+    sortValueAt: (index, column) => symbolValues(table, index, names, machine)[column] ?? ""
   };
 };
 
@@ -46,7 +48,9 @@ export const renderElfSymbolTables = (elf: ElfParseResult, out: string[], onlyIn
     if (onlyIndex != null && index !== onlyIndex) continue;
     const section = elf.sections.find(item => item.index === table.sectionIndex);
     out.push(renderElfSectionStart(`Symbols: ${section?.name || `section #${table.sectionIndex}`}`));
-    out.push(renderAutoPagedSortableTable(createElfSymbolTableModel(table, elf.sections)));
+    out.push(`<p class="smallNote">${escapeHtml(elfSymbolValueHelp(elf.header.type))} ` +
+      "A size of zero can indicate an unknown size.</p>");
+    out.push(renderAutoPagedSortableTable(createElfSymbolTableModel(table, elf.sections, elf.header.machine)));
     if (table.issues.length) {
       out.push(`<ul>${table.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
     }

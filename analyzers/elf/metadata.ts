@@ -16,6 +16,7 @@ import { parseElfInterpreter } from "./interpreter.js";
 import { parseElfNotes } from "./notes.js";
 import { parseElfComment } from "./comment.js";
 import { parseElfDebugLink } from "./debug-link.js";
+import { parseElfMiniDebugInfo } from "./mini-debug-info.js";
 import { analyzeElfDwarf, prepareElfDwarfSources, elfDwarfLogicalSizes } from "./dwarf.js";
 import { parseElfAttributes } from "./attributes.js";
 import { parseElfMips } from "./mips.js";
@@ -73,16 +74,18 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
 
 const parseAuxiliaryMetadata = async (file: File, result: ElfParseResult): Promise<void> => {
   retainMetadata(result, "goBuildInfo", await parseGoBuildInfo(file, result.sections, result.issues));
-  const [interpreter, notes, comment, debugLink] = await Promise.all([
+  const [interpreter, notes, comment, debugLink, miniDebugInfo] = await Promise.all([
     parseElfInterpreter(file, result.programHeaders),
     parseElfNotes({ file, ...result, ...(result.header.type === 4 ? { coreMachine: result.header.machine } : {}) }),
     parseElfComment(file, result.sections),
-    parseElfDebugLink(file, result.sections, result.littleEndian)
+    parseElfDebugLink(file, result.sections, result.littleEndian),
+    parseElfMiniDebugInfo(file, result)
   ]);
   retainMetadata(result, "interpreter", interpreter);
   retainMetadata(result, "notes", notes);
   retainMetadata(result, "comment", comment);
   retainMetadata(result, "debugLink", debugLink);
+  retainMetadata(result, "miniDebugInfo", miniDebugInfo);
 };
 
 const parseArchitectureMetadata = async (file: File, result: ElfParseResult): Promise<void> => {

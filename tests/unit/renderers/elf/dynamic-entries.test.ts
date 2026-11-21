@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { elfDynamicTagCatalog } from "../../../../analyzers/elf/dynamic-tags.js";
 import { test } from "node:test";
 import { DOMParser } from "@xmldom/xmldom";
 import {
@@ -51,10 +52,20 @@ void test("coverage explicitly reports missing tags only after a verified termin
 void test("coverage preserves uncertainty for unread tables and never repeats present tags", () => {
   const html = renderElfDynamicTagCoverage({ ...relocationFixture().elf.dynamic!,
     entries: [{ tag: 1, value: 1n, string: "present.so" }], terminated: false });
-  assert.doesNotMatch(html, /DT_NEEDED/);
+  assert.doesNotMatch(html, /<dt[^>]*>DT_NEEDED<\/dt>/);
   assert.doesNotMatch(html, /Absent/);
   assert.match(html, /Not determined/);
   assert.match(html, /DT_SONAME/);
+});
+
+void test("names processor-specific variant tags only for their owning machine", () => {
+  const entries = [{ tag: 0x70000005, value: 0n }, { tag: 0x70000001, value: 0n }];
+  const arm64 = elfDynamicTagCatalog(183);
+  assert.match(renderElfDynamicEntries(entries, arm64), />DT_AARCH64_VARIANT_PCS<\/dt>/);
+  assert.doesNotMatch(renderElfDynamicEntries(entries, arm64), /DT_RISCV_VARIANT_CC/);
+  assert.match(renderElfDynamicEntries(entries, elfDynamicTagCatalog(243)), />DT_RISCV_VARIANT_CC<\/dt>/);
+  assert.doesNotMatch(renderElfDynamicEntries(entries, elfDynamicTagCatalog(62)), /VARIANT/);
+  assert.match(renderElfDynamicTagCoverage({ entries: [], terminated: true }, arm64), /DT_AARCH64_VARIANT_PCS/);
 });
 
 void test("formats sizes, counts, addresses, relocation enums and all flag families", () => {

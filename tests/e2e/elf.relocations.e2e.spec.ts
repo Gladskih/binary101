@@ -21,7 +21,7 @@ const pagedRelocations = (): Buffer => {
   return bytes;
 };
 
-test("ELF relocations show aggregated statistics instead of raw address rows", async ({ page }) => {
+test("ELF relocations show aggregate counts and paged raw records", async ({ page }) => {
   await page.goto("/");
   await page.setInputFiles("#fileInput", {
     name: "relocations.elf", mimeType: "application/x-elf", buffer: pagedRelocations()
@@ -35,4 +35,10 @@ test("ELF relocations show aggregated statistics instead of raw address rows", a
   await expect(table).not.toContainText("Addend");
   await expect(table).not.toContainText("Virtual address");
   await expect(page.locator('[data-sort-state-key="elf-relocations-targets"]')).toContainText("201");
+  await page.getByText("Relocation records (201)", { exact: true }).click();
+  const records = page.locator('[data-paged-sortable-table-id="elf-relocation-records"]');
+  await expect(records.locator("tbody tr")).toHaveCount(100);
+  await expect(records).toContainText("Explicit addend");
+  await records.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(records.locator("tbody tr").first().locator("td").nth(6)).toHaveText("100");
 });

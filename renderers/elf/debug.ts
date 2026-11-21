@@ -6,6 +6,7 @@ import { renderDefinitionRow, escapeHtml } from "../../html-utils.js";
 import type { ElfCommentInfo, ElfDebugLinkInfo, ElfParseResult } from "../../analyzers/elf/types.js";
 import { formatElfHex } from "./value-format.js";
 import { renderDwarfAnalysis } from "../dwarf.js";
+import { renderElfMiniDebugInfo } from "./mini-debug-info.js";
 
 const renderComment = (comment: ElfCommentInfo): string => {
   if (!comment.strings?.length) return "";
@@ -26,7 +27,7 @@ const renderDebugLink = (debugLink: ElfDebugLinkInfo, littleEndian: boolean): st
   parts.push(`<details style="margin-top:.35rem"><summary style="cursor:pointer">Debug link (.gnu_debuglink)</summary>`);
   parts.push(`<dl>`);
   parts.push(renderDefinitionRow("File name", fileName));
-  parts.push(renderDefinitionRow("CRC32", crc));
+  parts.push(renderDefinitionRow("CRC32", crc, "Recorded checksum of the separate debug file."));
   parts.push(renderDefinitionRow("Endian", littleEndian ? "little-endian" : "big-endian"));
   parts.push(`</dl>`);
   if (debugLink.issues?.length) {
@@ -53,7 +54,7 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
   const comment = elf.comment;
   const debugLink = elf.debugLink;
   const dwarf = elf.dwarf;
-  if (![comment, debugLink, dwarf, elf.goBuildInfo].some(Boolean)) return;
+  if (![comment, debugLink, dwarf, elf.goBuildInfo, elf.miniDebugInfo].some(Boolean)) return;
   out.push(renderElfSectionStart(`Build / debug`));
   out.push(`<div class="smallNote">Non-code metadata useful for attribution and external debug info.</div>`);
   if (elf.goBuildInfo) renderGoBuildInfo(elf.goBuildInfo, out);
@@ -64,6 +65,7 @@ export function renderElfDebug(elf: ElfParseResult, out: string[]): void {
   if (debugLink) {
     out.push(renderDebugLink(debugLink, elf.littleEndian));
   }
+  if (elf.miniDebugInfo) out.push(renderElfMiniDebugInfo(elf));
   if (dwarf) {
     out.push(`<details style="margin-top:.35rem"><summary style="cursor:pointer">`);
     out.push(

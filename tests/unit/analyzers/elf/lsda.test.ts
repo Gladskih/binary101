@@ -23,6 +23,21 @@ void test("decodes LSDA call sites and cleanup action records", async () => {
   assert.deepEqual(parsed[0]?.issues, []);
 });
 
+void test("recovers LSDA from a file-backed load segment when its section name is missing", async () => {
+  const source = fixture([255, 255, 1, 4, 2, 5, 12, 1, 0, 0]);
+  delete source.elf.sections[4]!.name;
+  const [frame] = source.elf.unwind!;
+  frame!.sectionIndex = null;
+  source.elf.programHeaders = [{ index: 0, type: 1, typeName: "PT_LOAD", offset: 64n,
+    vaddr: 8192n, paddr: 8192n, filesz: 10n, memsz: 20n, flags: 4, flagNames: ["R"], align: 4n }];
+
+  const [result] = await parseElfLsda(source.file(), source.elf);
+
+  assert.equal(result?.segmentBacked, true);
+  assert.deepEqual(result?.callSites, [{ start: 2n, length: 5n, landingPad: 12n, action: 1n }]);
+  assert.deepEqual(result?.issues, []);
+});
+
 void test("reports invalid table lengths, missing bytes and cyclic actions", async () => {
   const short = fixture([255, 255, 1, 9, 2]);
   assert.match((await parseElfLsda(short.file(), short.elf))[0]!.issues.join(" "), /truncated/);

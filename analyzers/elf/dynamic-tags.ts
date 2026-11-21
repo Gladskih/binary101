@@ -2,13 +2,13 @@ import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
 
 type DynamicValueKind = "address" | "bytes" | "count" | "string" | "presence" |
   "flags" | "relocation" | "value";
+type DynamicTagCatalog = Readonly<Record<number, readonly [string, DynamicValueKind, string]>>;
 
 // Numeric assignments and semantics: gABI 8.3 and glibc elf/elf.h (GNU/Sun extensions).
 // https://gabi.xinuos.com/elf/08-dynamic.html#dynamic-section
 // https://github.com/bminor/glibc/blob/master/elf/elf.h
 // Sun string tags: https://docs.oracle.com/cd/E19683-01/817-3677/chapter6-42444/
-export const ELF_DYNAMIC_TAG_DESCRIPTIONS: Readonly<Record<number,
-  readonly [string, DynamicValueKind, string]>> = {
+export const ELF_DYNAMIC_TAG_DESCRIPTIONS: DynamicTagCatalog = {
   1: ["DT_NEEDED", "string", "Required shared library; order is significant."],
   2: ["DT_PLTRELSZ", "bytes", "Total size of PLT relocations."],
   3: ["DT_PLTGOT", "address", "PLT/GOT address; details depend on the processor ABI."],
@@ -23,7 +23,7 @@ export const ELF_DYNAMIC_TAG_DESCRIPTIONS: Readonly<Record<number,
   12: ["DT_INIT", "address", "Initialization function."],
   13: ["DT_FINI", "address", "Termination function."],
   14: ["DT_SONAME", "string", "Shared object's own library name."],
-  15: ["DT_RPATH", "string", "Legacy library search path; superseded by DT_RUNPATH."],
+  15: ["DT_RPATH", "string", "Legacy library search path. On glibc it may apply down the dependency tree and is ignored if this object has DT_RUNPATH. $ORIGIN refers to the containing object's directory."],
   16: ["DT_SYMBOLIC", "presence", "Search this object first; superseded by DF_SYMBOLIC."],
   17: ["DT_REL", "address", "Relocations with implicit addends."],
   18: ["DT_RELSZ", "bytes", "Total size of REL relocations."],
@@ -37,7 +37,7 @@ export const ELF_DYNAMIC_TAG_DESCRIPTIONS: Readonly<Record<number,
   26: ["DT_FINI_ARRAY", "address", "Array of termination function pointers."],
   27: ["DT_INIT_ARRAYSZ", "bytes", "Initialization array size."],
   28: ["DT_FINI_ARRAYSZ", "bytes", "Termination array size."],
-  29: ["DT_RUNPATH", "string", "Library search path."],
+  29: ["DT_RUNPATH", "string", "Search path for this object's direct DT_NEEDED dependencies. $ORIGIN refers to the containing object's directory."],
   30: ["DT_FLAGS", "flags", "Dynamic loader behavior flags (DF_*)."],
   32: ["DT_PREINIT_ARRAY", "address", "Pre-initialization function pointers; executable files only."],
   33: ["DT_PREINIT_ARRAYSZ", "bytes", "Pre-initialization array size."],
@@ -85,3 +85,18 @@ export const ELF_DYNAMIC_TAG_DESCRIPTIONS: Readonly<Record<number,
   0x7fffffff: ["DT_FILTER", "string",
     "Library supplying actual code and data for the symbols declared by this object."]
 };
+
+// Processor-specific tag numbers are meaningful only for the corresponding e_machine.
+// https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst#dynamic-section
+// https://riscv-non-isa.github.io/riscv-elf-psabi-doc/#_dynamic_section
+const aarch64Tags: DynamicTagCatalog = { ...ELF_DYNAMIC_TAG_DESCRIPTIONS,
+  0x70000005: ["DT_AARCH64_VARIANT_PCS", "value",
+    "Marks a PLT relocation against a variant-PCS symbol. The loader must preserve its calling convention. The value is unused."]
+};
+const riscvTags: DynamicTagCatalog = { ...ELF_DYNAMIC_TAG_DESCRIPTIONS,
+  0x70000001: ["DT_RISCV_VARIANT_CC", "value",
+    "Marks a PLT relocation against a symbol with a variant calling convention."]
+};
+
+export const elfDynamicTagCatalog = (machine?: number): DynamicTagCatalog =>
+  machine === 183 ? aarch64Tags : machine === 243 ? riscvTags : ELF_DYNAMIC_TAG_DESCRIPTIONS;

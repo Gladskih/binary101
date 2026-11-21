@@ -5,6 +5,7 @@ export interface ElfLsdaCallSite { start: bigint; length: bigint; landingPad: bi
 export interface ElfLsdaAction { offset: number; typeFilter: bigint; nextOffset: bigint }
 export interface ElfLsda {
   address: bigint;
+  segmentBacked?: true;
   landingPadBase: ElfUnwindPointer | null;
   typeEncoding: number;
   callSiteEncoding: number;

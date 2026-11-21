@@ -29,3 +29,19 @@ void test("renders nothing without attribute sections", () => {
   renderElfAttributes(relocationFixture().elf, out);
   assert.deepEqual(out, []);
 });
+
+void test("explains AArch64 comprehension, value encoding and feature coverage", () => {
+  const { elf } = relocationFixture();
+  elf.attributes = [{ sectionIndex: 4, issues: [], vendors: [{
+    name: "aeabi_feature_and_bits", scopes: [], aarch64: { comprehension: 1, parameterType: 0,
+      attributes: [{ tag: 0n, value: 1n }, { tag: 2n, value: 0n }, { tag: 32n, value: 19n }] }
+  }] }];
+  const out: string[] = [];
+  renderElfAttributes(elf, out);
+  const html = out.join("");
+  assert.match(html, /optional subsection/);
+  assert.match(html, /ULEB128/);
+  assert.match(html, /All executable sections/);
+  assert.match(html, /Not universal or unspecified/);
+  assert.match(html, /Unknown tag/);
+});

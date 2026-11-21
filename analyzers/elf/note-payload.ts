@@ -5,6 +5,7 @@ import { ELF_INTEGER_READERS } from "./byte-order.js";
 import { parseElfGnuProperties } from "./gnu-properties.js";
 import { elfCoreNoteName, parseElfCoreNote } from "./core-notes.js";
 import { decodeSystemTapNote } from "./systemtap-note.js";
+import { decodeElfPackageNote } from "./package-note.js";
 
 const abiVersion = (bytes: Uint8Array, order: ElfByteOrder): string | null => {
   if (bytes.length < 16) return null;
@@ -31,6 +32,13 @@ const gnuNotes: Readonly<Record<number, {
 
 export const decodeElfNotePayload = (entry: ElfNoteEntry, bytes: Uint8Array,
   wordSize: 4 | 8, order: ElfByteOrder, coreMachine: number | undefined, issues: string[]): void => {
+  // UAPI.8 defines the FDO owner and note type as a pair.
+  if (entry.name === "FDO" && entry.type === 0xcafe1a7e) {
+    entry.typeName = "FDO_PACKAGING_METADATA";
+    entry.description = "Package metadata recorded by the producer";
+    entry.value = decodeElfPackageNote(bytes, issues);
+    return;
+  }
   // Go's build ID uses owner Go and type 4, not GNU's type-4 gold version.
   // https://go.dev/src/cmd/internal/buildid/note.go
   if (entry.name === "Go" && entry.type === 4) {

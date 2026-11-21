@@ -97,6 +97,7 @@
     "llvm-rust-demangle": "0.3.0",
     "lzma-sdk-decode": "0.1.1",
     "pkijs": "^4.0.0",
+    "xz-decompress": "0.2.3",
     "zstddec": "0.3.4"
   }
 }

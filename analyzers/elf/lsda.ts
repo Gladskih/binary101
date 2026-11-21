@@ -7,6 +7,9 @@ import { elfFileRange } from "./relocation-reader.js";
 import { readElfUnwindPointer } from "./unwind-pointer.js";
 import { readElfLsdaActions } from "./lsda-actions.js";
 import { readElfLsdaCallSites, readElfLsdaTypes } from "./lsda-tables.js";
+import { elfLoadFileTail } from "./load-file-tail.js";
+
+type LsdaFrame = { fde: ElfUnwindFde; source: "runtime" | "debug" };
 
 const readHeader = async (
   cursor: DwarfCursor, addressSize: number, result: ElfLsda
@@ -41,18 +44,28 @@ const readTables = async (cursorAt: ElfLsdaCursorAt, addressSize: number, result
 };
 
 const readDescriptor = async (reader: FileRangeReader, elf: ElfParseResult,
-  section: ElfSectionHeader | undefined, fde: ElfUnwindFde, nextAddress?: bigint): Promise<ElfLsda> => {
+  section: ElfSectionHeader | undefined, { fde, source }: LsdaFrame, nextAddress?: bigint): Promise<ElfLsda> => {
   const result: ElfLsda = { address: fde.lsda!.address, landingPadBase: fde.start,
     typeEncoding: 255, callSiteEncoding: 255, callSites: [], actions: [], types: [], specifications: [], issues: [] };
-  if (!section || fde.lsda!.indirect || (section.flags & 0x800n)) {
-    result.issues.push("LSDA requires a direct pointer into an uncompressed .gcc_except_table section.");
+  if (fde.lsda!.indirect || (section && (section.flags & 0x800n)) ||
+      (!section && elf.sections.length && source === "debug")) {
+    result.issues.push("LSDA requires a direct pointer into an uncompressed .gcc_except_table section " +
+      "or a file-backed PT_LOAD mapped from runtime unwind data.");
     return result;
   }
-  const skip = result.address - section.addr;
-  const end = nextAddress != null && nextAddress < section.addr + section.size
-    ? nextAddress : section.addr + section.size;
-  const range = elfFileRange(section.offset + skip, end - result.address, reader.size);
-  if (!range) { result.issues.push("LSDA section is truncated or outside the file."); return result; }
+  const storage = section
+    ? elfFileRange(section.offset + result.address - section.addr,
+      section.addr + section.size - result.address, reader.size)
+    : elfLoadFileTail(elf.programHeaders, result.address, reader.size);
+  if (!storage) {
+    result.issues.push(section ? "LSDA section is truncated or outside the file." :
+      "LSDA address does not have an unambiguous file-backed PT_LOAD mapping.");
+    return result;
+  }
+  if (!section) result.segmentBacked = true;
+  const size = nextAddress != null && nextAddress - result.address < BigInt(storage.size)
+    ? Number(nextAddress - result.address) : storage.size;
+  const range = { offset: storage.offset, size };
   const cursorAt: ElfLsdaCursorAt = (position, end = range.size) => new DwarfCursor(reader,
     { ...range, name: "LSDA", compressed: false }, position, Math.min(end, range.size), elf.littleEndian, result.issues);
   await readTables(cursorAt, elf.is64 ? 8 : 4, result);
@@ -65,20 +78,25 @@ export const parseElfLsda = async (file: File, elf: ElfParseResult,
   const results: ElfLsda[] = [];
   const reader = createFileRangeReader(file, 0, file.size);
   const frames = lsdaFrames(elf);
-  for (const [index, fde] of frames.entries()) {
-    const address = fde.lsda!.address;
+  for (const [index, frame] of frames.entries()) {
+    const address = frame.fde.lsda!.address;
     if (nativeAotLsdas.has(address)) continue;
     const section = elf.sections.find(item => item.name === ".gcc_except_table" &&
       address >= item.addr && address < item.addr + item.size);
-    results.push(await readDescriptor(reader, elf, section, fde, frames[index + 1]?.lsda?.address));
+    results.push(await readDescriptor(reader, elf, section, frame, frames[index + 1]?.fde.lsda?.address));
   }
   return results;
 };
 
-const lsdaFrames = (elf: ElfParseResult): ElfUnwindFde[] => {
-  const unique = new Map<bigint, ElfUnwindFde>();
-  for (const fde of (elf.unwind ?? []).flatMap(section => section.fdes)) {
-    if (fde.lsda && fde.lsda.address !== 0n && !unique.has(fde.lsda.address)) unique.set(fde.lsda.address, fde);
+const lsdaFrames = (elf: ElfParseResult): LsdaFrame[] => {
+  const unique = new Map<bigint, LsdaFrame>();
+  for (const record of elf.unwind ?? []) {
+    const runtime = record.sectionIndex === null ||
+      elf.sections[record.sectionIndex]?.name === ".eh_frame";
+    for (const fde of record.fdes) {
+      if (!fde.lsda?.address || unique.has(fde.lsda.address)) continue;
+      unique.set(fde.lsda.address, { fde, source: runtime ? "runtime" : "debug" });
+    }
   }
-  return [...unique.values()].sort((left, right) => left.lsda!.address < right.lsda!.address ? -1 : 1);
+  return [...unique.values()].sort((left, right) => left.fde.lsda!.address < right.fde.lsda!.address ? -1 : 1);
 };

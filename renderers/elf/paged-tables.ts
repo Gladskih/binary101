@@ -18,6 +18,8 @@ import { createElfAttributeTableModel } from "./attributes.js";
 import { createElfMipsOptionModel } from "./mips.js";
 import { createElfArmEhabiModel, createElfArmScopeModel } from "./arm-ehabi.js";
 import { createElfCoreTableModel, createElfCoreMappingModel } from "./core-notes.js";
+import { getElfMiniDebugTable } from "./mini-debug-info.js";
+import { getElfRelocationRecordsModel } from "./relocation-records.js";
 
 const getArmTable = (
   elf: ElfParseResult,
@@ -41,14 +43,14 @@ const getCoreTable = (elf: ElfParseResult, tableId: string): PagedSortableTableM
 
 type TableResolver = (elf: ElfParseResult, tableId: string) => PagedSortableTableModel | null;
 const tableResolvers: TableResolver[] = [
-  getArmTable, getCoreTable,
+  getArmTable, getCoreTable, getElfMiniDebugTable, getElfRelocationRecordsModel,
   (elf, id) => {
     const index = elf.mips?.findIndex((_, index) => id === `elf-mips-options-${index}`) ?? -1;
     return index >= 0 ? createElfMipsOptionModel(elf.mips![index]!, index) : null;
   },
   (elf, id) => {
     const table = elf.symbolTables?.find(table => id === `elf-symbols-${table.sectionIndex}`);
-    return table ? createElfSymbolTableModel(table, elf.sections) : null;
+    return table ? createElfSymbolTableModel(table, elf.sections, elf.header.machine) : null;
   },
   (elf, id) => {
     const section = elf.attributes?.find(section => id === `elf-attributes-${section.sectionIndex}`);

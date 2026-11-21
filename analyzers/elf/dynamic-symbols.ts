@@ -125,6 +125,7 @@ const parseDynsym = async (
     out.push({ index, name, value, size, bind, bindName: decodeBind(bind),
       type, typeName: decodeType(type), visibility,
       visibilityName: decodeVisibility(visibility), shndx,
+      ...(other !== visibility ? { other } : {}),
       ...(section.rawSectionIndex === undefined ? {} : { rawSectionIndex: section.rawSectionIndex }) });
   }
   return out.sort((left, right) => left.index - right.index);

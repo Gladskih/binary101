@@ -11,7 +11,7 @@ import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
 import { elfUnwindTitle, renderElfUnwind } from "./unwind.js";
-import { renderElfLsda } from "./lsda.js";
+import { elfLsdaTitle, renderElfLsda } from "./lsda.js";
 import { renderElfArmEhabi } from "./arm-ehabi.js";
 import { renderElfHashTables } from "./hash-tables.js";
 import { renderElfAttributes } from "./attributes.js";
@@ -24,7 +24,7 @@ import { renderElfDebug } from "./debug.js";
 import { renderEmbeddedResources } from "../embedded-resources.js";
 import { markSupplementalAnalysis } from "../supplemental-analysis.js";
 import { renderChecksWithoutFindings } from "../checks-without-findings.js";
-import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "../../analyzers/elf/dynamic-tags.js";
+import { elfDynamicTagCatalog } from "../../analyzers/elf/dynamic-tags.js";
 
 export interface ElfLazySection {
   key: string;
@@ -70,7 +70,7 @@ const addTables = (elf: ElfParseResult, add: AddSection): void => {
   elf.unwind?.forEach((section, index) => add(`unwind-${index}`,
     elfUnwindTitle(section, section.sectionIndex == null ? undefined : names.get(section.sectionIndex)),
     renderElfUnwind, index));
-  if (elf.lsdas?.length) add("lsda", "Exception tables (.gcc_except_table)", renderElfLsda);
+  if (elf.lsdas?.length) add("lsda", elfLsdaTitle(elf.lsdas), renderElfLsda);
   addArchitecture(elf, add);
 };
 
@@ -100,7 +100,9 @@ const addBuildMetadata = (elf: ElfParseResult, add: AddSection): void => {
   if (elf.embeddedResources) add("embedded-resources", "Qt / GLib embedded resources",
     (current, out) => { out.push(renderEmbeddedResources(current.embeddedResources)); });
   if (elf.nativeAot) add("native-aot", "NativeAOT metadata", renderElfNativeAot);
-  if (elf.comment || elf.debugLink || elf.dwarf || elf.goBuildInfo) add("debug", "Build / debug", renderElfDebug);
+  if (elf.comment || elf.debugLink || elf.dwarf || elf.goBuildInfo || elf.miniDebugInfo) {
+    add("debug", "Build / debug", renderElfDebug);
+  }
 };
 
 const supplementalSections = new Set([
@@ -115,7 +117,7 @@ export const renderElfLazy = (elf: ElfReport | null): string => {
       : renderElfSectionStart(section.title) + renderElfSectionEnd())
       .replace("<section ", `<section data-elf-lazy-section="${section.key}" ` +
         (section.key === "linking" && elf.dynamic ? `data-report-search-labels="` +
-          `${Object.values(ELF_DYNAMIC_TAG_DESCRIPTIONS).map(([name]) => name).join("|")}" ` : ""));
+          `${Object.values(elfDynamicTagCatalog(elf.header.machine)).map(([name]) => name).join("|")}" ` : ""));
     return supplementalSections.has(section.key) ? markSupplementalAnalysis(html) : html;
   }).join("") + renderChecksWithoutFindings(elf);
 };

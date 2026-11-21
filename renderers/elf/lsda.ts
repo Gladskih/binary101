@@ -66,12 +66,18 @@ const renderWarnings = (lsdas: ElfLsda[]): string => {
     ).join("") + "</tbody></table></div>";
 };
 
+export const elfLsdaTitle = (lsdas: ElfLsda[]): string =>
+  lsdas.some(lsda => lsda.segmentBacked) ? "Exception tables (LSDA)" : "Exception tables (.gcc_except_table)";
+
 export const renderElfLsda = (elf: ElfParseResult, out: string[]): void => {
   const lsdas = elf.lsdas ?? [];
   if (!lsdas.length) return;
-  out.push(renderElfSectionStart("Exception tables (.gcc_except_table)"));
+  out.push(renderElfSectionStart(elfLsdaTitle(lsdas)));
   out.push('<p class="smallNote">GCC/LLVM language-specific exception data (LSDA). ' +
     "These are counts of decoded metadata records, not counts of functions or source-level catch clauses.</p>");
+  if (lsdas.some(lsda => lsda.segmentBacked)) out.push('<p class="smallNote">' +
+    "FDE pointers locate LSDA in file-backed PT_LOAD ranges. Reads stop at the next known LSDA " +
+    "or at the end of that file range.</p>");
   out.push(renderCounts(lsdas, "Tables", [
     ["Unique LSDA tables", () => 1],
     ["Tables with decoded call sites", lsda => Number(lsda.callSites.length > 0)],

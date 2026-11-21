@@ -21,12 +21,13 @@ const renderSegmentsTable = (tls: ElfTlsInfo): string => {
         `<tr><td>${seg.index}</td><td>${escapeHtml(formatElfHex(seg.offset))}</td><td>${escapeHtml(formatElfHex(seg.vaddr))}</td>` +
         `<td>${formatElfMaybeHumanSize(seg.filesz)}</td><td>${formatElfMaybeHumanSize(seg.memsz)}</td><td>${escapeHtml(
           formatElfHex(seg.align)
-        )}</td></tr>`
+        )}</td><td class="peNumeric">${seg.memsz >= seg.filesz
+          ? formatElfMaybeHumanSize(seg.memsz - seg.filesz) : "Unavailable"}</td></tr>`
       );
     })
     .join("");
   return renderTlsTable("PT_TLS segments", tls.segments.length,
-    ["#", "Offset", "VirtAddr", "FileSz", "MemSz", "Align"], rows);
+    ["#", "Offset", "VirtAddr", "FileSz", "MemSz", "Align", "Zero-filled bytes"], rows);
 };
 
 const renderSectionsTable = (tls: ElfTlsInfo): string => {
@@ -51,7 +52,9 @@ export function renderElfTls(elf: ElfParseResult, out: string[]): void {
 
   out.push(renderElfSectionStart(`TLS`));
   out.push(
-    `<div class="smallNote">Thread-local storage describes per-thread variables and the template copied into each new thread.</div>`
+    '<div class="smallNote">Each thread gets its own TLS block. FileSz is the initialization image ' +
+    '(typically .tdata). MemSz is the template size including the zero-filled part (typically .tbss). ' +
+    "A .tbss section can share a link-time address with an ordinary section.</div>"
   );
   out.push(`<dl>`);
   out.push(renderDefinitionRow("PT_TLS segments", escapeHtml(String(tls.segments.length))));

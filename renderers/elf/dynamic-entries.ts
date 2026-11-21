@@ -1,4 +1,4 @@
-import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "../../analyzers/elf/dynamic-tags.js";
+import { elfDynamicTagCatalog } from "../../analyzers/elf/dynamic-tags.js";
 import { ELF_DYNAMIC_TAG } from "../../analyzers/elf/abi-constants.js";
 import { DYNAMIC_FLAGS, DYNAMIC_FLAGS_1 } from "../../analyzers/elf/constants.js";
 import type { ElfDynamicInfo, ElfOptionEntry } from "../../analyzers/elf/types.js";
@@ -66,8 +66,10 @@ const renderValue = (entry: DynamicRecord, kind: string): string => {
   return raw + valueDetail(entry, kind);
 };
 
-const renderRecord = (entry: DynamicRecord, index: number): string => {
-  const definition = typeof entry.tag === "number" && ELF_DYNAMIC_TAG_DESCRIPTIONS[entry.tag];
+type TagCatalog = ReturnType<typeof elfDynamicTagCatalog>;
+
+const renderRecord = (entry: DynamicRecord, index: number, catalog: TagCatalog): string => {
+  const definition = typeof entry.tag === "number" && catalog[entry.tag];
   const [name, kind, description] = definition || [`Unknown tag ${rawHex(entry.tag)}`, "value",
     "Unknown tag; OS/processor-specific or reserved semantics are not inferred."];
   return renderDefinitionRow(name, renderValue(entry, kind),
@@ -75,23 +77,24 @@ const renderRecord = (entry: DynamicRecord, index: number): string => {
     (kind === "presence" ? " Presence enables this behavior; d_un is ignored." : ""));
 };
 
-export const renderElfDynamicEntries = (entries: ElfDynamicInfo["entries"]): string =>
+export const renderElfDynamicEntries = (entries: ElfDynamicInfo["entries"],
+  catalog = elfDynamicTagCatalog()): string =>
   entries.length ? `<h4>Dynamic entries (${entries.length})</h4>` +
     `<dl class="elfDynamicEntries" data-elf-dynamic-entries>` +
-    `${entries.map(renderRecord).join("")}</dl>` : "";
+    `${entries.map((entry, index) => renderRecord(entry, index, catalog)).join("")}</dl>` : "";
 
-const renderMissingTag = (tag: number, state: string): string => {
-  const [name, kind, description] = ELF_DYNAMIC_TAG_DESCRIPTIONS[tag]!;
+const renderMissingTag = (tag: number, state: string, catalog: TagCatalog): string => {
+  const [name, kind, description] = catalog[tag]!;
   return renderDefinitionRow(name, `<span class="dim">${state}</span>` +
     (kind === "flags" ? formatFlags(tag, 0n) : ""), description +
     (kind === "flags" ? " Dim chips show defined choices; no mask value is available." : ""));
 };
 
 export const renderElfDynamicTagCoverage = (
-  dynamic: Pick<ElfDynamicInfo, "entries" | "terminated">
+  dynamic: Pick<ElfDynamicInfo, "entries" | "terminated">, catalog = elfDynamicTagCatalog()
 ): string => {
   const present = new Set(dynamic.entries.map(entry => entry.tag));
-  const missing = Object.keys(ELF_DYNAMIC_TAG_DESCRIPTIONS).map(Number)
+  const missing = Object.keys(catalog).map(Number)
     .filter(tag => !present.has(tag));
   const state = dynamic.terminated ? "Absent" : "Not determined (DT_NULL not verified)";
   return `<div data-elf-dynamic-coverage><h4>Tag coverage</h4><p class="smallNote">` +
@@ -99,6 +102,6 @@ export const renderElfDynamicTagCoverage = (
       `${missing.length} known tag types are absent.` :
       "DT_NULL was not verified. Tags not encountered in decoded entries may occur " +
       "in unread data; their absence cannot be confirmed.") + `</p>` +
-    `<dl class="elfDynamicEntries">${missing.map(tag => renderMissingTag(tag, state))
+    `<dl class="elfDynamicEntries">${missing.map(tag => renderMissingTag(tag, state, catalog))
       .join("")}</dl></div>`;
 };

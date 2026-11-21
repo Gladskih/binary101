@@ -7,6 +7,7 @@ import type {
   ElfParseResult
 } from "../../analyzers/elf/types.js";
 import { renderCountedCollection } from "../counted-collection.js";
+import { elfDynamicTagCatalog } from "../../analyzers/elf/dynamic-tags.js";
 
 const collectIssues = (interpreter?: ElfInterpreterInfo, dynamic?: ElfDynamicInfo): string[] => {
   const issues: string[] = [];
@@ -30,7 +31,8 @@ export function renderElfLinking(elf: ElfParseResult, out: string[]): void {
   }
   out.push(`</dl>`);
   if (dynamic) {
-    out.push(renderElfDynamicEntries(dynamic.entries), renderElfDynamicTagCoverage(dynamic));
+    const catalog = elfDynamicTagCatalog(elf.header.machine);
+    out.push(renderElfDynamicEntries(dynamic.entries, catalog), renderElfDynamicTagCoverage(dynamic, catalog));
   }
   const issues = collectIssues(interpreter, dynamic);
   if (issues.length) {

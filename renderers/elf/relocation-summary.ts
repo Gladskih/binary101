@@ -47,9 +47,20 @@ const symbolTableIdentity = (sections: Map<number, ElfSectionHeader>, table: Elf
   return sections.get(table.symbolTableIndex)?.type === 11 ? "dynamic" : table.symbolTableIndex;
 };
 
-const typeLabel = (machine: number, table: ElfRelocationTable, entry: ElfRelocation): string =>
+export const elfRelocationTypeLabel = (machine: number, table: ElfRelocationTable, entry: ElfRelocation): string =>
   entry.type == null ? table.encoding === "AUTH_RELR" ? "Authenticated relative (RELR)" :
     "Relative (RELR)" : elfRelocationTypeName(machine, entry.type);
+
+// gABI 6 describes relocation operations, with exact formulas in each psABI.
+// https://gabi.xinuos.com/elf/06-reloc.html
+const typeMeaning = (type: string, symbolIndex: number | null): string => {
+  if (type.endsWith("_IRELATIVE")) return "Write the address returned by a resolver.";
+  if (type.endsWith("_RELATIVE")) return "Adjust an address by the object's load base.";
+  if (type.endsWith("_JUMP_SLOT") || type.endsWith("_JMP_SLOT")) return "Fill a procedure linkage slot.";
+  if (type.endsWith("_COPY")) return "Copy initial data from the selected external definition.";
+  if (type.endsWith("_GLOB_DAT")) return "Write the resolved symbol address to a linkage slot.";
+  return symbolIndex ? "Symbol reference" : "No symbol reference";
+};
 
 // gABI 6.2: RELR encodes locations where the loader adjusts a stored value.
 // https://gabi.xinuos.com/elf/06-reloc.html#relative-relocation-table
@@ -67,8 +78,8 @@ export const summarizeElfRelocations = (elf: ElfParseResult): ElfRelocationSumma
   const sections = new Map(elf.sections.map(section => [section.index, section]));
   for (const entry of elf.relocations?.entries ?? []) {
     const table = elf.relocations!.tables[entry.tableIndex]!;
-    const type = typeLabel(elf.header.machine, table, entry);
-    const binding = entry.symbolIndex ? "Symbol reference" : "No symbol reference";
+    const type = elfRelocationTypeLabel(elf.header.machine, table, entry);
+    const binding = typeMeaning(type, entry.symbolIndex);
     addRow(types, `${type}:${binding}`, type, binding);
     const meaning = encodingMeaning(table.encoding, entry.addend);
     addRow(formats, `${table.encoding}:${meaning}`, table.encoding, meaning);

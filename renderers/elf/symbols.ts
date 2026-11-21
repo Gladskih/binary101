@@ -8,6 +8,7 @@ import { createElfVersionedSymbolName } from "./symbol-versions.js";
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
 import { renderCountedCollection } from "../counted-collection.js";
+import { elfSymbolValueHelp, elfSymbolVersionHelp, elfSymbolVisibilityText } from "./symbol-fields.js";
 
 const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfParseResult): string => {
   if (!symbols.length) return `<div class="smallNote dim">${escapeHtml(title)}: none.</div>`;
@@ -23,15 +24,19 @@ const renderSymbolTable = (title: string, symbols: ElfDynamicSymbol[], elf: ElfP
         versionedName(sym, getElfSymbolDisplayName(sym))) : "-";
       const bind = escapeHtml(sym.bindName);
       const type = escapeHtml(sym.typeName);
-      const vis = escapeHtml(sym.visibilityName);
+      const vis = escapeHtml(elfSymbolVisibilityText(sym.visibilityName,
+        sym.other ?? sym.visibility, elf.header.machine));
       const value = sym.value ? escapeHtml(formatElfHex(sym.value)) : `<span class="dim">0</span>`;
-      return `<tr><td>${name}</td><td>${bind}</td><td>${type}</td><td>${vis}</td><td>${value}</td></tr>`;
+      return `<tr><td>${name}</td><td>${bind}</td><td>${type}</td><td>${vis}</td>` +
+        `<td class="peNumeric">${value}</td><td class="peNumeric">${sym.size}</td></tr>`;
     })
     .join("");
 
   return renderCountedCollection(escapeHtml(caption),
       `<div class="tableWrap"><table class="table" style="margin-top:.35rem"><thead><tr>` +
-      `<th>Name</th><th>Bind</th><th title="Symbol type recorded in ELF, not inferred from its name.">ELF type</th><th>Vis</th><th>Value</th>` +
+      `<th>Name</th><th>Bind</th><th>ELF type</th><th>Visibility</th>` +
+      `<th title="${escapeHtml(elfSymbolValueHelp(elf.header.type))}">Value</th>` +
+      `<th title="st_size is measured in bytes. Zero may mean unknown.">Size</th>` +
       `</tr></thead><tbody>${rows}</tbody></table></div>`, symbols.length
   );
 };
@@ -62,6 +67,7 @@ export function renderElfSymbols(elf: ElfParseResult, out: string[]): void {
 
   out.push(renderSymbolTable("Imported symbols", dyn.importSymbols, elf));
   out.push(renderSymbolTable("Exported symbols", dyn.exportSymbols, elf));
+  if (elf.symbolVersions) out.push(`<p class="smallNote">${elfSymbolVersionHelp}</p>`);
   out.push(renderIssues(dyn));
   out.push(renderElfSectionEnd());
 }

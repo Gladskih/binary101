@@ -49,7 +49,12 @@ void test("large record sets aggregate before rendering and symbol distributions
   assert.equal(createElfRelocationTableModel(elf).rowCount, 1);
   assert.equal(createElfRelocationTableModel(elf).rowAt(0)?.cells[2]?.html, "201");
   assert.equal(getElfRelocationSummaryModel(elf, "elf-relocations-symbols")?.rowCount, 201);
-  assert.doesNotMatch(out.join(""), /Virtual address|File offset|>Addend</);
+  const records = getElfPagedTableModel(elf, "elf-relocation-records")!;
+  assert.equal(records.rowCount, 201);
+  assert.equal(records.rowAt(200)?.cells[4]?.html, "201");
+  assert.equal(records.rowAt(0)?.cells[1]?.html, "0x40");
+  assert.equal(records.sortValueAt(0, 6), "-4");
+  assert.equal(records.rowAt(0)?.cells[9]?.html, "0x208");
 });
 
 void test("absent relocations render nothing; warnings without entries remain visible", () => {

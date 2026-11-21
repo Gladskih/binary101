@@ -34,8 +34,15 @@ import { renderElfNotes } from "./notes.js";
 import { renderElfNativeAot } from "./native-aot.js";
 import { renderElfSymbols } from "./symbols.js";
 import { renderElfTls } from "./tls.js";
+import { elfSectionSegments } from "../../analyzers/elf/section-segments.js";
 import { renderElfRelocations } from "./relocations.js";
 import { formatElfHex, formatElfList, formatElfMaybeHumanSize } from "./value-format.js";
+
+// https://github.com/ARM-software/abi-aa/blob/main/buildattr64/buildattr64.rst
+// https://riscv-non-isa.github.io/riscv-elf-psabi-doc/#risc-v-attributes
+const attributeSectionTypes = new Map([
+  [40, "SHT_ARM_ATTRIBUTES"], [183, "SHT_AARCH64_ATTRIBUTES"], [243, "SHT_RISCV_ATTRIBUTES"]
+]);
 
 const SECTION_HINTS: Record<string, string> = {
   ".text": "Executable code (instructions).",
@@ -132,6 +139,8 @@ const formatSectionEntSize = (section: ElfSectionHeader): string => {
 export function renderProgramHeaders(elf: ElfParseResult, out: string[]): void {
   if (!elf.programHeaders?.length) return;
   out.push(renderElfSectionStart(`Program headers (${elf.programHeaders.length})`));
+  out.push('<p class="smallNote">For PT_LOAD, FileSz bytes are mapped from the file. The next ' +
+    "MemSz − FileSz bytes are zero-filled. For PT_TLS these sizes refer to the per-thread template.</p>");
   out.push(`<div class="tableWrap">`);
   out.push(
     `<table class="table"><thead><tr>` +
@@ -177,13 +186,15 @@ export function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
       `<th title="sh_link: section index reference with type-specific meaning.">Link</th>` +
       `<th title="sh_info: extra data with type-specific meaning.">Info</th>` +
       `<th title="sh_entsize: size of one fixed-size entry in table-like sections.">EntSize</th>` +
+      (elf.programHeaders.length ? '<th>Containing segments</th>' : "") +
     `</tr></thead><tbody>`
   );
   const sectionTypeMap = new Map<number, ElfOptionEntry>(SECTION_TYPES.map(entry => [entry[0], entry]));
   const sectionsByIndex = new Map<number, ElfSectionHeader>(elf.sections.map(section => [section.index, section]));
   elf.sections.forEach((sec: ElfSectionHeader) => {
     const opt = sectionTypeMap.get(sec.type);
-    const typeLabel = sec.typeName || opt?.[1] || `0x${sec.type.toString(16)}`;
+    const processorType = sec.type === 0x70000003 ? attributeSectionTypes.get(elf.header.machine) : undefined;
+    const typeLabel = processorType || sec.typeName || opt?.[1] || `0x${sec.type.toString(16)}`;
     const typeTitle = opt?.[2] ? `${typeLabel} - ${opt[2]}` : typeLabel;
     const hint = sec.name ? knownSectionName(sec.name) : null;
     const nameCell = hint
@@ -198,7 +209,10 @@ export function renderSectionHeaders(elf: ElfParseResult, out: string[]): void {
         `<td>${flags}</td><td>${escapeHtml(formatElfHex(sec.addralign))}</td>` +
         `<td>${formatSectionLink(sec, sectionsByIndex)}</td>` +
         `<td>${formatSectionInfo(sec, sectionsByIndex)}</td>` +
-        `<td>${formatSectionEntSize(sec)}</td></tr>`
+        `<td>${formatSectionEntSize(sec)}</td>` +
+        (elf.programHeaders.length ? `<td>${escapeHtml(elfSectionSegments(sec, elf.programHeaders)
+          .map(header => `#${header.index} ${header.typeName ?? formatElfHex(header.type)}`).join(", ") || "—")}</td>` : "") +
+        "</tr>"
     );
   });
   out.push(`</tbody></table>`);
