@@ -15,6 +15,8 @@ import type { ElfHashTable } from "./hash-types.js";
 import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
 import { declaredDynamicSymbolRange } from "./dynsym-range.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
+import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
+  type ElfSectionEncoding } from "./section-data.js";
 
 // gABI p_type/sh_type and d_tag definitions:
 // https://gabi.xinuos.com/elf/03-sheader.html
@@ -43,8 +45,11 @@ const STV_INTERNAL = 1;
 const STV_HIDDEN = 2;
 const STV_PROTECTED = 3;
 
-type TableRange = { offset: number; size: number };
+type TableRange = { offset: number; size: number; reader?: FileRangeReader; storedOffset?: number };
 type DynamicSymbolTables = { symtab: TableRange; strtab: TableRange | null };
+type DynamicSymbolInput = ElfSectionEncoding & {
+  file: File; programHeaders: ElfProgramHeader[]; sections: ElfSectionHeader[];
+};
 
 const decodeBind = (bind: number): string => {
   const map: Record<number, string> = { 0: "LOCAL", 1: "GLOBAL", 2: "WEAK", 10: "GNU_UNIQUE" };
@@ -107,9 +112,9 @@ const parseDynsym = async (
   readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>,
   reader: FileRangeReader
 ): Promise<ElfDynamicSymbol[]> => {
-  const readName = createElfStringTableReader(reader, strtab, issues);
+  const readName = createElfStringTableReader(strtab?.reader ?? reader, strtab, issues);
   const out: ElfDynamicSymbol[] = [];
-  for (const { index, record } of await readDynsymRecords(symtab, layout, issues, reader)) {
+  for (const { index, record } of await readDynsymRecords(symtab, layout, issues, symtab.reader ?? reader)) {
     const { nameOffset: nameOff, value, size, info, other, sectionIndex } = record;
     // ELF*_ST_BIND/TYPE/VISIBILITY: high/low st_info nibbles and low two st_other bits.
     // https://gabi.xinuos.com/elf/05-symtab.html
@@ -121,7 +126,7 @@ const parseDynsym = async (
     const shndx = await readSectionIndex(index, sectionIndex);
     if (shndx == null) continue;
     const section = elfSymbolSectionFields(sectionIndex, shndx);
-    symbolCache.set(symtab.offset + index * layout.symbolEntrySize, { name, value, ...section });
+    if (!symtab.reader) symbolCache.set(symtab.offset + index * layout.symbolEntrySize, { name, value, ...section });
     out.push({ index, name, value, size, bind, bindName: decodeBind(bind),
       type, typeName: decodeType(type), visibility,
       visibilityName: decodeVisibility(visibility), shndx,
@@ -142,20 +147,26 @@ const readTableRange = (file: File, offset: bigint, size: bigint,
   return { offset: Number(offset), size: Number(size > available ? available : size) };
 };
 
-const parseDynsymFromSections = async (opts: {
-  file: File;
-  sections: ElfSectionHeader[];
-  is64: boolean;
-  littleEndian: boolean;
-  issues: string[];
-}): Promise<DynamicSymbolTables | null> => {
+const openDynamicSymbolSection = async (
+  opts: DynamicSymbolInput, section: ElfSectionHeader, name: string, issues: string[]
+): Promise<TableRange | null> => {
+  if (!(section.flags & ELF_SECTION_COMPRESSED)) {
+    return readTableRange(opts.file, section.offset, section.size, name, issues);
+  }
+  const data = await openElfSectionData(createFileRangeReader(opts.file, 0, opts.file.size),
+    { ...section, name: section.name || name }, opts, issues);
+  return data && { ...data, storedOffset: Number(section.offset) };
+};
+
+const parseDynsymFromSections = async (opts: DynamicSymbolInput & { issues: string[] }):
+Promise<DynamicSymbolTables | null> => {
   const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM && sec.size > 0n);
   if (!dynsym) return null;
   if (dynsym.entsize !== BigInt(selectElfBinaryLayout(opts).symbolEntrySize)) {
     opts.issues.push(".dynsym has an invalid entry size.");
     return null;
   }
-  const symtab = readTableRange(opts.file, dynsym.offset, dynsym.size, ".dynsym", opts.issues);
+  const symtab = await openDynamicSymbolSection(opts, dynsym, ".dynsym", opts.issues);
   if (!symtab) return null;
 
   const linked = opts.sections[dynsym.link];
@@ -164,18 +175,12 @@ const parseDynsymFromSections = async (opts: {
     opts.issues.push(".dynsym sh_link does not reference SHT_STRTAB.");
     return { symtab, strtab: null };
   }
-  const strtab = readTableRange(opts.file, linked.offset, linked.size, ".dynstr", opts.issues);
+  const strtab = await openDynamicSymbolSection(opts, linked, ".dynstr", opts.issues);
   return { symtab, strtab };
 };
 
-const parseDynsymFromDynamicTags = async (opts: {
-  file: File;
-  programHeaders: ElfProgramHeader[];
-  sections: ElfSectionHeader[];
-  is64: boolean;
-  littleEndian: boolean;
-  issues: string[];
-}, entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
+const parseDynsymFromDynamicTags = async (opts: DynamicSymbolInput & { issues: string[] },
+  entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
 Promise<DynamicSymbolTables | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
@@ -184,8 +189,16 @@ Promise<DynamicSymbolTables | null> => {
   const symtab = await locateDynamicSymbolTable(opts, tags, entries, hashes);
   if (!symtab) return null;
   const strtab = elfVirtualRange(opts.programHeaders, tags.strtabVaddr, tags.strsz, opts.file.size);
-  if (!strtab) opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
-  return strtab ? { symtab, strtab } : null;
+  if (!strtab) {
+    opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
+    return null;
+  }
+  if (hasCompressedSectionAt(opts.sections, SHT_DYNSYM, symtab.offset) ||
+      hasCompressedSectionAt(opts.sections, 3, strtab.offset)) {
+    opts.issues.push("Dynamic symbol tags point into compressed section data.");
+    return null;
+  }
+  return { symtab, strtab };
 };
 
 const locateDynamicSymbolTable = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
@@ -241,13 +254,8 @@ const inferDynsymCount = (symtab: bigint, strtab: bigint, entrySize: number,
   return count;
 };
 
-export async function parseElfDynamicSymbols(opts: {
-  file: File;
-  programHeaders: ElfProgramHeader[];
-  sections: ElfSectionHeader[];
-  is64: boolean;
-  littleEndian: boolean;
-}, parsedEntries?: ElfDynamicEntry[], symbolCache = new Map<number, ElfRelocationSymbol>(),
+export async function parseElfDynamicSymbols(opts: DynamicSymbolInput,
+  parsedEntries?: ElfDynamicEntry[], symbolCache = new Map<number, ElfRelocationSymbol>(),
 layout = selectElfBinaryLayout(opts), hashes?: ElfHashTable[]):
 Promise<ElfDynamicSymbolInfo | null> {
   const issues: string[] = [];
@@ -262,7 +270,7 @@ Promise<ElfDynamicSymbolInfo | null> {
 
   const symbols = await parseDynsym(tables.symtab, tables.strtab, layout,
     issues, symbolCache,
-    createElfDynamicIndexReader(opts.file, opts, tables.symtab.offset, entries, issues),
+    createElfDynamicIndexReader(opts.file, opts, tables.symtab.storedOffset ?? tables.symtab.offset, entries, issues),
     createFileRangeReader(opts.file, 0, opts.file.size));
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&

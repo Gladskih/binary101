@@ -5,6 +5,7 @@ import { readElfCompressedRelocations } from "../../../../analyzers/elf/relocati
 import { parseElfRelocations } from "../../../../analyzers/elf/relocations.js";
 import { encodeElfCompressedSection } from "../../../fixtures/dwarf-compressed-section-fixture.js";
 import { relocationFixture, relocationSection, relocationTable } from "../../../fixtures/elf-relocations.js";
+import { compressElfFixtureSection } from "../../../fixtures/elf-compressed-section.js";
 
 const compressedFixture = (bits: 32 | 64, order: "little" | "big", codec: number) => {
   const fixture = relocationFixture(bits, order);
@@ -37,14 +38,15 @@ for (const bits of [32, 64] as const) {
     }
   }
 }
-void test("compressed relocation sections require valid headers and cannot be allocated", async () => {
+void test("compressed relocations require valid headers and cannot be allocated in a shared object", async () => {
   const fixture = compressedFixture(64, "little", 1);
+  fixture.elf.header.type = 3; // ET_DYN. gABI 3.4 disallows SHF_ALLOC | SHF_COMPRESSED.
   fixture.elf.sections[4]!.flags |= 2n;
   const reader = createFileRangeReader(fixture.file(), 0, fixture.bytes.length);
   const issues: string[] = [];
   assert.deepEqual(await Array.fromAsync(
     readElfCompressedRelocations(reader, fixture.table, fixture.elf, 0, issues)), []);
-  assert.match(issues[0]!, /non-allocated/);
+  assert.match(issues[0]!, /allocated sections.*cannot be compressed/);
   fixture.elf.sections = [];
   assert.deepEqual(await Array.fromAsync(readElfCompressedRelocations(reader, fixture.table, fixture.elf, 0, [])), []);
 });
@@ -76,7 +78,7 @@ void test("corrupt zlib relocation payloads remain incomplete with a visible dec
   const result = await parseElfRelocations(fixture.file(), fixture.elf);
   assert.deepEqual(result?.entries, []);
   assert.equal(result?.tables[0]?.complete, false);
-  assert.match(result!.issues.join(" "), /compressed relocations/);
+  assert.match(result!.issues.join(" "), /decompression failed/);
 });
 
 void test("a decompressed partial record leaves the relocation table incomplete", async () => {
@@ -88,4 +90,14 @@ void test("a decompressed partial record leaves the relocation table incomplete"
   assert.deepEqual(result?.entries, []);
   assert.equal(result?.tables[0]?.complete, false);
   assert.match(result!.issues.join(" "), /partial record/);
+});
+
+void test("maps non-DWARF compressed relocation targets in logical coordinates", async () => {
+  const fixture = compressedFixture(64, "little", 1);
+  const target = fixture.elf.sections[1]!;
+  Object.assign(target, { name: ".payload", size: 128n });
+  compressElfFixtureSection(fixture.bytes, target, 640, { bits: 64, littleEndian: true, codec: "zlib" });
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+  assert.deepEqual(result?.entries[0]?.target, { sectionIndex: 1, sectionOffset: 8n, fileOffset: null });
+  assert.deepEqual(result?.issues, []);
 });

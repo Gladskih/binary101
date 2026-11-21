@@ -8,6 +8,8 @@ import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import { ELF_DYNAMIC_TAG as DT, ELF_SECTION_TYPE as SECTION, ELF_SYMBOL_INDEX } from "./abi-constants.js";
 import { declaredDynamicSymbolRange } from "./dynsym-range.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
+import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt } from "./section-data.js";
+import { readElfSymbolTable, type ElfSymbolTable } from "./symbol-tables.js";
 
 // gABI Symbol table: Elf32_Sym / Elf64_Sym, SHN_XINDEX, SHT_SYMTAB_SHNDX.
 // https://gabi.xinuos.com/elf/05-symtab.html
@@ -32,9 +34,11 @@ const locateSectionSymbol = (
 
 const dynamicStrings = (
   reader: FileRangeReader, elf: ElfRelocationImage, tags: Map<number, bigint>
-): { offset: number; size: number } | null =>
-  tags.has(DT.STRTAB) && tags.has(DT.STRSZ)
-    ? elfVirtualRange(elf.programHeaders, tags.get(DT.STRTAB)!, tags.get(DT.STRSZ)!, reader.size) : null;
+): { offset: number; size: number } | null => {
+  if (!tags.has(DT.STRTAB) || !tags.has(DT.STRSZ)) return null;
+  const range = elfVirtualRange(elf.programHeaders, tags.get(DT.STRTAB)!, tags.get(DT.STRSZ)!, reader.size);
+  return range && !hasCompressedSectionAt(elf.sections, SECTION.STRTAB, range.offset) ? range : null;
+};
 
 const dynamicSymbolSize = (reader: FileRangeReader, elf: ElfRelocationImage,
   tags: Map<number, bigint>, stride: number, issues: string[]): bigint | null => {
@@ -42,7 +46,8 @@ const dynamicSymbolSize = (reader: FileRangeReader, elf: ElfRelocationImage,
   if (address == null) return null;
   const section = elf.sections.find(section => section.type === SECTION.DYNSYM &&
     section.addr === address);
-  if (section) return section.entsize === BigInt(stride) ? section.size : 0n;
+  if (section) return section.entsize === BigInt(stride) && !(section.flags & ELF_SECTION_COMPRESSED)
+    ? section.size : 0n;
   const declaredSize = tags.get(DT.SYMTABSZ);
   if (declaredSize != null) return BigInt(declaredDynamicSymbolRange(
     elf.programHeaders, address, declaredSize, stride, reader.size, issues)?.size ?? 0);
@@ -123,15 +128,54 @@ const readSymbol = async (
   return { name, value: record.value, ...elfSymbolSectionFields(record.sectionIndex, extendedIndex) };
 };
 
+const compressedSymbolTables = (elf: ElfRelocationImage) => {
+  const sections = new Map(elf.sections.map(section => [section.index, section]));
+  const extended = new Set(elf.sections.filter(section => section.type === SECTION.SYMTAB_SHNDX &&
+    (section.flags & ELF_SECTION_COMPRESSED)).map(section => section.link));
+  return new Map(elf.sections.filter(section => {
+    if (section.type !== SECTION.SYMTAB && section.type !== SECTION.DYNSYM) return false;
+    const strings = sections.get(section.link);
+    return ((section.flags | (strings?.flags ?? 0n)) & ELF_SECTION_COMPRESSED) || extended.has(section.index);
+  }).map(section => [section.index, section]));
+};
+
+const createCompressedSymbolReader = (reader: FileRangeReader, elf: ElfRelocationImage, issues: string[]) => {
+  const sections = compressedSymbolTables(elf);
+  const decoded = new Map<number, Promise<ElfSymbolTable>>(elf.symbolTables?.map(table =>
+    [table.sectionIndex, Promise.resolve(table)]));
+  const decode = async (index: number): Promise<ElfSymbolTable> => {
+    const table = await readElfSymbolTable(reader, elf, sections.get(index)!);
+    issues.push(...table.issues);
+    return table;
+  };
+  return {
+    sections,
+    read: async (index: number, symbolIndex: number): Promise<ElfRelocationSymbol | null> => {
+      if (!decoded.has(index)) decoded.set(index, decode(index));
+      const symbol = (await decoded.get(index)!).entries[symbolIndex];
+      if (!symbol) {
+        issues.push(`Relocation symbol #${symbolIndex} is outside its symbol table or PT_LOAD.`);
+        return null;
+      }
+      const { name, value, sectionIndex, rawSectionIndex } = symbol;
+      return { name, value, sectionIndex, ...(rawSectionIndex != null && { rawSectionIndex }) };
+    }
+  };
+};
+
 export const createElfRelocationSymbolReader = (
   reader: FileRangeReader, elf: ElfRelocationImage, tags: Map<number, bigint>, issues: string[],
   parsedSymbols: Map<number, ElfRelocationSymbol> = new Map(), layout = selectElfBinaryLayout(elf)
 ): ((table: ElfRelocationTable, index: number) => Promise<ElfRelocationSymbol | null>) => {
   // Cache by physical symbol record, so aliases of .dynsym share decoded names.
   const cache = new Map<number, ElfRelocationSymbol | null>();
+  const compressed = createCompressedSymbolReader(reader, elf, issues);
   const dynamicSize = dynamicSymbolSize(reader, elf, tags, layout.symbolEntrySize, issues);
   let reportedBoundary = false;
   return async (table, index) => {
+    if (table.symbolTableIndex != null && compressed.sections.has(table.symbolTableIndex)) {
+      return compressed.read(table.symbolTableIndex, index);
+    }
     const location = locateSymbol(reader, elf, table, tags, index, layout.symbolEntrySize, dynamicSize);
     if (!location) {
       issues.push(`Relocation symbol #${index} is outside its symbol table or PT_LOAD.`);

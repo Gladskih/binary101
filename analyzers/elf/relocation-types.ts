@@ -2,7 +2,7 @@ import type { ElfParseResult } from "./types.js";
 
 export type ElfRelocationImage = Pick<ElfParseResult,
   "ident" | "header" | "sections" | "programHeaders" | "is64" | "littleEndian" | "fileSize" |
-  "dynSymbols">;
+  "dynSymbols" | "symbolTables">;
 export type ElfRelocationEncoding = "REL" | "RELA" | "RELR" |
   "ANDROID_REL" | "ANDROID_RELA" | "CREL" | "AUTH_RELR";
 

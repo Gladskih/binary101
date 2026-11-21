@@ -1,4 +1,4 @@
-import { createFileRangeReader } from "../file-range-reader.js";
+import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfRelocationImage } from "./relocation-types.js";
 import type { ElfRelocation, ElfRelocationInfo, ElfRelocationSymbol } from "./relocation-types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
@@ -8,9 +8,30 @@ import { readElfRelocationRecords } from "./relocation-records.js";
 import { createElfRelocationSymbolReader } from "./relocation-symbols.js";
 import { locateElfRelocationTarget } from "./relocation-targets.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
-import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
+import { ELF_FILE_TYPE, ELF_SECTION_FLAG, ELF_SYMBOL_INDEX } from "./abi-constants.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import type { ElfRelocationTable } from "./relocation-types.js";
+import { ELF_SECTION_COMPRESSED, openElfSectionData } from "./section-data.js";
+
+const createTargetBoundsReader = (
+  reader: FileRangeReader, elf: ElfRelocationImage, issues: string[], prepared: Map<number, bigint>
+) => {
+  const sizes = new Map(prepared);
+  const checked = new Set(prepared.keys());
+  return {
+    sizes,
+    read: async (index: number): Promise<void> => {
+      if (checked.has(index)) return;
+      checked.add(index);
+      const section = elf.sections[index];
+      if (!section || !(section.flags & ELF_SECTION_COMPRESSED)) return;
+      // Only section-relative targets use the logical bounds.
+      if (elf.header.type !== ELF_FILE_TYPE.REL && (section.flags & ELF_SECTION_FLAG.ALLOC)) return;
+      const source = await openElfSectionData(reader, section, elf, issues);
+      if (source) sizes.set(index, BigInt(source.size));
+    }
+  };
+};
 
 const resolveEntry = async (
   entry: ElfRelocation, table: ElfRelocationTable, elf: ElfRelocationImage,
@@ -43,16 +64,22 @@ export const parseElfRelocations = async (
   const tables = collectElfRelocationTables(elf, tags, issues, layout);
   if (!tables.length && !issues.length) return null;
   const readSymbol = createElfRelocationSymbolReader(reader, elf, tags, issues, symbolCache, layout);
+  const targetBounds = createTargetBoundsReader(reader, elf, issues, logicalSizes);
   const entries: ElfRelocation[] = [];
   const visited = new Set<string>();
   for (const [tableIndex, table] of tables.entries()) {
     // Exact aliases are merged above; overlapping tables need independent RELR cursors.
     let ordinal = 0;
+    let targetIndex = table.targetSectionIndex;
     for await (const entry of readElfRelocationRecords(reader, table, elf, tableIndex, issues, layout)) {
       const key = recordIdentity(elf, table, entry, ordinal++);
       if (visited.has(key)) continue;
       visited.add(key);
-      entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout, logicalSizes));
+      if (entry.type !== 0 && targetIndex != null) {
+        await targetBounds.read(targetIndex);
+        targetIndex = null;
+      }
+      entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout, targetBounds.sizes));
     }
   }
   return { tables, entries, issues: [...new Set(issues)] };

@@ -2,6 +2,7 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import { elfFileRange } from "./relocation-reader.js";
+import { ELF_SECTION_COMPRESSED, openElfSectionData } from "./section-data.js";
 
 export interface ElfSectionGroup {
   sectionIndex: number;
@@ -12,15 +13,26 @@ export interface ElfSectionGroup {
 
 // gABI 3.9: group words are 32 bits for both classes, including the first flag word.
 // https://gabi.xinuos.com/elf/03-sheader.html#section-groups
-const validateGroupHeader = (
-  section: ElfSectionHeader, elf: ElfParseResult, issues: string[]
-): void => {
+const validateGroupHeader = async (
+  reader: FileRangeReader, section: ElfSectionHeader, elf: ElfParseResult, issues: string[]
+): Promise<void> => {
   if (elf.header.type !== 1) issues.push("Section groups are only defined for relocatable ELF files.");
   const symbols = elf.sections.find(item => item.index === section.link && item.type === 2);
-  if (!symbols || symbols.entsize <= 0n || BigInt(section.info + 1) * symbols.entsize > symbols.size) {
+  if (!symbols || symbols.entsize <= 0n ||
+    section.info >= await signatureSymbolCount(reader, elf, symbols, issues)) {
     issues.push("Group signature has an invalid symbol table reference.");
   }
   if (section.flags !== 0n) issues.push("Group section header has nonzero flags.");
+};
+
+const signatureSymbolCount = async (
+  reader: FileRangeReader, elf: ElfParseResult, symbols: ElfSectionHeader, issues: string[]
+): Promise<bigint> => {
+  const table = elf.symbolTables?.find(table => table.sectionIndex === symbols.index);
+  if (table) return BigInt(table.entries.length);
+  if (!(symbols.flags & ELF_SECTION_COMPRESSED)) return symbols.size / symbols.entsize;
+  const source = await openElfSectionData(reader, symbols, elf, issues);
+  return BigInt(source?.size ?? 0) / symbols.entsize;
 };
 
 const validateMember = (
@@ -41,7 +53,8 @@ const readSectionGroup = async (
   memberships: Set<number>, sections: Map<number, ElfSectionHeader>
 ): Promise<ElfSectionGroup> => {
   const group: ElfSectionGroup = { sectionIndex: section.index, flags: null, members: [], issues: [] };
-  validateGroupHeader(section, elf, group.issues);
+  await validateGroupHeader(reader, section, elf, group.issues);
+  if (section.flags & ELF_SECTION_COMPRESSED) return group;
   const range = groupRange(section, reader.size, group.issues);
   if (!range) return group;
   const header = await reader.read(range.offset, 4);

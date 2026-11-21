@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { parseElfSymbolTables } from "../../../../analyzers/elf/symbol-tables.js";
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
 import type { ElfRelocationSymbol } from "../../../../analyzers/elf/relocation-types.js";
+import { compressElfFixtureSection } from "../../../fixtures/elf-compressed-section.js";
 
 for (const bits of [32, 64] as const) {
   for (const order of ["little", "big"] as const) {
@@ -67,4 +68,35 @@ void test("warns on out of bounds names and partial trailing records", async () 
   assert.equal(result[0]?.entries.length, 2);
   assert.match(result[0]!.issues.join(" "), /aligned/);
   assert.match(result[0]!.issues.join(" "), /string/);
+});
+
+void test("uses decoded symbol, string and extended index bytes in compressed sections", async () => {
+  const fixture = relocationFixture();
+  fixture.view.setUint16(286, 0xffff, true); // Elf64_Sym.st_shndx = SHN_XINDEX.
+  const extended = relocationSection(4, { type: 18, link: 2, offset: 512n, size: 8n, entsize: 4n });
+  fixture.elf.sections.push(extended);
+  fixture.view.setUint32(516, 65536, true);
+  const format = { bits: 64, littleEndian: true, codec: "zlib" } as const;
+  compressElfFixtureSection(fixture.bytes, fixture.elf.sections[2]!, 640, format);
+  compressElfFixtureSection(fixture.bytes, fixture.elf.sections[3]!, 704, format);
+  compressElfFixtureSection(fixture.bytes, extended, 768, format);
+  const cache = new Map<number, ElfRelocationSymbol>();
+
+  const [table] = await parseElfSymbolTables(fixture.file(), fixture.elf, cache);
+
+  assert.equal(table?.entries.length, 2);
+  assert.equal(table?.entries[1]?.name, "target");
+  assert.equal(table?.entries[1]?.sectionIndex, 65536);
+  assert.deepEqual(table?.issues, []);
+  assert.equal(cache.size, 0);
+});
+
+void test("keeps records unavailable when a compressed symbol table cannot be decoded", async () => {
+  const fixture = relocationFixture(32, "big");
+  const section = fixture.elf.sections[2]!;
+  compressElfFixtureSection(fixture.bytes, section, 640, { bits: 32, littleEndian: false, codec: "zstd" });
+  fixture.view.setUint32(640, 0x70000000, false); // Unknown processor-specific ELFCOMPRESS type.
+  const [table] = await parseElfSymbolTables(fixture.file(), fixture.elf);
+  assert.deepEqual(table?.entries, []);
+  assert.match(table!.issues.join(" "), /unsupported ELF compression type/);
 });

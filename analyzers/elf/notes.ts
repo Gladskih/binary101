@@ -6,6 +6,7 @@ import type { ElfNoteEntry, ElfNotesInfo, ElfProgramHeader, ElfSectionHeader } f
 import { decodeElfNotePayload } from "./note-payload.js";
 import type { ElfByteOrder } from "./binary-layout-types.js";
 import { decodeBuildAttributeNote, gnuBuildAttributeTypes } from "./build-attribute-note.js";
+import { ELF_SECTION_COMPRESSED, openElfSectionData } from "./section-data.js";
 
 const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
   const num = Number(value);
@@ -65,9 +66,10 @@ const parseNotesFromRange = async (reader: FileRangeReader, opts: ElfNoteInput,
     if (view.byteLength < 12) { issues.push(`${source}: note header is truncated.`); break; }
     const bounds = noteBounds(view, offset, littleEndian, source, issues, alignment, reader.size);
     if (!bounds) break;
-    const key = `${range.offset + BigInt(offset)}/${range.offset + BigInt(bounds.descStart)}`;
+    const recordLocation = range.compressed ? `decoded:${range.compressed.index}:${offset}` :
+      `${range.offset + BigInt(offset)}/${range.offset + BigInt(bounds.descStart)}`;
     offset = Math.ceil(bounds.descEnd / alignment) * alignment;
-    const existing = decoded.get(key);
+    const existing = decoded.get(recordLocation);
     if (existing) {
       addNoteSource(existing, source);
       records.push(existing);
@@ -81,7 +83,7 @@ const parseNotesFromRange = async (reader: FileRangeReader, opts: ElfNoteInput,
     decodeNote(entry, payload.nameBytes, payload.desc, opts.is64 ? 8 : 4, littleEndian ? "little" : "big",
       opts.coreMachine, attributeRanges, issues);
     const record = { entry };
-    decoded.set(key, record);
+    decoded.set(recordLocation, record);
     records.push(record);
   }
   return records;
@@ -95,11 +97,12 @@ const noteAlignment = (align: bigint, source: string, issues: string[]): number 
   return null;
 };
 
-type NoteRange = { offset: bigint; size: bigint; align: bigint; source: string };
+type NoteRange = { offset: bigint; size: bigint; align: bigint; source: string; compressed?: ElfSectionHeader };
 
 const noteRanges = (sections: ElfSectionHeader[], headers: ElfProgramHeader[]): NoteRange[] => {
-  const ranges = sections.filter(section => section.type === 7 && section.size > 0n)
+  const ranges: NoteRange[] = sections.filter(section => section.type === 7 && section.size > 0n)
     .map(section => ({ offset: section.offset, size: section.size, align: section.addralign,
+      ...(section.flags & ELF_SECTION_COMPRESSED ? { compressed: section } : {}),
       source: section.name ? `Section "${section.name}"` : `SHT_NOTE section #${section.index}` }));
   // SHT_NOTE=7; PT_NOTE=4; PT_GNU_PROPERTY=0x6474e553 (glibc elf.h).
   return ranges.concat(headers.filter(header => [4, 0x6474e553].includes(header.type) && header.filesz > 0n)
@@ -122,7 +125,18 @@ const readNoteRange = (file: File, range: NoteRange, issues: string[]): FileRang
 
 type ElfNoteInput = {
   file: File; programHeaders: ElfProgramHeader[]; sections: ElfSectionHeader[];
-  littleEndian: boolean; is64?: boolean; coreMachine?: number;
+  littleEndian: boolean; is64?: boolean; coreMachine?: number; header?: { type: number };
+};
+
+const readCompressedNotes = async (
+  opts: ElfNoteInput, range: NoteRange, issues: string[], decoded: Map<string, NoteRecord>
+): Promise<void> => {
+  const source = await openElfSectionData(createFileRangeReader(opts.file, 0, opts.file.size),
+    range.compressed!, { is64: opts.is64 ?? false, littleEndian: opts.littleEndian,
+      ...(opts.header && { header: opts.header }) }, issues);
+  if (!source) return;
+  const alignment = noteAlignment(source.alignment, range.source, issues);
+  if (alignment != null) await parseNotesFromRange(source.reader, opts, range, alignment, issues, decoded);
 };
 
 export async function parseElfNotes(opts: ElfNoteInput): Promise<ElfNotesInfo | null> {
@@ -132,6 +146,10 @@ export async function parseElfNotes(opts: ElfNoteInput): Promise<ElfNotesInfo | 
   const parsedRanges = new Map<string, NoteRecord[]>();
   const decoded = new Map<string, NoteRecord>();
   for (const range of ranges) {
+    if (range.compressed) {
+      await readCompressedNotes(opts, range, issues, decoded);
+      continue;
+    }
     const alignment = noteAlignment(range.align, range.source, issues);
     if (alignment == null) continue;
     const key = `${range.offset}/${range.size}/${alignment}`;

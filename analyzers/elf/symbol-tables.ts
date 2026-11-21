@@ -1,12 +1,12 @@
 import { createFileRangeReader } from "../file-range-reader.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
-import { elfFileRange } from "./relocation-reader.js";
 import { createElfStringTableReader } from "./string-table.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { ELF_SYMBOL_INDEX } from "./abi-constants.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
+import { openElfSectionData, type ElfSectionData } from "./section-data.js";
 
 export interface ElfStaticSymbol extends ElfRelocationSymbol {
   size: bigint;
@@ -23,59 +23,49 @@ export interface ElfSymbolTable {
 // gABI 5: Elf32/64_Sym and SHT_SYMTAB_SHNDX; indices use Elf32_Word in both classes.
 // https://gabi.xinuos.com/elf/05-symtab.html
 const readExtendedIndex = async (
-  reader: FileRangeReader, section: ElfSectionHeader | undefined,
-  index: number, elf: ElfParseResult, issues: string[]
+  source: ElfSectionData | null, index: number, elf: SymbolImage, issues: string[]
 ): Promise<number | null> => {
-  const range = section?.entsize === 4n && BigInt(index + 1) * 4n <= section.size
-    ? elfFileRange(section.offset + BigInt(index) * 4n, 4n, reader.size) : null;
-  const view = range ? await reader.read(range.offset, 4) : null;
+  const view = source && (index + 1) * 4 <= source.size
+    ? await source.reader.read(source.offset + index * 4, 4) : null;
   const value = view?.byteLength === 4 ? view.getUint32(0, elf.littleEndian) : null;
   if (value != null && value >= 0xff00) return value; // SHN_LORESERVE, gABI 3.1.
   issues.push(`Symbol #${index} has an invalid SHN_XINDEX reference.`);
   return null;
 };
 
-const staticTableRange = (
-  section: ElfSectionHeader, stride: number, fileSize: number, issues: string[]
-): { offset: number; size: number } | null => {
-  if (section.entsize !== BigInt(stride)) {
-    issues.push("Symbol table has an invalid entry size.");
-    return null;
-  }
-  const range = elfFileRange(section.offset, section.size, fileSize);
-  if (!range) {
-    issues.push("Symbol table is truncated or outside the file.");
-    return null;
-  }
-  if (range.size % stride) issues.push("Symbol table size is not aligned.");
-  return range;
-};
+type SymbolImage = Pick<ElfParseResult, "header" | "is64" | "littleEndian" | "sections">;
 
-const readStaticTable = async (
-  reader: FileRangeReader, elf: ElfParseResult, section: ElfSectionHeader,
-  cache: Map<number, ElfRelocationSymbol>
+export const readElfSymbolTable = async (
+  reader: FileRangeReader, elf: SymbolImage, section: ElfSectionHeader,
+  cache?: Map<number, ElfRelocationSymbol>
 ): Promise<ElfSymbolTable> => {
   const result: ElfSymbolTable = { sectionIndex: section.index, entries: [], issues: [] };
   const layout = selectElfBinaryLayout(elf);
-  const range = staticTableRange(section, layout.symbolEntrySize, reader.size, result.issues);
-  if (!range) return result;
+  if (section.entsize !== BigInt(layout.symbolEntrySize)) {
+    result.issues.push("Symbol table has an invalid entry size.");
+    return result;
+  }
+  const source = await openElfSectionData(reader, section, elf, result.issues);
+  if (!source) return result;
+  if (source.size % layout.symbolEntrySize) result.issues.push("Symbol table size is not aligned.");
   const strings = elf.sections.find(item => item.index === section.link && item.type === 3);
-  const readName = createElfStringTableReader(reader,
-    strings ? elfFileRange(strings.offset, strings.size, reader.size) : null, result.issues);
+  const names = strings ? await openElfSectionData(reader, strings, elf, result.issues) : null;
+  const readName = createElfStringTableReader(names?.reader ?? reader, names, result.issues);
   const extended = elf.sections.find(item => item.type === 18 && item.link === section.index);
-  const count = Math.floor(range.size / layout.symbolEntrySize);
+  const indices = extended?.entsize === 4n ? await openElfSectionData(reader, extended, elf, result.issues) : null;
+  const count = Math.floor(source.size / layout.symbolEntrySize);
   for (let index = 0; index < count; index += 1) {
-    const offset = range.offset + index * layout.symbolEntrySize;
-    const record = layout.readSymbol(await reader.read(offset, layout.symbolEntrySize));
+    const offset = source.offset + index * layout.symbolEntrySize;
+    const record = layout.readSymbol(await source.reader.read(offset, layout.symbolEntrySize));
     if (!record) {
       result.issues.push(`Symbol #${index} is truncated.`);
       break;
     }
     const extendedIndex = record.sectionIndex === ELF_SYMBOL_INDEX.XINDEX
-      ? await readExtendedIndex(reader, extended, index, elf, result.issues) : null;
+      ? await readExtendedIndex(indices, index, elf, result.issues) : null;
     const symbol = { name: await readName(record.nameOffset) ?? "", value: record.value,
       ...elfSymbolSectionFields(record.sectionIndex, extendedIndex) };
-    cache.set(offset, symbol);
+    if (source.reader === reader) cache?.set(offset, symbol);
     result.entries.push({ ...symbol, size: record.size, info: record.info, other: record.other });
   }
   return result;
@@ -87,7 +77,7 @@ export const parseElfSymbolTables = async (
   const reader = createFileRangeReader(file, 0, file.size);
   const tables: ElfSymbolTable[] = [];
   for (const section of elf.sections.filter(item => item.type === 2)) {
-    tables.push(await readStaticTable(reader, elf, section, cache));
+    tables.push(await readElfSymbolTable(reader, elf, section, cache));
   }
   return tables;
 };

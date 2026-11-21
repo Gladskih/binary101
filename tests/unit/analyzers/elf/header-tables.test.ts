@@ -11,6 +11,7 @@ import type { ElfHeader } from "../../../../analyzers/elf/types.js";
 import { MockFile } from "../../../helpers/mock-file.js";
 import { createElfFile } from "../../../fixtures/elf-sample-file.js";
 import { parseElf } from "../../../../analyzers/elf/index.js";
+import { encodeElfCompressedSection } from "../../../fixtures/dwarf-compressed-section-fixture.js";
 
 const baseHeader = (partial: Partial<ElfHeader>): ElfHeader => ({
   type: 2, typeName: "Executable", machine: 0x3e, machineName: "x86-64",
@@ -86,11 +87,11 @@ void test("parseProgramHeadersWithGuards parses available program headers", asyn
   assert.equal(entries.length, 1);
   assert.equal(entries[0]?.type, 1);
 });
-void test("parseSectionHeadersWithNames resolves section names from string table", async () => {
+void test("parseSectionHeadersWithNames resolves section names from a compressed string table", async () => {
   const headerSize = 64;
   const tableOffset = headerSize;
   const entrySize = 64;
-  const strings = new TextEncoder().encode("\0.sec0\0.shstrtab\0");
+  const strings = encodeElfCompressedSection(new TextEncoder().encode("\0.sec0\0.shstrtab\0"), "elf64", "little");
   const stringsOffset = tableOffset + entrySize * 2;
   const bytes = new Uint8Array(stringsOffset + strings.length).fill(0);
   const dv = new DataView(bytes.buffer);
@@ -100,6 +101,7 @@ void test("parseSectionHeadersWithNames resolves section names from string table
   dv.setUint32(section0 + 4, 1, true);
   dv.setUint32(section1 + 0, 7, true); // ".shstrtab"
   dv.setUint32(section1 + 4, 3, true);
+  dv.setBigUint64(section1 + 8, 0x800n, true); // SHF_COMPRESSED, gABI 3.7.
   dv.setBigUint64(section1 + 24, BigInt(stringsOffset), true);
   dv.setBigUint64(section1 + 32, BigInt(strings.length), true);
   bytes.set(strings, stringsOffset);

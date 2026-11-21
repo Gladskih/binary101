@@ -2,7 +2,7 @@
 
 import { createFileRangeReader } from "../file-range-reader.js";
 import { createElfStringTableReader } from "./string-table.js";
-import { elfFileRange } from "./relocation-reader.js";
+import { openElfSectionData } from "./section-data.js";
 import { locateElfHeaderTable } from "./header-table-range.js";
 import {
   PROGRAM_FLAGS,
@@ -122,11 +122,10 @@ function parseSectionHeader32(view: DataView, littleEndian: boolean): Omit<ElfSe
 }
 
 function locateSectionNameTable(
-  file: File,
   sections: ElfSectionHeader[],
   header: ElfHeader,
   issues: string[]
-): { offset: number; size: number } | null {
+): ElfSectionHeader | null {
   // gABI 2: SHN_UNDEF means that the file has no section name table.
   // https://gabi.xinuos.com/elf/02-eheader.html
   if (header.shstrndx === 0) return null;
@@ -139,9 +138,7 @@ function locateSectionNameTable(
     issues.push("Section name table must have type SHT_STRTAB.");
     return null;
   }
-  const range = elfFileRange(shstr.offset, shstr.size, file.size);
-  if (!range) issues.push("Section name table is truncated or falls outside the file.");
-  return range;
+  return shstr;
 }
 
 const readSectionZero = async (
@@ -260,9 +257,11 @@ export async function parseSectionHeadersWithNames(
     sections.push({ ...parsed, index });
   }
   validateElfSectionHeaders(sections, file.size, issues);
-  const namesTable = locateSectionNameTable(file, sections, header, issues);
+  const namesSection = locateSectionNameTable(sections, header, issues);
+  const namesTable = namesSection && await openElfSectionData(reader,
+    { ...namesSection, name: "Section name table" }, { is64, littleEndian, header }, issues);
   if (namesTable) {
-    const readName = createElfStringTableReader(reader, namesTable, issues);
+    const readName = createElfStringTableReader(namesTable.reader, namesTable, issues);
     for (const section of sections) section.name = await readName(section.nameOff) ?? "";
   }
   return sections;

@@ -7,6 +7,8 @@ import { parseElfNotes } from "../../../../analyzers/elf/notes.js";
 import type { ElfProgramHeader, ElfSectionHeader } from "../../../../analyzers/elf/types.js";
 import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { MockFile } from "../../../helpers/mock-file.js";
+import { compressElfFixtureSection } from "../../../fixtures/elf-compressed-section.js";
+import { relocationFixture } from "../../../fixtures/elf-relocations.js";
 
 const makeSection = (partial: Partial<ElfSectionHeader>): ElfSectionHeader =>
   ({
@@ -71,6 +73,28 @@ void test("parseElfNotes decodes GNU build-id", async () => {
   const buildId = parsed.notes.entries.find(entry => entry.typeName === "NT_GNU_BUILD_ID");
   assert.ok(buildId);
   assert.equal(buildId.value, expected.buildIdHex);
+});
+
+void test("uses the original note alignment from a compressed section header", async () => {
+  const fixture = relocationFixture();
+  const { bytes, view, elf } = fixture;
+  view.setUint32(64, 8, true);
+  view.setUint32(68, 32, true);
+  view.setUint32(72, 3, true); // NT_STAPSDT.
+  bytes.set(new TextEncoder().encode("stapsdt\0"), 76);
+  view.setBigUint64(88, 0x1234n, true); // Descriptor starts at +24 with 8-byte alignment.
+  bytes.set(new TextEncoder().encode("demo\0p\0\0"), 112);
+  const section = makeSection({ name: ".note.stapsdt", type: 7, offset: 64n, size: 56n, addralign: 8n });
+  elf.sections = [section];
+  compressElfFixtureSection(bytes, section, 640, { bits: 64, littleEndian: true, codec: "zlib" });
+  view.setBigUint64(656, 8n, true); // Elf64_Chdr.ch_addralign.
+  section.addralign = 4n; // A different alignment for the stored compressed data.
+
+  const result = await parseElfNotes({ file: fixture.file(), ...elf });
+
+  assert.deepEqual(result?.issues, []);
+  assert.equal(result?.entries.length, 1);
+  assert.equal(result?.entries[0]?.value, "demo:p; location 0x1234; base 0x0; semaphore 0x0; arguments: none");
 });
 
 void test("parseElfNotes reports truncated note payloads", async () => {

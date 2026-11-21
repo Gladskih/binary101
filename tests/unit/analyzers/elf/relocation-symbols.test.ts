@@ -4,6 +4,8 @@ import { createFileRangeReader } from "../../../../analyzers/file-range-reader.j
 import { createElfRelocationSymbolReader } from "../../../../analyzers/elf/relocation-symbols.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 import { relocationSection, relocationTable } from "../../../fixtures/elf-relocations.js";
+import { compressElfFixtureSection } from "../../../fixtures/elf-compressed-section.js";
+import { parseElfSymbolTables } from "../../../../analyzers/elf/symbol-tables.js";
 
 void test("reuses an already decoded symbol across section and dynamic table aliases", async context => {
   const fixture = dynamicRelocationFixture();
@@ -32,6 +34,30 @@ void test("resolves static symbols and caches the same physical entry", async ()
 
   assert.deepEqual(symbol, { name: "target", value: 4n, sectionIndex: 1 });
   assert.equal(alias, symbol);
+});
+
+void test("resolves a compressed symbol table through its logical entries and reuses parsed symbols", async context => {
+  const fixture = dynamicRelocationFixture();
+  fixture.elf.sections[2]!.type = 2; // SHT_SYMTAB.
+  const format = { bits: 64, littleEndian: true, codec: "zlib" } as const;
+  compressElfFixtureSection(fixture.bytes, fixture.elf.sections[2]!, 640, format);
+  compressElfFixtureSection(fixture.bytes, fixture.elf.sections[3]!, 704, format);
+  const file = fixture.file();
+  const reader = createFileRangeReader(file, 0, file.size);
+  const readBytes = context.mock.fn(reader.readBytes);
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader({ ...reader, readBytes }, fixture.elf, new Map(), issues);
+  const expected = { name: "target", value: 4n, sectionIndex: 1 };
+
+  assert.deepEqual(await Promise.all([read(relocationTable(), 1), read(relocationTable(), 1)]), [expected, expected]);
+  assert.equal(readBytes.mock.callCount(), 2);
+  assert.equal(await read(relocationTable(), 2), null);
+  assert.match(issues.join(" "), /outside/);
+
+  fixture.elf.symbolTables = await parseElfSymbolTables(file, fixture.elf);
+  const cached = createElfRelocationSymbolReader({ ...reader, readBytes }, fixture.elf, new Map(), []);
+  assert.deepEqual(await cached(relocationTable(), 1), expected);
+  assert.equal(readBytes.mock.callCount(), 2);
 });
 
 void test("resolves sectionless ELF32 symbols from dynamic tags", async () => {

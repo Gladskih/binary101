@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElfSectionGroups } from "../../../../analyzers/elf/section-groups.js";
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
+import { compressElfFixtureSection } from "../../../fixtures/elf-compressed-section.js";
+import { parseElfSymbolTables } from "../../../../analyzers/elf/symbol-tables.js";
 
 const groupFixture = (order: "little" | "big" = "little") => {
   const fixture = relocationFixture(64, order);
@@ -57,4 +59,27 @@ void test("warns on file bounds and unsupported flag bits", async () => {
   assert.match((await parseElfSectionGroups(fixture.file(), fixture.elf))[0]!.issues.join(" "), /flags/);
   fixture.elf.sections[4]!.offset = 1n << 60n;
   assert.match((await parseElfSectionGroups(fixture.file(), fixture.elf))[0]!.issues.join(" "), /outside/);
+});
+
+void test("validates group signature indices against the logical symbol count", async () => {
+  const fixture = groupFixture();
+  const table = fixture.elf.sections[2]!;
+  table.size = 96n;
+  fixture.elf.sections[4]!.info = 3;
+  compressElfFixtureSection(fixture.bytes, table, 640, { bits: 64, littleEndian: true, codec: "zlib" });
+  assert.ok(table.size < 96n);
+  const [group] = await parseElfSectionGroups(fixture.file(), fixture.elf);
+  assert.deepEqual(group?.issues, []);
+  fixture.elf.symbolTables = await parseElfSymbolTables(fixture.file(), fixture.elf);
+  assert.deepEqual(await parseElfSectionGroups(fixture.file(), fixture.elf), [group]);
+});
+
+void test("does not parse group words from a forbidden SHF_COMPRESSED payload", async () => {
+  const fixture = groupFixture();
+  const group = fixture.elf.sections[4]!;
+  compressElfFixtureSection(fixture.bytes, group, 640, { bits: 64, littleEndian: true, codec: "zlib" });
+  const [result] = await parseElfSectionGroups(fixture.file(), fixture.elf);
+  assert.equal(result?.flags, null);
+  assert.deepEqual(result?.members, []);
+  assert.match(result!.issues.join(" "), /flags/);
 });

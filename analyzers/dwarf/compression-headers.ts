@@ -31,8 +31,8 @@ const ELF_COMPRESSION = {
   typeOffset: 0,
   zlib: 1,
   zstd: 2,
-  elf32: { headerBytes: 12, sizeOffset: 4 },
-  elf64: { headerBytes: 24, reservedOffset: 4, sizeOffset: 8 }
+  elf32: { headerBytes: 12, sizeOffset: 4, alignmentOffset: 8 },
+  elf64: { headerBytes: 24, reservedOffset: 4, sizeOffset: 8, alignmentOffset: 16 }
 } as const;
 
 export const canonicalDwarfSectionName = (name: string): string =>
@@ -49,7 +49,7 @@ const safeSize = (value: bigint, label: string, issues: string[]): number | null
 
 const readHeader = async (
   reader: FileRangeReader,
-  section: DwarfSectionInput,
+  section: Pick<DwarfSectionInput, "offset" | "size">,
   headerBytes: number,
   label: string,
   issues: string[]
@@ -96,17 +96,13 @@ const readGnuPayload = async (
   };
 };
 
-const elfCompressionLayout = (elfClass: "elf32" | "elf64") =>
-  elfClass === "elf64" ? ELF_COMPRESSION.elf64 : ELF_COMPRESSION.elf32;
-
-const readElfPayload = async (
+export const readElfCompressionPayload = async (
   reader: FileRangeReader,
-  section: DwarfSectionInput,
-  compression: Extract<DwarfSectionCompression, { kind: "elf" }>,
+  section: Pick<DwarfSectionInput, "name" | "offset" | "size">,
+  { is64, littleEndian }: { is64: boolean; littleEndian: boolean },
   issues: string[]
-): Promise<DwarfCompressionPayload | null> => {
-  const layout = elfCompressionLayout(compression.elfClass);
-  const littleEndian = compression.byteOrder === "little";
+): Promise<(DwarfCompressionPayload & { alignment: bigint }) | null> => {
+  const layout = is64 ? ELF_COMPRESSION.elf64 : ELF_COMPRESSION.elf32;
   const view = await readHeader(
     reader,
     section,
@@ -123,21 +119,22 @@ const readElfPayload = async (
     );
     return null;
   }
-  if (compression.elfClass === "elf64" &&
-      view.getUint32(ELF_COMPRESSION.elf64.reservedOffset, littleEndian) !== 0) {
+  if (is64 && view.getUint32(ELF_COMPRESSION.elf64.reservedOffset, littleEndian) !== 0) {
     issues.push(`${section.name}: ELF64 compression header reserved field is non-zero.`);
     return null;
   }
-  const sizeValue = compression.elfClass === "elf64"
+  const sizeValue = is64
     ? view.getBigUint64(layout.sizeOffset, littleEndian)
     : BigInt(view.getUint32(layout.sizeOffset, littleEndian));
   const uncompressedSize = safeSize(sizeValue, `${section.name} uncompressed size`, issues);
+  const alignment = is64 ? view.getBigUint64(layout.alignmentOffset, littleEndian) :
+    BigInt(view.getUint32(layout.alignmentOffset, littleEndian));
   return uncompressedSize == null ? null : {
     codec: type === ELF_COMPRESSION.zstd ? "Zstandard" : "zlib",
     name: section.name,
     offset: section.offset + layout.headerBytes,
     size: section.size - layout.headerBytes,
-    uncompressedSize
+    uncompressedSize, alignment
   };
 };
 
@@ -148,4 +145,5 @@ export const readDwarfCompressionPayload = async (
   issues: string[]
 ): Promise<DwarfCompressionPayload | null> => compression.kind === "gnu-zlib"
   ? readGnuPayload(reader, section, issues)
-  : readElfPayload(reader, section, compression, issues);
+  : readElfCompressionPayload(reader, section,
+    { is64: compression.elfClass === "elf64", littleEndian: compression.byteOrder === "little" }, issues);

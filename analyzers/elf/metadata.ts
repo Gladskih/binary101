@@ -77,8 +77,8 @@ const parseAuxiliaryMetadata = async (file: File, result: ElfParseResult): Promi
   const [interpreter, notes, comment, debugLink, miniDebugInfo] = await Promise.all([
     parseElfInterpreter(file, result.programHeaders),
     parseElfNotes({ file, ...result, ...(result.header.type === 4 ? { coreMachine: result.header.machine } : {}) }),
-    parseElfComment(file, result.sections),
-    parseElfDebugLink(file, result.sections, result.littleEndian),
+    parseElfComment(file, result),
+    parseElfDebugLink(file, result),
     parseElfMiniDebugInfo(file, result)
   ]);
   retainMetadata(result, "interpreter", interpreter);
