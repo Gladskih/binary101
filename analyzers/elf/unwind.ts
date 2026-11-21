@@ -79,6 +79,9 @@ const readUnwindSection = async (
   reader: FileRangeReader, elf: ElfParseResult, section: ElfSectionHeader
 ): Promise<ElfUnwindSection> => {
   const result: ElfUnwindSection = { sectionIndex: section.index, cies: [], fdes: [], issues: [] };
+  if (section.name === ".debug_frame" && elf.dwarf) {
+    return elf.dwarf.frames ? elfDwarfFrames(elf.dwarf.frames, section.index) : result;
+  }
   if (unavailableSection(section, elf, result.issues)) return result;
   return readUnwindFrames(reader, elf, { offset: Number(section.offset), size: Number(section.size),
     addr: section.addr, name: section.name! }, result);
@@ -134,18 +137,34 @@ const readPendingFdes = async (
 export const parseElfUnwind = async (file: File, elf: ElfParseResult): Promise<ElfUnwindSection[]> => {
   const reader = createFileRangeReader(file, 0, file.size);
   const result: ElfUnwindSection[] = [];
-  if (!elf.sections.length) {
-    const header = findElfEhFrameHeader(elf.programHeaders);
-    if (!header) return result;
-    const unwind: ElfUnwindSection = { sectionIndex: null, programHeaderIndex: header.index,
-      cies: [], fdes: [], issues: [] };
-    const source = await locateSegmentUnwind(reader, elf, header, unwind.issues);
-    return [source ? await readUnwindFrames(reader, elf, source, unwind) : unwind];
+  const sections = elf.sections.filter(item => item.name === ".eh_frame" || item.name === ".debug_frame");
+  let haveRuntimeFrames = false;
+  for (const section of sections) {
+    const frames = await readUnwindSection(reader, elf, section);
+    result.push(frames);
+    if (section.name === ".eh_frame" && frames.fdes.length) haveRuntimeFrames = true;
   }
-  for (const section of elf.sections.filter(item => item.name === ".eh_frame" || item.name === ".debug_frame")) {
-    result.push(section.name === ".debug_frame" && elf.dwarf
-      ? elfDwarfFrames(elf.dwarf.frames ?? { cies: [], fdes: [] }, section.index)
-      : await readUnwindSection(reader, elf, section));
+  if (!haveRuntimeFrames) {
+    const fallback = await readSegmentFrames(reader, elf, sections);
+    if (fallback) result.push(fallback);
   }
   return result;
+};
+
+const readSegmentFrames = async (
+  reader: FileRangeReader, elf: ElfParseResult, attempted: ElfSectionHeader[]
+): Promise<ElfUnwindSection | null> => {
+  const header = findElfEhFrameHeader(elf.programHeaders);
+  if (!header) return null;
+  const unwind: ElfUnwindSection = { sectionIndex: null, programHeaderIndex: header.index,
+    cies: [], fdes: [], issues: [] };
+  const source = await locateSegmentUnwind(reader, elf, header, unwind.issues);
+  if (!source) return unwind;
+  const start = BigInt(source.offset);
+  // An in-file, overlapping .eh_frame has already been handled by the section path.
+  // An out-of-file section size does not invalidate an independently bounded PT_LOAD.
+  if (attempted.some(section => section.name === ".eh_frame" &&
+    start >= section.offset && start < section.offset + section.size &&
+    elfFileRange(section.offset, section.size, reader.size))) return null;
+  return readUnwindFrames(reader, elf, source, unwind);
 };
