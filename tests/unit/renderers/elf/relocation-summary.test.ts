@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { DOMParser } from "@xmldom/xmldom";
 import { renderElfRelocations } from "../../../../renderers/elf/relocations.js";
 import { relocationFixture, relocationSection, relocationTable } from "../../../fixtures/elf-relocations.js";
 
@@ -12,10 +13,16 @@ void test("renders human-readable aggregates without address or addend rows", ()
   }], issues: [] };
   const out: string[] = [];
   renderElfRelocations(elf, out);
-  assert.match(out.join(""), /Relocation type/);
-  assert.match(out.join(""), /100\.0%/);
-  assert.match(out.join(""), /Target section/);
-  assert.doesNotMatch(out.join(""), /Virtual address|File offset|Section offset|Addend<|0x208/);
+  const report = new DOMParser().parseFromString(out.join(""), "text/html");
+  const tables = Array.from(report.getElementsByTagName("table"));
+  const summary = tables.filter(table => table.getAttribute("data-sort-state-key")?.startsWith("elf-relocations"));
+  assert.equal(summary.length, 3);
+  assert.match(summary[0]!.textContent!, /Relocation type.*100\.0%/);
+  assert.match(summary[2]!.textContent!, /Target section/);
+  assert.doesNotMatch(summary.map(table => table.textContent).join(" "),
+    /Virtual address|File offset|Section offset|0x208/);
+  const records = tables.find(table => table.getAttribute("data-sort-state-key") === "elf-relocation-records");
+  assert.match(records!.textContent!, /Explicit addend.*0x208/);
 });
 
 import { summarizeElfRelocations } from "../../../../renderers/elf/relocation-summary.js";
@@ -42,10 +49,10 @@ void test("summary keeps formats, missing mappings, NONE and authenticated RELR 
   assert.equal(summary.types[0]?.label, "R_X86_64_64");
   assert.equal(summary.types[0]?.count, 3);
   assert.ok(summary.types.some(row => row.label === "Authenticated relative (RELR)"));
-  assert.ok(summary.targets.some(row => row.label === "Unmapped"));
-  assert.ok(summary.targets.some(row => row.label === "No target (NONE)"));
+  assert.ok(summary.targets.some(row => row.label === "Target unavailable"));
+  assert.ok(summary.targets.some(row => row.label === "No write (NONE)"));
   assert.ok(summary.targets.some(row => row.label === "PT_LOAD (section unavailable)"));
-  assert.ok(summary.targets.some(row => row.label === "Section #99" && row.detail === "No file bytes"));
+  assert.ok(summary.targets.some(row => row.label === "Section #99" && row.detail === "No single file range"));
   assert.ok(summary.symbols.some(row => row.detail === "Unresolved symbol reference"));
 });
 
@@ -65,7 +72,7 @@ void test("summary groups symbol identity instead of spelling and describes unde
   assert.equal(summary.symbols.length, 5);
   assert.equal(summary.symbols[0]?.label, ".debug_info");
   assert.equal(summary.symbols[0]?.count, 2);
-  assert.ok(summary.symbols.some(row => row.detail === "Undefined; requires symbol lookup"));
+  assert.ok(summary.symbols.some(row => row.detail === "Undefined in this file"));
   assert.ok(summary.symbols.some(row => row.detail === "Absolute definition"));
   assert.ok(summary.symbols.some(row => row.detail === "Common definition"));
   assert.ok(summary.symbols.some(row => row.label === "Unnamed symbol"));
@@ -104,10 +111,10 @@ void test("all distributions report exact counts, labels, storage and binding se
   const summary = summarizeElfRelocations(elf);
   assert.deepEqual(summary.types, [
     { label: "R_X86_64_64", detail: "Symbol reference", count: 2 },
-    { label: "Authenticated relative (RELR)", detail: "No symbol reference", count: 1 },
+    { label: "Authenticated relative (RELR)", detail: "Adjust and authenticate a stored pointer.", count: 1 },
     { label: "R_X86_64_64", detail: "No symbol reference", count: 1 },
-    { label: "R_X86_64_NONE", detail: "No symbol reference", count: 1 },
-    { label: "Relative (RELR)", detail: "No symbol reference", count: 1 }
+    { label: "R_X86_64_NONE", detail: "No operation.", count: 1 },
+    { label: "Relative (RELR)", detail: "Adjust the pointer already stored at the target for the load address.", count: 1 }
   ]);
   assert.deepEqual(summary.formats, [
     { label: "RELA", detail: "Explicit addend", count: 4 },
@@ -116,8 +123,8 @@ void test("all distributions report exact counts, labels, storage and binding se
   ]);
   assert.deepEqual(summary.targets, [
     { label: ".debug_info", detail: "File-backed", count: 3 },
-    { label: "Unmapped", detail: "", count: 2 },
-    { label: "No target (NONE)", detail: "", count: 1 }
+    { label: "Target unavailable", detail: "", count: 2 },
+    { label: "No write (NONE)", detail: "", count: 1 }
   ]);
   assert.equal(summary.symbols[0]?.detail, "Defined in this file");
   assert.equal(summary.symbols[0]?.count, 2);
@@ -143,7 +150,7 @@ void test("authenticated and plain relative relocations have independent totals"
       summaryEntry({ tableIndex: 1, type: null, symbolIndex: null }),
       summaryEntry({ tableIndex: 1, type: null, symbolIndex: null })], issues: [] };
   assert.deepEqual(summarizeElfRelocations(elf).types, [
-    { label: "Authenticated relative (RELR)", detail: "No symbol reference", count: 2 },
-    { label: "Relative (RELR)", detail: "No symbol reference", count: 1 }
+    { label: "Authenticated relative (RELR)", detail: "Adjust and authenticate a stored pointer.", count: 2 },
+    { label: "Relative (RELR)", detail: "Adjust the pointer already stored at the target for the load address.", count: 1 }
   ]);
 });

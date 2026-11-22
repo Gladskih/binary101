@@ -142,3 +142,26 @@ void test("ELF32 RELR validates four-byte targets at the memory boundary", () =>
   assert.equal(locateElfRelocationTarget(fixture.elf, table, 0x17fcn, [])?.fileOffset, null);
   assert.equal(locateElfRelocationTarget(fixture.elf, table, 0x17fen, []), null);
 });
+
+void test("accepts contiguous load mappings but refuses a gap or an ambiguous file offset", () => {
+  const { elf } = dynamicRelocationFixture();
+  const table = relocationTable({ targetSectionIndex: null });
+  const load = elf.programHeaders[0]!;
+  load.memsz = load.filesz;
+  const next = { ...load, index: 1, vaddr: 0x1400n, memsz: 4n, filesz: 4n, offset: 0n };
+  elf.programHeaders = [next, load]; // The validated union is independent of header order.
+  assert.equal(locateElfRelocationTarget(elf, table, 0x13fcn, [], undefined, undefined, 8n)?.fileOffset, null);
+  next.vaddr += 1n;
+  assert.equal(locateElfRelocationTarget(elf, table, 0x13fcn, [], undefined, undefined, 8n), null);
+  next.vaddr = 0x13fen;
+  assert.equal(locateElfRelocationTarget(elf, table, 0x13f8n, [], undefined, undefined, 8n)?.fileOffset, null);
+});
+
+void test("rejects a write that overflows the virtual address space", () => {
+  const { elf } = dynamicRelocationFixture(32);
+  elf.programHeaders[0]!.vaddr = 0xfffffc00n;
+  const issues: string[] = [];
+  assert.equal(locateElfRelocationTarget(elf, relocationTable({ targetSectionIndex: null }),
+    0xfffffffen, issues, undefined, undefined, 4n), null);
+  assert.match(issues.join(" "), /exceeds the ELF address space/);
+});

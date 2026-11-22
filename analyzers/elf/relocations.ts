@@ -12,6 +12,9 @@ import { ELF_FILE_TYPE, ELF_SECTION_FLAG, ELF_SYMBOL_INDEX } from "./abi-constan
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import type { ElfRelocationTable } from "./relocation-types.js";
 import { ELF_SECTION_COMPRESSED, openElfSectionData } from "./section-data.js";
+import { elfRuntimeRelocationOperation, elfRuntimeRelocationWriteSize,
+  isElfRuntimeRelocationTable, type ElfRelocationOperation } from "./relocation-operation.js";
+import { readElfStoredRelocationAddend } from "./relocation-addend.js";
 
 const createTargetBoundsReader = (
   reader: FileRangeReader, elf: ElfRelocationImage, issues: string[], prepared: Map<number, bigint>
@@ -33,17 +36,21 @@ const createTargetBoundsReader = (
   };
 };
 
-const resolveEntry = async (
-  entry: ElfRelocation, table: ElfRelocationTable, elf: ElfRelocationImage,
+const createEntryResolver = (
+  reader: FileRangeReader, elf: ElfRelocationImage,
   readSymbol: ReturnType<typeof createElfRelocationSymbolReader>, issues: string[],
   layout: ElfBinaryLayout, logicalSizes: Map<number, bigint>
-): Promise<ElfRelocation> => ({
-  ...entry,
-  symbol: entry.symbolIndex != null && entry.symbolIndex !== ELF_SYMBOL_INDEX.UNDEF
-    ? await readSymbol(table, entry.symbolIndex) : null,
-  target: entry.type === 0 ? null :
-    locateElfRelocationTarget(elf, table, entry.offset, issues, layout, logicalSizes)
-});
+) => async (entry: ElfRelocation, table: ElfRelocationTable,
+  operation?: ElfRelocationOperation): Promise<ElfRelocation> => {
+  const width = elfRuntimeRelocationWriteSize(elf, operation);
+  const target = entry.type === 0 ? null :
+    locateElfRelocationTarget(elf, table, entry.offset, issues, layout, logicalSizes, width);
+  const storedAddend = operation && await readElfStoredRelocationAddend(reader, elf, table, entry, operation, target);
+  return { ...entry, target,
+    symbol: entry.symbolIndex != null && entry.symbolIndex !== ELF_SYMBOL_INDEX.UNDEF
+      ? await readSymbol(table, entry.symbolIndex) : null,
+    ...(storedAddend !== undefined && { storedAddend }) };
+};
 
 const recordIdentity = (elf: ElfRelocationImage, table: ElfRelocationTable,
   entry: ElfRelocation, ordinal: number): string => {
@@ -65,9 +72,11 @@ export const parseElfRelocations = async (
   if (!tables.length && !issues.length) return null;
   const readSymbol = createElfRelocationSymbolReader(reader, elf, tags, issues, symbolCache, layout);
   const targetBounds = createTargetBoundsReader(reader, elf, issues, logicalSizes);
+  const resolveEntry = createEntryResolver(reader, elf, readSymbol, issues, layout, targetBounds.sizes);
   const entries: ElfRelocation[] = [];
   const visited = new Set<string>();
   for (const [tableIndex, table] of tables.entries()) {
+    const runtime = isElfRuntimeRelocationTable(elf, table);
     // Exact aliases are merged above; overlapping tables need independent RELR cursors.
     let ordinal = 0;
     let targetIndex = table.targetSectionIndex;
@@ -79,7 +88,8 @@ export const parseElfRelocations = async (
         await targetBounds.read(targetIndex);
         targetIndex = null;
       }
-      entries.push(await resolveEntry(entry, table, elf, readSymbol, issues, layout, targetBounds.sizes));
+      entries.push(await resolveEntry(entry, table,
+        runtime ? elfRuntimeRelocationOperation(elf, entry.type) : undefined));
     }
   }
   return { tables, entries, issues: [...new Set(issues)] };

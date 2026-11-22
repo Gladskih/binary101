@@ -2,6 +2,34 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElfRelocations } from "../../../../analyzers/elf/relocations.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
+
+void test("checks the full write for common dynamic relocations at the PT_LOAD boundary", async () => {
+  const fixture = dynamicRelocationFixture();
+  // x86-64 ABI R_X86_64_RELATIVE writes eight bytes.
+  fixture.word(64, 0x17f9n);
+  fixture.word(72, 8n);
+  fixture.installTags();
+
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+
+  assert.equal(result?.entries[0]?.target, null);
+  assert.match(result!.issues.join(" "), /8-byte.*outside PT_LOAD/);
+});
+
+void test("reads an i386 RELATIVE addend from the original file bytes", async () => {
+  const fixture = dynamicRelocationFixture(32);
+  fixture.tags.clear();
+  fixture.tags.set(17, 0x1040n).set(18, 8n).set(19, 8n); // DT_REL / DT_RELSZ / DT_RELENT.
+  fixture.word(64, 0x1200n);
+  fixture.word(68, 8n); // R_386_RELATIVE, symbol zero.
+  fixture.word(512, 0xfedcba98n);
+  fixture.installTags();
+
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+
+  assert.equal(result?.entries[0]?.addend, null);
+  assert.equal(result?.entries[0]?.storedAddend, 0xfedcba98n);
+});
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
 
 void test("RELA resolves a linked static symbol and section-relative target", async () => {

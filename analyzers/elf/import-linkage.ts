@@ -1,7 +1,9 @@
 import type { ElfParseResult } from "./types.js";
 import type { ElfRelocation } from "./relocation-types.js";
 import { elfRelocationTypeName } from "./relocation-names.js";
-import { ELF_FILE_TYPE, ELF_SECTION_TYPE, ELF_SECTION_FLAG } from "./abi-constants.js";
+import { ELF_FILE_TYPE, ELF_SECTION_FLAG } from "./abi-constants.js";
+import { elfRuntimeRelocationOperation, elfRuntimeRelocationWriteSize,
+  isElfRuntimeRelocationTable } from "./relocation-operation.js";
 
 export type ElfImportLinkKind = "PLT slot" | "GOT slot" |
   "IFUNC resolver slot" | "COPY relocation" | "Other symbol relocation";
@@ -62,16 +64,6 @@ const bindingPolicy = (elf: ElfParseResult, issues: string[]): string => {
   }
   return invalid ? "Unknown (invalid dynamic metadata)" :
     eager ? "Immediate binding requested" : "Lazy binding permitted";
-};
-
-const runtimeTable = (elf: ElfParseResult, entry: ElfRelocation): boolean => {
-  const table = elf.relocations?.tables[entry.tableIndex];
-  if (!table) return false;
-  if (table.sources.some(source => source.startsWith("DT_"))) return true;
-  return elf.sections.some(section => section.index === table.symbolTableIndex &&
-    section.type === ELF_SECTION_TYPE.DYNSYM) &&
-    elf.sections.some(section => section.index === table.sectionIndex &&
-      (section.flags & ELF_SECTION_FLAG.ALLOC) !== 0n);
 };
 
 const validatePltGot = (elf: ElfParseResult, issues: string[]): void => {
@@ -147,13 +139,15 @@ export const analyzeElfImportLinkage = (elf: ElfParseResult): ElfImportLinkage |
   const links: ElfImportLink[] = [];
   validatePltGot(elf, issues);
   const slotWidth = slotMachines.get(elf.header.machine);
+  const runtime = elf.relocations?.tables.map(table => isElfRuntimeRelocationTable(elf, table));
   for (const [index, entry] of (elf.relocations?.entries ?? []).entries()) {
-    if (!runtimeTable(elf, entry)) continue;
+    if (!runtime?.[entry.tableIndex]) continue;
     const name = entry.type == null ? "" : elfRelocationTypeName(elf.header.machine, entry.type);
     const kind = classifyLink(entry, name, slotWidth);
     if (!kind) continue;
     const width = kind === "COPY relocation" || kind === "Other symbol relocation"
-      ? 1n : slotWidth || (elf.is64 ? 8n : 4n);
+      ? 1n : elfRuntimeRelocationWriteSize(elf, elfRuntimeRelocationOperation(elf, entry.type)) ??
+        (slotWidth || (elf.is64 ? 8n : 4n));
     const link = describeLink(elf, entry, index, kind, width);
     reportLinkAnomalies(elf, entry, link);
     links.push(link);

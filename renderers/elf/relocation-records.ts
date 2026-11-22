@@ -19,10 +19,11 @@ const recordCells = (entry: ElfRelocation, table: ElfRelocationTable, machine: n
   const target = section != null ? sections.get(section) || `Section #${section}` :
     entry.target ? "PT_LOAD" : "—";
   const location = table.compressed ? `Decoded +${display(entry.recordOffset)}` : display(entry.recordOffset);
+  const addend = entry.addend ?? entry.storedAddend;
   return [numberCell(entry.tableIndex, String(entry.tableIndex)), numberCell(entry.recordOffset, location),
     cell(elfRelocationTypeLabel(machine, table, entry)), numberCell(entry.offset),
     numberCell(entry.symbolIndex, String(entry.symbolIndex ?? "—")), cell(entry.symbol?.name || "—"),
-    numberCell(entry.addend, String(entry.addend ?? "—")), cell(target),
+    numberCell(addend ?? null, addend == null ? "—" : `${addend}${entry.addend == null ? " (file)" : ""}`), cell(target),
     numberCell(entry.target?.sectionOffset ?? null), numberCell(entry.target?.fileOffset ?? null)];
 };
 
@@ -37,7 +38,8 @@ export const getElfRelocationRecordsModel = (elf: ElfParseResult, id: string): P
   };
   return { id, pageSize: 100, rowCount: relocations.entries.length,
     columns: ["Table #", "Record location", "Type", "r_offset", "Symbol index", "Symbol",
-      "Explicit addend", "Target", "Target section offset", "Target file offset"]
+      relocations.entries.some(entry => entry.storedAddend !== undefined) ? "Addend" : "Explicit addend",
+      "Target", "Target section offset", "Target file offset"]
       .map((label, index) => ({ label, className: [0, 1, 3, 4, 6, 8, 9].includes(index) ? "peNumeric" : "" })),
     rowAt, sortValueAt: (index, column) => rowAt(index)?.cells[column]?.sortValue ?? ""
   };
@@ -65,6 +67,8 @@ export const renderElfRelocationRecords = (elf: ElfParseResult): string => {
     'In executables and shared objects it is a link-time virtual address. Record location is a file offset, ' +
     'or an offset in decoded bytes for a compressed section. Packed formats can produce several rows ' +
     'from one record location.</p>' +
+    (model.columns[6]?.label === "Addend" ? '<p class="smallNote">' +
+      'The “file” label marks an implicit addend read as a raw word from the original file image.</p>' : "") +
     renderTables(elf.relocations!) + renderAutoPagedSortableTable(model) +
     renderCollectionEnd(model.rowCount);
 };

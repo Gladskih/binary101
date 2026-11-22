@@ -70,3 +70,23 @@ void test("absent relocations render nothing; warnings without entries remain vi
   assert.match(out.join(""), /malformed/);
   assert.doesNotMatch(out.join(""), /<table/);
 });
+
+void test("describes loader operations and keeps original file operands with records", () => {
+  const { elf } = relocationFixture(32);
+  elf.header.type = 3; // ET_DYN.
+  elf.relocations = { tables: [relocationTable({ encoding: "REL", sources: ["DT_REL"] })],
+    entries: [entry({ type: 8, symbolIndex: 0, symbol: null, addend: null, storedAddend: 4096n }),
+      entry({ type: 7, target: null, addend: null })],
+    issues: ["Relocation target range (4-byte write) is outside PT_LOAD memory.", "Partial table."] };
+  const out: string[] = [];
+  renderElfRelocations(elf, out);
+  const html = out.join("");
+  const records = getElfPagedTableModel(elf, "elf-relocation-records")!;
+  assert.match(html, /difference between the runtime and link-time load addresses/);
+  assert.match(html, /Procedure Linkage Table \(PLT\) slot/);
+  assert.match(html, /Target unavailable/);
+  assert.match(html, /<details><summary[^>]*>Analysis is incomplete or contains anomalies \(2\)/);
+  assert.equal(records.rowAt(0)?.cells[6]?.html, "4096 (file)");
+  assert.equal(records.sortValueAt(0, 6), "4096");
+  assert.equal(records.columns[6]?.label, "Addend");
+});

@@ -41,6 +41,8 @@ export interface ElfRelocation {
   symbolIndex: number | null;
   symbol: ElfRelocationSymbol | null;
   addend: bigint | null;
+  // Raw operand from the unmodified file image for a supported REL operation.
+  storedAddend?: bigint;
   target: ElfRelocationTarget | null;
 }
 

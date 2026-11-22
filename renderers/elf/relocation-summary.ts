@@ -2,6 +2,8 @@ import type { ElfParseResult, ElfSectionHeader } from "../../analyzers/elf/types
 import type { ElfRelocation, ElfRelocationSymbol, ElfRelocationTable } from "../../analyzers/elf/relocation-types.js";
 import { elfRelocationTypeName } from "../../analyzers/elf/relocation-names.js";
 import { elfSymbolSectionReference } from "../../analyzers/elf/symbol-section-index.js";
+import { elfRuntimeRelocationOperation, isElfRuntimeRelocationTable,
+  type ElfRelocationOperation } from "../../analyzers/elf/relocation-operation.js";
 
 export interface ElfRelocationSummaryRow {
   label: string; detail: string; count: number; symbol?: ElfRelocationSymbol;
@@ -19,7 +21,7 @@ const addRow = (rows: Map<string, ElfRelocationSummaryRow>, key: string,
 const symbolState = (entry: ElfRelocation): string => {
   if (!entry.symbol) return "Unresolved symbol reference";
   // gABI SHN_UNDEF/ABS/COMMON: a definition need not belong to a section.
-  if (entry.symbol.sectionIndex === 0) return "Undefined; requires symbol lookup";
+  if (entry.symbol.sectionIndex === 0) return "Undefined in this file";
   const index = entry.symbol.rawSectionIndex ?? entry.symbol.sectionIndex;
   if (index === 0xfff1) return "Absolute definition";
   if (index === 0xfff2) return "Common definition";
@@ -27,13 +29,13 @@ const symbolState = (entry: ElfRelocation): string => {
 };
 
 const targetLabel = (sections: Map<number, ElfSectionHeader>, entry: ElfRelocation): string => {
-  if (!entry.target) return entry.type === 0 ? "No target (NONE)" : "Unmapped";
+  if (!entry.target) return entry.type === 0 ? "No write (NONE)" : "Target unavailable";
   if (entry.target.sectionIndex == null) return "PT_LOAD (section unavailable)";
   return sections.get(entry.target.sectionIndex)?.name || `Section #${entry.target.sectionIndex}`;
 };
 
 const targetStorage = (entry: ElfRelocation): string => entry.target ?
-  entry.target.fileOffset == null ? "No file bytes" : "File-backed" : "";
+  entry.target.fileOffset == null ? "No single file range" : "File-backed" : "";
 
 const symbolLabel = (sections: Map<number, ElfSectionHeader>, entry: ElfRelocation): string => {
   if (!entry.symbol) return "Unresolved symbol";
@@ -53,13 +55,26 @@ export const elfRelocationTypeLabel = (machine: number, table: ElfRelocationTabl
 
 // gABI 6 describes relocation operations, with exact formulas in each psABI.
 // https://gabi.xinuos.com/elf/06-reloc.html
-const typeMeaning = (type: string, symbolIndex: number | null): string => {
-  if (type.endsWith("_IRELATIVE")) return "Write the address returned by a resolver.";
-  if (type.endsWith("_RELATIVE")) return "Adjust an address by the object's load base.";
-  if (type.endsWith("_JUMP_SLOT") || type.endsWith("_JMP_SLOT")) return "Fill a procedure linkage slot.";
-  if (type.endsWith("_COPY")) return "Copy initial data from the selected external definition.";
-  if (type.endsWith("_GLOB_DAT")) return "Write the resolved symbol address to a linkage slot.";
-  return symbolIndex ? "Symbol reference" : "No symbol reference";
+const relative = "Add the difference between the runtime and link-time load addresses to the addend.";
+const absolute = "Add the resolved symbol address to the addend.";
+const runtimeMeanings: Record<ElfRelocationOperation, string> = {
+  relative, relative64: relative,
+  "jump-slot": "Bind a Procedure Linkage Table (PLT) slot to the resolved function.",
+  "global-data": "Set a Global Offset Table (GOT) slot using the resolved symbol.",
+  resolver: "Run a resolver in this object and write the address it returns.",
+  copy: "Copy initial data from the resolved external definition into this object's storage.",
+  absolute, absolute64: absolute,
+  "pc-relative": "Write the symbol address plus the addend, relative to the relocation site.",
+  "tls-descriptor": "Initialize the two-word descriptor used to locate a thread-local symbol."
+};
+
+const typeMeaning = (entry: ElfRelocation, table: ElfRelocationTable,
+  operation: ElfRelocationOperation | undefined): string => {
+  if (entry.type === 0) return "No operation.";
+  if (table.encoding === "RELR") return "Adjust the pointer already stored at the target for the load address.";
+  if (table.encoding === "AUTH_RELR") return "Adjust and authenticate a stored pointer.";
+  if (operation) return runtimeMeanings[operation];
+  return entry.symbolIndex ? "Symbol reference" : "No symbol reference";
 };
 
 // gABI 6.2: RELR encodes locations where the loader adjusts a stored value.
@@ -67,7 +82,7 @@ const typeMeaning = (type: string, symbolIndex: number | null): string => {
 const encodingMeaning = (encoding: ElfRelocationTable["encoding"], addend: bigint | null): string => {
   if (encoding === "RELR") return "Adjusts stored value by load base";
   if (encoding === "AUTH_RELR") return "Packed authenticated relative sites";
-  return addend == null ? "Addend in target bytes" : "Explicit addend";
+  return addend == null ? "Implicit addends where required" : "Explicit addend";
 };
 
 export const summarizeElfRelocations = (elf: ElfParseResult): ElfRelocationSummary => {
@@ -76,11 +91,13 @@ export const summarizeElfRelocations = (elf: ElfParseResult): ElfRelocationSumma
   const targets = new Map<string, ElfRelocationSummaryRow>();
   const symbols = new Map<string, ElfRelocationSummaryRow>();
   const sections = new Map(elf.sections.map(section => [section.index, section]));
+  const runtime = elf.relocations?.tables.map(table => isElfRuntimeRelocationTable(elf, table));
   for (const entry of elf.relocations?.entries ?? []) {
     const table = elf.relocations!.tables[entry.tableIndex]!;
     const type = elfRelocationTypeLabel(elf.header.machine, table, entry);
-    const binding = typeMeaning(type, entry.symbolIndex);
-    addRow(types, `${type}:${binding}`, type, binding);
+    const meaningOfType = typeMeaning(entry, table,
+      runtime?.[entry.tableIndex] ? elfRuntimeRelocationOperation(elf, entry.type) : undefined);
+    addRow(types, `${type}:${meaningOfType}`, type, meaningOfType);
     const meaning = encodingMeaning(table.encoding, entry.addend);
     addRow(formats, `${table.encoding}:${meaning}`, table.encoding, meaning);
     const target = targetLabel(sections, entry);

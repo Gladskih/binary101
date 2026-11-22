@@ -8,6 +8,7 @@ import type { ElfRelocationSummary, ElfRelocationSummaryKind } from "./relocatio
 import { getElfSymbolDisplayName } from "../../analyzers/elf/symbol-names.js";
 import { renderSymbolName } from "../symbol-name.js";
 import { renderElfRelocationRecords } from "./relocation-records.js";
+import { renderCountedCollection } from "../counted-collection.js";
 
 const labels = { types: "Relocation type", formats: "Encoding", targets: "Target section", symbols: "Referenced symbol" };
 const tableId = (kind: ElfRelocationSummaryKind): string =>
@@ -51,9 +52,9 @@ export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void =
   out.push(renderElfSectionStart(`Relocations (${relocations.entries.length})`));
   out.push(`<p>Decoded relocations: ${relocations.entries.length} across ${relocations.tables.length} tables. ` +
     `Distinct referenced symbols: ${summary.symbols.length}.</p>`);
-  out.push(`<p class="smallNote">A RELR word can expand to multiple relocation sites. ` +
-    `The REL format stores implicit addends in the target bytes. ` +
-    `Symbol providers and runtime addresses depend on the loader. CREL is an experimental LLVM format.</p>`);
+  out.push('<p class="smallNote">A RELR word can expand to multiple relocation sites. ' +
+    'When the write size is known, the target check covers the entire write. ' +
+    'For other operations it checks the target address.</p>');
   for (const kind of Object.keys(labels) as ElfRelocationSummaryKind[]) {
     if (!summary[kind].length) continue;
     out.push(`<h4>${escapeHtml(labels[kind])} distribution</h4>`);
@@ -61,8 +62,10 @@ export const renderElfRelocations = (elf: ElfParseResult, out: string[]): void =
   }
   out.push(renderElfRelocationRecords(elf));
   if (relocations.issues.length) {
-    out.push(`<p>Analysis is incomplete or contains anomalies:</p><ul>` +
-      relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("") + `</ul>`);
+    out.push(renderCountedCollection(
+      `Analysis is incomplete or contains anomalies (${relocations.issues.length})`,
+      `<ul>${relocations.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`,
+      relocations.issues.length));
   }
   out.push(renderElfSectionEnd());
 };

@@ -1,6 +1,6 @@
 import type { ElfRelocationImage } from "./relocation-types.js";
 import type { ElfRelocationTable, ElfRelocationTarget } from "./relocation-types.js";
-import type { ElfSectionHeader } from "./types.js";
+import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import { ELF_FILE_TYPE, ELF_SECTION_TYPE, ELF_SECTION_FLAG, ELF_SEGMENT_TYPE } from "./abi-constants.js";
@@ -52,18 +52,37 @@ const compressedTarget = (sectionIndex: number, offset: bigint, width: bigint,
   return { sectionIndex, sectionOffset: offset, fileOffset: null };
 };
 
+const coveredByLoads = (loads: ElfProgramHeader[], start: bigint, end: bigint): boolean => {
+  if (loads.some(load => load.vaddr <= start && load.vaddr + load.memsz >= end)) return true;
+  // A write may cross contiguous mapped segments. Only gaps make memory unavailable.
+  loads.sort((left, right) => left.vaddr < right.vaddr ? -1 : left.vaddr > right.vaddr ? 1 : 0);
+  let covered = start;
+  for (const load of loads) {
+    if (load.vaddr > covered) break;
+    if (load.vaddr + load.memsz > covered) covered = load.vaddr + load.memsz;
+    if (covered >= end) return true;
+  }
+  return false;
+};
+
 const virtualTarget = (
   elf: ElfRelocationImage, offset: bigint, width: bigint, issues: string[]
 ): ElfRelocationTarget | null => {
-  const section = elf.sections.find(item => allocatedSection(item) && !tlsZeroFill(item) &&
-    offset >= item.addr && offset + width <= item.addr + item.size);
-  const range = elfVirtualRange(elf.programHeaders, offset, width, elf.fileSize);
-  const memory = elf.programHeaders.some(item => item.type === ELF_SEGMENT_TYPE.LOAD &&
-    offset >= item.vaddr && offset + width <= item.vaddr + item.memsz);
-  if (!range && !memory) {
-    issues.push(`Relocation target 0x${offset.toString(16)} is outside PT_LOAD memory.`);
+  const end = offset + width;
+  if (offset < 0n || end > (1n << (elf.is64 ? 64n : 32n))) {
+    issues.push("Relocation target range exceeds the ELF address space.");
     return null;
   }
+  const loads = elf.programHeaders.filter(load => load.type === ELF_SEGMENT_TYPE.LOAD &&
+    load.memsz > 0n && load.vaddr < end && load.vaddr + load.memsz > offset);
+  if (!coveredByLoads(loads, offset, end)) {
+    issues.push(width === 1n ? "Relocation target address is outside PT_LOAD memory." :
+      `Relocation target range (${width}-byte write) is outside PT_LOAD memory.`);
+    return null;
+  }
+  const section = elf.sections.find(item => allocatedSection(item) && !tlsZeroFill(item) &&
+    offset >= item.addr && end <= item.addr + item.size);
+  const range = loads.length === 1 ? elfVirtualRange(loads, offset, width, elf.fileSize) : null;
   return { sectionIndex: section?.index ?? null,
     sectionOffset: section ? offset - section.addr : null,
     fileOffset: range ? BigInt(range.offset) : null };
@@ -71,12 +90,12 @@ const virtualTarget = (
 
 export const locateElfRelocationTarget = (
   elf: ElfRelocationImage, table: ElfRelocationTable, offset: bigint, issues: string[],
-  layout = selectElfBinaryLayout(elf), logicalSizes = new Map<number, bigint>()
+  layout = selectElfBinaryLayout(elf), logicalSizes = new Map<number, bigint>(), writeSize?: bigint
 ): ElfRelocationTarget | null => {
   // RELR fixes a whole address-sized slot. Unknown symbolic types only identify a site;
   // their write width belongs to the processor-specific relocation evaluator.
   const width = table.encoding === "RELR" || table.encoding === "AUTH_RELR" ?
-    BigInt(layout.wordSize) : 1n;
+    BigInt(layout.wordSize) : writeSize ?? 1n;
   const section = table.targetSectionIndex == null ? undefined :
     elf.sections[table.targetSectionIndex];
   if (elf.header.type === ELF_FILE_TYPE.REL) {
@@ -86,7 +105,7 @@ export const locateElfRelocationTarget = (
   // gABI §6 gives linked r_offset as an address, and §3 gives non-ALLOC sections sh_addr=0.
   // https://sourceware.org/binutils/docs/ld/Options.html
   // https://gabi.xinuos.com/elf/06-reloc.html
-  if (section && !allocatedSection(section) &&
+  if (section && !allocatedSection(section) && !table.sources.some(source => source.startsWith("DT_")) &&
     (elf.header.type === ELF_FILE_TYPE.EXEC || elf.header.type === ELF_FILE_TYPE.DYN)) {
     return sectionTarget(section, offset - section.addr, width, elf.fileSize, issues, logicalSizes);
   }
