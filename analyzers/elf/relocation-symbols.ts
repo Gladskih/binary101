@@ -28,10 +28,10 @@ const locateSectionSymbol = (
     BigInt(index + 1) * BigInt(stride) > section.size) return null;
   const range = elfFileRange(section.offset + BigInt(index * stride), BigInt(stride), reader.size);
   if (!range) return null;
-  const address = tags.get(DT.SYMTAB);
-  if (section.type === SECTION.DYNSYM && address != null) {
-    const runtime = elfVirtualRange(elf.programHeaders, address, 1n, reader.size);
-    if (runtime && BigInt(runtime.offset) === section.offset) {
+  if (section.type === SECTION.DYNSYM) {
+    // ELF virtual addresses are unsigned; an absent tag has no mapping.
+    const runtime = elfVirtualRange(elf.programHeaders, tags.get(DT.SYMTAB) ?? -1n, 1n, reader.size);
+    if (runtime?.offset === Number(section.offset)) {
       const runtimeStrings = dynamicStrings(reader, elf, tags);
       if (runtimeStrings) return { offset: range.offset, strings: runtimeStrings };
     }

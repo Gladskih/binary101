@@ -52,9 +52,9 @@ export const associatedElfHashTables = (image: HashImage, symtab: ElfDynamicSymb
   entries: ElfDynamicEntry[], tables: ElfHashTable[] | undefined): ElfHashTable[] => {
   if (!tables?.length) return [];
   const offset = BigInt(symtab.storedOffset ?? symtab.offset);
-  const symbolAddress = entries.find(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTAB)?.value;
-  const symbolRange = symbolAddress === undefined ? null :
-    elfVirtualRange(image.programHeaders, symbolAddress, 1n, image.file.size);
+  // ELF virtual addresses are unsigned; an absent tag has no mapping.
+  const symbolAddress = entries.find(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTAB)?.value ?? -1n;
+  const symbolRange = elfVirtualRange(image.programHeaders, symbolAddress, 1n, image.file.size);
   return tables.filter(table => {
     const { sectionType, tag } = hashDescriptors[table.kind];
     const section = image.sections.find(item => item.type === sectionType);
@@ -63,9 +63,8 @@ export const associatedElfHashTables = (image: HashImage, symtab: ElfDynamicSymb
       return linked?.offset === offset && section.offset === BigInt(table.offset);
     }
     if (symbolRange?.offset !== symtab.offset || symtab.reader) return false;
-    const address = entries.find(entry => entry.tag === tag)?.value;
-    return address !== undefined &&
-      elfVirtualRange(image.programHeaders, address, 1n, image.file.size)?.offset === table.offset;
+    const address = entries.find(entry => entry.tag === tag)?.value ?? -1n;
+    return elfVirtualRange(image.programHeaders, address, 1n, image.file.size)?.offset === table.offset;
   });
 };
 

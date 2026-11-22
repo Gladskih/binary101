@@ -1,11 +1,68 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseElfHashTables, validateElfSysvHashSymbolCount } from "../../../../analyzers/elf/hash-tables.js";
+import {
+  associatedElfHashTables, parseElfHashTables, validateElfSysvHashSymbolCount
+} from "../../../../analyzers/elf/hash-tables.js";
+import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
 import { parseElfDynamicSymbols } from "../../../../analyzers/elf/dynamic-symbols.js";
 import { parseElf } from "../../../../analyzers/elf/index.js";
 import type { ElfHashTable } from "../../../../analyzers/elf/hash-types.js";
 import { createElfImportLinkageBytes } from "../../../fixtures/elf-import-linkage-file.js";
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
+
+const associatedSectionHash = () => {
+  const fixture = relocationFixture();
+  const symbols = fixture.elf.sections[2]!;
+  symbols.type = 11; // SHT_DYNSYM, gABI 3.3.
+  const hashSection = relocationSection(4, { type: 5, offset: 64n, link: symbols.index });
+  fixture.elf.sections.push(hashSection);
+  const table: ElfHashTable = { kind: "sysv", offset: 64, buckets: [1], chains: [0, 0], issues: [] };
+  return { image: { ...fixture.elf, file: fixture.file() }, symbols, hashSection, table };
+};
+
+void test("associates hashes only with the named dynamic symbol section and stored hash offset", () => {
+  const { image, symbols, hashSection, table } = associatedSectionHash();
+  const symtab = { offset: Number(symbols.offset), size: Number(symbols.size) };
+
+  assert.deepEqual(associatedElfHashTables(image, symtab, [], undefined), []);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [], [table]), [table]);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [], [{ ...table, offset: 65 }]), []);
+  hashSection.link = 1;
+  image.sections[1]!.offset = symbols.offset;
+  assert.deepEqual(associatedElfHashTables(image, symtab, [], [table]), []);
+});
+
+// gABI 8.3: DT_HASH=4, DT_SYMTAB=6. tag values use the same PT_LOAD translation.
+const mappedHash = () => {
+  const { image, symbols, table } = associatedSectionHash();
+  const address = 4096n;
+  image.sections = [];
+  image.programHeaders.push({ type: 1, typeName: "LOAD", index: 0, offset: 0n, vaddr: address,
+    paddr: address, filesz: BigInt(image.file.size), memsz: BigInt(image.file.size),
+    flags: 4, flagNames: [], align: 1n });
+  return { image, table, symtab: { offset: Number(symbols.offset), size: Number(symbols.size) },
+    hash: { tag: 4, value: address + BigInt(table.offset) },
+    symbol: { tag: 6, value: address + symbols.offset }, unmapped: address + BigInt(image.file.size) };
+};
+
+void test("requires both runtime tags to map to their respective file positions", () => {
+  const { image, table, symtab, hash, symbol, unmapped } = mappedHash();
+
+  assert.deepEqual(associatedElfHashTables(image, symtab, [hash, symbol], [table]), [table]);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [hash], [table]), []);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [symbol], [table]), []);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [{ ...hash, value: unmapped }, symbol], [table]), []);
+  assert.deepEqual(
+    associatedElfHashTables(image, symtab, [hash, { ...symbol, value: symbol.value + 1n }], [table]), []);
+  assert.deepEqual(associatedElfHashTables(image, symtab, [hash, symbol], [{ ...table, offset: 65 }]), []);
+});
+
+void test("keeps a decoded symbol table distinct from a runtime mapping at its logical offset", () => {
+  const { image, table, symtab, hash, symbol } = mappedHash();
+  const reader = createFileRangeReader(image.file, 0, image.file.size);
+
+  assert.deepEqual(associatedElfHashTables(image, { ...symtab, reader }, [hash, symbol], [table]), []);
+});
 
 const fixture = (kind: "sysv" | "gnu", order: "little" | "big" = "little") => {
   const result = relocationFixture(64, order);

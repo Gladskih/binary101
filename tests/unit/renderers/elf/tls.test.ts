@@ -25,11 +25,12 @@ void test("renderElfTls renders TLS segments and sections", async () => {
 
 void test("renders TLS consistency warnings with the segment they describe", async () => {
   const elf = expectDefined(await parseElf(createElfMetadataFile().file));
-  elf.tls!.issues = ["PT_TLS #4: p_filesz exceeds p_memsz. <invalid>"];
+  elf.tls!.issues = ["PT_TLS #4: p_filesz exceeds p_memsz. <invalid>", "A second warning."];
   const out: string[] = [];
 
   renderElfTls(elf, out);
 
-  assert.match(out.join(""), /p_filesz exceeds p_memsz.*&lt;invalid>/);
+  assert.ok(out.join("").includes("<ul><li>PT_TLS #4: p_filesz exceeds p_memsz. &lt;invalid></li>" +
+    "<li>A second warning.</li></ul>"));
 });
 

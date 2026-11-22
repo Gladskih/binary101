@@ -28,6 +28,7 @@ void test("parseElfTlsInfo returns null when no TLS is present", async () => {
 
 for (const [type, addressDelta, fileDelta, expected] of [
   [1, 0n, 0n, null], [8, 4n, 200n, null],
+  [1, -1n, -1n, /file range.*initialization image/],
   [1, 0n, 1n, /file range.*initialization image/],
   [1, 4n, 4n, /file range.*initialization image/],
   [8, 0n, 0n, /zero-filled/], [8, 8n, 0n, /zero-filled/]
@@ -72,5 +73,51 @@ void test("reports multiple nonempty TLS templates and treats an empty entry as 
     elf.sections, elf.header.type)?.issues, ["Multiple nonempty PT_TLS entries describe the TLS template."]);
   assert.equal(parseElfTlsInfo([segment, { ...segment, filesz: 0n, memsz: 0n }],
     elf.sections, elf.header.type)?.issues, undefined);
+});
+
+void test("matches the entire initialized image and translates a nonzero section offset", async () => {
+  const elf = expectDefined(await parseElf(createElfMetadataFile().file));
+  const segment = expectDefined(elf.programHeaders.find(header => header.type === 7));
+  const template = { ...segment, memsz: segment.filesz };
+  const section = relocationSection(9, { name: ".tls_second", flags: 0x402n, size: 2n,
+    addr: segment.vaddr + 2n, offset: segment.offset + 2n });
+
+  assert.deepEqual(parseElfTlsInfo([template], [section], 2), {
+    segments: [{ index: segment.index, offset: template.offset, vaddr: template.vaddr,
+      filesz: template.filesz, memsz: template.memsz, align: template.align }],
+    sections: [{ index: section.index, name: ".tls_second", addr: section.addr,
+      offset: section.offset, size: section.size, flags: [] }]
+  });
+});
+
+void test("a template with no zero-filled bytes cannot have a nonempty TLS NOBITS section", async () => {
+  const elf = expectDefined(await parseElf(createElfMetadataFile().file));
+  const segment = expectDefined(elf.programHeaders.find(header => header.type === 7));
+  const template = { ...segment, memsz: segment.filesz };
+  const section = relocationSection(9, { type: 8, flags: 0x402n, size: 1n,
+    addr: template.vaddr + template.filesz });
+  delete section.name;
+
+  const tls = parseElfTlsInfo([template], [section], 2);
+
+  assert.equal(tls?.sections[0]?.name, "");
+  assert.deepEqual(tls?.issues, ["TLS section #9 is outside the zero-filled PT_TLS template."]);
+});
+
+void test("treats empty TLS entries and malformed geometry as distinct conditions", async () => {
+  const elf = expectDefined(await parseElf(createElfMetadataFile().file));
+  const segment = expectDefined(elf.programHeaders.find(header => header.type === 7));
+  const empty = { ...segment, filesz: 0n, memsz: 0n };
+  const impossible = { ...segment, filesz: segment.memsz + 1n };
+  const section = relocationSection(9, { flags: 0x402n, size: 1n });
+
+  assert.equal(parseElfTlsInfo([empty], [], 2)?.issues, undefined);
+  assert.deepEqual(parseElfTlsInfo([empty], [section], 2)?.issues,
+    ["SHF_TLS sections are present without a nonempty PT_TLS template."]);
+  assert.deepEqual(parseElfTlsInfo([impossible], [section], 2)?.issues,
+    [`PT_TLS #${segment.index}: p_filesz exceeds p_memsz.`]);
+  assert.deepEqual(parseElfTlsInfo([{ ...impossible, memsz: 0n }], [section], 2)?.issues,
+    [`PT_TLS #${segment.index}: p_filesz exceeds p_memsz.`]);
+  assert.equal(parseElfTlsInfo([], [{ ...section, size: 0n }], 2), null);
 });
 
