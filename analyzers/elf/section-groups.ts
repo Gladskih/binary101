@@ -22,7 +22,11 @@ const validateGroupHeader = async (
     section.info >= await signatureSymbolCount(reader, elf, symbols, issues)) {
     issues.push("Group signature has an invalid symbol table reference.");
   }
-  if (section.flags !== 0n) issues.push("Group section header has nonzero flags.");
+  if (section.flags & ELF_SECTION_COMPRESSED) {
+    issues.push("SHT_GROUP requires sh_flags = 0. SHF_COMPRESSED is invalid and this group was skipped.");
+  } else if (section.flags !== 0n) {
+    issues.push("SHT_GROUP requires sh_flags = 0.");
+  }
 };
 
 const signatureSymbolCount = async (

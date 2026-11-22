@@ -81,5 +81,5 @@ void test("does not parse group words from a forbidden SHF_COMPRESSED payload", 
   const [result] = await parseElfSectionGroups(fixture.file(), fixture.elf);
   assert.equal(result?.flags, null);
   assert.deepEqual(result?.members, []);
-  assert.match(result!.issues.join(" "), /flags/);
+  assert.match(result!.issues.join(" "), /SHT_GROUP requires sh_flags = 0.*SHF_COMPRESSED.*skipped/);
 });

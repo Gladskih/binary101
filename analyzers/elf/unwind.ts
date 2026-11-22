@@ -10,7 +10,10 @@ import { elfDwarfFrames } from "./dwarf-frames.js";
 import { findElfEhFrameHeader } from "./eh-frame-header.js";
 import { locateSegmentUnwind } from "./unwind-segment.js";
 
-type FrameSource = { offset: number; size: number; addr: bigint; name: string };
+type FrameSource = { offset: number; size: number; addr: bigint; name: string; fdeCount?: number | undefined };
+type FrameStop = "terminator" | "short-record" | "invalid";
+type Continuation = { offset: number; stop: "section-end" | "short-record" };
+type SectionScan = { section: ElfSectionHeader; frames: ElfUnwindSection; continuation?: Continuation };
 
 interface FrameRecord {
   offset: number;
@@ -26,33 +29,36 @@ const cieReference = (name: string, id: bigint, idSize: number, idOffset: number
   return id === 0n ? null : idOffset - Number(id);
 };
 
-const frameLength = async (cursor: DwarfCursor): Promise<{ size: bigint; width: number } | null> => {
+const frameLength = async (cursor: DwarfCursor): Promise<{ size: bigint; width: number } | FrameStop> => {
+  const available = cursor.end - cursor.position;
   const length = await cursor.uint32();
-  if (length == null || length === 0) return null;
+  if (length == null) return available < 4 ? "short-record" : "invalid";
+  if (length === 0) return "terminator";
   if (length >= 0xfffffff0 && length !== 0xffffffff) {
     cursor.fail("Reserved unwind record length");
-    return null;
+    return "invalid";
   }
   const size = length === 0xffffffff ? await cursor.uint64() : BigInt(length);
-  return size == null ? null : { size, width: length === 0xffffffff ? 8 : 4 };
+  return size == null ? available < 12 ? "short-record" : "invalid" :
+    { size, width: length === 0xffffffff ? 8 : 4 };
 };
 
 // DWARF 5 7.2.2 initial lengths; .eh_frame keeps 4-byte CIE ids even with extended length.
 // https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html
 const readFrameRecord = async (
   cursor: DwarfCursor, sectionName: string
-): Promise<FrameRecord | null> => {
+): Promise<FrameRecord | FrameStop> => {
   const offset = cursor.position;
   const length = await frameLength(cursor);
-  if (!length) return null;
+  if (typeof length === "string") return length;
   const idOffset = cursor.position;
   const idSize = sectionName === ".debug_frame" ? length.width : 4;
   if (length.size < BigInt(idSize) || length.size > BigInt(cursor.end - cursor.position)) {
     cursor.fail("Unwind record is truncated or has an invalid length");
-    return null;
+    return length.size < BigInt(idSize) ? "invalid" : "short-record";
   }
   const id = await cursor.unsigned(idSize);
-  if (id == null) return null;
+  if (id == null) return "invalid";
   return { offset, body: cursor.position, end: idOffset + Number(length.size),
     cieOffset: cieReference(sectionName, id, idSize, idOffset) };
 };
@@ -77,29 +83,31 @@ const unavailableSection = (
 
 const readUnwindSection = async (
   reader: FileRangeReader, elf: ElfParseResult, section: ElfSectionHeader
-): Promise<ElfUnwindSection> => {
-  const result: ElfUnwindSection = { sectionIndex: section.index, cies: [], fdes: [], issues: [] };
+): Promise<SectionScan> => {
+  const frames: ElfUnwindSection = { sectionIndex: section.index, cies: [], fdes: [], issues: [] };
   if (section.name === ".debug_frame" && elf.dwarf) {
-    return elf.dwarf.frames ? elfDwarfFrames(elf.dwarf.frames, section.index) : result;
+    return { section, frames: elf.dwarf.frames ? elfDwarfFrames(elf.dwarf.frames, section.index) : frames };
   }
-  if (unavailableSection(section, elf, result.issues)) return result;
-  return readUnwindFrames(reader, elf, { offset: Number(section.offset), size: Number(section.size),
-    addr: section.addr, name: section.name! }, result);
+  if (unavailableSection(section, elf, frames.issues)) return { section, frames };
+  const continuation = await readUnwindFrames(reader, elf, { offset: Number(section.offset),
+    size: Number(section.size), addr: section.addr, name: section.name! }, frames);
+  return { section, frames, ...(continuation && { continuation }) };
 };
 
 const readUnwindFrames = async (
-  reader: FileRangeReader, elf: ElfParseResult, source: FrameSource, result: ElfUnwindSection
-): Promise<ElfUnwindSection> => {
+  reader: FileRangeReader, elf: ElfParseResult, source: FrameSource, result: ElfUnwindSection, start = 0
+): Promise<Continuation | undefined> => {
   const cursorAt = (position: number, end: number) => new DwarfCursor(reader,
     { name: source.name, offset: source.offset, size: source.size, compressed: false },
     position, end, elf.littleEndian, result.issues);
-  const cursor = cursorAt(0, source.size);
+  const cursor = cursorAt(start, source.size);
   const pending: FrameRecord[] = [];
-  let terminated = false;
+  let stop: FrameStop | "section-end" = "section-end";
+  let offset = start;
   while (cursor.position < cursor.end) {
     const record = await readFrameRecord(cursor, source.name);
-    if (!record) {
-      terminated = !cursor.failed;
+    if (typeof record === "string") {
+      stop = record;
       break;
     }
     if (record.cieOffset == null) {
@@ -108,12 +116,13 @@ const readUnwindFrames = async (
       if (cie) result.cies.push(cie);
     } else pending.push(record);
     cursor.position = record.end;
+    offset = record.end;
   }
-  if (result.sectionIndex === null && !terminated && !cursor.failed) {
+  if (result.sectionIndex === null && stop === "section-end") {
     result.issues.push("No .eh_frame terminator before the end of the file-backed PT_LOAD.");
   }
   await readPendingFdes(pending, result, cursorAt, source.addr, elf.header.machine);
-  return result;
+  return stop === "section-end" || stop === "short-record" ? { offset, stop } : undefined;
 };
 
 const readPendingFdes = async (
@@ -136,35 +145,55 @@ const readPendingFdes = async (
 
 export const parseElfUnwind = async (file: File, elf: ElfParseResult): Promise<ElfUnwindSection[]> => {
   const reader = createFileRangeReader(file, 0, file.size);
-  const result: ElfUnwindSection[] = [];
-  const sections = elf.sections.filter(item => item.name === ".eh_frame" || item.name === ".debug_frame");
-  let haveRuntimeFrames = false;
-  for (const section of sections) {
-    const frames = await readUnwindSection(reader, elf, section);
-    result.push(frames);
-    if (section.name === ".eh_frame" && frames.fdes.length) haveRuntimeFrames = true;
+  const sections: SectionScan[] = [];
+  for (const section of elf.sections) {
+    if (section.name === ".eh_frame" || section.name === ".debug_frame") {
+      sections.push(await readUnwindSection(reader, elf, section));
+    }
   }
-  if (!haveRuntimeFrames) {
-    const fallback = await readSegmentFrames(reader, elf, sections);
-    if (fallback) result.push(fallback);
-  }
+  const runtime = sections.filter(scan => scan.section.name === ".eh_frame");
+  const result = sections.map(scan => scan.frames);
+  if (runtime.some(scan => scan.frames.fdes.length) &&
+      !runtime.some(scan => scan.continuation)) return result;
+  const fallback = await readSegmentFrames(reader, elf, runtime);
+  if (fallback?.replaced) result[result.indexOf(fallback.replaced)] = fallback.frames;
+  else if (fallback) result.push(fallback.frames);
   return result;
 };
 
 const readSegmentFrames = async (
-  reader: FileRangeReader, elf: ElfParseResult, attempted: ElfSectionHeader[]
-): Promise<ElfUnwindSection | null> => {
+  reader: FileRangeReader, elf: ElfParseResult, attempted: SectionScan[]
+): Promise<{ frames: ElfUnwindSection; replaced?: ElfUnwindSection } | null> => {
   const header = findElfEhFrameHeader(elf.programHeaders);
   if (!header) return null;
   const unwind: ElfUnwindSection = { sectionIndex: null, programHeaderIndex: header.index,
     cies: [], fdes: [], issues: [] };
   const source = await locateSegmentUnwind(reader, elf, header, unwind.issues);
-  if (!source) return unwind;
+  const haveFrames = attempted.some(scan => scan.frames.fdes.length);
+  if (!source) return haveFrames ? null : { frames: unwind };
   const start = BigInt(source.offset);
-  // An in-file, overlapping .eh_frame has already been handled by the section path.
-  // An out-of-file section size does not invalidate an independently bounded PT_LOAD.
-  if (attempted.some(section => section.name === ".eh_frame" &&
-    start >= section.offset && start < section.offset + section.size &&
-    elfFileRange(section.offset, section.size, reader.size))) return null;
-  return readUnwindFrames(reader, elf, source, unwind);
+  const alias = attempted.find(({ section }) => start === section.offset && source.addr === section.addr &&
+    elfFileRange(section.offset, section.size, reader.size));
+  if (alias) return extendSectionScan(reader, elf, source, unwind, alias);
+  if (haveFrames) return null;
+  await readUnwindFrames(reader, elf, source, unwind);
+  return { frames: unwind };
+};
+
+const extendSectionScan = async (
+  reader: FileRangeReader, elf: ElfParseResult, source: FrameSource,
+  unwind: ElfUnwindSection, { section, frames, continuation }: SectionScan
+): Promise<{ frames: ElfUnwindSection; replaced: ElfUnwindSection } | null> => {
+  if (!continuation || BigInt(source.size) <= section.size) return null;
+  if (continuation.stop === "section-end" && frames.fdes.length &&
+    (source.fdeCount ?? 0) <= frames.fdes.length) return null;
+  // CIE references and PC-relative operands have the same origin in both views.
+  // Keep complete records and resume at the first record outside the section.
+  unwind.cies = frames.cies.slice();
+  unwind.fdes = frames.fdes.slice();
+  unwind.issues = frames.issues.slice();
+  await readUnwindFrames(reader, elf, source, unwind, continuation.offset);
+  if (unwind.fdes.length <= frames.fdes.length) return null;
+  unwind.issues.unshift(`.eh_frame via PT_GNU_EH_FRAME extends beyond section #${section.index}.`);
+  return { frames: unwind, replaced: frames };
 };

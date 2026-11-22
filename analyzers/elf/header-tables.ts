@@ -3,6 +3,7 @@
 import { createFileRangeReader } from "../file-range-reader.js";
 import { createElfStringTableReader } from "./string-table.js";
 import { openElfSectionData } from "./section-data.js";
+import { elfFileRange } from "./relocation-reader.js";
 import { locateElfHeaderTable } from "./header-table-range.js";
 import {
   PROGRAM_FLAGS,
@@ -124,6 +125,7 @@ function parseSectionHeader32(view: DataView, littleEndian: boolean): Omit<ElfSe
 function locateSectionNameTable(
   sections: ElfSectionHeader[],
   header: ElfHeader,
+  fileSize: number,
   issues: string[]
 ): ElfSectionHeader | null {
   // gABI 2: SHN_UNDEF means that the file has no section name table.
@@ -136,6 +138,10 @@ function locateSectionNameTable(
   }
   if (shstr.type !== 3) { // SHT_STRTAB, gABI 3.
     issues.push("Section name table must have type SHT_STRTAB.");
+    return null;
+  }
+  if (!elfFileRange(shstr.offset, shstr.size, fileSize)) {
+    issues.push("Section name table is truncated or falls outside the file.");
     return null;
   }
   return shstr;
@@ -257,7 +263,7 @@ export async function parseSectionHeadersWithNames(
     sections.push({ ...parsed, index });
   }
   validateElfSectionHeaders(sections, file.size, issues);
-  const namesSection = locateSectionNameTable(sections, header, issues);
+  const namesSection = locateSectionNameTable(sections, header, reader.size, issues);
   const namesTable = namesSection && await openElfSectionData(reader,
     { ...namesSection, name: "Section name table" }, { is64, littleEndian, header }, issues);
   if (namesTable) {
