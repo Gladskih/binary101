@@ -1,5 +1,5 @@
 import type { ElfHeader, ElfProgramHeader } from "./types.js";
-import { elfRangesCover } from "./range-coverage.js";
+import { elfLoadMappingCovers } from "./range-coverage.js";
 
 type ProgramTable = Pick<ElfHeader, "phoff" | "phentsize" | "phnum">;
 
@@ -47,11 +47,7 @@ const validateProgramTableSegment = (
   if (segment.memsz !== size) issues.push(`${label}: p_memsz differs from the program header table size.`);
   if (segment.offset !== table.phoff || segment.filesz !== size || segment.memsz !== size ||
     table.phoff + size > fileSize) return;
-  const translation = segment.vaddr - segment.offset;
-  const ranges = loads.filter(load => load.vaddr - load.offset === translation)
-    .map(load => ({ start: load.offset, end: load.offset +
-      (load.filesz < load.memsz ? load.filesz : load.memsz) }));
-  if (!elfRangesCover(ranges, table.phoff, table.phoff + size)) {
+  if (!elfLoadMappingCovers(loads, table.phoff, segment.vaddr, size)) {
     issues.push(`${label}: the program header table lacks file-backed PT_LOAD coverage at p_vaddr.`);
   }
 };

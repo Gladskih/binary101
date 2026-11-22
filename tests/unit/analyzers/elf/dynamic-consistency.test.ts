@@ -10,14 +10,54 @@ import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocati
 import { relocationSection } from "../../../fixtures/elf-relocations.js";
 
 // gABI 8.3: DT_STRTAB=5, DT_SYMTAB=6, DT_STRSZ=10. Offsets come from the fixture.
-const mappedTables = () => {
-  const fixture = dynamicRelocationFixture();
+const mappedTables = (bits: 32 | 64 = 64) => {
+  const fixture = dynamicRelocationFixture(bits);
   fixture.installTags();
   const image = { ...fixture.elf, file: fixture.file() };
   const entries = [...fixture.tags].map(([tag, value]) => ({ tag, value }));
   return { image, entries, symbolOffset: Number(image.sections[2]!.offset),
     strings: { offset: Number(image.sections[3]!.offset), size: Number(image.sections[3]!.size) } };
 };
+
+void test("bounds ELF32 dynamic records by the eight-byte Elf32_Dyn stride", () => {
+  const { image, entries } = mappedTables(32);
+  const [load, dynamic] = image.programHeaders;
+  load!.filesz = dynamic!.offset + dynamic!.filesz;
+
+  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), []);
+});
+
+void test("selects the nonempty PT_DYNAMIC for the table actually parsed", () => {
+  const { image, entries } = mappedTables();
+  const dynamic = image.programHeaders[1]!;
+  image.programHeaders.unshift({ ...dynamic, filesz: 0n, memsz: 0n });
+
+  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), []);
+});
+
+for (const [allocated, expected] of [[0n, []], [2n, [
+  "PT_DYNAMIC #1 p_memsz does not contain all of SHT_DYNAMIC #4."
+]]] as const) {
+  void test(`checks the memory extent of SHT_DYNAMIC padding only for SHF_ALLOC=${allocated}`, () => {
+    const { image, entries } = mappedTables();
+    const dynamic = image.programHeaders[1]!;
+    dynamic.filesz += 16n; // p_memsz covers the observed array including DT_NULL exactly.
+    image.sections.push(relocationSection(4, { type: 6, flags: allocated,
+      offset: dynamic.offset, addr: dynamic.vaddr, size: dynamic.filesz }));
+
+    assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), expected);
+  });
+}
+
+void test("does not use the compressed byte size as the size of the dynamic symbol table", () => {
+  const { image, entries } = mappedTables();
+  const symbols = image.sections[2]!;
+  symbols.type = 11;
+  symbols.flags = 0x800n; // SHF_COMPRESSED, gABI 3.4.
+  symbols.size -= 1n;
+
+  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), []);
+});
 
 void test("an identical repeated string tag preserves the verified range", () => {
   const { image, entries, strings } = mappedTables();
@@ -43,8 +83,7 @@ void test("handles a missing string size or compressed section at the mapped off
   assert.equal(elfDynamicStringRange(image, entries.filter(entry => entry.tag !== 10), missingSize), null);
   assert.equal(elfDynamicStringRange(image, entries, compressed), null);
   assert.equal(elfDynamicStringRange(image, entries), null);
-  assert.deepEqual(missingSize,
-    ["DT_STRTAB does not map into a PT_LOAD segment for the full DT_STRSZ range."]);
+  assert.deepEqual(missingSize, []);
   assert.deepEqual(compressed, ["DT_STRTAB points into a compressed string table."]);
 });
 
@@ -86,8 +125,10 @@ void test("compares the virtual address of an allocated symbol section without a
   Object.assign(image.sections[2]!, { type: 11, flags: 2n }); // SHT_DYNSYM, SHF_ALLOC.
   image.programHeaders.shift(); // Keep PT_DYNAMIC, removing PT_LOAD.
 
-  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }),
-    ["DT_SYMTAB disagrees with the location of SHT_DYNSYM #2."]);
+  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), [
+    "PT_DYNAMIC #1: the dynamic table lacks file-backed PT_LOAD coverage at p_vaddr.",
+    "DT_SYMTAB disagrees with the location of SHT_DYNSYM #2."
+  ]);
 });
 
 void test("checks only linked SHT_STRTAB sections and only meaningful string addresses", () => {
@@ -105,7 +146,8 @@ void test("checks only linked SHT_STRTAB sections and only meaningful string add
   image.sections[3]!.size -= 1n;
   image.sections[3]!.flags = 2n;
   assert.deepEqual(validateElfDynamicConsistency(image,
-    { ...table, entries: entries.filter(entry => entry.tag !== 5) }), []);
+    { ...table, entries: entries.filter(entry => entry.tag !== 5) }),
+  ["ELF dynamic table is missing required DT_STRTAB."]);
 });
 
 void test("only trusts the string link of an SHT_DYNAMIC covering the same records", () => {
@@ -139,10 +181,6 @@ void test("uses DT_STRSZ to bound runtime symbol names and reports conflicting s
   // Fixture's second Elf64_Dyn entry is DT_STRSZ, d_val at +8.
   const size = strings.size - BigInt(fixture.expected.exportSymbol.length + 1);
   fixture.view.setBigUint64(Number(fixture.dynamic.offset) + 16 + 8, size, true);
-  // Replace DT_INIT with DT_SYMTAB pointing to the same table as the section.
-  const symbolTag = Number(fixture.dynamic.offset) + 6 * 16;
-  fixture.view.setBigInt64(symbolTag, 6n, true);
-  fixture.view.setBigUint64(symbolTag + 8, fixture.parsed.sections[3]!.addr, true);
 
   const parsed = expectDefined(await parseElf(fixture.file()));
 
@@ -169,9 +207,8 @@ void test("warns when DT_STRTAB points past the start of its linked string secti
 void test("keeps section symbol names when DT_SYMTAB points at a different table", async () => {
   const fixture = await dynamicFixture();
   const strings = fixture.parsed.sections[fixture.dynamic.link]!;
-  // Reuse the Elf64_Dyn DT_INIT slot for a conflicting DT_SYMTAB (gABI 8.3).
-  const entry = Number(fixture.dynamic.offset) + 6 * 16;
-  fixture.view.setBigInt64(entry, 6n, true);
+  // Redirect DT_SYMTAB (the fixture's 13th Elf64_Dyn) to an unrelated table.
+  const entry = Number(fixture.dynamic.offset) + 12 * 16;
   fixture.view.setBigUint64(entry + 8, strings.addr, true);
   fixture.view.setBigUint64(Number(fixture.dynamic.offset) + 16 + 8, strings.size - 8n, true);
 

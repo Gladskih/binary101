@@ -57,7 +57,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
   retainMetadata(result, "hashTables", hashes);
   const [dynamic, symbols] = await Promise.all([
     parseElfDynamicInfo({ file, ...result }, table),
-    parseElfDynamicSymbols({ file, ...result }, entries, cache, layout, hashes)
+    parseElfDynamicSymbols({ file, ...result }, table, cache, layout, hashes)
   ]);
   retainMetadata(result, "dynamic", dynamic);
   retainMetadata(result, "dynSymbols", symbols);

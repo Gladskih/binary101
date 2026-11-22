@@ -4,6 +4,7 @@ import { elfFileRange } from "./relocation-reader.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import { ELF_DYNAMIC_TAG, ELF_SECTION_TYPE, ELF_SEGMENT_TYPE } from "./abi-constants.js";
 import { ELF_SECTION_COMPRESSED, openElfSectionData, type ElfSectionEncoding } from "./section-data.js";
+import type { ElfProgramHeader } from "./types.js";
 
 export interface ElfDynamicEntry {
   tag: number | bigint;
@@ -19,12 +20,15 @@ export interface ElfDynamicTable {
 // https://gabi.xinuos.com/elf/08-dynamic.html#dynamic-section
 type DynamicImage = Pick<ElfRelocationImage, "programHeaders" | "sections"> & ElfSectionEncoding;
 
+export const findElfDynamicSegment = (headers: ElfProgramHeader[]): ElfProgramHeader | undefined =>
+  headers.find(header => header.type === ELF_SEGMENT_TYPE.DYNAMIC && header.filesz > 0n);
+
 const dynamicRange = async (
   reader: FileRangeReader,
   elf: DynamicImage,
   issues: string[]
 ): Promise<{ offset: number; size: number; reader: FileRangeReader } | null> => {
-  const segment = elf.programHeaders.find(header => header.type === ELF_SEGMENT_TYPE.DYNAMIC && header.filesz > 0n);
+  const segment = findElfDynamicSegment(elf.programHeaders);
   const section = elf.sections.find(header => header.type === ELF_SECTION_TYPE.DYNAMIC && header.size > 0n);
   if (section && (section.flags & ELF_SECTION_COMPRESSED)) {
     if (!segment) return openElfSectionData(reader, section, elf, issues);

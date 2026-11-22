@@ -4,7 +4,8 @@ import { createFileRangeReader, type FileRangeReader } from "../file-range-reade
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { elfVirtualRange } from "./relocation-reader.js";
-import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
+import { findElfDynamicSegment, readElfDynamicTable, type ElfDynamicEntry,
+  type ElfDynamicTable } from "./dynamic-entries.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
@@ -17,6 +18,7 @@ import { createElfGnuHashSymbolValidator } from "./hash-symbols.js";
 import { createElfSysvHashSymbolValidator } from "./sysv-hash.js";
 import { associatedElfHashTables, validateElfSysvHashSymbolCount } from "./hash-tables.js";
 import { elfRuntimeStringsForSectionSymbols } from "./dynamic-consistency.js";
+import { elfDynamicSymbolTags } from "./dynamic-symbol-tags.js";
 import { createElfDynamicSymbolNameReader, readElfDynamicSymbolRecords,
   type ElfDynamicSymbolRange, type ElfDynamicSymbolTables, type ElfSymbolHashValidators } from
   "./dynamic-symbol-records.js";
@@ -27,15 +29,10 @@ import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
 // https://gabi.xinuos.com/elf/03-sheader.html
 // https://gabi.xinuos.com/elf/07-pheader.html
 // https://gabi.xinuos.com/elf/08-dynamic.html
-const PT_DYNAMIC = 2;
 const SHT_DYNSYM = 11;
 
 const DT_HASH = 4;
 const DT_GNU_HASH = 0x6ffffef5;
-const DT_STRTAB = 5;
-const DT_SYMTAB = 6;
-const DT_STRSZ = 10;
-const DT_SYMENT = 11;
 
 // gABI symbol binding, type, visibility and section-index encodings:
 // https://gabi.xinuos.com/elf/05-symtab.html
@@ -167,13 +164,11 @@ Promise<ElfDynamicSymbolTables | null> => {
   return { symtab, strtab };
 };
 
+type DynamicSymbolTags = NonNullable<ReturnType<typeof elfDynamicSymbolTags>>;
+
 const parseDynsymFromDynamicTags = async (opts: DynamicSymbolInput & { issues: string[] },
-  entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
+  tags: DynamicSymbolTags, entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
 Promise<ElfDynamicSymbolTables | null> => {
-  const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
-  if (!dynamicPh) return null;
-  const tags = dynsymTags(entries, selectElfBinaryLayout(opts).symbolEntrySize, opts.issues);
-  if (!tags) return null;
   const symtab = await locateDynamicSymbolTable(opts, tags, entries, hashes);
   if (!symtab) return null;
   const strtab = elfVirtualRange(opts.programHeaders, tags.strtabVaddr, tags.strsz, opts.file.size);
@@ -190,9 +185,8 @@ Promise<ElfDynamicSymbolTables | null> => {
 };
 
 const locateDynamicSymbolTable = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
-  { symtabVaddr, strtabVaddr, entrySize }: NonNullable<ReturnType<typeof dynsymTags>>,
+  { symtabVaddr, strtabVaddr, entrySize, declaredSize }: DynamicSymbolTags,
   entries: ElfDynamicEntry[], hashes: ElfHashTable[] | undefined): Promise<ElfDynamicSymbolRange | null> => {
-  const declaredSize = entries.find(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTABSZ)?.value;
   if (declaredSize != null) return declaredDynamicSymbolRange(
     opts.programHeaders, symtabVaddr, declaredSize, entrySize, opts.file.size, opts.issues);
   const count = await dynamicHashCount(opts, entries, hashes) ??
@@ -205,20 +199,6 @@ const locateDynamicSymbolTable = async (opts: Parameters<typeof parseDynsymFromD
     BigInt(count) * BigInt(entrySize), opts.file.size);
   if (!range) opts.issues.push("DT_SYMTAB is outside a file-backed PT_LOAD range.");
   return range;
-};
-
-const dynsymTags = (entries: ElfDynamicEntry[], expectedSize: number, issues: string[]) => {
-  const value = (tag: number): bigint => entries.find(entry => entry.tag === tag)?.value ?? 0n;
-  const symtabVaddr = value(DT_SYMTAB);
-  const strtabVaddr = value(DT_STRTAB);
-  const strsz = value(DT_STRSZ);
-  const entrySize = Number(value(DT_SYMENT));
-  if (entrySize !== expectedSize) {
-    issues.push("DT_SYMENT has an invalid symbol entry size.");
-    return null;
-  }
-  if ([symtabVaddr, strtabVaddr, strsz].includes(0n)) return null;
-  return { symtabVaddr, strtabVaddr, strsz, entrySize };
 };
 
 const dynamicHashCount = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
@@ -243,17 +223,20 @@ const inferDynsymCount = (symtab: bigint, strtab: bigint, entrySize: number,
 };
 
 export async function parseElfDynamicSymbols(opts: DynamicSymbolInput,
-  parsedEntries?: ElfDynamicEntry[], symbolCache = new Map<number, ElfRelocationSymbol>(),
+  parsedEntries?: ElfDynamicEntry[] | ElfDynamicTable, symbolCache = new Map<number, ElfRelocationSymbol>(),
 layout = selectElfBinaryLayout(opts), hashes?: ElfHashTable[]):
 Promise<ElfDynamicSymbolInfo | null> {
   const issues: string[] = [];
 
   const sectionTables = await parseDynsymFromSections({ ...opts, issues });
-  const entries = parsedEntries ?? await readElfDynamicEntries(
-    createFileRangeReader(opts.file, 0, opts.file.size), opts, issues, layout);
-  const tagTables = sectionTables ? null :
-    await parseDynsymFromDynamicTags({ ...opts, issues }, entries, hashes);
-  const tables = sectionTables ?? tagTables;
+  const table = Array.isArray(parsedEntries) ? { entries: parsedEntries, terminated: false } :
+    parsedEntries ?? await readElfDynamicTable(
+      createFileRangeReader(opts.file, 0, opts.file.size), opts, issues, layout);
+  const { entries } = table;
+  const tags = findElfDynamicSegment(opts.programHeaders) ?
+    elfDynamicSymbolTags(table, layout.symbolEntrySize, issues) : null;
+  const tables = sectionTables ?? (tags &&
+    await parseDynsymFromDynamicTags({ ...opts, issues }, tags, entries, hashes));
   if (!tables) return issues.length ? { total: 0, importSymbols: [], exportSymbols: [], issues } : null;
   if (sectionTables && !sectionTables.symtab.reader) {
     // Both tables may be independently valid. Runtime symbol names use DT_STRTAB/DT_STRSZ.

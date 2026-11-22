@@ -1,7 +1,5 @@
-"use strict";
 import { MockFile } from "../helpers/mock-file.js";
 const encoder = new TextEncoder();
-
 const alignTo = (value: number, alignment: number): number => {
   const mask = alignment - 1;
   return (value + mask) & ~mask;
@@ -107,7 +105,7 @@ const createElfMetadataLayout = (names: ElfMetadataFixtureNames): ElfMetadataFix
   const dynstrText = buildDynamicStringTable(names);
   offset = placeBytes(offset, bytes, offsets, "dynstr", encoder.encode(dynstrText));
   offset = placeBytes(offset, bytes, offsets, "dynsym", new Uint8Array(24 * 3).fill(0));
-  offset = placeBytes(offset, bytes, offsets, "dynamic", new Uint8Array(16 * 13).fill(0));
+  offset = placeBytes(offset, bytes, offsets, "dynamic", new Uint8Array(16 * 16));
   offset = placeBytes(offset, bytes, offsets, "note", new Uint8Array(12 + 4 + 20).fill(0));
   offset = placeBytes(offset, bytes, offsets, "tdata", new Uint8Array([1, 2, 3, 4]));
   offset = placeBytes(
@@ -269,7 +267,11 @@ const writeDynamicEntries = (
   writeDyn(9, 27, 16n);
   writeDyn(10, 30, 0x1234n);
   writeDyn(11, 0x6ffffffb, 0x5678n);
-  writeDyn(12, 0, 0n);
+  // gABI 8.3: DT_SYMTAB, DT_SYMENT, DT_SYMTABSZ (no DT_HASH), and DT_NULL.
+  writeDyn(12, 6, fileVaddr(layout.offsets.dynsym));
+  writeDyn(13, 11, 24n); // sizeof(Elf64_Sym), gABI 5.1.
+  writeDyn(14, 39, BigInt(layout.bytes.dynsym.length));
+  writeDyn(15, 0, 0n);
 };
 const writePayloadSections = (bytes: Uint8Array, layout: ElfMetadataFixtureLayout): void => {
   (["interp", "dynstr", "comment", "debugLink", "shstr", "tdata"] as ElfMetadataLayoutName[])

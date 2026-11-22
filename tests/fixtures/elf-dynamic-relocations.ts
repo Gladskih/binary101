@@ -24,7 +24,8 @@ const installDynamicTags = (
   const stride = wordSize * 2;
   fixture.elf.programHeaders.push({ ...fixture.elf.programHeaders[0]!,
     type: 2, index: 1, offset: BigInt(relocationStorage.dynamic), // PT_DYNAMIC (gABI §7).
-    filesz: BigInt((tags.size + 1) * stride)
+    vaddr: relocationStorage.loadAddress + BigInt(relocationStorage.dynamic),
+    filesz: BigInt((tags.size + 1) * stride), memsz: BigInt((tags.size + 1) * stride)
   });
   let position: number = relocationStorage.dynamic;
   for (const [tag, value] of tags) {

@@ -2,7 +2,7 @@ import { createElfStringTableReader } from "./string-table.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import type { FileRangeReader } from "../file-range-reader.js";
 import {
-  readElfDynamicTable, type ElfDynamicEntry, type ElfDynamicTable
+  findElfDynamicSegment, readElfDynamicTable, type ElfDynamicEntry, type ElfDynamicTable
 } from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
@@ -15,7 +15,6 @@ import { elfDynamicStringRange, validateElfDynamicConsistency } from "./dynamic-
 // https://gabi.xinuos.com/elf/03-sheader.html
 // https://gabi.xinuos.com/elf/08-dynamic.html
 // https://raw.githubusercontent.com/bminor/glibc/master/elf/elf.h
-const PT_DYNAMIC = 2;
 const SHT_DYNAMIC = 6;
 
 const DT_NEEDED = 1;
@@ -37,7 +36,7 @@ type DynEntry = ElfDynamicEntry;
 
 const hasDynamicTable = (file: File, headers: ElfProgramHeader[], sections: ElfSectionHeader[],
   issues: string[]): boolean => {
-  const segment = headers.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
+  const segment = findElfDynamicSegment(headers);
   const source = segment ? { offset: segment.offset, size: segment.filesz } :
     sections.find(section => section.type === SHT_DYNAMIC && section.size > 0n);
   if (!source) return false;
@@ -59,7 +58,7 @@ const locateDynStringTable = async (
 
 const linkedDynamicStrings = async (reader: FileRangeReader, opts: DynamicInfoInput, issues: string[]) => {
   // gABI 3.5: SHT_DYNAMIC.sh_link identifies its string table, independent of names.
-  const segment = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
+  const segment = findElfDynamicSegment(opts.programHeaders);
   const dynamic = opts.sections.find(section => section.type === SHT_DYNAMIC &&
     (!segment || section.offset === segment.offset));
   if (!dynamic) return null;

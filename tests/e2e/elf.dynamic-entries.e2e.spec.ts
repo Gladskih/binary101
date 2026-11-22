@@ -82,7 +82,7 @@ test("an unterminated table does not produce confirmed absence claims", async ({
   // Elf64_Ehdr.e_phoff/e_phentsize and Elf64_Phdr.p_filesz; omit the final Elf64_Dyn.
   // https://gabi.xinuos.com/elf/07-pheader.html
   view.setBigUint64(Number(view.getBigUint64(32, true)) +
-    segment.index * view.getUint16(54, true) + 32, segment.filesz - 16n, true);
+    segment.index * view.getUint16(54, true) + 32, BigInt(elf.dynamic!.entries.length) * 16n, true);
   await page.goto("/");
   await page.setInputFiles("#fileInput", {
     name: "unterminated.elf", mimeType: "application/x-elf", buffer: Buffer.from(bytes)
@@ -116,4 +116,28 @@ test("reports conflicting dynamic string bounds and keeps names inside the runti
   const symbols = page.locator('[data-elf-lazy-section="symbols"]');
   await expect(symbols.getByText(expected.importSymbol, { exact: true })).toBeVisible();
   await expect(symbols.getByText(expected.exportSymbol, { exact: true })).toHaveCount(0);
+});
+
+test("shows runtime mapping and symbol stride inconsistencies while preserving file evidence", async ({ page }) => {
+  const { file, expected } = createElfMetadataFile();
+  const elf = (await parseElf(file))!;
+  const dynamic = elf.programHeaders.find(header => header.type === 2)!;
+  const bytes = await file.arrayBuffer();
+  const view = new DataView(bytes);
+  const headerOffset = Number(elf.header.phoff) + dynamic.index * elf.header.phentsize;
+  view.setBigUint64(headerOffset + 16, dynamic.vaddr + BigInt(file.size), true); // Elf64_Phdr.p_vaddr.
+  const symbolStride = elf.dynamic!.entries.findIndex(({ tag }) => tag === 11); // DT_SYMENT.
+  view.setBigUint64(Number(dynamic.offset) + symbolStride * 16 + 8, 8n, true);
+
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(bytes) });
+  await openInspectionSection(page, "Dynamic linking");
+  const linking = page.locator('[data-elf-lazy-section="linking"]');
+  await expandInspectionCollection(linking.locator("summary").filter({ hasText: /^Notes$/ }).locator(".."));
+  await expect(linking.getByText(/PT_DYNAMIC.*lacks file-backed PT_LOAD coverage/)).toBeVisible();
+  await expect(linking.locator("[data-elf-dynamic-entries]")).toContainText(expected.needed[0]!);
+  await openInspectionSection(page, "Imports / exports");
+  const symbols = page.locator('[data-elf-lazy-section="symbols"]');
+  await expect(symbols.getByText("DT_SYMENT is 8 bytes. Expected 24 bytes.", { exact: true })).toBeVisible();
+  await expect(symbols.getByText(expected.importSymbol, { exact: true })).toBeVisible();
 });
