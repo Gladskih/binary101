@@ -2,6 +2,24 @@ import { expect, test } from "@playwright/test";
 import { openInspectionSection } from "./inspection-navigation.js";
 import { createElfImportLinkageBytes } from "../fixtures/elf-import-linkage-file.js";
 
+test("shows a missing array size beside the recorded dynamic tag", async ({ page }) => {
+  const bytes = createElfImportLinkageBytes();
+  // Replace DT_FLAGS with DT_INIT_ARRAY in the fixture's penultimate Elf64_Dyn record.
+  // gABI 8.3 requires a corresponding DT_INIT_ARRAYSZ when DT_INIT_ARRAY is present.
+  const view = new DataView(bytes.buffer);
+  view.setBigUint64(0x3a0, 25n, true);
+  view.setBigUint64(0x3a8, 0x1200n, true);
+
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: "missing-array-size.elf",
+    mimeType: "application/x-elf", buffer: Buffer.from(bytes) });
+  await openInspectionSection(page, "Dynamic linking");
+
+  const section = page.locator('[data-elf-lazy-section="linking"]');
+  await expect(section.getByText("DT_INIT_ARRAY", { exact: true })).toBeVisible();
+  await expect(section.getByText("Dynamic: DT_INIT_ARRAY requires DT_INIT_ARRAYSZ.")).toBeVisible();
+});
+
 for (const width of [390, 1280]) {
   test(`ELF linkage enriches in place after ISA at width ${width}`, async ({ page }) => {
     const errors: string[] = [];

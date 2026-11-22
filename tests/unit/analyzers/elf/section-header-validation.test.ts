@@ -39,3 +39,20 @@ void test("ignores undefined NULL fields and zero-size payload offsets", () => {
     relocationSection(1, { offset: 100n, size: 0n })], 0, issues);
   assert.deepEqual(issues, []);
 });
+
+void test("checks stored section overlap despite unordered and nested sections", () => {
+  const issues: string[] = [];
+  const sections = [
+    relocationSection(1, { offset: 8n, size: 2n }),
+    relocationSection(2, { offset: 4n, size: 8n, flags: 0x800n }),
+    relocationSection(3, { offset: 10n, size: 1n }),
+    relocationSection(4, { offset: 12n, size: 4n }),
+    relocationSection(5, { offset: 4n, size: 8n, type: 8 }),
+    relocationSection(6, { offset: 6n, size: 0n })
+  ];
+
+  validateElfSectionHeaders(sections, 16, issues);
+
+  assert.deepEqual(issues, ["Section #1 file range overlaps section #2.",
+    "Section #3 file range overlaps section #2."]);
+});

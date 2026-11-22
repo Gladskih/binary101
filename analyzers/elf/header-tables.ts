@@ -236,7 +236,7 @@ export async function parseProgramHeadersWithGuards(
     const parsed = is64 ? parseProgramHeader64(view, littleEndian) : parseProgramHeader32(view, littleEndian);
     entries.push({ ...parsed, index });
   }
-  validateElfProgramHeaders(entries, file.size, issues);
+  validateElfProgramHeaders(entries, file.size, issues, header);
   return entries;
 }
 

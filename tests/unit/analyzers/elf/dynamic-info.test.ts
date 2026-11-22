@@ -134,6 +134,53 @@ const dynamicStringsFixture = (text = "\0libtest.so\0") => {
     is64: true, littleEndian: true };
 };
 
+// gABI 8.3: DT_PREINIT_ARRAY/DT_INIT_ARRAY/DT_FINI_ARRAY and their sizes.
+for (const [baseTag, sizeTag] of [[32, 33], [25, 27], [26, 28]] as const) {
+  for (const [size, terminated, diagnostic] of [
+    [undefined, true, /requires .*ARRAYSZ/], [undefined, false, null],
+    [0n, true, null], [8n, true, null], [9n, true, /whole number of pointers/],
+    [16n, true, /outside PT_LOAD memory/]
+  ] as const) {
+    void test(`checks dynamic array tag ${baseTag}, size ${size}, terminated ${terminated}`, async () => {
+      const fixture = dynamicStringsFixture();
+      const load = { ...fixture.load, vaddr: 0n, filesz: 0n, memsz: 12n };
+      const entries = [{ tag: baseTag, value: 0n },
+        ...(size === undefined ? [] : [{ tag: sizeTag, value: size }])];
+
+      const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [load] },
+        { entries, terminated });
+
+      assert.deepEqual(result?.issues.map(issue => diagnostic?.test(issue)), diagnostic ? [true] : []);
+      assert.equal(result?.entries.length, entries.length);
+    });
+  }
+}
+
+void test("accepts ELF32 pointers crossing adjacent load ranges", async () => {
+  const fixture = dynamicStringsFixture();
+  const first = { ...fixture.load, vaddr: 0n, filesz: 0n, memsz: 2n };
+  const second = { ...first, index: 1, vaddr: 2n };
+
+  const result = await parseElfDynamicInfo({ ...fixture, is64: false, programHeaders: [first, second] },
+    { entries: [{ tag: 25, value: 0n }, { tag: 27, value: 4n }], terminated: true });
+
+  assert.deepEqual(result?.initArray, { vaddr: 0n, size: 4n });
+  assert.deepEqual(result?.issues, []);
+});
+
+for (const [type, size, mapped] of [[1, 4n, true], [1, 8n, false], [4, 4n, false]] as const) {
+  void test(`handles ELF32 array at the address limit with segment type ${type}, size ${size}`, async () => {
+    const fixture = dynamicStringsFixture();
+    const load = { ...fixture.load, type, vaddr: 0xfffffffcn, filesz: 0n, memsz: 8n };
+    const entries = [{ tag: 25, value: load.vaddr }, { tag: 27, value: size }];
+
+    const result = await parseElfDynamicInfo({ ...fixture, is64: false, programHeaders: [load] },
+      { entries, terminated: true });
+
+    assert.deepEqual(result?.issues, mapped ? [] : ["DT_INIT_ARRAY range is outside PT_LOAD memory."]);
+  });
+}
+
 void test("rejects dynamic strings crossing the file-backed load boundary", async () => {
   const fixture = dynamicStringsFixture();
   fixture.load.filesz -= 1n;

@@ -1,4 +1,7 @@
-import type { ElfProgramHeader } from "./types.js";
+import type { ElfHeader, ElfProgramHeader } from "./types.js";
+import { elfRangesCover } from "./range-coverage.js";
+
+type ProgramTable = Pick<ElfHeader, "phoff" | "phentsize" | "phnum">;
 
 // gABI 7.1/7.2: load sizes, alignment, ordering, and unique INTERP/PHDR entries.
 // https://gabi.xinuos.com/elf/07-pheader.html
@@ -33,9 +36,30 @@ const validateOrderedSegments = (
   }
 };
 
-export const validateElfProgramHeaders = (
-  headers: ElfProgramHeader[], fileSize: number, issues: string[]
+const validateProgramTableSegment = (
+  segment: ElfProgramHeader, table: ProgramTable, loads: ElfProgramHeader[],
+  fileSize: bigint, issues: string[]
 ): void => {
+  const size = BigInt(table.phnum) * BigInt(table.phentsize);
+  const label = `PT_PHDR #${segment.index}`;
+  if (segment.offset !== table.phoff) issues.push(`${label}: p_offset differs from e_phoff.`);
+  if (segment.filesz !== size) issues.push(`${label}: p_filesz differs from the program header table size.`);
+  if (segment.memsz !== size) issues.push(`${label}: p_memsz differs from the program header table size.`);
+  if (segment.offset !== table.phoff || segment.filesz !== size || segment.memsz !== size ||
+    table.phoff + size > fileSize) return;
+  const translation = segment.vaddr - segment.offset;
+  const ranges = loads.filter(load => load.vaddr - load.offset === translation)
+    .map(load => ({ start: load.offset, end: load.offset +
+      (load.filesz < load.memsz ? load.filesz : load.memsz) }));
+  if (!elfRangesCover(ranges, table.phoff, table.phoff + size)) {
+    issues.push(`${label}: the program header table lacks file-backed PT_LOAD coverage at p_vaddr.`);
+  }
+};
+
+export const validateElfProgramHeaders = (
+  headers: ElfProgramHeader[], fileSize: number, issues: string[], table?: ProgramTable
+): void => {
+  const loads = headers.filter(header => header.type === 1);
   for (const header of headers) {
     // PT_NULL fields are undefined; zero-sized segments need no file payload.
     if (header.type !== 0 && header.filesz > 0n &&
@@ -44,5 +68,7 @@ export const validateElfProgramHeaders = (
     }
     if (header.type === 1) validateLoadSegment(header, issues);
   }
-  validateOrderedSegments(headers, headers.filter(header => header.type === 1), issues);
+  validateOrderedSegments(headers, loads, issues);
+  const programTable = headers.find(header => header.type === 6);
+  if (programTable && table) validateProgramTableSegment(programTable, table, loads, BigInt(fileSize), issues);
 };

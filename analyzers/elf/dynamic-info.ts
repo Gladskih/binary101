@@ -8,6 +8,7 @@ import {
 import { createFileRangeReader } from "../file-range-reader.js";
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
 import { hasCompressedSectionAt, openElfSectionData, type ElfSectionEncoding } from "./section-data.js";
+import { elfRangesCover } from "./range-coverage.js";
 
 // gABI p_type/sh_type and dynamic tags; GNU DT_FLAGS_1 from glibc's ELF declarations.
 // https://gabi.xinuos.com/elf/07-pheader.html
@@ -99,11 +100,29 @@ const readNamedTag = async (entries: DynEntry[], tag: number,
   return value == null ? null : await readString(Number(value)) || null;
 };
 
-const readArrayTag = (entries: DynEntry[], baseTag: number, sizeTag: number):
+const readArrayTag = (
+  table: ElfDynamicTable, tags: readonly [number, number], image: DynamicInfoInput, issues: string[]
+):
 { vaddr: bigint; size: bigint } | null => {
-  const base = getTagValue(entries, baseTag);
-  const byteCount = getTagValue(entries, sizeTag);
-  if (base == null || byteCount == null || base === 0n || byteCount === 0n) return null;
+  const [baseTag, sizeTag] = tags;
+  const base = getTagValue(table.entries, baseTag);
+  if (base == null) return null;
+  const byteCount = getTagValue(table.entries, sizeTag);
+  const label = ELF_DYNAMIC_TAG_DESCRIPTIONS[baseTag]![0];
+  if (byteCount == null) {
+    if (table.terminated) issues.push(`${label} requires ${ELF_DYNAMIC_TAG_DESCRIPTIONS[sizeTag]![0]}.`);
+    return null;
+  }
+  if (byteCount === 0n) return null;
+  if (byteCount % (image.is64 ? 8n : 4n) !== 0n) {
+    issues.push(`${label} size does not describe a whole number of pointers.`);
+  }
+  const ranges = image.programHeaders.filter(header => header.type === 1 && header.memsz > 0n)
+    .map(header => ({ start: header.vaddr, end: header.vaddr + header.memsz }));
+  const end = base + byteCount;
+  if (end > (1n << (image.is64 ? 64n : 32n)) || !elfRangesCover(ranges, base, end)) {
+    issues.push(`${label} range is outside PT_LOAD memory.`);
+  }
   return { vaddr: base, size: byteCount };
 };
 
@@ -133,9 +152,9 @@ export async function parseElfDynamicInfo(
     runpath: await readNamedTag(entries, DT_RUNPATH, readString),
     init: getTagValue(entries, DT_INIT),
     fini: getTagValue(entries, DT_FINI),
-    preinitArray: readArrayTag(entries, DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ),
-    initArray: readArrayTag(entries, DT_INIT_ARRAY, DT_INIT_ARRAYSZ),
-    finiArray: readArrayTag(entries, DT_FINI_ARRAY, DT_FINI_ARRAYSZ),
+    preinitArray: readArrayTag(table, [DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ], opts, issues),
+    initArray: readArrayTag(table, [DT_INIT_ARRAY, DT_INIT_ARRAYSZ], opts, issues),
+    finiArray: readArrayTag(table, [DT_FINI_ARRAY, DT_FINI_ARRAYSZ], opts, issues),
     flags: dynamicFlags(entries, DT_FLAGS),
     flags1: dynamicFlags(entries, DT_FLAGS_1),
     issues
