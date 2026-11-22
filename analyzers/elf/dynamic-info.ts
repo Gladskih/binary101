@@ -1,14 +1,14 @@
 import { createElfStringTableReader } from "./string-table.js";
 import type { ElfDynamicInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import type { FileRangeReader } from "../file-range-reader.js";
-import { elfVirtualRange } from "./relocation-reader.js";
 import {
   readElfDynamicTable, type ElfDynamicEntry, type ElfDynamicTable
 } from "./dynamic-entries.js";
 import { createFileRangeReader } from "../file-range-reader.js";
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
-import { hasCompressedSectionAt, openElfSectionData, type ElfSectionEncoding } from "./section-data.js";
+import { openElfSectionData, type ElfSectionEncoding } from "./section-data.js";
 import { elfRangesCover } from "./range-coverage.js";
+import { elfDynamicStringRange, validateElfDynamicConsistency } from "./dynamic-consistency.js";
 
 // gABI p_type/sh_type and dynamic tags; GNU DT_FLAGS_1 from glibc's ELF declarations.
 // https://gabi.xinuos.com/elf/07-pheader.html
@@ -21,8 +21,6 @@ const SHT_DYNAMIC = 6;
 const DT_NEEDED = 1;
 const DT_INIT = 12;
 const DT_FINI = 13;
-const DT_STRTAB = 5;
-const DT_STRSZ = 10;
 const DT_SONAME = 14;
 const DT_RPATH = 15;
 const DT_INIT_ARRAY = 25;
@@ -55,19 +53,8 @@ type DynamicInfoInput = ElfSectionEncoding & {
 const locateDynStringTable = async (
   reader: FileRangeReader, opts: DynamicInfoInput, entries: DynEntry[], issues: string[]
 ) => {
-  const strtabEntry = entries.find(entry => entry.tag === DT_STRTAB);
-  const strszEntry = entries.find(entry => entry.tag === DT_STRSZ);
-  if (strtabEntry) {
-    const range = strszEntry ? elfVirtualRange(opts.programHeaders,
-      strtabEntry.value, strszEntry.value, opts.file.size) : null;
-    if (range && !hasCompressedSectionAt(opts.sections, 3, range.offset)) {
-      return { ...range, reader };
-    }
-    issues.push(range ? "DT_STRTAB points into a compressed string table." :
-      "DT_STRTAB does not map into a PT_LOAD segment for the full DT_STRSZ range.");
-  }
-
-  return linkedDynamicStrings(reader, opts, issues);
+  const range = elfDynamicStringRange(opts, entries, issues);
+  return range ? { ...range, reader } : linkedDynamicStrings(reader, opts, issues);
 };
 
 const linkedDynamicStrings = async (reader: FileRangeReader, opts: DynamicInfoInput, issues: string[]) => {
@@ -145,6 +132,7 @@ export async function parseElfDynamicInfo(
   const preinitArray = readArrayTag(table, [DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ], opts, arrayIssues);
   const initArray = readArrayTag(table, [DT_INIT_ARRAY, DT_INIT_ARRAYSZ], opts, arrayIssues);
   const finiArray = readArrayTag(table, [DT_FINI_ARRAY, DT_FINI_ARRAYSZ], opts, arrayIssues);
+  const consistencyIssues = validateElfDynamicConsistency(opts, table);
   return {
     terminated: table.terminated,
     entries: await Promise.all(entries.map(async entry =>
@@ -163,6 +151,7 @@ export async function parseElfDynamicInfo(
     flags: dynamicFlags(entries, DT_FLAGS),
     flags1: dynamicFlags(entries, DT_FLAGS_1),
     ...(arrayIssues.length ? { arrayIssues } : {}),
+    ...(consistencyIssues.length ? { consistencyIssues } : {}),
     issues
   };
 }

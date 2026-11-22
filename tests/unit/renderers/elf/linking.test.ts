@@ -40,12 +40,14 @@ void test("dynamic linking escapes interpreter and dynamic warnings", () => {
   elf.dynamic = { entries: [{ tag: 15, value: 1n, string: "<path>" }],
     needed: [], soname: null, rpath: "<path>", runpath: null,
     init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
-    flags: null, flags1: null, issues: ["<bad flags>"], arrayIssues: ["<bad array>"] };
+    flags: null, flags1: null, issues: ["<bad flags>"], arrayIssues: ["<bad array>"],
+    consistencyIssues: ["<bad string bounds>"] };
   const out: string[] = [];
   renderElfLinking(elf, out);
   assert.ok(out.join("").includes("&lt;bad interpreter>"));
   assert.ok(out.join("").includes("&lt;bad flags>"));
   assert.ok(out.join("").includes("&lt;bad array>"));
+  assert.ok(out.join("").includes("&lt;bad string bounds>"));
   assert.ok(out.join("").includes("&lt;path&gt;"));
   assert.doesNotMatch(out.join(""), /<bad|<path/);
 });

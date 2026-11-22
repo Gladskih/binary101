@@ -14,6 +14,8 @@ import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
 import { declaredDynamicSymbolRange } from "./dynsym-range.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
 import { createElfGnuHashSymbolValidator } from "./hash-symbols.js";
+import { associatedElfHashTables, validateElfSysvHashSymbolCount } from "./hash-tables.js";
+import { elfRuntimeStringsForSectionSymbols } from "./dynamic-consistency.js";
 import { createElfDynamicSymbolNameReader, readElfDynamicSymbolRecords,
   type ElfDynamicSymbolRange, type ElfDynamicSymbolTables } from "./dynamic-symbol-records.js";
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
@@ -251,41 +253,34 @@ Promise<ElfDynamicSymbolInfo | null> {
     await parseDynsymFromDynamicTags({ ...opts, issues }, entries, hashes);
   const tables = sectionTables ?? tagTables;
   if (!tables) return issues.length ? { total: 0, importSymbols: [], exportSymbols: [], issues } : null;
-
+  if (sectionTables && !sectionTables.symtab.reader) {
+    // Both tables may be independently valid. Runtime symbol names use DT_STRTAB/DT_STRSZ.
+    tables.strtab = elfRuntimeStringsForSectionSymbols(opts, entries, sectionTables.symtab.offset) ?? tables.strtab;
+  }
+  const associatedHashes = associatedElfHashTables(opts, tables.symtab, entries, hashes);
+  const stride = layout.symbolEntrySize;
+  const { size, truncated, section } = tables.symtab;
+  const declared = !section && entries.some(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTABSZ);
+  const total = Math.floor(size / stride);
+  validateElfSysvHashSymbolCount(associatedHashes,
+    (section || declared) && !truncated && size % stride === 0 ? total : undefined);
   const symbols = await parseDynsym(tables, layout,
     issues, symbolCache,
     createElfDynamicIndexReader(opts.file, opts, tables.symtab.storedOffset ?? tables.symtab.offset, entries, issues),
     createFileRangeReader(opts.file, 0, opts.file.size),
-    createElfGnuHashSymbolValidator(associatedHashTables(opts, tables.symtab, entries, hashes),
-      layout.wordSize === 8 ? 64 : 32));
+    createElfGnuHashSymbolValidator(associatedHashes, layout.wordSize === 8 ? 64 : 32));
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&
     sym.bind !== STB_LOCAL && sym.name.length > 0 &&
     sym.visibility !== STV_HIDDEN && sym.visibility !== STV_INTERNAL);
 
   return {
-    total: Math.floor(tables.symtab.size / layout.symbolEntrySize),
+    total,
     importSymbols,
     exportSymbols,
     issues
   };
 }
-
-const associatedHashTables = (opts: DynamicSymbolInput, symtab: ElfDynamicSymbolRange,
-  entries: ElfDynamicEntry[], tables: ElfHashTable[] | undefined): ElfHashTable[] => {
-  if (!tables?.length) return [];
-  // SHT_GNU_HASH (glibc elf.h). Its sh_link identifies the associated symbol table.
-  const section = opts.sections.find(item => item.type === 0x6ffffff6);
-  const offset = BigInt(symtab.storedOffset ?? symtab.offset);
-  if (section) {
-    const linked = opts.sections.find(item => item.index === section.link && item.type === SHT_DYNSYM);
-    return linked?.offset === offset ? tables : [];
-  }
-  const address = entries.find(entry => entry.tag === DT_SYMTAB)?.value;
-  if (address == null) return [];
-  const range = elfVirtualRange(opts.programHeaders, address, 1n, opts.file.size);
-  return range && BigInt(range.offset) === offset && !symtab.reader ? tables : [];
-};
 
 const hashSymbolCount = (tables: ElfHashTable[] | undefined): number | null => {
   const valid = tables?.filter(table => !table.issues.length);

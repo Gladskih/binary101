@@ -23,3 +23,13 @@ void test("renderElfTls renders TLS segments and sections", async () => {
   assert.doesNotMatch(html, /<summary[^>]*>Show (?:PT_TLS segments|TLS sections)/);
 });
 
+void test("renders TLS consistency warnings with the segment they describe", async () => {
+  const elf = expectDefined(await parseElf(createElfMetadataFile().file));
+  elf.tls!.issues = ["PT_TLS #4: p_filesz exceeds p_memsz. <invalid>"];
+  const out: string[] = [];
+
+  renderElfTls(elf, out);
+
+  assert.match(out.join(""), /p_filesz exceeds p_memsz.*&lt;invalid>/);
+});
+

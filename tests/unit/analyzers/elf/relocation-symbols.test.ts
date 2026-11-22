@@ -36,6 +36,18 @@ void test("resolves static symbols and caches the same physical entry", async ()
   assert.equal(alias, symbol);
 });
 
+void test("bounds a relocation's linked dynamic symbol name by DT_STRSZ", async () => {
+  const fixture = dynamicRelocationFixture();
+  fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM; DT_SYMTAB maps to this section.
+  fixture.tags.set(10, 1n); // DT_STRSZ covers the leading NUL only.
+  const issues: string[] = [];
+  const read = createElfRelocationSymbolReader(
+    createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, issues);
+
+  assert.deepEqual(await read(relocationTable(), 1), { name: "", value: 4n, sectionIndex: 1 });
+  assert.deepEqual(issues, ["Relocation symbol #1 has an invalid string table offset."]);
+});
+
 void test("resolves a compressed symbol table through its logical entries and reuses parsed symbols", async context => {
   const fixture = dynamicRelocationFixture();
   fixture.elf.sections[2]!.type = 2; // SHT_SYMTAB.

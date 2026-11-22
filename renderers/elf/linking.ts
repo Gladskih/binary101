@@ -14,6 +14,7 @@ const collectIssues = (interpreter?: ElfInterpreterInfo, dynamic?: ElfDynamicInf
   interpreter?.issues?.forEach(issue => issues.push(`PT_INTERP: ${issue}`));
   dynamic?.issues?.forEach(issue => issues.push(`Dynamic: ${issue}`));
   dynamic?.arrayIssues?.forEach(issue => issues.push(`Dynamic: ${issue}`));
+  dynamic?.consistencyIssues?.forEach(issue => issues.push(`Dynamic: ${issue}`));
   return issues;
 };
 

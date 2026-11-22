@@ -87,7 +87,7 @@ const parseAuxiliaryMetadata = async (file: File, result: ElfParseResult): Promi
 };
 
 const parseArchitectureMetadata = async (file: File, result: ElfParseResult): Promise<void> => {
-  retainMetadata(result, "tls", parseElfTlsInfo(result.programHeaders, result.sections));
+  retainMetadata(result, "tls", parseElfTlsInfo(result.programHeaders, result.sections, result.header.type));
   retainMetadata(result, "attributes", await parseElfAttributes(file, result));
   retainMetadata(result, "mips", await parseElfMips(file, result));
   retainMetadata(result, "armEhabi", await parseElfArmEhabi(file, result));

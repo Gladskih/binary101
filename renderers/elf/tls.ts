@@ -62,6 +62,9 @@ export function renderElfTls(elf: ElfParseResult, out: string[]): void {
   out.push(`</dl>`);
   out.push(renderSegmentsTable(tls));
   out.push(renderSectionsTable(tls));
+  if (tls.issues?.length) {
+    out.push(`<ul>${tls.issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("")}</ul>`);
+  }
   out.push(renderElfSectionEnd());
 }
 

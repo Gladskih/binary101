@@ -20,16 +20,25 @@ type SymbolLocation = {
 
 const locateSectionSymbol = (
   reader: FileRangeReader, elf: ElfRelocationImage, table: ElfRelocationTable,
-  index: number, stride: number
+  index: number, stride: number, tags: Map<number, bigint>
 ): SymbolLocation | null => {
   const section = elf.sections.find(item => item.index === table.symbolTableIndex);
   if (!section || (section.type !== SECTION.SYMTAB && section.type !== SECTION.DYNSYM) ||
     section.entsize !== BigInt(stride) ||
     BigInt(index + 1) * BigInt(stride) > section.size) return null;
   const range = elfFileRange(section.offset + BigInt(index * stride), BigInt(stride), reader.size);
+  if (!range) return null;
+  const address = tags.get(DT.SYMTAB);
+  if (section.type === SECTION.DYNSYM && address != null) {
+    const runtime = elfVirtualRange(elf.programHeaders, address, 1n, reader.size);
+    if (runtime && BigInt(runtime.offset) === section.offset) {
+      const runtimeStrings = dynamicStrings(reader, elf, tags);
+      if (runtimeStrings) return { offset: range.offset, strings: runtimeStrings };
+    }
+  }
   const strings = elf.sections.find(item => item.index === section.link && item.type === SECTION.STRTAB);
-  return range ? { offset: range.offset,
-    strings: strings ? elfFileRange(strings.offset, strings.size, reader.size) : null } : null;
+  return { offset: range.offset,
+    strings: strings ? elfFileRange(strings.offset, strings.size, reader.size) : null };
 };
 
 const dynamicStrings = (
@@ -84,7 +93,7 @@ const locateSymbol = (
   tags: Map<number, bigint>, index: number, stride: number, dynamicSize: bigint | null
 ): SymbolLocation | null => {
   if (!Number.isSafeInteger(index) || index < 0 || index > ELF_SYMBOL_INDEX.MAX) return null;
-  return table.symbolTableIndex != null ? locateSectionSymbol(reader, elf, table, index, stride) :
+  return table.symbolTableIndex != null ? locateSectionSymbol(reader, elf, table, index, stride, tags) :
     locateDynamicSymbol(reader, elf, tags, index, stride, dynamicSize);
 };
 

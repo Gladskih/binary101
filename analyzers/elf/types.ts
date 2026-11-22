@@ -146,6 +146,7 @@ export interface ElfDynamicInfo {
   flags: number | null;
   flags1: number | null;
   arrayIssues?: string[];
+  consistencyIssues?: string[];
   issues: string[];
 }
 
@@ -175,6 +176,7 @@ export interface ElfDynamicSymbolInfo {
 export interface ElfTlsInfo {
   segments: Array<{ index: number; offset: bigint; vaddr: bigint; filesz: bigint; memsz: bigint; align: bigint }>;
   sections: Array<{ index: number; name: string; addr: bigint; offset: bigint; size: bigint; flags: string[] }>;
+  issues?: string[];
 }
 
 export interface ElfNoteEntry {

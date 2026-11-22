@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseElfHashTables } from "../../../../analyzers/elf/hash-tables.js";
+import { parseElfHashTables, validateElfSysvHashSymbolCount } from "../../../../analyzers/elf/hash-tables.js";
+import { parseElfDynamicSymbols } from "../../../../analyzers/elf/dynamic-symbols.js";
+import { parseElf } from "../../../../analyzers/elf/index.js";
+import type { ElfHashTable } from "../../../../analyzers/elf/hash-types.js";
+import { createElfImportLinkageBytes } from "../../../fixtures/elf-import-linkage-file.js";
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
 
 const fixture = (kind: "sysv" | "gnu", order: "little" | "big" = "little") => {
@@ -16,6 +20,58 @@ void test("reads System V buckets and chains", async () => {
   const source = fixture("sysv");
   const tables = await parseElfHashTables(source.file(), source.elf, []);
   assert.deepEqual(tables[0], { kind: "sysv", offset: 64, buckets: [1], chains: [0, 2, 0], issues: [] });
+});
+
+for (const [count, link, diagnostics] of [[2, 2, false], [3, 2, true], [3, 1, false]] as const) {
+  void test(`checks System V nchain ${count} with section link ${link}`, async () => {
+    const source = fixture("sysv");
+    source.elf.sections[2]!.type = 11; // SHT_DYNSYM, two Elf64_Sym records.
+    source.elf.sections[2]!.info = 2;
+    source.elf.sections[4]!.link = link;
+    source.view.setUint32(68, count, true);
+    source.view.setUint32(80, 0, true); // Chain #1 terminates even when nchain is two.
+    const file = source.file();
+    const tables = await parseElfHashTables(file, source.elf, []);
+
+    await parseElfDynamicSymbols({ ...source.elf, file }, [], undefined, undefined, tables);
+
+    assert.deepEqual(tables[0]?.issues, diagnostics
+      ? ["System V hash nchain (3) disagrees with the dynamic symbol count (2)."] : []);
+  });
+}
+
+for (const [chains, expected] of [[[1], 2], [[], undefined]] as const) {
+  void test(`uses GNU chains as a second count source when available: ${expected}`, () => {
+    const sysv: ElfHashTable = { kind: "sysv", offset: 64, buckets: [1], chains: [0, 0, 0], issues: [] };
+    const gnu: ElfHashTable = { kind: "gnu", offset: 128, buckets: [1], chains: [...chains],
+      symbolOffset: 1, bloomShift: 5, bloom: [0n], issues: [] };
+
+    validateElfSysvHashSymbolCount([sysv, gnu]);
+
+    assert.deepEqual(sysv.issues, expected === undefined ? [] :
+      [`System V hash nchain (3) disagrees with the dynamic symbol count (${expected}).`]);
+  });
+}
+
+void test("retains structural hash issues when the table has no reliable chain count", () => {
+  const table: ElfHashTable = { kind: "sysv", offset: 64, buckets: [1], chains: [],
+    issues: ["Hash table arrays are truncated."] };
+
+  validateElfSysvHashSymbolCount([table], 2);
+
+  assert.deepEqual(table.issues, ["Hash table arrays are truncated."]);
+});
+
+void test("checks sectionless DT_HASH against DT_SYMTABSZ", async () => {
+  const bytes = createElfImportLinkageBytes();
+  // nchain is the second word of the fixture's System V hash, with one spare zero word.
+  new DataView(bytes.buffer).setUint32(0x264, 3, true);
+
+  const elf = await parseElf(new File([Uint8Array.from(bytes)], "sectionless-hash.elf"));
+
+  assert.equal(elf?.dynSymbols?.total, 2);
+  assert.deepEqual(elf?.hashTables?.[0]?.issues,
+    ["System V hash nchain (3) disagrees with the dynamic symbol count (2)."]);
 });
 
 void test("reads GNU bloom words and contiguous chains in big endian", async () => {

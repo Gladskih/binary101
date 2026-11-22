@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { parseElf } from "../../analyzers/elf/index.js";
 import { createElfMetadataFile } from "../fixtures/elf-metadata-file.js";
-import { openInspectionSection } from "./inspection-navigation.js";
+import { expandInspectionCollection, openInspectionSection } from "./inspection-navigation.js";
 
 const dynamicReportBytes = async (): Promise<Uint8Array> => {
   const { file } = createElfMetadataFile();
@@ -93,4 +93,27 @@ test("an unterminated table does not produce confirmed absence claims", async ({
   await expect(coverage.locator("dt").filter({ hasText: /^DT_NEEDED$/ })
     .locator("+ dd")).toContainText("Not determined");
   await expect(page.locator("[data-elf-dynamic-entries] dt")).toHaveCount(12);
+});
+
+test("reports conflicting dynamic string bounds and keeps names inside the runtime table", async ({ page }) => {
+  const { file, expected } = createElfMetadataFile();
+  const elf = (await parseElf(file))!;
+  const dynamic = elf.sections.find(section => section.type === 6)!;
+  const strings = elf.sections[dynamic.link]!;
+  const bytes = await file.arrayBuffer();
+  // The second Elf64_Dyn is DT_STRSZ. Stop just before the final export name.
+  new DataView(bytes).setBigUint64(Number(dynamic.offset) + 24,
+    strings.size - BigInt(expected.exportSymbol.length + 1), true);
+
+  await page.goto("/");
+  await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type, buffer: Buffer.from(bytes) });
+  await openInspectionSection(page, "Dynamic linking");
+
+  const section = page.locator('[data-elf-lazy-section="linking"]');
+  await expandInspectionCollection(section.locator("summary").filter({ hasText: /^Notes$/ }).locator(".."));
+  await expect(section.getByText(/DT_STRSZ.*disagrees.*sh_size/)).toBeVisible();
+  await openInspectionSection(page, "Imports / exports");
+  const symbols = page.locator('[data-elf-lazy-section="symbols"]');
+  await expect(symbols.getByText(expected.importSymbol, { exact: true })).toBeVisible();
+  await expect(symbols.getByText(expected.exportSymbol, { exact: true })).toHaveCount(0);
 });
