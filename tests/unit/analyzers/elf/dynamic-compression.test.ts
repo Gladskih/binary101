@@ -27,6 +27,7 @@ void test("reads a compressed section-only dynamic table and its linked strings"
 void test("reads compressed dynamic symbol, string and extended index data without caching fake file offsets", async () => {
   const fixture = relocationFixture();
   fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM.
+  fixture.elf.sections[2]!.info = 1;
   fixture.bytes[284] = 0x12; // STB_GLOBAL | STT_FUNC.
   fixture.view.setUint16(286, 0xffff, true);
   const extended = relocationSection(4, { type: 18, link: 2, offset: 512n, size: 8n, entsize: 4n });

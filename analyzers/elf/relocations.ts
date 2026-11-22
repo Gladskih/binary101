@@ -15,6 +15,7 @@ import { ELF_SECTION_COMPRESSED, openElfSectionData } from "./section-data.js";
 import { elfRuntimeRelocationOperation, elfRuntimeRelocationWriteSize,
   isElfRuntimeRelocationTable, type ElfRelocationOperation } from "./relocation-operation.js";
 import { readElfStoredRelocationAddend } from "./relocation-addend.js";
+import { createElfRelativePrefixValidator } from "./relocation-prefix.js";
 
 const createTargetBoundsReader = (
   reader: FileRangeReader, elf: ElfRelocationImage, issues: string[], prepared: Map<number, bigint>
@@ -77,10 +78,13 @@ export const parseElfRelocations = async (
   const visited = new Set<string>();
   for (const [tableIndex, table] of tables.entries()) {
     const runtime = isElfRuntimeRelocationTable(elf, table);
+    const validatePrefix = runtime && createElfRelativePrefixValidator(elf, table, tags, issues);
     // Exact aliases are merged above; overlapping tables need independent RELR cursors.
     let ordinal = 0;
     let targetIndex = table.targetSectionIndex;
     for await (const entry of readElfRelocationRecords(reader, table, elf, tableIndex, issues, layout)) {
+      const operation = runtime ? elfRuntimeRelocationOperation(elf, entry.type) : undefined;
+      if (validatePrefix) validatePrefix(ordinal, entry, operation);
       const key = recordIdentity(elf, table, entry, ordinal++);
       if (visited.has(key)) continue;
       visited.add(key);
@@ -88,8 +92,7 @@ export const parseElfRelocations = async (
         await targetBounds.read(targetIndex);
         targetIndex = null;
       }
-      entries.push(await resolveEntry(entry, table,
-        runtime ? elfRuntimeRelocationOperation(elf, entry.type) : undefined));
+      entries.push(await resolveEntry(entry, table, operation));
     }
   }
   return { tables, entries, issues: [...new Set(issues)] };

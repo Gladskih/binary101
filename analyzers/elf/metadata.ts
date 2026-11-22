@@ -6,7 +6,6 @@ import { readElfDynamicTable, type ElfDynamicEntry } from "./dynamic-entries.js"
 import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfHashTables } from "./hash-tables.js";
-import { validateElfHashSymbols } from "./hash-symbols.js";
 import { parseElfSymbolTables } from "./symbol-tables.js";
 import { parseElfSymbolVersions } from "./symbol-versions.js";
 import { parseElfSectionGroups } from "./section-groups.js";
@@ -62,7 +61,6 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
   ]);
   retainMetadata(result, "dynamic", dynamic);
   retainMetadata(result, "dynSymbols", symbols);
-  validateElfHashSymbols(hashes, symbols, result.is64 ? 64 : 32);
   await parseLinkingTables(file, result, entries, cache, layout, logicalSizes);
   await decodeElfSymbolNames(result);
   result.embeddedResources = await analyzeElfEmbeddedResources(file, result);

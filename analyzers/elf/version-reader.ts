@@ -2,6 +2,7 @@ import type { FileRangeReader } from "../file-range-reader.js";
 import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
+import { ELF_SECTION_COMPRESSED } from "./section-data.js";
 
 export interface ElfVersionTable {
   offset: number;
@@ -11,7 +12,7 @@ export interface ElfVersionTable {
 }
 
 // LSB 10.7 and glibc elf/elf.h: section types and corresponding dynamic tags.
-// https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/symversion.html
+// https://refspecs.linuxbase.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic.pdf
 // https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h
 const versionSources = {
   definitions: { section: 0x6ffffffd, tag: 0x6ffffffc, count: 0x6ffffffd },
@@ -33,11 +34,35 @@ const sectionVersionTable = (
   elf: ElfParseResult, section: ElfSectionHeader, kind: keyof typeof versionSources,
   symbolCount: number, issues: string[]
 ): ElfVersionTable | null => {
+  if (section.flags & ELF_SECTION_COMPRESSED) {
+    issues.push(`${kind}: compressed version section cannot be read as a version table.`);
+    return null;
+  }
   const range = elfFileRange(section.offset, section.size, elf.fileSize);
+  if (!range) {
+    issues.push(`${kind}: version section is truncated or outside the file.`);
+    return null;
+  }
+  if (kind === "symbols") {
+    return { ...range, count: sectionVersionSymbolCount(elf, section, symbolCount, issues), strings: null };
+  }
   const strings = elf.sections.find(item => item.index === section.link && item.type === 3);
-  if (!range) issues.push(`${kind}: version section is truncated or outside the file.`);
-  return range ? { ...range, count: kind === "symbols" ? symbolCount : section.info,
-    strings: strings ? elfFileRange(strings.offset, strings.size, elf.fileSize) : null } : null;
+  return { ...range, count: section.info,
+    strings: strings ? elfFileRange(strings.offset, strings.size, elf.fileSize) : null };
+};
+
+const sectionVersionSymbolCount = (
+  elf: ElfParseResult, section: ElfSectionHeader, fallback: number, issues: string[]
+): number => {
+  const dynsym = elf.sections.find(item => item.index === section.link && item.type === 11);
+  const stride = elf.is64 ? 24n : 16n; // gABI 5: Elf64_Sym and Elf32_Sym widths.
+  if (!dynsym || dynsym.flags & ELF_SECTION_COMPRESSED || dynsym.entsize !== stride ||
+    dynsym.size % stride !== 0n || !elfFileRange(dynsym.offset, dynsym.size, elf.fileSize)) return fallback;
+  const count = Number(dynsym.size / stride);
+  if (section.size / 2n > BigInt(count)) {
+    issues.push(`Symbol version table contains ${section.size / 2n} entries for ${count} dynamic symbols.`);
+  }
+  return count;
 };
 
 const dynamicVersionStrings = (

@@ -68,6 +68,7 @@ for (const [bits, order, shndxOffset] of [
   void test(`resolves ELF${bits} ${order} dynamic SHN_XINDEX`, async () => {
     const fixture = relocationFixture(bits, order);
     fixture.elf.sections[2]!.type = 11;
+    fixture.elf.sections[2]!.info = 1;
     fixture.bytes[284] = 0x12;
     fixture.view.setUint16(shndxOffset, 0xffff, fixture.elf.littleEndian);
     fixture.elf.sections.push({ ...fixture.elf.sections[3]!, index: 4, type: 18,

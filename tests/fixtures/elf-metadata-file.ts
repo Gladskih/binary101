@@ -216,7 +216,7 @@ const sectionHeader = (
   fileOffset: layout.offsets[fileOffsetName],
   size: layout.bytes[fileOffsetName].length,
   link: sectionName === ".dynsym" || sectionName === ".dynamic" ? 2 : 0,
-  info: 0,
+  info: sectionName === ".dynsym" ? 1 : 0,
   addralign: sectionName === ".dynsym" || sectionName === ".dynamic" || sectionName === ".tdata" ? 8n : 1n,
   entsize: sectionName === ".dynsym" ? 24n : sectionName === ".dynamic" ? 16n : 0n
 });

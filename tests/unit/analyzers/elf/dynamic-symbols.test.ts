@@ -153,6 +153,7 @@ for (const [visibility, exports] of [[0, 1], [1, 0], [2, 0], [3, 1]] as const) {
   void test(`classifies dynamic export visibility ${visibility}`, async () => {
     const fixture = relocationFixture();
     fixture.elf.sections[2]!.type = 11;
+    fixture.elf.sections[2]!.info = 1;
     fixture.bytes[284] = 0x12; // STB_GLOBAL | STT_FUNC.
     fixture.bytes[285] = visibility;
 
@@ -235,6 +236,7 @@ for (const [bits, order, offset] of [
   void test(`caches valid ELF${bits} ${order} symbols at their file offsets`, async () => {
     const fixture = relocationFixture(bits, order);
     fixture.elf.sections[2]!.type = 11;
+    fixture.elf.sections[2]!.info = 1;
     fixture.bytes[284] = 0x12; // Fixture st_info offset for both classes.
     const cache = new Map<number, ElfRelocationSymbol>();
 
@@ -284,6 +286,7 @@ void test("reads large dynamic tables with bounded slices", async () => {
   bytes.set(fixture.bytes.subarray(384, 392), bytes.length - 8);
   fixture.elf.sections[2]!.type = 11;
   fixture.elf.sections[2]!.size = 5000n * 24n;
+  fixture.elf.sections[2]!.info = 5000;
   fixture.elf.sections[3]!.offset = BigInt(bytes.length - 8);
   const file = new File([bytes], "large-symbols");
   const slice = file.slice.bind(file);

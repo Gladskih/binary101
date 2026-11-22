@@ -1,12 +1,10 @@
 "use strict";
 
-import { createElfStringTableReader } from "./string-table.js";
-import type { FileRangeReader } from "../file-range-reader.js";
+import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfDynamicSymbol, ElfDynamicSymbolInfo, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
 import { elfVirtualRange } from "./relocation-reader.js";
 import { readElfDynamicEntries, type ElfDynamicEntry } from "./dynamic-entries.js";
-import { createFileRangeReader } from "../file-range-reader.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
@@ -15,6 +13,9 @@ import type { ElfHashTable } from "./hash-types.js";
 import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
 import { declaredDynamicSymbolRange } from "./dynsym-range.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
+import { createElfGnuHashSymbolValidator } from "./hash-symbols.js";
+import { createElfDynamicSymbolNameReader, readElfDynamicSymbolRecords,
+  type ElfDynamicSymbolRange, type ElfDynamicSymbolTables } from "./dynamic-symbol-records.js";
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
   type ElfSectionEncoding } from "./section-data.js";
 
@@ -45,8 +46,6 @@ const STV_INTERNAL = 1;
 const STV_HIDDEN = 2;
 const STV_PROTECTED = 3;
 
-type TableRange = { offset: number; size: number; reader?: FileRangeReader; storedOffset?: number };
-type DynamicSymbolTables = { symtab: TableRange; strtab: TableRange | null };
 type DynamicSymbolInput = ElfSectionEncoding & {
   file: File; programHeaders: ElfProgramHeader[]; sections: ElfSectionHeader[];
 };
@@ -80,49 +79,29 @@ const decodeVisibility = (vis: number): string => {
   return map[vis] || `VIS_${vis}`;
 };
 
-const isDisplayableType = (type: number): boolean =>
-  // NOTYPE, OBJECT, FUNC, COMMON, TLS (gABI 5.3), GNU_IFUNC (glibc elf.h).
-  [0, 1, 2, 5, 6, 10].includes(type);
-
-const readDynsymRecords = async (
-  symtab: TableRange, layout: ElfBinaryLayout, issues: string[], reader: FileRangeReader
-) => {
-  const records = [];
-  const count = Math.floor(symtab.size / layout.symbolEntrySize);
-  if (symtab.size % layout.symbolEntrySize !== 0) {
-    issues.push(`.dynsym size is not aligned to entry size (${layout.symbolEntrySize} bytes).`);
-  }
-  for (let index = 0; index < count; index += 1) {
-    const record = layout.readSymbol(await reader.read(
-      symtab.offset + index * layout.symbolEntrySize, layout.symbolEntrySize));
-    if (!record) { issues.push(`Dynamic symbol #${index} is truncated.`); break; }
-    if (isDisplayableType(record.info & 0x0f)) records.push({ index, record });
-  }
-  // The lto-dump profile repeatedly reloads .dynstr blocks when resolving names in symbol order.
-  // Sort this private list to read names sequentially without growing the byte cache.
-  return records.sort((left, right) => left.record.nameOffset - right.record.nameOffset);
-};
-
 const parseDynsym = async (
-  symtab: TableRange,
-  strtab: TableRange | null,
+  tables: ElfDynamicSymbolTables,
   layout: ElfBinaryLayout,
   issues: string[],
   symbolCache: Map<number, ElfRelocationSymbol>,
   readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>,
-  reader: FileRangeReader
+  reader: FileRangeReader,
+  hash: ReturnType<typeof createElfGnuHashSymbolValidator>
 ): Promise<ElfDynamicSymbol[]> => {
-  const readName = createElfStringTableReader(strtab?.reader ?? reader, strtab, issues);
+  const { symtab } = tables;
+  const readName = createElfDynamicSymbolNameReader(tables.strtab, reader, issues, hash);
+  const records = await readElfDynamicSymbolRecords(symtab, layout, issues, symtab.reader ?? reader, hash);
   const out: ElfDynamicSymbol[] = [];
-  for (const { index, record } of await readDynsymRecords(symtab, layout, issues, symtab.reader ?? reader)) {
-    const { nameOffset: nameOff, value, size, info, other, sectionIndex } = record;
+  for (const item of records) {
+    const name = await readName(item);
+    if (name == null) continue;
+    const { index, record } = item;
+    const { value, size, info, other, sectionIndex } = record;
     // ELF*_ST_BIND/TYPE/VISIBILITY: high/low st_info nibbles and low two st_other bits.
     // https://gabi.xinuos.com/elf/05-symtab.html
     const bind = info >> 4;
     const type = info & 0x0f;
     const visibility = other & 0x03;
-    const name = await readName(nameOff);
-    if (name == null) continue;
     const shndx = await readSectionIndex(index, sectionIndex);
     if (shndx == null) continue;
     const section = elfSymbolSectionFields(sectionIndex, shndx);
@@ -137,19 +116,19 @@ const parseDynsym = async (
 };
 
 const readTableRange = (file: File, offset: bigint, size: bigint,
-  label: string, issues: string[]): TableRange | null => {
+  label: string, issues: string[]): ElfDynamicSymbolRange | null => {
   if (offset < 0n || offset >= BigInt(file.size) || size <= 0n) {
     issues.push(`${label} is outside the file or empty.`);
     return null;
   }
   const available = BigInt(file.size) - offset;
   if (size > available) issues.push(`${label} is truncated.`);
-  return { offset: Number(offset), size: Number(size > available ? available : size) };
+  return { offset: Number(offset), size: Number(size > available ? available : size), truncated: size > available };
 };
 
 const openDynamicSymbolSection = async (
   opts: DynamicSymbolInput, section: ElfSectionHeader, name: string, issues: string[]
-): Promise<TableRange | null> => {
+): Promise<ElfDynamicSymbolRange | null> => {
   if (!(section.flags & ELF_SECTION_COMPRESSED)) {
     return readTableRange(opts.file, section.offset, section.size, name, issues);
   }
@@ -159,15 +138,20 @@ const openDynamicSymbolSection = async (
 };
 
 const parseDynsymFromSections = async (opts: DynamicSymbolInput & { issues: string[] }):
-Promise<DynamicSymbolTables | null> => {
-  const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM && sec.size > 0n);
+Promise<ElfDynamicSymbolTables | null> => {
+  const dynsym = opts.sections.find(sec => sec.type === SHT_DYNSYM);
   if (!dynsym) return null;
+  if (!dynsym.size) {
+    opts.issues.push(".dynsym is missing symbol #0 (STN_UNDEF).");
+    return null;
+  }
   if (dynsym.entsize !== BigInt(selectElfBinaryLayout(opts).symbolEntrySize)) {
     opts.issues.push(".dynsym has an invalid entry size.");
     return null;
   }
   const symtab = await openDynamicSymbolSection(opts, dynsym, ".dynsym", opts.issues);
   if (!symtab) return null;
+  symtab.section = dynsym;
 
   const linked = opts.sections[dynsym.link];
   // gABI 3: SHT_DYNSYM.sh_link identifies the associated SHT_STRTAB, regardless of names.
@@ -181,7 +165,7 @@ Promise<DynamicSymbolTables | null> => {
 
 const parseDynsymFromDynamicTags = async (opts: DynamicSymbolInput & { issues: string[] },
   entries: ElfDynamicEntry[], hashes?: ElfHashTable[]):
-Promise<DynamicSymbolTables | null> => {
+Promise<ElfDynamicSymbolTables | null> => {
   const dynamicPh = opts.programHeaders.find(ph => ph.type === PT_DYNAMIC && ph.filesz > 0n);
   if (!dynamicPh) return null;
   const tags = dynsymTags(entries, selectElfBinaryLayout(opts).symbolEntrySize, opts.issues);
@@ -203,7 +187,7 @@ Promise<DynamicSymbolTables | null> => {
 
 const locateDynamicSymbolTable = async (opts: Parameters<typeof parseDynsymFromDynamicTags>[0],
   { symtabVaddr, strtabVaddr, entrySize }: NonNullable<ReturnType<typeof dynsymTags>>,
-  entries: ElfDynamicEntry[], hashes: ElfHashTable[] | undefined): Promise<TableRange | null> => {
+  entries: ElfDynamicEntry[], hashes: ElfHashTable[] | undefined): Promise<ElfDynamicSymbolRange | null> => {
   const declaredSize = entries.find(entry => entry.tag === ELF_DYNAMIC_TAG.SYMTABSZ)?.value;
   if (declaredSize != null) return declaredDynamicSymbolRange(
     opts.programHeaders, symtabVaddr, declaredSize, entrySize, opts.file.size, opts.issues);
@@ -268,10 +252,12 @@ Promise<ElfDynamicSymbolInfo | null> {
   const tables = sectionTables ?? tagTables;
   if (!tables) return issues.length ? { total: 0, importSymbols: [], exportSymbols: [], issues } : null;
 
-  const symbols = await parseDynsym(tables.symtab, tables.strtab, layout,
+  const symbols = await parseDynsym(tables, layout,
     issues, symbolCache,
     createElfDynamicIndexReader(opts.file, opts, tables.symtab.storedOffset ?? tables.symtab.offset, entries, issues),
-    createFileRangeReader(opts.file, 0, opts.file.size));
+    createFileRangeReader(opts.file, 0, opts.file.size),
+    createElfGnuHashSymbolValidator(associatedHashTables(opts, tables.symtab, entries, hashes),
+      layout.wordSize === 8 ? 64 : 32));
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&
     sym.bind !== STB_LOCAL && sym.name.length > 0 &&
@@ -284,6 +270,22 @@ Promise<ElfDynamicSymbolInfo | null> {
     issues
   };
 }
+
+const associatedHashTables = (opts: DynamicSymbolInput, symtab: ElfDynamicSymbolRange,
+  entries: ElfDynamicEntry[], tables: ElfHashTable[] | undefined): ElfHashTable[] => {
+  if (!tables?.length) return [];
+  // SHT_GNU_HASH (glibc elf.h). Its sh_link identifies the associated symbol table.
+  const section = opts.sections.find(item => item.type === 0x6ffffff6);
+  const offset = BigInt(symtab.storedOffset ?? symtab.offset);
+  if (section) {
+    const linked = opts.sections.find(item => item.index === section.link && item.type === SHT_DYNSYM);
+    return linked?.offset === offset ? tables : [];
+  }
+  const address = entries.find(entry => entry.tag === DT_SYMTAB)?.value;
+  if (address == null) return [];
+  const range = elfVirtualRange(opts.programHeaders, address, 1n, opts.file.size);
+  return range && BigInt(range.offset) === offset && !symtab.reader ? tables : [];
+};
 
 const hashSymbolCount = (tables: ElfHashTable[] | undefined): number | null => {
   const valid = tables?.filter(table => !table.issues.length);

@@ -1,6 +1,7 @@
 import type { FileRangeReader } from "../file-range-reader.js";
 
 type StringTableRange = { offset: number; size: number };
+type StringBytesObserver = (bytes: Uint8Array) => void;
 
 const validTableRange = (fileSize: number, strings: StringTableRange | null):
 strings is StringTableRange => strings != null && Number.isSafeInteger(strings.offset) &&
@@ -31,7 +32,8 @@ const validStringIndex = (size: number, offset: number): boolean =>
   (offset < size || (offset === 0 && size === 0));
 
 const readTableString = async (
-  reader: FileRangeReader, strings: StringTableRange, offset: number, issues: string[]
+  reader: FileRangeReader, strings: StringTableRange, offset: number, issues: string[],
+  observeBytes?: StringBytesObserver
 ): Promise<string | null> => {
   if (!validStringIndex(strings.size, offset)) {
     issues.push("ELF string has an invalid string table offset/reference.");
@@ -46,7 +48,12 @@ const readTableString = async (
       Math.min(limit - consumed, 4096));
     if (!bytes.length) break;
     const end = bytes.indexOf(0);
-    if (end >= 0) return parts.join("") + decoder.decode(bytes.subarray(0, end));
+    if (end >= 0) {
+      const tail = bytes.subarray(0, end);
+      observeBytes?.(tail);
+      return parts.join("") + decoder.decode(tail);
+    }
+    observeBytes?.(bytes);
     parts.push(decoder.decode(bytes, { stream: true }));
     consumed += bytes.length;
   }
@@ -55,7 +62,8 @@ const readTableString = async (
 };
 
 export const createElfStringTableReader = (
-  reader: FileRangeReader, strings: StringTableRange | null, issues: string[]
+  reader: FileRangeReader, strings: StringTableRange | null, issues: string[],
+  observeBytes?: StringBytesObserver
 ): ((offset: number) => Promise<string | null>) => {
   // Share in-flight reads too: DT_NEEDED can reference the same name concurrently.
   const cache = new Map<number, Promise<string | null>>();
@@ -63,7 +71,7 @@ export const createElfStringTableReader = (
   return async offset => {
     validated ??= validateStringTable(reader, strings, issues);
     if (!await validated || !strings) return null;
-    if (!cache.has(offset)) cache.set(offset, readTableString(reader, strings, offset, issues));
+    if (!cache.has(offset)) cache.set(offset, readTableString(reader, strings, offset, issues, observeBytes));
     return cache.get(offset)!;
   };
 };

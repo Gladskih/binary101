@@ -3,6 +3,48 @@ import { test } from "node:test";
 import { parseElfRelocations } from "../../../../analyzers/elf/relocations.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 
+// glibc elf/do-rel.h and x86-64 dl-machine.h: relative types 8 and 38.
+for (const [machine, info, count, warning] of [
+  [62, 8n, 1n, null], [62, 38n, 1n, null], [62, 37n, 1n, /non-relative/],
+  [62, 37n, 0n, null],
+  [183, 1027n, 1n, null], [183, 1n << 32n | 1027n, 1n, null],
+  [183, 1032n, 1n, /non-relative/], [243, 3n, 1n, null]
+] as const) {
+  void test(`validates DT_RELACOUNT on machine ${machine}, r_info ${info}, count ${count}`, async () => {
+    const fixture = dynamicRelocationFixture();
+    fixture.elf.header.machine = machine;
+    fixture.tags.set(0x6ffffff9, count); // glibc elf.h: DT_RELACOUNT.
+    fixture.word(64, 0x1200n);
+    fixture.word(72, info);
+    fixture.installTags();
+
+    const result = await parseElfRelocations(fixture.file(), fixture.elf);
+
+    const issues = result?.issues.filter(issue => issue.includes("DT_RELACOUNT"));
+    assert.deepEqual(issues?.map(issue => warning?.test(issue)), warning ? [true] : []);
+    assert.equal(result?.entries.length, 1);
+  });
+}
+
+for (const [count, expected] of [
+  [1n, []], [2n, ["DT_RELACOUNT prefix entry #1 has non-relative relocation type 7."]], [3n, []]
+] as const) {
+  void test(`limits RELA prefix classification to ${count} declared records`, async () => {
+    const fixture = dynamicRelocationFixture();
+    fixture.tags.set(8, 48n).set(0x6ffffff9, count); // Two Elf64_Rela records, DT_RELACOUNT.
+    fixture.word(64, 0x1200n);
+    fixture.word(72, 8n); // R_X86_64_RELATIVE.
+    fixture.word(88, 0x1208n);
+    fixture.word(96, 7n); // R_X86_64_JUMP_SLOT.
+    fixture.installTags();
+
+    const result = await parseElfRelocations(fixture.file(), fixture.elf);
+
+    assert.equal(result?.entries.length, 2);
+    assert.deepEqual(result?.issues.filter(issue => issue.startsWith("DT_RELACOUNT")), expected);
+  });
+}
+
 void test("checks the full write for common dynamic relocations at the PT_LOAD boundary", async () => {
   const fixture = dynamicRelocationFixture();
   // x86-64 ABI R_X86_64_RELATIVE writes eight bytes.
@@ -20,6 +62,7 @@ void test("reads an i386 RELATIVE addend from the original file bytes", async ()
   const fixture = dynamicRelocationFixture(32);
   fixture.tags.clear();
   fixture.tags.set(17, 0x1040n).set(18, 8n).set(19, 8n); // DT_REL / DT_RELSZ / DT_RELENT.
+  fixture.tags.set(0x6ffffffa, 1n); // glibc elf.h: DT_RELCOUNT.
   fixture.word(64, 0x1200n);
   fixture.word(68, 8n); // R_386_RELATIVE, symbol zero.
   fixture.word(512, 0xfedcba98n);
@@ -29,6 +72,20 @@ void test("reads an i386 RELATIVE addend from the original file bytes", async ()
 
   assert.equal(result?.entries[0]?.addend, null);
   assert.equal(result?.entries[0]?.storedAddend, 0xfedcba98n);
+  assert.deepEqual(result?.issues, []);
+});
+
+void test("reports a nonzero symbol index in i386 DT_RELCOUNT", async () => {
+  const fixture = dynamicRelocationFixture(32);
+  fixture.tags.clear();
+  fixture.tags.set(17, 0x1040n).set(18, 8n).set(19, 8n).set(0x6ffffffa, 1n);
+  fixture.word(64, 0x1200n);
+  fixture.word(68, 1n << 8n | 8n); // ELF32_R_INFO: symbol #1, R_386_RELATIVE.
+  fixture.installTags();
+
+  const result = await parseElfRelocations(fixture.file(), fixture.elf);
+
+  assert.ok(result?.issues.includes("DT_RELCOUNT prefix entry #0 has a nonzero symbol index (1)."));
 });
 import { relocationFixture, relocationSection } from "../../../fixtures/elf-relocations.js";
 
