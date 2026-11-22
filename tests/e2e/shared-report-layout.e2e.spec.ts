@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createPngFile } from "../fixtures/image-sample-files.js";
 import { createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createPeWithDosPrintStubFile } from "../fixtures/pe-dos-print-stub-file.js";
 import { openInspectionSection } from "./inspection-navigation.js";
 
 test("plain PNG tables share the grid and the workspace has no outer card gutter", async ({ page }) => {
@@ -64,17 +65,18 @@ test("text cells and text blocks have a reading measure on a wide viewport", asy
 });
 
 test("legacy inline margins cannot attach text to the next table", async ({ page }) => {
-  const file = createPePlusFile();
+  const file = createPeWithDosPrintStubFile();
   await page.goto("/");
   await page.setInputFiles("#fileInput", { name: file.name, mimeType: file.type,
     buffer: Buffer.from(file.data) });
   await openInspectionSection(page, "DOS header");
-  const gaps = await page.locator('[data-pe-lazy-section="dos-header"] table')
-    .evaluateAll(tables => tables.flatMap(table => {
-      const note = table.previousElementSibling;
-      return note?.matches(".smallNote") ?
-        [table.getBoundingClientRect().top - note.getBoundingClientRect().bottom] : [];
-    }));
-  expect(gaps.length).toBeGreaterThan(0);
-  for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(12);
+  const dos = page.locator('[data-pe-lazy-section="dos-header"]');
+  const table = dos.locator(".smallNote + table")
+    .filter({ has: page.getByRole("columnheader", { name: "Instruction" }) });
+  await expect(table).toBeVisible();
+  const note = table.locator("xpath=preceding-sibling::*[1]");
+  await expect(note).toHaveText("This program cannot be run in DOS mode.");
+  const gap = await table.evaluate(element =>
+    element.getBoundingClientRect().top - element.previousElementSibling!.getBoundingClientRect().bottom);
+  expect(gap).toBeGreaterThanOrEqual(12);
 });
