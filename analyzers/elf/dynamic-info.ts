@@ -140,6 +140,11 @@ export async function parseElfDynamicInfo(
   const readString = createElfStringTableReader(strings?.reader ?? reader, strings, issues);
   const needed = (await Promise.all(getTagValues(entries, DT_NEEDED)
     .map(value => readString(Number(value))))).filter((name): name is string => !!name);
+  // An array inconsistency does not invalidate separately decoded DT_NEEDED names.
+  const arrayIssues: string[] = [];
+  const preinitArray = readArrayTag(table, [DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ], opts, arrayIssues);
+  const initArray = readArrayTag(table, [DT_INIT_ARRAY, DT_INIT_ARRAYSZ], opts, arrayIssues);
+  const finiArray = readArrayTag(table, [DT_FINI_ARRAY, DT_FINI_ARRAYSZ], opts, arrayIssues);
   return {
     terminated: table.terminated,
     entries: await Promise.all(entries.map(async entry =>
@@ -152,11 +157,12 @@ export async function parseElfDynamicInfo(
     runpath: await readNamedTag(entries, DT_RUNPATH, readString),
     init: getTagValue(entries, DT_INIT),
     fini: getTagValue(entries, DT_FINI),
-    preinitArray: readArrayTag(table, [DT_PREINIT_ARRAY, DT_PREINIT_ARRAYSZ], opts, issues),
-    initArray: readArrayTag(table, [DT_INIT_ARRAY, DT_INIT_ARRAYSZ], opts, issues),
-    finiArray: readArrayTag(table, [DT_FINI_ARRAY, DT_FINI_ARRAYSZ], opts, issues),
+    preinitArray,
+    initArray,
+    finiArray,
     flags: dynamicFlags(entries, DT_FLAGS),
     flags1: dynamicFlags(entries, DT_FLAGS_1),
+    ...(arrayIssues.length ? { arrayIssues } : {}),
     issues
   };
 }

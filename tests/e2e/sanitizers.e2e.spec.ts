@@ -37,6 +37,8 @@ for (const width of [390, 1280]) {
     await expect(section).toContainText("libasan.so.8");
     await expect(section).toContainText("Runtime dependency");
     await expect(section).not.toContainText("ABI reference");
+    await openInspectionSection(page, "Dynamic linking");
+    await expect(page.getByText("Dynamic: DT_INIT_ARRAY range is outside PT_LOAD memory.")).toBeVisible();
     await openInspectionSection(page, "Checks without findings");
     const checks = page.locator(".checksWithoutFindings");
     await expect(checks.getByRole("listitem").filter({ hasText: /^ASan$/ })).toHaveCount(0);

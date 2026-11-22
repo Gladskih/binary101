@@ -150,7 +150,9 @@ for (const [baseTag, sizeTag] of [[32, 33], [25, 27], [26, 28]] as const) {
       const result = await parseElfDynamicInfo({ ...fixture, programHeaders: [load] },
         { entries, terminated });
 
-      assert.deepEqual(result?.issues.map(issue => diagnostic?.test(issue)), diagnostic ? [true] : []);
+      assert.deepEqual((result?.arrayIssues ?? []).map(issue => diagnostic?.test(issue)),
+        diagnostic ? [true] : []);
+      assert.deepEqual(result?.issues, []);
       assert.equal(result?.entries.length, entries.length);
     });
   }
@@ -165,6 +167,7 @@ void test("accepts ELF32 pointers crossing adjacent load ranges", async () => {
     { entries: [{ tag: 25, value: 0n }, { tag: 27, value: 4n }], terminated: true });
 
   assert.deepEqual(result?.initArray, { vaddr: 0n, size: 4n });
+  assert.equal(result?.arrayIssues, undefined);
   assert.deepEqual(result?.issues, []);
 });
 
@@ -177,7 +180,7 @@ for (const [type, size, mapped] of [[1, 4n, true], [1, 8n, false], [4, 4n, false
     const result = await parseElfDynamicInfo({ ...fixture, is64: false, programHeaders: [load] },
       { entries, terminated: true });
 
-    assert.deepEqual(result?.issues, mapped ? [] : ["DT_INIT_ARRAY range is outside PT_LOAD memory."]);
+    assert.deepEqual(result?.arrayIssues, mapped ? undefined : ["DT_INIT_ARRAY range is outside PT_LOAD memory."]);
   });
 }
 

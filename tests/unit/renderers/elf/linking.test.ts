@@ -40,13 +40,27 @@ void test("dynamic linking escapes interpreter and dynamic warnings", () => {
   elf.dynamic = { entries: [{ tag: 15, value: 1n, string: "<path>" }],
     needed: [], soname: null, rpath: "<path>", runpath: null,
     init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
-    flags: null, flags1: null, issues: ["<bad flags>"] };
+    flags: null, flags1: null, issues: ["<bad flags>"], arrayIssues: ["<bad array>"] };
   const out: string[] = [];
   renderElfLinking(elf, out);
   assert.ok(out.join("").includes("&lt;bad interpreter>"));
   assert.ok(out.join("").includes("&lt;bad flags>"));
+  assert.ok(out.join("").includes("&lt;bad array>"));
   assert.ok(out.join("").includes("&lt;path&gt;"));
   assert.doesNotMatch(out.join(""), /<bad|<path/);
+});
+
+void test("dynamic linking renders a clean table without array diagnostics", () => {
+  const elf = relocationFixture().elf;
+  elf.dynamic = { entries: [], needed: [], soname: null, rpath: null, runpath: null,
+    init: null, fini: null, preinitArray: null, initArray: null, finiArray: null,
+    flags: null, flags1: null, issues: [] };
+  const out: string[] = [];
+
+  renderElfLinking(elf, out);
+
+  assert.match(out.join(""), /Dynamic linking/);
+  assert.doesNotMatch(out.join(""), /Notes/);
 });
 
 void test("dynamic linking handles interpreter-only files and absent metadata", () => {

@@ -145,6 +145,7 @@ export interface ElfDynamicInfo {
   finiArray: { vaddr: bigint; size: bigint } | null;
   flags: number | null;
   flags1: number | null;
+  arrayIssues?: string[];
   issues: string[];
 }
 

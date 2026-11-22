@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { analyzeElfSanitizers } from "../../../../analyzers/elf/sanitizers.js";
+import { parseElf } from "../../../../analyzers/elf/index.js";
+import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { sanitizerElf, sanitizerStaticSymbol, sanitizerDynamicSymbol,
   sanitizerElfDefinitions, sanitizerElfSegmentDefinitions } from
   "../../../fixtures/sanitizer-metadata.js";
@@ -69,6 +71,16 @@ void test("uses DT_NEEDED only when dynamic metadata parsed without warnings", (
     source: "ELF DT_NEEDED", name: "libasan.so.8" }]);
   elf.dynamic.issues.push("truncated string table");
   assert.deepEqual(analyzeElfSanitizers(elf), []);
+});
+
+void test("retains recorded sanitizer dependencies when an initialization array is inconsistent", async () => {
+  const fixture = createElfMetadataFile(["libasan.so.8", "libc.so.6"]);
+
+  const elf = await parseElf(fixture.file);
+
+  assert.deepEqual(elf?.dynamic?.arrayIssues, ["DT_INIT_ARRAY range is outside PT_LOAD memory."]);
+  assert.deepEqual(elf?.sanitizerEvidence, [{ tool: "ASan", kind: "dependency",
+    source: "ELF DT_NEEDED", name: "libasan.so.8" }]);
 });
 
 void test("rejects dynamic table warnings, data symbols and undefined local symbols", () => {
