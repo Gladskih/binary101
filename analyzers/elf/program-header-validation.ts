@@ -57,6 +57,7 @@ export const validateElfProgramHeaders = (
 ): void => {
   const loads = headers.filter(header => header.type === 1);
   for (const header of headers) {
+    if (header.type === 5) issues.push(`PT_SHLIB #${header.index} is reserved and does not conform to the ELF ABI.`);
     // PT_NULL fields are undefined; zero-sized segments need no file payload.
     if (header.type !== 0 && header.filesz > 0n &&
       header.offset + header.filesz > BigInt(fileSize)) {

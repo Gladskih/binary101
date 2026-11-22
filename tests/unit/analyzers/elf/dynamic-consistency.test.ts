@@ -8,7 +8,6 @@ import { createElfMetadataFile } from "../../../fixtures/elf-metadata-file.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 import { relocationSection } from "../../../fixtures/elf-relocations.js";
-
 // gABI 8.3: DT_STRTAB=5, DT_SYMTAB=6, DT_STRSZ=10. Offsets come from the fixture.
 const mappedTables = (bits: 32 | 64 = 64) => {
   const fixture = dynamicRelocationFixture(bits);
@@ -18,7 +17,6 @@ const mappedTables = (bits: 32 | 64 = 64) => {
   return { image, entries, symbolOffset: Number(image.sections[2]!.offset),
     strings: { offset: Number(image.sections[3]!.offset), size: Number(image.sections[3]!.size) } };
 };
-
 void test("bounds ELF32 dynamic records by the eight-byte Elf32_Dyn stride", () => {
   const { image, entries } = mappedTables(32);
   const [load, dynamic] = image.programHeaders;
@@ -26,7 +24,6 @@ void test("bounds ELF32 dynamic records by the eight-byte Elf32_Dyn stride", () 
 
   assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), []);
 });
-
 void test("selects the nonempty PT_DYNAMIC for the table actually parsed", () => {
   const { image, entries } = mappedTables();
   const dynamic = image.programHeaders[1]!;
@@ -58,6 +55,21 @@ void test("does not use the compressed byte size as the size of the dynamic symb
 
   assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), []);
 });
+
+void test("requires the full SHT_DYNSYM byte range to map at DT_SYMTAB", () => {
+  const { image, entries } = mappedTables();
+  const symbols = image.sections[2]!;
+  symbols.type = 11;
+  const [load, dynamic] = image.programHeaders;
+  load!.filesz = symbols.offset + symbols.entsize;
+  image.programHeaders.push({ ...load!, index: 2, offset: dynamic!.offset, vaddr: dynamic!.vaddr,
+    filesz: dynamic!.filesz, memsz: dynamic!.filesz });
+
+  assert.deepEqual(validateElfDynamicConsistency(image, { entries, terminated: true }), [
+    "DT_SYMTAB does not map the full SHT_DYNSYM #2 range through PT_LOAD."
+  ]);
+});
+
 
 void test("an identical repeated string tag preserves the verified range", () => {
   const { image, entries, strings } = mappedTables();

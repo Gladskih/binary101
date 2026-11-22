@@ -133,7 +133,7 @@ export const PROGRAM_FLAGS: ElfOptionEntry[] = [
 export const DYNAMIC_FLAGS: ElfOptionEntry[] = [
   [0x1, "DF_ORIGIN", "The loader may resolve $ORIGIN in paths."],
   [0x2, "DF_SYMBOLIC", "Prefer this object for symbol resolution before dependencies."],
-  [0x4, "DF_TEXTREL", "Text relocations are present (code pages may need temporary writes)."],
+  [0x4, "DF_TEXTREL", "Relocations may write to non-writable load segments."],
   [0x8, "DF_BIND_NOW", "Resolve relocations eagerly at load time."],
   [0x10, "DF_STATIC_TLS", "Object uses static TLS model requirements."]
 ];

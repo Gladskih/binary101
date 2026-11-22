@@ -1,7 +1,7 @@
 import { createFileRangeReader, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfRelocationImage } from "./relocation-types.js";
 import type { ElfRelocation, ElfRelocationInfo, ElfRelocationSymbol } from "./relocation-types.js";
-import type { ElfDynamicEntry } from "./dynamic-entries.js";
+import { readElfDynamicTable, type ElfDynamicEntry, type ElfDynamicTable } from "./dynamic-entries.js";
 import { readElfRelocationTags } from "./relocation-dynamic.js";
 import { collectElfRelocationTables } from "./relocation-tables.js";
 import { readElfRelocationRecords } from "./relocation-records.js";
@@ -16,6 +16,7 @@ import { elfRuntimeRelocationOperation, elfRuntimeRelocationWriteSize,
   isElfRuntimeRelocationTable, type ElfRelocationOperation } from "./relocation-operation.js";
 import { readElfStoredRelocationAddend } from "./relocation-addend.js";
 import { createElfRelativePrefixValidator } from "./relocation-prefix.js";
+import { createElfRelocationPermissionCheck } from "./relocation-permissions.js";
 
 const createTargetBoundsReader = (
   reader: FileRangeReader, elf: ElfRelocationImage, issues: string[], prepared: Map<number, bigint>
@@ -62,18 +63,21 @@ const recordIdentity = (elf: ElfRelocationImage, table: ElfRelocationTable,
 };
 
 export const parseElfRelocations = async (
-  file: File, elf: ElfRelocationImage, dynamicEntries?: ElfDynamicEntry[],
+  file: File, elf: ElfRelocationImage, dynamicEntries?: ElfDynamicEntry[] | ElfDynamicTable,
   symbolCache?: Map<number, ElfRelocationSymbol>, layout = selectElfBinaryLayout(elf),
   logicalSizes = new Map<number, bigint>()
 ): Promise<ElfRelocationInfo | null> => {
   const reader = createFileRangeReader(file, 0, file.size);
   const issues: string[] = [];
-  const tags = await readElfRelocationTags(reader, elf, issues, dynamicEntries, layout);
+  const dynamic = Array.isArray(dynamicEntries) ? { entries: dynamicEntries, terminated: false } :
+    dynamicEntries ?? await readElfDynamicTable(reader, elf, issues, layout);
+  const tags = await readElfRelocationTags(reader, elf, issues, dynamic.entries, layout);
   const tables = collectElfRelocationTables(elf, tags, issues, layout);
   if (!tables.length && !issues.length) return null;
   const readSymbol = createElfRelocationSymbolReader(reader, elf, tags, issues, symbolCache, layout);
   const targetBounds = createTargetBoundsReader(reader, elf, issues, logicalSizes);
   const resolveEntry = createEntryResolver(reader, elf, readSymbol, issues, layout, targetBounds.sizes);
+  const checkPermissions = createElfRelocationPermissionCheck(elf, dynamic, layout, issues);
   const entries: ElfRelocation[] = [];
   const visited = new Set<string>();
   for (const [tableIndex, table] of tables.entries()) {
@@ -92,7 +96,11 @@ export const parseElfRelocations = async (
         await targetBounds.read(targetIndex);
         targetIndex = null;
       }
-      entries.push(await resolveEntry(entry, table, operation));
+      const resolved = await resolveEntry(entry, table, operation);
+      if (resolved.target) {
+        checkPermissions?.(table, entry.offset, elfRuntimeRelocationWriteSize(elf, operation));
+      }
+      entries.push(resolved);
     }
   }
   return { tables, entries, issues: [...new Set(issues)] };

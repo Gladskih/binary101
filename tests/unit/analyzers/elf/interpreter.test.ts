@@ -95,7 +95,37 @@ void test("diagnoses an empty interpreter path and ignores bytes after its termi
   const parsed = await parsePathBytes(new TextEncoder().encode("\0extra"));
   assert.equal(parsed?.path, "");
   assert.match(parsed.issues.join(" "), /pathname is empty/);
+  assert.doesNotMatch(parsed.issues.join(" "), /final byte/);
 });
+
+for (const [size, finalByte, warning] of [
+  [1, 0, /size from 2 to 4096/], [2, 0, null], [4096, 0, null], [4097, 0, /size from 2 to 4096/],
+  [16, 0x61, /final byte.*NUL/]
+] as const) {
+  void test(`checks Linux PT_INTERP size ${size} and final byte ${finalByte}`, async () => {
+    const bytes = new Uint8Array(size);
+    bytes[0] = 0x78;
+    bytes[size - 1] = finalByte;
+
+    const result = await parseElfInterpreter(new MockFile(bytes),
+      [makePh({ type: 3, filesz: BigInt(size) })], "linux");
+
+    assert.deepEqual(result?.issues.filter(issue => issue.startsWith("Linux")).map(issue => warning?.test(issue)),
+      warning ? [true] : []);
+  });
+}
+
+for (const [bytes, size, warning] of [
+  [Uint8Array.of(0, 1), 2n, true], [Uint8Array.of(2, 1), 2n, false],
+  [Uint8Array.of(0x78, 0, 1), 4n, false]
+] as const) {
+  void test(`limits the Linux final-byte check to a complete segment with a pathname terminator (${bytes}/${size})`,
+    async () => {
+      const parsed = await parseElfInterpreter(new MockFile(bytes), [makePh({ type: 3, filesz: size })], "linux");
+
+      assert.equal(parsed?.issues.some(issue => issue.includes("final byte")), warning);
+    });
+}
 
 for (const span of [{ offset: -1n, filesz: 1n }, { offset: 1n, filesz: 1n },
   { offset: 0n, filesz: 0n }]) {

@@ -6,6 +6,16 @@ import type { ElfInterpreterInfo, ElfProgramHeader } from "./types.js";
 // https://gabi.xinuos.com/elf/07-pheader.html#segment-types
 const PT_INTERP = 3;
 
+// Linux binfmt_elf validates the size and final byte before opening the path.
+// https://github.com/torvalds/linux/blob/master/fs/binfmt_elf.c
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h
+const checkLinuxInterpreter = (filesz: bigint, bytes: Uint8Array, terminator: number, issues: string[]): void => {
+  if (filesz < 2n || filesz > 4096n) issues.push("Linux requires a PT_INTERP size from 2 to 4096 bytes.");
+  if (terminator >= 0 && BigInt(bytes.length) === filesz && bytes[bytes.length - 1] !== 0) {
+    issues.push("Linux requires the final byte of PT_INTERP to be NUL.");
+  }
+};
+
 const displayPath = (bytes: Uint8Array, issues: string[]): string => {
   try {
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
@@ -18,7 +28,7 @@ const displayPath = (bytes: Uint8Array, issues: string[]): string => {
 
 export async function parseElfInterpreter(
   file: File,
-  programHeaders: ElfProgramHeader[]
+  programHeaders: ElfProgramHeader[], profile?: "linux"
 ): Promise<ElfInterpreterInfo | null> {
   const issues: string[] = [];
   const interp = programHeaders.find(ph => ph.type === PT_INTERP);
@@ -32,6 +42,7 @@ export async function parseElfInterpreter(
   const length = Math.min(size, DEFAULT_FILE_READ_WINDOW_BYTES);
   const bytes = new Uint8Array(await file.slice(offset, offset + length).arrayBuffer());
   const terminator = bytes.indexOf(0);
+  if (profile === "linux") checkLinuxInterpreter(interp.filesz, bytes, terminator, issues);
   if (terminator === -1) issues.push(size === length ? "PT_INTERP pathname is missing its NUL terminator." :
     "PT_INTERP pathname preview reached the read limit before the NUL terminator.");
   if (terminator === 0) issues.push("PT_INTERP pathname is empty.");

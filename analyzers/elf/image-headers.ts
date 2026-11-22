@@ -3,6 +3,8 @@ import { selectElfBinaryLayout } from "./binary-layout.js";
 import { parseProgramHeadersWithGuards, parseSectionHeadersWithNames,
   resolveExtendedHeaderCounts } from "./header-tables.js";
 import type { ElfReport } from "./types.js";
+import { validateElfLinuxLoadLayout } from "./linux-load-validation.js";
+import { validateElfAllocatedSectionMappings } from "./allocated-section-mapping.js";
 
 export async function readElfImageHeaders(file: File): Promise<ElfReport | null> {
   const result = await readElfFileHeader(file);
@@ -22,7 +24,9 @@ export async function readElfImageHeaders(file: File): Promise<ElfReport | null>
     issues.push(`ELF header size e_ehsize (${header.ehsize}) exceeds file size (${file.size}).`);
   }
   result.programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
+  validateElfLinuxLoadLayout(result);
   result.sections = await parseSectionHeadersWithNames(file, header, is64, little, issues,
     layout.sectionHeaderSize, sourceHeader);
+  validateElfAllocatedSectionMappings(result);
   return result;
 }

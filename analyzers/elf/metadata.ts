@@ -2,7 +2,7 @@ import type { ElfParseResult } from "./types.js";
 import type { ElfBinaryLayout } from "./binary-layout-types.js";
 import type { ElfRelocationSymbol } from "./relocation-types.js";
 import { createFileRangeReader } from "../file-range-reader.js";
-import { readElfDynamicTable, type ElfDynamicEntry } from "./dynamic-entries.js";
+import { readElfDynamicTable, type ElfDynamicTable } from "./dynamic-entries.js";
 import { parseElfDynamicInfo } from "./dynamic-info.js";
 import { parseElfDynamicSymbols } from "./dynamic-symbols.js";
 import { parseElfHashTables } from "./hash-tables.js";
@@ -29,6 +29,7 @@ import { decodeElfSymbolNames } from "./symbol-names.js";
 import { analyzeElfEmbeddedResources } from "./embedded-resources.js";
 import { analyzeElfSanitizers } from "./sanitizers.js";
 import { analyzeElfImportLinkage } from "./import-linkage.js";
+import { elfLinuxLoadProfile } from "./linux-load-validation.js";
 
 const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult,
   key: Key, value: ElfParseResult[Key] | null): void => {
@@ -36,13 +37,13 @@ const retainMetadata = <Key extends keyof ElfParseResult>(result: ElfParseResult
   result[key] = value;
 };
 
-const parseLinkingTables = async (file: File, result: ElfParseResult, entries: ElfDynamicEntry[],
+const parseLinkingTables = async (file: File, result: ElfParseResult, dynamic: ElfDynamicTable,
   cache: Map<number, ElfRelocationSymbol>, layout: ElfBinaryLayout,
   logicalSizes: Map<number, bigint>): Promise<void> => {
   retainMetadata(result, "symbolTables", await parseElfSymbolTables(file, result, cache));
   retainMetadata(result, "sectionGroups", await parseElfSectionGroups(file, result));
-  retainMetadata(result, "relocations", await parseElfRelocations(file, result, entries, cache, layout, logicalSizes));
-  retainMetadata(result, "symbolVersions", await parseElfSymbolVersions(file, result, entries,
+  retainMetadata(result, "relocations", await parseElfRelocations(file, result, dynamic, cache, layout, logicalSizes));
+  retainMetadata(result, "symbolVersions", await parseElfSymbolVersions(file, result, dynamic.entries,
     result.dynSymbols?.total ?? 0));
 };
 
@@ -61,7 +62,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
   ]);
   retainMetadata(result, "dynamic", dynamic);
   retainMetadata(result, "dynSymbols", symbols);
-  await parseLinkingTables(file, result, entries, cache, layout, logicalSizes);
+  await parseLinkingTables(file, result, table, cache, layout, logicalSizes);
   await decodeElfSymbolNames(result);
   result.embeddedResources = await analyzeElfEmbeddedResources(file, result);
   if (result.relocations) result.relocations.issues.unshift(...issues);
@@ -73,7 +74,7 @@ const parseLinkingMetadata = async (file: File, result: ElfParseResult, layout: 
 const parseAuxiliaryMetadata = async (file: File, result: ElfParseResult): Promise<void> => {
   retainMetadata(result, "goBuildInfo", await parseGoBuildInfo(file, result.sections, result.issues));
   const [interpreter, notes, comment, debugLink, miniDebugInfo] = await Promise.all([
-    parseElfInterpreter(file, result.programHeaders),
+    parseElfInterpreter(file, result.programHeaders, elfLinuxLoadProfile(result.ident, result.header)),
     parseElfNotes({ file, ...result, ...(result.header.type === 4 ? { coreMachine: result.header.machine } : {}) }),
     parseElfComment(file, result),
     parseElfDebugLink(file, result),

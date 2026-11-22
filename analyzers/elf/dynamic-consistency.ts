@@ -1,7 +1,7 @@
 import { findElfDynamicSegment, type ElfDynamicEntry, type ElfDynamicTable } from "./dynamic-entries.js";
 import type { ElfProgramHeader, ElfSectionHeader } from "./types.js";
-import { elfVirtualRange } from "./relocation-reader.js";
-import { ELF_DYNAMIC_TAG, ELF_SECTION_FLAG, ELF_SECTION_TYPE, ELF_SEGMENT_TYPE } from "./abi-constants.js";
+import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
+import { ELF_DYNAMIC_TAG, ELF_SECTION_FLAG, ELF_SECTION_TYPE } from "./abi-constants.js";
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt } from "./section-data.js";
 import { elfLoadMappingCovers } from "./range-coverage.js";
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
@@ -56,8 +56,7 @@ const checkDynamicMapping = (
 ): void => {
   const label = `PT_DYNAMIC #${segment.index}`;
   if (segment.memsz < size) issues.push(`${label}: p_memsz does not contain all of the dynamic table.`);
-  const loads = image.programHeaders.filter(header => header.type === ELF_SEGMENT_TYPE.LOAD);
-  if (!elfLoadMappingCovers(loads, segment.offset, segment.vaddr, size)) {
+  if (!elfLoadMappingCovers(image.programHeaders, segment.offset, segment.vaddr, size)) {
     issues.push(`${label}: the dynamic table lacks file-backed PT_LOAD coverage at p_vaddr.`);
   }
 };
@@ -132,8 +131,38 @@ const checkSymbolSection = (
     return;
   }
   const size = elfSingleDynamicTag(entries, ELF_DYNAMIC_TAG.SYMTABSZ);
-  if (size != null && size !== section.size && !(section.flags & ELF_SECTION_COMPRESSED)) {
+  if (section.flags & ELF_SECTION_COMPRESSED) return;
+  if (size != null && size !== section.size) {
     issues.push(`DT_SYMTABSZ (${size} bytes) disagrees with SHT_DYNSYM #${section.index} sh_size (${section.size} bytes).`);
+  }
+  if (elfFileRange(section.offset, section.size, image.file.size) &&
+      !elfLoadMappingCovers(image.programHeaders, section.offset, address, section.size)) {
+    issues.push(`DT_SYMTAB does not map the full SHT_DYNSYM #${section.index} range through PT_LOAD.`);
+  }
+};
+
+// gABI 3.3 and 8.3: one extended index word per symbol, in the section
+// identified by DT_SYMTAB_SHNDX when that tag is present.
+// https://gabi.xinuos.com/elf/03-sheader.html#section-types
+const checkSymbolIndexSection = (
+  image: DynamicDescription, entries: ElfDynamicEntry[], symbols: ElfSectionHeader, issues: string[]
+): void => {
+  const indices = image.sections.find(section => section.type === ELF_SECTION_TYPE.SYMTAB_SHNDX &&
+    section.link === symbols.index);
+  if (!indices || ((indices.flags | symbols.flags) & ELF_SECTION_COMPRESSED)) return;
+  const location = elfSingleDynamicTag(entries, ELF_DYNAMIC_TAG.SYMTAB_SHNDX);
+  const stride = image.is64 ? 24n : 16n;
+  if (indices.entsize !== 4n || (symbols.size % stride === 0n && indices.size !== (symbols.size / stride) * 4n)) {
+    issues.push(`SHT_SYMTAB_SHNDX #${indices.index} must contain one 4-byte word per dynamic symbol.`);
+  }
+  if (location === undefined) return;
+  if (location === null) {
+    issues.push("Conflicting DT_SYMTAB_SHNDX values.");
+    return;
+  }
+  if (((indices.flags & ELF_SECTION_FLAG.ALLOC) && indices.addr !== location) ||
+      !elfLoadMappingCovers(image.programHeaders, indices.offset, location, indices.size)) {
+    issues.push(`DT_SYMTAB_SHNDX disagrees with the location or extent of SHT_SYMTAB_SHNDX #${indices.index}.`);
   }
 };
 
@@ -149,7 +178,10 @@ export const validateElfDynamicConsistency = (
   const dynamic = image.sections.find(section => section.type === ELF_SECTION_TYPE.DYNAMIC);
   if (dynamic) checkDynamicSegment(segment, dynamic, table, size, issues);
   const dynsym = image.sections.find(section => section.type === ELF_SECTION_TYPE.DYNSYM);
-  if (dynsym) checkSymbolSection(image, table.entries, dynsym, issues);
+  if (dynsym) {
+    checkSymbolSection(image, table.entries, dynsym, issues);
+    checkSymbolIndexSection(image, table.entries, dynsym, issues);
+  }
   const links = new Set([dynamic?.offset === segment.offset ? dynamic.link : undefined, dynsym?.link]);
   for (const section of image.sections) {
     if (section.type === ELF_SECTION_TYPE.STRTAB && links.has(section.index)) {

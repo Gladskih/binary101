@@ -1,7 +1,8 @@
 "use strict";
 
 import type { ElfProgramHeader, ElfSectionHeader, ElfTlsInfo } from "./types.js";
-import { ELF_FILE_TYPE, ELF_SECTION_FLAG, ELF_SECTION_TYPE } from "./abi-constants.js";
+import { ELF_FILE_TYPE, ELF_SECTION_FLAG, ELF_SECTION_TYPE, ELF_SEGMENT_TYPE } from "./abi-constants.js";
+import { elfLoadMappingCovers } from "./range-coverage.js";
 
 const PT_TLS = 7;
 // gABI 7.7: the file image initializes the leading part of the template;
@@ -38,6 +39,24 @@ const validateTlsTemplate = (
   }
 };
 
+// gABI 7.7 gives PT_TLS flags as PF_R; glibc uses p_align as a power-of-two mask.
+// https://github.com/bminor/glibc/blob/master/elf/dl-load.c
+const validateTlsSegment = (segment: ElfProgramHeader, loads: ElfProgramHeader[], issues: string[]): void => {
+  const label = `PT_TLS #${segment.index}`;
+  if (segment.filesz > segment.memsz) {
+    issues.push(`${label}: p_filesz exceeds p_memsz.`);
+    return;
+  }
+  if (!segment.memsz) return;
+  if (segment.flags !== 4) issues.push(`${label}: the TLS template flags must be PF_R.`);
+  if ((segment.align & (segment.align - 1n)) !== 0n) {
+    issues.push(`${label}: p_align is not zero or a power of two.`);
+  }
+  if (loads.length && segment.filesz && !elfLoadMappingCovers(loads, segment.offset, segment.vaddr, segment.filesz)) {
+    issues.push(`${label}: the initialization bytes do not map through PT_LOAD at p_vaddr.`);
+  }
+};
+
 export function parseElfTlsInfo(
   programHeaders: ElfProgramHeader[], sections: ElfSectionHeader[], fileType?: number
 ): ElfTlsInfo | null {
@@ -45,11 +64,8 @@ export function parseElfTlsInfo(
   const tlsSections = sections.filter(section => section.size > 0n && (section.flags & ELF_SECTION_FLAG.TLS));
   if (!tlsSegments.length && !tlsSections.length) return null;
   const issues: string[] = [];
-  for (const segment of tlsSegments) {
-    if (segment.filesz > segment.memsz) {
-      issues.push(`PT_TLS #${segment.index}: p_filesz exceeds p_memsz.`);
-    }
-  }
+  const loads = programHeaders.filter(header => header.type === ELF_SEGMENT_TYPE.LOAD);
+  for (const segment of tlsSegments) validateTlsSegment(segment, loads, issues);
   if (fileType === ELF_FILE_TYPE.EXEC || fileType === ELF_FILE_TYPE.DYN) {
     validateTlsTemplate(tlsSections, tlsSegments, issues);
   }
