@@ -14,10 +14,12 @@ import { ELF_DYNAMIC_TAG } from "./abi-constants.js";
 import { declaredDynamicSymbolRange } from "./dynsym-range.js";
 import { elfSymbolSectionFields } from "./symbol-section-index.js";
 import { createElfGnuHashSymbolValidator } from "./hash-symbols.js";
+import { createElfSysvHashSymbolValidator } from "./sysv-hash.js";
 import { associatedElfHashTables, validateElfSysvHashSymbolCount } from "./hash-tables.js";
 import { elfRuntimeStringsForSectionSymbols } from "./dynamic-consistency.js";
 import { createElfDynamicSymbolNameReader, readElfDynamicSymbolRecords,
-  type ElfDynamicSymbolRange, type ElfDynamicSymbolTables } from "./dynamic-symbol-records.js";
+  type ElfDynamicSymbolRange, type ElfDynamicSymbolTables, type ElfSymbolHashValidators } from
+  "./dynamic-symbol-records.js";
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
   type ElfSectionEncoding } from "./section-data.js";
 
@@ -88,11 +90,11 @@ const parseDynsym = async (
   symbolCache: Map<number, ElfRelocationSymbol>,
   readSectionIndex: ReturnType<typeof createElfDynamicIndexReader>,
   reader: FileRangeReader,
-  hash: ReturnType<typeof createElfGnuHashSymbolValidator>
+  hashes: ElfSymbolHashValidators
 ): Promise<ElfDynamicSymbol[]> => {
   const { symtab } = tables;
-  const readName = createElfDynamicSymbolNameReader(tables.strtab, reader, issues, hash);
-  const records = await readElfDynamicSymbolRecords(symtab, layout, issues, symtab.reader ?? reader, hash);
+  const readName = createElfDynamicSymbolNameReader(tables.strtab, reader, issues, hashes);
+  const records = await readElfDynamicSymbolRecords(symtab, layout, issues, symtab.reader ?? reader, hashes);
   const out: ElfDynamicSymbol[] = [];
   for (const item of records) {
     const name = await readName(item);
@@ -268,7 +270,8 @@ Promise<ElfDynamicSymbolInfo | null> {
     issues, symbolCache,
     createElfDynamicIndexReader(opts.file, opts, tables.symtab.storedOffset ?? tables.symtab.offset, entries, issues),
     createFileRangeReader(opts.file, 0, opts.file.size),
-    createElfGnuHashSymbolValidator(associatedHashes, layout.wordSize === 8 ? 64 : 32));
+    { gnu: createElfGnuHashSymbolValidator(associatedHashes, layout.wordSize === 8 ? 64 : 32),
+      sysv: createElfSysvHashSymbolValidator(associatedHashes) });
   const importSymbols = symbols.filter(sym => sym.shndx === SHN_UNDEF && sym.bind !== STB_LOCAL && sym.name.length > 0);
   const exportSymbols = symbols.filter(sym => sym.shndx !== SHN_UNDEF &&
     sym.bind !== STB_LOCAL && sym.name.length > 0 &&

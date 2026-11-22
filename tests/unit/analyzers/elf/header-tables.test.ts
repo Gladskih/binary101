@@ -58,6 +58,7 @@ void test("resolveExtendedHeaderCounts reports missing section table for extende
   assert.equal(resolved.shstrndx, 0);
   assert.ok(issues.some(issue => issue.includes("requires section header #0")));
 });
+
 void test("parseProgramHeadersWithGuards rejects undersized entries", async () => {
   const file = new MockFile(new Uint8Array(256), "ph-small.elf", "application/x-elf");
   const issues: string[] = [];
@@ -91,34 +92,32 @@ void test("parseSectionHeadersWithNames resolves section names from a compressed
   const headerSize = 64;
   const tableOffset = headerSize;
   const entrySize = 64;
-  const strings = encodeElfCompressedSection(new TextEncoder().encode("\0.sec0\0.shstrtab\0"), "elf64", "little");
-  const stringsOffset = tableOffset + entrySize * 2;
+  const strings = encodeElfCompressedSection(new TextEncoder().encode("\0.demo\0.shstrtab\0"), "elf64", "little");
+  const stringsOffset = tableOffset + entrySize * 3;
   const bytes = new Uint8Array(stringsOffset + strings.length).fill(0);
   const dv = new DataView(bytes.buffer);
-  const section0 = tableOffset;
   const section1 = tableOffset + entrySize;
-  dv.setUint32(section0 + 0, 1, true); // ".sec0"
-  dv.setUint32(section0 + 4, 1, true);
-  dv.setUint32(section1 + 0, 7, true); // ".shstrtab"
-  dv.setUint32(section1 + 4, 3, true);
-  dv.setBigUint64(section1 + 8, 0x800n, true); // SHF_COMPRESSED, gABI 3.7.
-  dv.setBigUint64(section1 + 24, BigInt(stringsOffset), true);
-  dv.setBigUint64(section1 + 32, BigInt(strings.length), true);
+  const section2 = section1 + entrySize;
+  dv.setUint32(section1, 1, true); // ".demo"
+  dv.setUint32(section1 + 4, 1, true);
+  dv.setUint32(section2, 7, true); // ".shstrtab"
+  dv.setUint32(section2 + 4, 3, true);
+  dv.setBigUint64(section2 + 8, 0x800n, true); // SHF_COMPRESSED, gABI 3.7.
+  dv.setBigUint64(section2 + 24, BigInt(stringsOffset), true);
+  dv.setBigUint64(section2 + 32, BigInt(strings.length), true);
   bytes.set(strings, stringsOffset);
   const file = new MockFile(bytes, "sections.elf", "application/x-elf");
 
   const sections = await parseSectionHeadersWithNames(
     file,
-    baseHeader({ shoff: BigInt(tableOffset), shnum: 2, shentsize: 64, shstrndx: 1 }),
+    baseHeader({ shoff: BigInt(tableOffset), shnum: 3, shentsize: 64, shstrndx: 2 }),
     true,
     true,
     [],
     64
   );
 
-  assert.equal(sections.length, 2);
-  assert.equal(sections[0]?.name, ".sec0");
-  assert.equal(sections[1]?.name, ".shstrtab");
+  assert.deepEqual(sections.map(section => section.name), ["", ".demo", ".shstrtab"]);
 });
 void test("parseSectionHeadersWithNames rejects undersized section entries", async () => {
   const file = new MockFile(new Uint8Array(256), "sections-small.elf", "application/x-elf");

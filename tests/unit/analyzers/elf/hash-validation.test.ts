@@ -14,8 +14,8 @@ void test("rejects invalid GNU bloom dimensions, shift, buckets and termination"
   assert.match(table.issues.join(" "), /terminated/);
 });
 
-void test("accepts empty buckets and convergent System V chains", () => {
-  const table: ElfHashTable = { kind: "sysv", offset: 0, buckets: [0, 1, 1], chains: [0, 0], issues: [] };
+void test("accepts empty buckets and disjoint System V chains", () => {
+  const table: ElfHashTable = { kind: "sysv", offset: 0, buckets: [0, 1, 2], chains: [0, 0, 0], issues: [] };
   validateElfHashTable(table);
   assert.deepEqual(table.issues, []);
 });

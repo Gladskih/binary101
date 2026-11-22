@@ -15,7 +15,7 @@ import {
 } from "./constants.js";
 import type { ElfHeader, ElfProgramHeader, ElfSectionHeader } from "./types.js";
 import { validateElfProgramHeaders } from "./program-header-validation.js";
-import { validateElfSectionHeaders } from "./section-header-validation.js";
+import { ELF_SECTION_ZERO_TYPE_ISSUE, validateElfSectionHeaders } from "./section-header-validation.js";
 
 const bigFrom32 = (value: number): bigint => BigInt.asUintN(32, BigInt(value));
 
@@ -202,6 +202,10 @@ export async function resolveExtendedHeaderCounts(
   const dv = await readSectionZero(file, header, expectedSectionHeaderSize, issues);
   if (!dv) return unresolvedHeader();
   const sectionZero = is64 ? parseSectionHeader64(dv, littleEndian) : parseSectionHeader32(dv, littleEndian);
+  if (sectionZero.type !== 0) {
+    issues.push(ELF_SECTION_ZERO_TYPE_ISSUE);
+    return unresolvedHeader();
+  }
   const resolvedShnum = needsShnum
     ? (toSafeNumber(sectionZero.size, "Section count from section header #0", issues) ?? 0)
     : header.shnum;
@@ -246,7 +250,8 @@ export async function parseSectionHeadersWithNames(
   is64: boolean,
   littleEndian: boolean,
   issues: string[],
-  expectedSectionHeaderSize: number
+  expectedSectionHeaderSize: number,
+  sourceHeader = header
 ): Promise<ElfSectionHeader[]> {
   const table = locateElfHeaderTable(file.size, header.shoff, header.shnum,
     header.shentsize, expectedSectionHeaderSize, "Section header", issues);
@@ -262,7 +267,7 @@ export async function parseSectionHeadersWithNames(
     const parsed = is64 ? parseSectionHeader64(view, littleEndian) : parseSectionHeader32(view, littleEndian);
     sections.push({ ...parsed, index });
   }
-  validateElfSectionHeaders(sections, file.size, issues);
+  validateElfSectionHeaders(sections, file.size, issues, sourceHeader);
   const namesSection = locateSectionNameTable(sections, header, reader.size, issues);
   const namesTable = namesSection && await openElfSectionData(reader,
     { ...namesSection, name: "Section name table" }, { is64, littleEndian, header }, issues);

@@ -14,6 +14,61 @@ void test("decodes version definitions, requirements and hidden indices", async 
   });
 });
 
+for (const count of [1n, 2n]) {
+  void test(`checks both version record counts against dynamic count ${count}`, async () => {
+    const fixture = elfVersionFixture();
+
+    const result = await parseElfSymbolVersions(fixture.file(), fixture.elf,
+      [{ tag: 0x6ffffffd, value: count }, { tag: 0x6fffffff, value: count }], 2);
+
+    assert.equal(result?.definitions.length, 1);
+    assert.equal(result?.requirements.length, 1);
+    assert.deepEqual(result?.issues, count === 1n ? [] : [
+      "DT_VERDEFNUM (2) disagrees with the version section #3 record count (1).",
+      "DT_VERNEEDNUM (2) disagrees with the version section #4 record count (1)."
+    ]);
+  });
+}
+
+for (const [index, tag, name] of [
+  [3, 0x6ffffffc, "DT_VERDEF"], [4, 0x6ffffffe, "DT_VERNEED"], [5, 0x6ffffff0, "DT_VERSYM"]
+] as const) {
+  void test(`checks the runtime address of ${name} against the version section`, async () => {
+    const fixture = elfVersionFixture();
+    const section = fixture.elf.sections[index]!;
+    section.addr = 0x2000n;
+    section.flags = 2n; // SHF_ALLOC makes sh_addr meaningful.
+
+    const matching = await parseElfSymbolVersions(fixture.file(), fixture.elf,
+      [{ tag, value: section.addr }], 2);
+    const conflicting = await parseElfSymbolVersions(fixture.file(), fixture.elf,
+      [{ tag, value: section.addr + 1n }], 2);
+
+    assert.deepEqual(matching?.issues, []);
+    assert.deepEqual(conflicting?.issues, [`${name} disagrees with the location of version section #${index}.`]);
+  });
+}
+
+void test("detects a different version table at the same advertised virtual address", async () => {
+  const fixture = elfVersionFixture();
+  const section = fixture.elf.sections[3]!;
+  section.flags = 2n; // SHF_ALLOC.
+  fixture.elf.programHeaders.push({ type: 1, index: 0, typeName: "LOAD",
+    vaddr: section.addr, paddr: section.addr, offset: section.offset + 1n,
+    filesz: section.size, memsz: section.size, flags: 4, flagNames: [], align: 1n });
+
+  const entries = [{ tag: 0x6ffffffc, value: section.addr }];
+
+  const result = await parseElfSymbolVersions(fixture.file(), fixture.elf, entries, 2);
+  fixture.elf.programHeaders[0]!.offset = section.offset;
+  const matching = await parseElfSymbolVersions(fixture.file(), fixture.elf, entries, 2);
+  const absent = await parseElfSymbolVersions(fixture.file(), fixture.elf, [], 2);
+
+  assert.deepEqual(result?.issues, ["DT_VERDEF disagrees with the location of version section #3."]);
+  assert.deepEqual(matching?.issues, []);
+  assert.deepEqual(absent?.issues, []);
+});
+
 void test("decodes big endian version records", async () => {
   const fixture = elfVersionFixture("big");
   const result = await parseElfSymbolVersions(fixture.file(), fixture.elf, [], 2);

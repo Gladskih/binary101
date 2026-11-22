@@ -131,6 +131,40 @@ void test("checks sectionless DT_HASH against DT_SYMTABSZ", async () => {
     ["System V hash nchain (3) disagrees with the dynamic symbol count (2)."]);
 });
 
+for (const bucket of [0, 1]) {
+  void test(`checks which System V bucket can find an exported name: ${bucket}`, async () => {
+    const bytes = createElfImportLinkageBytes();
+    const view = new DataView(bytes.buffer);
+    // ELF64 symbol #1: SHN_ABS defines "puts". The gABI hash of "puts" is odd.
+    view.setUint16(0x29e, 0xfff1, true);
+    view.setUint32(0x260, 2, true);
+    view.setUint32(0x268, 0, true);
+    view.setUint32(0x268 + bucket * 4, 1, true);
+
+    const elf = await parseElf(new File([Uint8Array.from(bytes)], "sysv-lookup.elf"));
+
+    assert.equal(elf?.dynSymbols?.exportSymbols[0]?.name, "puts");
+    assert.deepEqual(elf?.hashTables?.[0]?.issues, bucket === 1 ? [] :
+      ["System V hash bucket 0 contains dynamic symbol #1, whose name hashes to bucket 1."]);
+  });
+}
+
+void test("checks System V bucket membership using the raw name bytes", async () => {
+  const bytes = createElfImportLinkageBytes();
+  const view = new DataView(bytes.buffer);
+  // Hash(0xff) = 255, so its bucket is 3 of 4. Hashing the replacement
+  // character's UTF-8 bytes would instead select bucket 1.
+  bytes.fill(0, 0x268, 0x280);
+  bytes.set([0xff, 0], 0x2b1);
+  view.setUint32(0x260, 4, true);
+  view.setUint32(0x274, 1, true);
+
+  const elf = await parseElf(new File([Uint8Array.from(bytes)], "sysv-raw-name.elf"));
+
+  assert.equal(elf?.dynSymbols?.importSymbols[0]?.name, "\ufffd");
+  assert.deepEqual(elf?.hashTables?.[0]?.issues, []);
+});
+
 void test("reads GNU bloom words and contiguous chains in big endian", async () => {
   const source = fixture("gnu", "big");
   const tables = await parseElfHashTables(source.file(), source.elf, []);

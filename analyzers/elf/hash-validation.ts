@@ -1,32 +1,12 @@
 import type { ElfHashTable } from "./hash-types.js";
+import { validateElfSysvHashChains } from "./sysv-hash.js";
 
 // System V hash traversal and GNU hash termination: gABI 8.5 and glibc dl-lookup.c.
 // https://gabi.xinuos.com/elf/08-dynamic.html#hash-table
 // https://raw.githubusercontent.com/bminor/glibc/master/elf/dl-lookup.c
-const validateSysvChains = (table: ElfHashTable): void => {
-  const complete = new Set<number>();
-  for (const bucket of table.buckets) {
-    const path = new Set<number>();
-    let index = bucket;
-    while (index && !complete.has(index)) {
-      if (index >= table.chains.length) {
-        table.issues.push(`Hash symbol index ${index} is outside the chain table.`);
-        break;
-      }
-      if (path.has(index)) {
-        table.issues.push(`Hash chain has a cycle at symbol #${index}.`);
-        break;
-      }
-      path.add(index);
-      index = table.chains[index]!;
-    }
-    for (const item of path) complete.add(item);
-  }
-};
-
 export const validateElfHashTable = (table: ElfHashTable): void => {
   if (table.kind === "sysv") {
-    validateSysvChains(table);
+    validateElfSysvHashChains(table);
     return;
   }
   if (!table.bloom.length || (table.bloom.length & (table.bloom.length - 1)) !== 0) {

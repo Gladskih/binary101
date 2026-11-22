@@ -3,6 +3,7 @@ import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
 import { ELF_SECTION_COMPRESSED } from "./section-data.js";
+import { ELF_SECTION_FLAG } from "./abi-constants.js";
 
 export interface ElfVersionTable {
   offset: number;
@@ -15,10 +16,32 @@ export interface ElfVersionTable {
 // https://refspecs.linuxbase.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic.pdf
 // https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h
 const versionSources = {
-  definitions: { section: 0x6ffffffd, tag: 0x6ffffffc, count: 0x6ffffffd },
-  requirements: { section: 0x6ffffffe, tag: 0x6ffffffe, count: 0x6fffffff },
-  symbols: { section: 0x6fffffff, tag: 0x6ffffff0, count: 0 }
+  definitions: { section: 0x6ffffffd, tag: 0x6ffffffc, name: "DT_VERDEF",
+    count: { tag: 0x6ffffffd, name: "DT_VERDEFNUM" } },
+  requirements: { section: 0x6ffffffe, tag: 0x6ffffffe, name: "DT_VERNEED",
+    count: { tag: 0x6fffffff, name: "DT_VERNEEDNUM" } },
+  symbols: { section: 0x6fffffff, tag: 0x6ffffff0, name: "DT_VERSYM", count: null }
 } as const;
+
+const compareVersionSource = (
+  elf: ElfParseResult, section: ElfSectionHeader, entries: ElfDynamicEntry[],
+  source: typeof versionSources[keyof typeof versionSources], issues: string[]
+): void => {
+  const address = entries.find(entry => entry.tag === source.tag)?.value;
+  if (address !== undefined) {
+    const range = elfVirtualRange(elf.programHeaders, address, 1n, elf.fileSize);
+    if (((section.flags & ELF_SECTION_FLAG.ALLOC) && address !== section.addr) ||
+      (range && BigInt(range.offset) !== section.offset)) {
+      issues.push(`${source.name} disagrees with the location of version section #${section.index}.`);
+    }
+  }
+  const { count: countTag } = source;
+  if (!countTag) return;
+  const count = entries.find(entry => entry.tag === countTag.tag)?.value;
+  if (count !== undefined && count !== BigInt(section.info)) {
+    issues.push(`${countTag.name} (${count}) disagrees with the version section #${section.index} record count (${section.info}).`);
+  }
+};
 
 export const locateElfVersionTable = (
   elf: ElfParseResult, entries: ElfDynamicEntry[], kind: keyof typeof versionSources,
@@ -26,7 +49,10 @@ export const locateElfVersionTable = (
 ): ElfVersionTable | null => {
   const source = versionSources[kind];
   const section = elf.sections.find(item => item.type === source.section);
-  if (section) return sectionVersionTable(elf, section, kind, symbolCount, issues);
+  if (section) {
+    compareVersionSource(elf, section, entries, source, issues);
+    return sectionVersionTable(elf, section, kind, symbolCount, issues);
+  }
   return dynamicVersionTable(elf, entries, kind, symbolCount, issues);
 };
 
@@ -91,7 +117,7 @@ const dynamicVersionCount = (
   entries: ElfDynamicEntry[], kind: keyof typeof versionSources, symbolCount: number, issues: string[]
 ): number | null => {
   const count = kind === "symbols" ? symbolCount : Number(
-    entries.find(item => item.tag === versionSources[kind].count)?.value ?? 0n);
+    entries.find(item => item.tag === versionSources[kind].count?.tag)?.value ?? 0n);
   if (Number.isSafeInteger(count) && count > 0) return count;
   issues.push(`${kind}: missing or invalid version record count.`);
   return null;

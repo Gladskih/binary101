@@ -9,7 +9,8 @@ export async function readElfImageHeaders(file: File): Promise<ElfReport | null>
   if (!result || "incompleteHeader" in result) return result;
   const layout = selectElfBinaryLayout(result);
   const { is64, littleEndian: little, issues } = result;
-  const header = await resolveExtendedHeaderCounts(file, result.header,
+  const sourceHeader = result.header;
+  const header = await resolveExtendedHeaderCounts(file, sourceHeader,
     is64, little, issues, layout.sectionHeaderSize);
   result.header = header;
   if (header.ehsize < layout.headerSize) {
@@ -21,6 +22,7 @@ export async function readElfImageHeaders(file: File): Promise<ElfReport | null>
     issues.push(`ELF header size e_ehsize (${header.ehsize}) exceeds file size (${file.size}).`);
   }
   result.programHeaders = await parseProgramHeadersWithGuards(file, header, is64, little, issues);
-  result.sections = await parseSectionHeadersWithNames(file, header, is64, little, issues, layout.sectionHeaderSize);
+  result.sections = await parseSectionHeadersWithNames(file, header, is64, little, issues,
+    layout.sectionHeaderSize, sourceHeader);
   return result;
 }
