@@ -48,6 +48,39 @@ void test("bounds a relocation's linked dynamic symbol name by DT_STRSZ", async 
   assert.deepEqual(issues, ["Relocation symbol #1 has an invalid string table offset."]);
 });
 
+const sectionStringCases: [string, (fixture: ReturnType<typeof dynamicRelocationFixture>) => void][] = [
+  ["static symbols", fixture => {
+    fixture.elf.sections[2]!.type = 2; // SHT_SYMTAB.
+  }],
+  ["no DT_SYMTAB", fixture => { fixture.tags.delete(6); }],
+  ["a different mapped DT_SYMTAB", fixture => {
+    fixture.tags.set(6, fixture.tags.get(6)! + 24n); // Another Elf64_Sym, still in PT_LOAD.
+  }],
+  ["an unmapped DT_SYMTAB", fixture => {
+    const load = fixture.elf.programHeaders[0]!;
+    fixture.tags.set(6, load.vaddr + load.memsz);
+    fixture.tags.delete(39); // DT_SYMTABSZ is optional for this section-based lookup.
+  }],
+  ["an unmapped dynamic string range", fixture => {
+    fixture.tags.set(10, BigInt(fixture.bytes.length));
+  }]
+];
+
+for (const [situation, adjust] of sectionStringCases) {
+  void test(`uses the linked section strings for ${situation}`, async () => {
+    const fixture = dynamicRelocationFixture();
+    fixture.elf.sections[2]!.type = 11; // SHT_DYNSYM.
+    fixture.tags.set(10, 1n);
+    adjust(fixture);
+    const issues: string[] = [];
+    const read = createElfRelocationSymbolReader(
+      createFileRangeReader(fixture.file(), 0, fixture.bytes.length), fixture.elf, fixture.tags, issues);
+
+    assert.deepEqual(await read(relocationTable(), 1), { name: "target", value: 4n, sectionIndex: 1 });
+    assert.deepEqual(issues, []);
+  });
+}
+
 void test("resolves a compressed symbol table through its logical entries and reuses parsed symbols", async context => {
   const fixture = dynamicRelocationFixture();
   fixture.elf.sections[2]!.type = 2; // SHT_SYMTAB.
