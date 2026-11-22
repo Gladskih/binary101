@@ -15,7 +15,7 @@ const ph = (overrides: Partial<ElfProgramHeader>): ElfProgramHeader =>
     vaddr: 0n,
     paddr: 0n,
     filesz: 1n,
-    memsz: 1n,
+    memsz: overrides.filesz ?? 1n,
     flags: 0,
     flagNames: [],
     align: 0n,
@@ -54,6 +54,7 @@ void test("collectElfDisassemblySeedsFromDynamic reads DT_INIT_ARRAY pointers", 
   const initArray = groups.find(group => group.source === "DT_INIT_ARRAY");
   assert.ok(initArray);
   assert.deepEqual(initArray?.vaddrs, [0x2000n]);
+  assert.deepEqual(issues, []);
 });
 
 void test("collectElfDisassemblySeedsFromDynamic reads function symbols from DT_SYMTAB using DT_HASH", async () => {
@@ -157,7 +158,7 @@ void test("collectElfDisassemblySeedsFromDynamic reports pointer arrays outside 
   });
 
   assert.equal(groups.length, 0);
-  assert.ok(issues.some(issue => issue.includes("DT_INIT_ARRAY does not map into a PT_LOAD segment.")));
+  assert.match(issues.join(" "), /DT_INIT_ARRAY does not map to an unambiguous file-backed PT_LOAD range/);
 });
 
 void test("collectElfDisassemblySeedsFromDynamic warns on truncated/misaligned pointer arrays", async () => {
@@ -188,7 +189,8 @@ void test("collectElfDisassemblySeedsFromDynamic warns on truncated/misaligned p
   const initArray = groups.find(group => group.source === "DT_INIT_ARRAY");
   assert.ok(initArray);
   assert.deepEqual(initArray?.vaddrs, [0x2000n]);
-  assert.ok(issues.some(issue => issue.includes("DT_INIT_ARRAY extends past end of file; truncating")));
+  assert.match(issues.join(" "), /DT_INIT_ARRAY extends past its file-backed PT_LOAD range or the end of the file/);
+  assert.match(issues.join(" "), /Reading the available prefix/);
   assert.ok(issues.some(issue => issue.includes("DT_INIT_ARRAY size is not aligned to pointer size")));
 });
 

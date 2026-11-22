@@ -3,7 +3,7 @@
 import type { ElfProgramHeader } from "./types.js";
 import type { ElfDisassemblySeedGroup } from "./disassembly-seeds-types.js";
 import { readDynsymCountFromGnuHash, readDynsymCountFromSysvHash } from "./dynsym-count.js";
-import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
+import { elfLoadFilePrefix } from "./load-file-tail.js";
 
 const PT_LOAD = 1;
 const PT_DYNAMIC = 2;
@@ -58,32 +58,34 @@ const parseDynamicTags = (bytes: Uint8Array<ArrayBuffer>, is64: boolean, littleE
   return out;
 };
 
-const readPointerArrayAtVaddr = async (opts: {
+type MappedSeedInput = {
   file: File;
   programHeaders: ElfProgramHeader[];
   vaddr: bigint;
   byteSize: bigint;
-  is64: boolean;
-  littleEndian: boolean;
   issues: string[];
   label: string;
-}): Promise<bigint[]> => {
+};
+
+const readMappedSeedBytes = async (opts: MappedSeedInput): Promise<DataView | null> => {
+  const range = elfLoadFilePrefix(opts.programHeaders, opts.vaddr, opts.byteSize, opts.file.size);
+  if (!range) {
+    opts.issues.push(`${opts.label} does not map to an unambiguous file-backed PT_LOAD range.`);
+    return null;
+  }
+  if (BigInt(range.size) < opts.byteSize) {
+    opts.issues.push(`${opts.label} extends past its file-backed PT_LOAD range or the end of the file. ` +
+      "Reading the available prefix.");
+  }
+  return new DataView(await opts.file.slice(range.offset, range.offset + range.size).arrayBuffer());
+};
+
+const readPointerArrayAtVaddr = async (
+  opts: MappedSeedInput & { is64: boolean; littleEndian: boolean }
+): Promise<bigint[]> => {
+  const dv = await readMappedSeedBytes(opts);
+  if (!dv) return [];
   const pointerSize = opts.is64 ? 8 : 4;
-  const fileOffset = vaddrToFileOffset(opts.programHeaders, opts.vaddr);
-  if (fileOffset == null) {
-    opts.issues.push(`${opts.label} does not map into a PT_LOAD segment.`);
-    return [];
-  }
-  const start = toSafeIndex(fileOffset, `${opts.label} file offset`, opts.issues);
-  const size = toSafeIndex(opts.byteSize, `${opts.label} size`, opts.issues);
-  if (start == null || size == null || size <= 0) return [];
-  const end = Math.min(opts.file.size, start + size);
-  if (start >= opts.file.size || end <= start) return [];
-  if (end !== start + size) {
-    opts.issues.push(`${opts.label} extends past end of file; truncating to available bytes.`);
-  }
-  const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (dv.byteLength % pointerSize !== 0) {
     opts.issues.push(`${opts.label} size is not aligned to pointer size (${pointerSize} bytes).`);
   }
@@ -110,23 +112,9 @@ const readDynsymFunctionVaddrs = async (opts: {
   littleEndian: boolean;
   issues: string[];
 }): Promise<bigint[]> => {
-  const symOffset = vaddrToFileOffset(opts.programHeaders, opts.symtabVaddr);
-  if (symOffset == null) {
-    opts.issues.push("DT_SYMTAB does not map into a PT_LOAD segment.");
-    return [];
-  }
-  const start = toSafeIndex(symOffset, "DT_SYMTAB file offset", opts.issues);
-  if (start == null) return [];
-  const byteSize = BigInt(opts.entrySize) * BigInt(opts.symbolCount);
-  const size = toSafeIndex(byteSize, "DT_SYMTAB size", opts.issues);
-  if (size == null || size <= 0) return [];
-  const end = Math.min(opts.file.size, start + size);
-  if (start >= opts.file.size || end <= start) return [];
-  if (end !== start + size) {
-    opts.issues.push("DT_SYMTAB extends past end of file; truncating to available bytes.");
-  }
-  const bytes = new Uint8Array(await opts.file.slice(start, end).arrayBuffer());
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const dv = await readMappedSeedBytes({ ...opts, vaddr: opts.symtabVaddr,
+    byteSize: BigInt(opts.entrySize) * BigInt(opts.symbolCount), label: "DT_SYMTAB" });
+  if (!dv) return [];
   const count = Math.floor(dv.byteLength / opts.entrySize);
   const out: bigint[] = [];
   for (let index = 0; index < count; index += 1) {
