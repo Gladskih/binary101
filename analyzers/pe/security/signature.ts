@@ -3,6 +3,14 @@
 import { formatPeMachine } from "../machine.js";
 import type { PeDataDirectory } from "../types.js";
 
+// Microsoft PE/COFF, PE signature "PE\0\0".
+// https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#signature-image-only
+export const PE_SIGNATURE_BYTE_LENGTH = 4;
+export const hasPeSignature = (view: DataView, offset: number): boolean =>
+  Number.isSafeInteger(offset) && offset >= 0 &&
+  offset + PE_SIGNATURE_BYTE_LENGTH <= view.byteLength &&
+  view.getUint32(offset, true) === 0x0000_4550;
+
 export const peProbe = (dataView: DataView): { e_lfanew: number } | null =>
   dataView.byteLength >= 0x40 && dataView.getUint16(0, true) === 0x5a4d
     ? { e_lfanew: dataView.getUint32(0x3c, true) }

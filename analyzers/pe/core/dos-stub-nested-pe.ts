@@ -10,13 +10,12 @@ import {
   readCoffField
 } from "../../coff/layout.js";
 import type { PeDosStubMleHeader, PeDosStubNestedPe, PeDosStubNestedPeSection } from "../types.js";
+import { hasPeSignature, PE_SIGNATURE_BYTE_LENGTH } from "../security/signature.js";
+import { PE32_OPTIONAL_HEADER_MAGIC, PE32_PLUS_OPTIONAL_HEADER_MAGIC } from
+  "../optional-header/magic.js";
 
 const DOS_SIGNATURE_MZ = 0x5a4d;
-const PE_SIGNATURE = 0x0000_4550;
-const PE_SIGNATURE_BYTE_LENGTH = 4;
 const OPTIONAL_HEADER_STANDARD_FIELDS_SIZE = 24;
-const PE32_OPTIONAL_HEADER_MAGIC = 0x10b;
-const PE32_PLUS_OPTIONAL_HEADER_MAGIC = 0x20b;
 const MAX_NESTED_SECTIONS_PREVIEW = 8;
 const IMAGE_DEBUG_TYPE_CODEVIEW = 2;
 const RSDS_SIGNATURE = 0x5344_5352;
@@ -126,7 +125,7 @@ export const parseNestedPeAtDosEntrypoint = (
   if (eLfanew == null || eLfanew + PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_BYTE_LENGTH > view.byteLength) {
     return null;
   }
-  if (readU32(view, eLfanew) !== PE_SIGNATURE) return null;
+  if (!hasPeSignature(view, eLfanew)) return null;
   const warnings: string[] = [];
   const coffOffset = eLfanew + PE_SIGNATURE_BYTE_LENGTH;
   const sectionCount = readCoffField(view, coffOffset, COFF_FILE_HEADER_FIELDS.NumberOfSections);

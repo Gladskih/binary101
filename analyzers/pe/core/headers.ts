@@ -9,8 +9,8 @@ import { parseRichHeaderFromDosStub } from "./rich-header.js";
 import { analyzePeDosStubCode } from "./dos-stub-code.js";
 import { parseValveIntegrityBlock } from "./valve-integrity.js";
 import type { PeDosHeader } from "../types.js";
+import { hasPeSignature, PE_SIGNATURE_BYTE_LENGTH } from "../security/signature.js";
 
-const PE_SIGNATURE_BYTE_LENGTH = 4;
 const PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH = PE_SIGNATURE_BYTE_LENGTH + COFF_FILE_HEADER_BYTE_LENGTH;
 
 export async function parseDosHeaderAndStub(
@@ -73,13 +73,7 @@ export async function parseCoffHeader(
   peHeaderOffset: number
 ): Promise<CoffFileHeader | null> {
   const headerView = await reader.read(peHeaderOffset, PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH);
-  if (headerView.byteLength < PE_SIGNATURE_BYTE_LENGTH) return null;
-  const signature =
-    String.fromCharCode(headerView.getUint8(0)) +
-    String.fromCharCode(headerView.getUint8(1)) +
-    String.fromCharCode(headerView.getUint8(2)) +
-    String.fromCharCode(headerView.getUint8(3));
-  if (signature !== "PE\0\0") return null;
-  if (headerView.byteLength < PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH) return null;
+  if (headerView.byteLength < PE_SIGNATURE_AND_COFF_HEADER_BYTE_LENGTH ||
+      !hasPeSignature(headerView, 0)) return null;
   return readCoffFileHeaderFields(headerView, PE_SIGNATURE_BYTE_LENGTH);
 }
