@@ -7,16 +7,17 @@ import type {
 } from "../../analyzers/pe/packers/index.js";
 
 export type PePackerSectionDefinition = {
-  key: "bun-standalone" | "inno-setup" | "nsis-installer" | "upx";
+  key: PePackerId;
   title: string;
 };
 
-export const PE_PACKER_SECTIONS: Readonly<Record<PePackerId, PePackerSectionDefinition>> = {
+export const PE_PACKER_SECTIONS = {
   "bun-standalone": { key: "bun-standalone", title: "Bun standalone executable" },
+  "crinkler": { key: "crinkler", title: "Crinkler executable packer" },
   "inno-setup": { key: "inno-setup", title: "Inno Setup installer" },
   "nsis-installer": { key: "nsis-installer", title: "NSIS installer" },
   "upx": { key: "upx", title: "UPX executable packer" }
-};
+} as const satisfies Readonly<Record<PePackerId, PePackerSectionDefinition>>;
 
 export const pePackerReportSummary = (report: PePackerReport): string => {
   const findings = report.findings.length;

@@ -6,6 +6,7 @@ import type { PeLinuxBootProtocol } from "./linux-boot.js";
 import type { MuiResourceConfiguration } from "./resources/mui-config.js";
 import type { PeDosHeader } from "./types.js";
 import type { PeAppHostAnalysis } from "./apphost/types.js";
+import type { PePackerAnalysis } from "./packers/types.js";
 import {
   detectPeClrNativeImageSubtypeFromClr,
   isPeClrNativeImage,
@@ -26,6 +27,7 @@ export type PeMuiResourceSubtype = "mui-resource-image";
 export type PeLinuxBootSubtype = "linux-boot-kernel";
 export type PeDosStubNestedPeSubtype = "intel-txt-mle-nested-pe" | "dos-stub-nested-pe";
 export type PeAppHostSubtype = "dotnet-apphost";
+export type PePackerSubtype = "crinkler";
 export type PeSubtype =
   PeWinmdSubtype |
   PeReferenceAssemblySubtype |
@@ -33,7 +35,14 @@ export type PeSubtype =
   PeLinuxBootSubtype |
   PeDosStubNestedPeSubtype |
   PeAppHostSubtype |
+  PePackerSubtype |
   PeMuiResourceSubtype;
+
+export const detectPePackerSubtype = (
+  packers: PePackerAnalysis | null | undefined
+): PePackerSubtype | null =>
+  packers?.reports.some(report => report.id === "crinkler" && report.findings.length > 0)
+    ? "crinkler" : null;
 
 export const detectPeAppHostSubtype = (
   appHost: PeAppHostAnalysis | null | undefined

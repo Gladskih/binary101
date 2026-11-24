@@ -13,6 +13,7 @@ import { renderBunFindingDetails } from "./bun-packer.js";
 import { renderInnoSetupFindingDetails } from "./inno-setup.js";
 import { renderNsisFindingDetails } from "./nsis-installer.js";
 import { renderUpxFindingDetails } from "./upx-packer.js";
+import { renderCrinklerFindingDetails } from "./crinkler.js";
 
 const renderEvidence = (finding: PePackerFinding): string =>
   `<div class="smallNote pePackerFinding__evidenceLabel">Validation checks</div>` +
@@ -37,6 +38,18 @@ const findNsisPayloads = (
     ) ?? []
     : [];
 
+const renderFindingDetails = (
+  finding: PePackerFinding, payloads: PePayloadAnalysis | null | undefined
+): string => {
+  switch (finding.id) {
+    case "upx": return renderUpxFindingDetails(finding);
+    case "bun-standalone": return renderBunFindingDetails(finding);
+    case "crinkler": return renderCrinklerFindingDetails(finding);
+    case "inno-setup": return renderInnoSetupFindingDetails(finding);
+    case "nsis-installer": return renderNsisFindingDetails(finding, findNsisPayloads(finding, payloads));
+  }
+};
+
 const renderFinding = (
   finding: PePackerFinding,
   index: number,
@@ -46,13 +59,7 @@ const renderFinding = (
   const heading = total > 1
     ? `<h4 class="pePackerFinding__title">Finding ${index + 1}: ${escapeHtml(finding.name)}</h4>`
     : "";
-  const details = finding.id === "upx"
-    ? renderUpxFindingDetails(finding)
-    : finding.id === "bun-standalone"
-      ? renderBunFindingDetails(finding)
-      : finding.id === "inno-setup"
-        ? renderInnoSetupFindingDetails(finding)
-        : renderNsisFindingDetails(finding, findNsisPayloads(finding, payloads));
+  const details = renderFindingDetails(finding, payloads);
   return `<div class="pePackerFinding">${heading}${renderEvidence(finding)}${details}</div>`;
 };
 

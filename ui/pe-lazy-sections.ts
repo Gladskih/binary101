@@ -1,7 +1,6 @@
 "use strict";
 import { renderPeSanitizers } from "../renderers/pe/sanitizers.js";
 import { isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult } from "../analyzers/pe/index.js";
-import type { PePackerId } from "../analyzers/pe/packers/index.js";
 import { renderHeaders } from "../renderers/pe/headers.js";
 import { renderPackerReport } from "../renderers/pe/packers.js";
 import { renderLoadConfig } from "../renderers/pe/load-config.js";
@@ -87,23 +86,10 @@ const renderToString = (render: (out: string[]) => void): string => {
   return out.join("");
 };
 
-const renderPackerById = (pe: PeWindowsParseResult, id: PePackerId): string => {
-  const report = pe.packers?.reports.find(candidate => candidate.id === id);
-  return report ? renderToString(out => renderPackerReport(report, out, pe.payloads)) : "";
-};
-
 const WINDOWS_LAZY_RENDERERS: Partial<Record<
   PeLazySectionKey, (pe: PeWindowsParseResult) => string
 >> = {
   [PE_LAZY_SECTION_KEYS.sanitizers]: renderPeSanitizers,
-  [PE_LAZY_SECTION_KEYS.upx]: (pe: PeWindowsParseResult) =>
-    renderPackerById(pe, "upx"),
-  [PE_LAZY_SECTION_KEYS.nsisInstaller]: (pe: PeWindowsParseResult) =>
-    renderPackerById(pe, "nsis-installer"),
-  [PE_LAZY_SECTION_KEYS.innoSetup]: (pe: PeWindowsParseResult) =>
-    renderPackerById(pe, "inno-setup"),
-  [PE_LAZY_SECTION_KEYS.bunStandalone]: (pe: PeWindowsParseResult) =>
-    renderPackerById(pe, "bun-standalone"),
   [PE_LAZY_SECTION_KEYS.loadConfig]: (pe: PeWindowsParseResult) =>
     renderToString(out => renderLoadConfig(pe, out)),
   [PE_LAZY_SECTION_KEYS.debug]: (pe: PeWindowsParseResult) =>
@@ -158,8 +144,11 @@ const WINDOWS_LAZY_RENDERERS: Partial<Record<
     renderToString(out => renderPePayloads(pe.payloads, "resource", out)),
 };
 
-const renderWindowsLazyMarkup = (pe: PeWindowsParseResult, key: PeLazySectionKey): string =>
-  WINDOWS_LAZY_RENDERERS[key]?.(pe) ?? "";
+const renderWindowsLazyMarkup = (pe: PeWindowsParseResult, key: PeLazySectionKey): string => {
+  const report = pe.packers?.reports.find(candidate => candidate.id === key);
+  if (report) return renderToString(out => renderPackerReport(report, out, pe.payloads));
+  return WINDOWS_LAZY_RENDERERS[key]?.(pe) ?? "";
+};
 
 const renderLazySectionMarkup = (pe: PeParseResult, key: PeLazySectionKey): string => {
   if ([PE_LAZY_SECTION_KEYS.dosHeader, PE_LAZY_SECTION_KEYS.peHeaders,

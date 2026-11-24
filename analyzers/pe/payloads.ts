@@ -156,9 +156,9 @@ const overlayPayloadProvenance = (
     };
 
 const inspectProjectorPayload = async (
-  file: File, overlay: PeOverlayAnalysis | null | undefined
+  file: File, ranges: FileRange[]
 ): Promise<PePayloadAnalysis> => {
-  const firstRange = overlay?.ranges[0];
+  const firstRange = ranges[0];
   const projector = firstRange ? await analyzeFlashProjector(file, firstRange.start) : null;
   if (!projector) return { entries: [] };
   return isValidatedProjectorMovie(projector.swf)
@@ -186,19 +186,30 @@ export const analyzePePayloads = async (
   file: File, reader: FileRangeReader, overlay: PeOverlayAnalysis | null | undefined,
   packers: PePackerAnalysis | null | undefined, resources?: PeResources | null
 ): Promise<PePayloadAnalysis | null> => {
-  const projector = await inspectProjectorPayload(file, overlay);
+  const candidates = subtractFileRanges(overlay?.ranges ?? [], packerImageRanges(packers));
+  const projector = await inspectProjectorPayload(file, candidates);
   // A confirmed SWF is already explained. Avoid scanning its media bytes again as archive data.
-  const ranges = subtractFileRanges(overlay?.ranges ?? [],
+  const ranges = subtractFileRanges(candidates,
     projector.entries.map(payload => ({ start: payload.start, end: payload.end + 8 })));
   const entries = (await findResourcePePayloads(reader, resources)).concat(projector.entries,
     await findOverlayArchives(file, reader, ranges, nsisFindings(packers)));
   return entries.length || projector.projectorCandidate ? { ...projector, entries } : null;
 };
 
+const packerImageRanges = (analysis: PePackerAnalysis | null | undefined): FileRange[] =>
+  analysis?.reports.flatMap(report => report.findings.flatMap(finding => {
+    if (finding.id !== "crinkler") return [];
+    const { streamOffset } = finding.layout;
+    if (finding.decoded) return [{ start: 0, end: streamOffset + finding.decoded.packedSize }];
+    if (finding.parts) return [{ start: 0, end: streamOffset }];
+    return [];
+  })) ?? [];
+
 const explainedRanges = (
   packers: PePackerAnalysis | null | undefined,
   payloads: PePayloadAnalysis | null | undefined
 ): FileRange[] => [
+  ...packerImageRanges(packers),
   ...innoFindings(packers).map(finding => ({
     start: finding.dataOffset,
     end: finding.totalSize

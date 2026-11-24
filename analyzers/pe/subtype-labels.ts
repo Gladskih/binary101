@@ -3,6 +3,7 @@
 import type { PeSubtype } from "./subtype.js";
 
 const PE_SUBTYPE_LABELS: Record<PeSubtype, string> = {
+  "crinkler": "Crinkler-packed PE",
   "winmd": "Windows Metadata (WinMD)",
   "dotnet-reference-assembly": ".NET reference assembly (metadata-only)",
   "clr-native-image": "CLR native image",

@@ -4,6 +4,7 @@ import { detectBunStandalone } from "./bun-standalone.js";
 import { detectNsisInstaller } from "./nsis-installer.js";
 import { detectInnoSetup } from "./inno-setup.js";
 import { detectUpx } from "./upx.js";
+import { detectCrinkler } from "./crinkler.js";
 import type {
   PePackerAnalysis,
   PePackerAnalysisInput,
@@ -15,6 +16,11 @@ type PePackerAnalyzer = (input: PePackerAnalysisInput) => Promise<PePackerDetect
 type PePackerAnalyzerRegistration = { id: PePackerId; analyze: PePackerAnalyzer };
 
 const DETECTORS: readonly PePackerAnalyzerRegistration[] = [{
+  id: "crinkler",
+  analyze: input => input.imagePointerBytes === 4 && input.sections.length <= 1
+    ? detectCrinkler(input.reader)
+    : Promise.resolve({ findings: [], warnings: [] })
+}, {
   id: "upx",
   analyze: input => detectUpx({
     reader: input.reader,
@@ -64,6 +70,7 @@ export type {
   InnoSetupDetectorInput,
   NsisInstallerDetectorInput,
   PeBunPackerFinding,
+  PeCrinklerPackerFinding,
   PeInnoSetupFinding,
   PePackerAnalysis,
   PePackerConfidence,

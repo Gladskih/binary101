@@ -23,6 +23,7 @@ export const PE_LAZY_SECTION_KEYS = {
   boundImports: "bound-imports",
   bunStandalone: PE_PACKER_SECTIONS["bun-standalone"].key,
   clr: "clr",
+  crinkler: PE_PACKER_SECTIONS.crinkler.key,
   dataDirectories: "data-directories",
   debug: "debug",
   dwarf: "dwarf",
@@ -61,12 +62,11 @@ export type PeLazySectionKey = typeof PE_LAZY_SECTION_KEYS[keyof typeof PE_LAZY_
 export type PeLazySectionDescriptor =
   { id?: string; key: PeLazySectionKey; summary?: string; title: string; origin?: "supplemental" };
 const supplementalSections = new Set<PeLazySectionKey>([
-  "apphost", "appended-payloads", "bun-standalone", "import-linking", "inno-setup",
-  "itanium-rtti", "linux-boot", "msvc-eh", "msvc-rtti", "native-aot", "nsis-installer",
-  "overlay", "resource-payloads", "sanity", "sanitizers", "type-libraries", "upx"
+  "apphost", "appended-payloads", "import-linking", "itanium-rtti", "linux-boot", "msvc-eh",
+  "msvc-rtti", "native-aot", "overlay", "resource-payloads", "sanity", "sanitizers",
+  "type-libraries", ...Object.values(PE_PACKER_SECTIONS).map(section => section.key)
 ]);
-const plural = (count: number, one: string, many: string): string =>
-  `${count} ${count === 1 ? one : many}`;
+const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 const coffTailSummary = (pe: PeParseResult): string =>
   (pe.coff.NumberOfSymbols >>> 0) > 0
     ? plural(pe.coff.NumberOfSymbols >>> 0, "symbol-table record", "symbol-table records")

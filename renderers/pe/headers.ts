@@ -17,6 +17,8 @@ import { IMAGE_DEBUG_TYPE_REPRO } from "../../analyzers/pe/debug/types.js";
 import { peDirectoryCoverageIssue } from "../../analyzers/pe/directories/file-coverage.js";
 import { hasPeResourceDirectoryDetails } from "./directory-details.js";
 import { renderPeDiagnostics } from "./diagnostics.js";
+import { CRINKLER_SHORT_OPTIONAL_HEADER_BYTES } from
+  "../../analyzers/pe/packers/crinkler-layout.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
@@ -247,6 +249,12 @@ export function renderHeaders(pe: PeParseResult, out: string[]): void {
     )
   );
   out.push(renderDefinitionRow("SizeOfCode", humanSize(oh.SizeOfCode), "Size of code section bytes."));
+  if (pe.subtype === "crinkler" && pe.coff.SizeOfOptionalHeader === CRINKLER_SHORT_OPTIONAL_HEADER_BYTES) {
+    out.push("</dl>",
+      '<p class="smallNote">The declared optional header ends here.</p>', renderPeSectionEnd());
+    renderHeadersTail(pe, out);
+    return;
+  }
   out.push(
     renderDefinitionRow(
       "SizeOfInitializedData",

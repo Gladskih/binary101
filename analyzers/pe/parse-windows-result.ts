@@ -10,7 +10,7 @@ import type {
 } from "./parse-windows.js";
 import type { PeImageArtifacts } from "./image-artifacts.js";
 import { attachManifestValidation } from "./resources/manifest-consistency.js";
-import { detectPeSubtype } from "./subtype.js";
+import { detectPePackerSubtype, detectPeSubtype } from "./subtype.js";
 
 const appendUniqueMessages = (existing: string[] | undefined, messages: string[]): string[] | undefined =>
   messages.length ? [...new Set([...(existing ?? []), ...messages])] : existing;
@@ -33,7 +33,7 @@ const buildWindowsPeIdentity = (
     core.warnings,
     directories.manifestValidation?.warnings ?? []
   );
-  const subtype = detectPeSubtype(
+  const subtype = detectPePackerSubtype(imageArtifacts.packers) ?? detectPeSubtype(
     directories.clr,
     directories.resources?.muiResourceConfiguration,
     core.opt.AddressOfEntryPoint,

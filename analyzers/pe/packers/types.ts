@@ -5,10 +5,13 @@ import type { PeOverlayAnalysis } from "../overlay.js";
 import type { PeSection } from "../types.js";
 import type { PeResources } from "../resources/index.js";
 import type { UpxPackHeader } from "./upx-pack-header.js";
+import type { CrinklerLayout, CrinklerTinyLayout } from "./crinkler-layout.js";
+import type { CrinklerModelPart } from "./crinkler-models.js";
+import type { CrinklerTinyImport } from "./crinkler-tiny-import.js";
 
 export type PePackerKind = "executable-packer" | "installer" | "runtime-packager";
 export type PePackerConfidence = "high";
-export type PePackerId = "bun-standalone" | "inno-setup" | "nsis-installer" | "upx";
+export type PePackerId = "bun-standalone" | "crinkler" | "inno-setup" | "nsis-installer" | "upx";
 export type BunPayloadStorage =
   | "u32-length-prefixed"
   | "u64-length-prefixed"
@@ -66,8 +69,17 @@ export interface PeUpxPackerFinding extends PePackerFindingBase {
   packHeaderOffset: number;
 }
 
+export interface PeCrinklerPackerFinding extends PePackerFindingBase {
+  id: "crinkler";
+  layout: CrinklerLayout;
+  parts?: CrinklerModelPart[];
+  tiny?: CrinklerTinyLayout;
+  decoded?: { data: Uint8Array; packedSize: number; imports?: CrinklerTinyImport };
+}
+
 export type PePackerFinding =
   | PeBunPackerFinding
+  | PeCrinklerPackerFinding
   | PeInnoSetupFinding
   | PeNsisPackerFinding
   | PeUpxPackerFinding;
