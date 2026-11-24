@@ -2,6 +2,7 @@
 
 import type { CoffFileHeader } from "../coff/types.js";
 import type { PeSectionName } from "./sections/name.js";
+import type { PeRecoveredEntrypoint } from "./core/entrypoint-recovery.js";
 
 export type RvaToOffset = ((rva: number) => number | null) & {
   /** File-backed contiguous bytes; preserves the point mapper's section precedence. */
@@ -220,6 +221,7 @@ interface PeCoreBase {
 export interface PeWindowsCore extends PeCoreBase {
   opt: PeWindowsOptionalHeader;
   dataDirs: PeDataDirectory[];
+  recoveredEntrypoint?: PeRecoveredEntrypoint;
 }
 
 export interface PeHeaderCore extends PeCoreBase {

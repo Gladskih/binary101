@@ -30,6 +30,7 @@ import type {
   PeRomOptionalHeader,
   PeSection,
   PeTlsDirectory,
+  PeWindowsCore,
   PeWindowsOptionalHeader,
   RvaToOffset
 } from "../types.js";
@@ -80,6 +81,7 @@ interface PeParseResultBase {
 
 export interface PeWindowsParseResult extends PeParseResultBase {
   fileSize: number;
+  recoveredEntrypoint?: PeWindowsCore["recoveredEntrypoint"];
   sanitizerEvidence?: SanitizerEvidence[];
   debug: PeDebugSection | null;
   opt: PeWindowsOptionalHeader;

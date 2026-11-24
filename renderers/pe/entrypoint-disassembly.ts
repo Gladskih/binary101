@@ -14,8 +14,11 @@ const PROGRESS_QUEUED_ID = "peEntrypointDisassemblyProgressQueued";
 
 export const PE_ENTRYPOINT_DISASSEMBLY_PANEL_ID = "peEntrypointDisassemblyPanel";
 
+const entrypointRva = (pe: PeWindowsParseResult): number =>
+  pe.recoveredEntrypoint?.rva ?? pe.opt.AddressOfEntryPoint;
+
 const hasEntrypoint = (pe: PeWindowsParseResult): boolean =>
-  Number.isSafeInteger(pe.opt.AddressOfEntryPoint) && pe.opt.AddressOfEntryPoint > 0;
+  Number.isSafeInteger(entrypointRva(pe)) && entrypointRva(pe) > 0;
 
 const renderEntrypointActions = (pe: PeWindowsParseResult, out: string[]): void => {
   if (!hasEntrypoint(pe)) return;
@@ -59,12 +62,17 @@ const renderEntrypointDisassemblyContent = (pe: PeWindowsParseResult, out: strin
   out.push(
     `<details class="analysisPanel"><summary class="analysisPanelSummary">` +
     `<span class="detailsSummaryTitle">${pe.entrypointDisassembly &&
-      pe.entrypointDisassembly.entrypointRva !== pe.opt.AddressOfEntryPoint
+      pe.entrypointDisassembly.entrypointRva !== entrypointRva(pe)
       ? "Disassembly from selected RVA" : "Entrypoint disassembly"}</span></summary>` +
     `<div class="analysisPanelBody"><div class="analysisPanelActions">`
   );
   renderEntrypointActions(pe, out);
   out.push(`</div>`);
+  if (pe.recoveredEntrypoint &&
+      (!pe.entrypointDisassembly || pe.entrypointDisassembly.entrypointRva === entrypointRva(pe))) {
+    out.push('<p class="smallNote">The entry point RVA was read outside the ' +
+      "declared optional header.</p>");
+  }
   renderEntrypointReport(pe, out);
   out.push(`</div></details>`);
 };

@@ -17,12 +17,9 @@ import {
   COFF_SECTION_CHARACTERISTICS,
   COFF_SECTION_HEADER_BYTE_LENGTH
 } from "../../coff/layout.js";
-import { IMAGE_FILE_MACHINE_IA64 } from "../../coff/machine.js";
+import { getPeArchitecturePageSize } from "./page-size.js";
 // Microsoft PE format overview: the PE header is aligned on an 8-byte boundary. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#overview
 const PE_HEADER_ALIGNMENT = 8;
-// Microsoft PE/COFF section-data rules call out 4 KiB pages for x86/MIPS and 8 KiB pages for Itanium when applying the low-SectionAlignment special case. https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#section-data
-const COMMON_ARCH_PAGE_SIZE = 0x1000;
-const ITANIUM_PAGE_SIZE = 0x2000;
 type NamedSectionRange = {
   index: number; label: string; virtualAddress: number; virtualEndAligned: number | null;
   rawStart: number; rawEnd: number
@@ -41,14 +38,12 @@ const getHeaderSpanEnd = (pe: PeParseResult): number =>
     : Math.max(getActualHeaderEnd(pe), pe.opt.SizeOfHeaders >>> 0);
 const getKnownFileSize = (fileSize?: number): number | null =>
   Number.isSafeInteger(fileSize) && fileSize != null && fileSize >= 0 ? fileSize : null;
-const getArchitecturePageSize = (machine: number): number =>
-  machine === IMAGE_FILE_MACHINE_IA64 ? ITANIUM_PAGE_SIZE : COMMON_ARCH_PAGE_SIZE;
 const usesWindowsSectionAlignmentRules = (pe: PeParseResult): boolean =>
   !isReadyToRunOsOverriddenMachine(pe.coff.Machine >>> 0);
 const usesLowSectionAlignmentLayout = (pe: PeParseResult): boolean =>
   isPeWindowsParseResult(pe) && usesWindowsSectionAlignmentRules(pe) &&
   (pe.opt.SectionAlignment >>> 0) > 0 &&
-  (pe.opt.SectionAlignment >>> 0) < getArchitecturePageSize(pe.coff.Machine >>> 0);
+  (pe.opt.SectionAlignment >>> 0) < getPeArchitecturePageSize(pe.coff.Machine >>> 0);
 const isUninitializedDataOnlySection = (section: PeSection): boolean =>
   ((section.characteristics >>> 0) & COFF_SECTION_CHARACTERISTICS.CNT_UNINITIALIZED_DATA) !== 0 &&
   ((section.characteristics >>> 0) &

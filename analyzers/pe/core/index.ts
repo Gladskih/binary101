@@ -7,6 +7,7 @@ import {
 } from "../optional-header/magic.js";
 import { peProbe } from "../security/signature.js";
 import { computeEntrySection } from "./entry.js";
+import { recoverPeEntrypoint } from "./entrypoint-recovery.js";
 import { PE_RVA_EXCLUSIVE_LIMIT } from "../layout/rva-limits.js";
 import { COFF_SECTION_HEADER_BYTE_LENGTH } from "../../coff/layout.js";
 import {
@@ -217,7 +218,10 @@ export async function parsePeHeaders(reader: FileRangeReader): Promise<PeCore | 
     e_lfanew,
     coff.SizeOfOptionalHeader
   );
-  return optionalResult.opt && optionalResult.opt.Magic !== ROM_OPTIONAL_HEADER_MAGIC
-    ? buildWindowsCore(reader, dos, coff, optionalResult, optionalResult.opt)
-    : buildHeaderCore(reader, dos, coff, optionalResult, optionalResult.opt);
+  if (!optionalResult.opt || optionalResult.opt.Magic === ROM_OPTIONAL_HEADER_MAGIC) {
+    return buildHeaderCore(reader, dos, coff, optionalResult, optionalResult.opt);
+  }
+  const core = await buildWindowsCore(reader, dos, coff, optionalResult, optionalResult.opt);
+  const recoveredEntrypoint = await recoverPeEntrypoint(reader, core);
+  return recoveredEntrypoint ? { ...core, recoveredEntrypoint } : core;
 }

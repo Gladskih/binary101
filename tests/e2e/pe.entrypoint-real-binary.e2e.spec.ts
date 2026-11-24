@@ -1,7 +1,8 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
 import { expect, test } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { createPePlusLongEntrypointFile } from "../fixtures/pe-long-entrypoint-file.js";
+import { createPeWithShortOptionalHeader } from "../fixtures/pe-short-optional-header.js";
 
 const WINDOWS_SYSTEM_PE_PATHS = [
   "C:\\Windows\\System32\\notepad.exe",
@@ -75,5 +76,20 @@ test.describe("PE entrypoint disassembly on a real C drive binary", () => {
     );
     await expect(finalRow).toBeVisible();
     await expect(finalRow).toContainText("ret");
+  });
+
+  void test("previews a file-backed entry point outside the declared optional header", async ({
+    page
+  }) => {
+    await page.setInputFiles("#fileInput", {
+      name: "short-optional-header.bin",
+      mimeType: "application/octet-stream",
+      buffer: Buffer.from(createPeWithShortOptionalHeader())
+    });
+    await openInspectionSection(page, "Entrypoint disassembly");
+    await expect(page.getByText(/outside the declared optional header/)).toBeVisible();
+    await page.locator("#peEntrypointDisassembleButton").click();
+    await expect(page.locator("#peEntrypointDisassemblyPanel")).toContainText("1 instruction(s)");
+    await expect(page.locator(".peEntrypointInstructionRow")).toContainText("ret");
   });
 });

@@ -15,6 +15,7 @@ import {
   type PeEntrypointDisassemblyReport
 } from "../analyzers/pe/disassembly/index.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
+import { createRvaToOffsetMapper } from "../analyzers/pe/sections/rva-mapper.js";
 
 type AnalyzePeEntrypointDisassembly = (
   reader: FileRangeReader,
@@ -78,7 +79,7 @@ const buildFailureReport = (
   requestedRva?: number
 ): PeEntrypointDisassemblyReport => ({
   bitness: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC ? 64 : 32,
-  entrypointRva: requestedRva ?? (pe.opt.AddressOfEntryPoint >>> 0),
+  entrypointRva: requestedRva ?? pe.recoveredEntrypoint?.rva ?? (pe.opt.AddressOfEntryPoint >>> 0),
   bytesDecoded: 0,
   instructionCount: 0,
   blocks: [],
@@ -87,19 +88,24 @@ const buildFailureReport = (
 
 const disassemblyOptions = (
   pe: PeWindowsParseResult, requestedRva: number | undefined
-): AnalyzePeEntrypointDisassemblyOptions => ({
-  coffMachine: getCanonicalPeMachine(pe.coff.Machine),
-  is64Bit: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
-  imageBase: pe.opt.ImageBase,
-  entrypointRva: requestedRva ?? pe.opt.AddressOfEntryPoint,
-  headerRvaLimit: pe.opt.SizeOfHeaders,
-  imports: pe.imports,
-  delayImports: pe.delayImports,
-  loadcfg: pe.loadcfg,
-  rvaToOff: pe.rvaToOff,
-  sections: pe.sections,
-  yieldEveryInstructions: 64
-});
+): AnalyzePeEntrypointDisassemblyOptions => {
+  const recovered = requestedRva == null ? pe.recoveredEntrypoint : undefined;
+  const flatRvaLimit = recovered?.flatRvaLimit;
+  return {
+    coffMachine: getCanonicalPeMachine(pe.coff.Machine),
+    is64Bit: pe.opt.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
+    imageBase: recovered?.imageBase ?? pe.opt.ImageBase,
+    entrypointRva: requestedRva ?? recovered?.rva ?? pe.opt.AddressOfEntryPoint,
+    headerRvaLimit: flatRvaLimit ?? pe.opt.SizeOfHeaders,
+    imports: pe.imports,
+    delayImports: pe.delayImports,
+    loadcfg: pe.loadcfg,
+    rvaToOff: flatRvaLimit == null ? pe.rvaToOff
+      : createRvaToOffsetMapper([], pe.fileSize, flatRvaLimit, 0),
+    sections: pe.sections,
+    yieldEveryInstructions: 64
+  };
+};
 
 export const createPeEntrypointDisassemblyController = (
   opts: PeEntrypointDisassemblyControllerOptions
