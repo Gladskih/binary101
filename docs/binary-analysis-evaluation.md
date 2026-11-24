@@ -1,6 +1,6 @@
 # Binary Analysis Evaluation
 
-> Methodology and matrix maintained 2026-11-16; source discovery snapshot mainly 2026-11-15. [Canonical tool catalog](binary-analysis-landscape.md) · [Technical methods](binary-analysis-techniques.md) · [Compiler exploration](compiler-exploration-landscape.md).
+> Methodology maintained 2026-11-16; matrix selectively refreshed 2026-11-25; source discovery snapshot mainly 2026-11-15. [Canonical tool catalog](binary-analysis-landscape.md) · [Technical methods](binary-analysis-techniques.md) · [Compiler exploration](compiler-exploration-landscape.md).
 >
 > **Do not turn README promises, file counts, stars, or tool labels into tested feature coverage.** No cross-tool executable corpus or performance benchmark was completed in this revision.
 
@@ -65,7 +65,7 @@ The table selects tools **by relevance to file-first PE/ELF inspection**, not by
 | [PE Explorer](https://www.heaventools.com/pe-explorer-feature-list.htm) | D | — | — | D: **x86** disassembler | ? | Resource/section editor, static unpackers |
 | [binkeep](https://kano92-dir.github.io/binkeep/guide.html) | D | D | D | D: Capstone, linear-sweep functions, CFG | ? | Local browser; decompiler **planned** |
 | [ATLAS](https://github.com/GreenShoeGarage/Atlas) | P | P | ? | P: x86/x64 and Thumb core decode, CFG, evolving x86 LIR | ? | Browser + optional bridge; incomplete ISA and parsers |
-| [PE Parser](https://www.peparser.com/en) | D | — | — | P: selected x86/x64 code emulation | ? | Browser PE batches, YARA and UPX |
+| [PE Parser](https://www.peparser.com/en) · [code](https://www.peparser.com/en/blog/stack-strings-floss-decoded-strings) | D | — | — | D: x86/x64 function discovery, .NET IL; P: integer emulation (no SIMD/FP) | ? | Batch/diff, Boreal YARA, UPX with import reconstruction; [RSA integrity checks, no chain trust](https://www.peparser.com/en/blog/authenticode-signature-verification-offline) |
 | [Bytes Revealer](https://github.com/vulnex/bytesrevealer) | D | D | D | ? (disassembly on roadmap) | ? | Kaitai/YARA/hex; full analysis <50 MB per README |
 | [KDE ELF Dissector](https://github.com/KDE/elf-dissector) | — | D | — | D: x86/AArch64 disassembly | ? | Relocation/dependency/size profiling; some CLI experimental |
 | [XELFViewer](https://github.com/horsicq/XELFViewer) | — | D | — | ? | ? | ELF GUI editor/inspector |
@@ -84,11 +84,11 @@ The number of file types listed in a format registry, signatures database or gen
 | Case | Evidence to compare | Suggested comparators |
 |---|---|---|
 | Modern MSVC PE with RTTI and exception metadata | Raw record order, validated references, complete/extensible tree, ambiguity | binary101, PPEE v2, Malcat, PE-bear, PortEx, ImHex patterns, Cerbero |
-| Signed PE with complex Authenticode | CMS vs PE digest, signer verification, trust, timestamps, failure modes | binary101, Cerbero, LIEF, Dissect; specific signature validators as oracle |
+| Signed PE with complex Authenticode | CMS vs PE digest, signer verification, trust, timestamps, failure modes | binary101, Cerbero, LIEF, Dissect, PE Parser; specific signature validators as oracle |
 | .NET NativeAOT / ReadyToRun PE | Metadata/ownership graph, well-supported version layouts, false seeds | binary101, Ghidra, specialized .NET tools |
 | ELF with DWARF, relocations and Go metadata | Exact sections/tags, addresses, raw ranges and orphan data | binary101, KDE ELF Dissector, XELFViewer, binsider, dwex, readelf, llvm-dwarfdump, Ghidra |
-| Nested archive/resource and damaged sample | Exact parent/child mapping, extraction boundaries, non-recursive failures | binary101, unblob, Cerbero, Loupe, fq |
-| Hand-crafted malformed/overlapping PE/ELF | Crashes, hangs, false positives, warning precision, resource limits | binary101, PPEE, Malcat, PortEx, LIEF, Kaitai and specialized parsers |
+| Nested archive/resource and damaged sample | Exact parent/child mapping, extraction boundaries, non-recursive failures | binary101, unblob, Cerbero, Loupe, fq, PE Parser (nested PE/UPX scope) |
+| Hand-crafted malformed/overlapping PE/ELF | Crashes, hangs, false positives, warning precision, resource limits | binary101, PPEE, Malcat, PortEx, LIEF, Kaitai and specialized parsers (PE Parser for PE) |
 | x64 PE altered prologue with matched unmodified control | `UNWIND_INFO` op offsets vs actual bytes, warning precision and false positives | PPEE v2 preview, binary101 AMD64 prolog validator, `llvm-readobj --unwind` as metadata oracle |
 | x64 PE valid noncanonical prologues, chained records and epilogues | Prevent false mismatch on legitimate compiler/assembly cases, including probes and shrink wrapping | PPEE v2 preview, MSVC/Clang fixtures, WinDbg where possible |
 | x64 PE body-only frame/stack mutation | Determine whether a checker actually performs path-sensitive **full-function** analysis | Separate experimental CFG/dataflow validator; PPEE full-function support unverified |
