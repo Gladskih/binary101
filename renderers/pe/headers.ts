@@ -12,7 +12,11 @@ import {
   DLL_FLAGS
 } from "../../analyzers/pe/constants.js";
 import { isPeWindowsParseResult, type PeParseResult } from "../../analyzers/pe/index.js";
+import type { PeDataDirectory } from "../../analyzers/pe/types.js";
 import { IMAGE_DEBUG_TYPE_REPRO } from "../../analyzers/pe/debug/types.js";
+import { peDirectoryCoverageIssue } from "../../analyzers/pe/directories/file-coverage.js";
+import { hasPeResourceDirectoryDetails } from "./directory-details.js";
+import { renderPeDiagnostics } from "./diagnostics.js";
 import {
   PE32_OPTIONAL_HEADER_MAGIC,
   PE32_PLUS_OPTIONAL_HEADER_MAGIC,
@@ -53,12 +57,60 @@ const DATA_DIRECTORY_MEANINGS: Record<string, string> = {
 const dataDirectoryMeaning = (name: string): string =>
   DATA_DIRECTORY_MEANINGS[name] || "Reserved or producer-specific directory slot.";
 
-const renderDataDirectoryStatus = (present: boolean): string =>
-  `<span class="peDataDirectoryStatus peDataDirectoryStatus--${present ? "present" : "absent"}" ` +
-  `aria-label="${present ? "Declared" : "Absent"}" title="${present ? "Declared" : "Absent"}"></span>`;
+const renderDataDirectoryStatus = (
+  kind: "absent" | "present" | "unverified", label: string
+): string =>
+  `<span class="peDataDirectoryStatus peDataDirectoryStatus--${kind}" ` +
+  `role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"></span>`;
 
 const renderDataDirectorySize = (size: number): string =>
   `<span title="${size} bytes">${humanSize(size).replace(` (${size} bytes)`, "")}</span>`;
+
+const collectUnreadableDirectoryWarnings = (pe: PeParseResult): Map<
+  string, { title: string; issues: string[] }
+> => {
+  const warnings = new Map<string, { title: string; issues: string[] }>();
+  if (!isPeWindowsParseResult(pe)) return warnings;
+  if (!pe.imports.entries.length && pe.imports.warning) {
+    warnings.set("IMPORT", { title: "Import warnings", issues: [pe.imports.warning] });
+  }
+  if (pe.exports?.headerRead === false && pe.exports.issues?.length) {
+    warnings.set("EXPORT", { title: "Export warnings", issues: pe.exports.issues });
+  }
+  if (pe.resources?.issues?.length && !hasPeResourceDirectoryDetails(pe.resources)) {
+    warnings.set("RESOURCE", { title: "Resource warnings", issues: pe.resources.issues });
+  }
+  return warnings;
+};
+
+const renderDataDirectoryRow = (
+  directory: PeDataDirectory, pe: PeParseResult, warning: string | undefined
+): string => {
+  const present = directory.rva !== 0 || directory.size !== 0;
+  const issue = present && isPeWindowsParseResult(pe)
+    ? peDirectoryCoverageIssue(directory, pe) ?? warning : null;
+  const meaning = dataDirectoryMeaning(directory.name);
+  const addressKind = directory.name === "SECURITY" ? "File offset" : "RVA";
+  return `<tr class="peDataDirectoryTable__row${
+    present ? "" : " peDataDirectoryTable__row--absent"
+  }">` +
+    `<td class="peDataDirectoryTable__status" data-sort-value="${issue ? 2 : Number(present)}">` +
+    `${issue
+      ? renderDataDirectoryStatus("unverified", `Unverified: ${issue}`)
+      : renderDataDirectoryStatus(present ? "present" : "absent", present ? "Declared" : "Absent")
+    }</td>` +
+    `<td class="peNumeric peDataDirectoryTable__index" data-sort-value="${directory.index ?? ""}">` +
+    `${directory.index == null ? "-" : directory.index}</td>` +
+    `<th scope="row" class="peDataDirectoryTable__directory" ` +
+    `data-sort-value="${escapeHtml(directory.name)}">${escapeHtml(directory.name)}</th>` +
+    `<td class="peNumeric peDataDirectoryTable__rva" data-sort-value="${directory.rva}">` +
+    `${hex(directory.rva, 8)} <span class="smallNote">${addressKind}</span></td>` +
+    `<td class="peNumeric peDataDirectoryTable__size peDataDirectorySize" ` +
+    `data-sort-value="${directory.size}">` +
+    `${renderDataDirectorySize(directory.size)}</td>` +
+    `<td class="smallNote peDataDirectoryTable__meaning" style="margin:0;font-family:inherit" ` +
+    `data-sort-value="${meaning}">${meaning}</td></tr>`;
+};
 
 const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
   if (!pe.dirs?.length) return;
@@ -82,30 +134,12 @@ const renderDataDirectories = (pe: PeParseResult, out: string[]): void => {
     `<th class="peDataDirectoryTable__meaning">Meaning</th>` +
     `</tr></thead><tbody>`
   );
-  pe.dirs.forEach(directory => {
-    const present = directory.rva !== 0 || directory.size !== 0;
-    const meaning = dataDirectoryMeaning(directory.name);
-    const addressKind = directory.name === "SECURITY" ? "File offset" : "RVA";
-    out.push(
-      `<tr class="peDataDirectoryTable__row${
-        present ? "" : " peDataDirectoryTable__row--absent"
-      }">` +
-      `<td class="peDataDirectoryTable__status" data-sort-value="${present ? "1" : "0"}">` +
-      `${renderDataDirectoryStatus(present)}</td>` +
-      `<td class="peNumeric peDataDirectoryTable__index" data-sort-value="${directory.index ?? ""}">` +
-      `${directory.index == null ? "-" : directory.index}</td>` +
-      `<th scope="row" class="peDataDirectoryTable__directory" ` +
-      `data-sort-value="${escapeHtml(directory.name)}">${escapeHtml(directory.name)}</th>` +
-      `<td class="peNumeric peDataDirectoryTable__rva" data-sort-value="${directory.rva}">` +
-      `${hex(directory.rva, 8)} <span class="smallNote">${addressKind}</span></td>` +
-      `<td class="peNumeric peDataDirectoryTable__size peDataDirectorySize" ` +
-      `data-sort-value="${directory.size}">` +
-      `${renderDataDirectorySize(directory.size)}</td>` +
-      `<td class="smallNote peDataDirectoryTable__meaning" style="margin:0;font-family:inherit" ` +
-      `data-sort-value="${meaning}">${meaning}</td></tr>`
-    );
-  });
+  const warnings = collectUnreadableDirectoryWarnings(pe);
+  for (const directory of pe.dirs) {
+    out.push(renderDataDirectoryRow(directory, pe, warnings.get(directory.name)?.issues[0]));
+  }
   out.push(`</tbody></table></div>`);
+  for (const { title, issues } of warnings.values()) out.push(renderPeDiagnostics(title, issues));
   out.push(renderPeSectionEnd());
 };
 

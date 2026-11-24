@@ -14,6 +14,7 @@ export type PeExportEntry = {
 };
 
 type PeExportDirectoryResult = {
+  headerRead?: false;
   flags: number;
   timestamp: number;
   version: number;
@@ -34,9 +35,10 @@ type ExportDirectoryHeader = {
   AddressOfNameOrdinals: number;
 };
 
-const createEmptyExportDirectory = (issues: string[]): PeExportDirectoryResult => ({
-  flags: 0, timestamp: 0, version: 0, dllName: "", Base: 0,
-  NumberOfFunctions: 0, NumberOfNames: 0, namePointerTable: 0, ordinalTable: 0, entries: [], issues
+const createEmptyExportDirectory = (issue: string): PeExportDirectoryResult => ({
+  headerRead: false, flags: 0, timestamp: 0, version: 0, dllName: "", Base: 0,
+  NumberOfFunctions: 0, NumberOfNames: 0, namePointerTable: 0, ordinalTable: 0,
+  entries: [], issues: [issue]
 });
 
 const readExportHeader = (dv: DataView): ExportDirectoryHeader => ({
@@ -246,13 +248,11 @@ export async function parseExportDirectory(
   const dir = dataDirs.find(d => d.name === "EXPORT");
   if (!dir || (dir.rva === 0 && dir.size === 0)) return null;
   if (dir.rva === 0) {
-    return createEmptyExportDirectory(["Export directory has a non-zero size but RVA is 0."]);
+    return createEmptyExportDirectory("Export directory has a non-zero size but RVA is 0.");
   }
-  if (dir.size === 0) {
-    return createEmptyExportDirectory(["Export directory has an RVA but size is 0."]);
-  }
+  if (dir.size === 0) return createEmptyExportDirectory("Export directory has an RVA but size is 0.");
   const directoryView = await getExportDirectoryView(reader, dir, rvaToOff);
-  if (directoryView.issue) return createEmptyExportDirectory([directoryView.issue]);
+  if (directoryView.issue) return createEmptyExportDirectory(directoryView.issue);
   const header = readExportHeader(directoryView.view);
   const issues: string[] = [];
   if (header.Characteristics !== 0) issues.push("Export directory flags are reserved and must be zero.");

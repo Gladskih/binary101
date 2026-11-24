@@ -1,4 +1,5 @@
 "use strict";
+import { hasPeResourceDirectoryDetails } from "./directory-details.js";
 import { hex, humanSize } from "../../binary-utils.js";
 import {
   isPeWindowsParseResult, type PeParseResult, type PeWindowsParseResult
@@ -105,7 +106,7 @@ const addHeaderDescriptors = (pe: PeParseResult, descriptors: PeLazySectionDescr
   });
   pushIf(descriptors, pe.dirs?.length, {
     key: PE_LAZY_SECTION_KEYS.dataDirectories,
-    summary: `${pe.dirs?.filter(directory => directory.rva || directory.size).length ?? 0} present`,
+    summary: `${pe.dirs?.filter(directory => directory.rva || directory.size).length ?? 0} declared`,
     title: "Data directories"
   });
   pushIf(descriptors, pe.sections?.length, {
@@ -153,7 +154,7 @@ const addWindowsImportDescriptors = (
     summary: `${plural(pe.importLinking?.modules.length ?? 0, "module", "modules")}`,
     title: "Import linkage"
   });
-  pushIf(descriptors, pe.imports.entries.length || pe.imports.warning, {
+  pushIf(descriptors, pe.imports.entries.length, {
     id: PE_IMPORTS_PANEL_ID,
     key: PE_LAZY_SECTION_KEYS.imports,
     summary: `imports: ${pe.imports.entries.length} DLL / ${importFunctionCount(pe)} functions`,
@@ -191,7 +192,7 @@ const addWindowsDirectoryDescriptors = (
   pe: PeWindowsParseResult,
   descriptors: PeLazySectionDescriptor[]
 ): void => {
-  pushIf(descriptors, pe.resources, {
+  pushIf(descriptors, hasPeResourceDirectoryDetails(pe.resources), {
     key: PE_LAZY_SECTION_KEYS.resources,
     summary: `resources: ${resourceLeafCount(pe)} leaves`,
     title: "Resources"
@@ -200,7 +201,7 @@ const addWindowsDirectoryDescriptors = (
     descriptors.push({ id: "pe-type-libraries", key: PE_LAZY_SECTION_KEYS.typeLibraries,
       title: "Type libraries (COM)" });
   }
-  if (pe.exports) descriptors.push({
+  if (pe.exports && pe.exports.headerRead !== false) descriptors.push({
     key: PE_LAZY_SECTION_KEYS.exports,
     summary: plural(pe.exports.entries.length, "entry", "entries"),
     title: "Export directory"

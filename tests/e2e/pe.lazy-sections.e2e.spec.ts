@@ -1,10 +1,10 @@
-import { toggleInspectionSection } from "./inspection-navigation.js";
+import { openInspectionSection, toggleInspectionSection } from "./inspection-navigation.js";
 "use strict";
 
 import { expect, test } from "@playwright/test";
 import { createLargePeLegacyCoffSymbolFile } from "../fixtures/pe-coff-debug-fixtures.js";
 import { createPeResourcePreviewFile } from "../fixtures/pe-resource-preview-file.js";
-import { createPePlusFile } from "../fixtures/sample-files-pe.js";
+import { createPePlusFile, createPePlusWithSection } from "../fixtures/sample-files-pe.js";
 import { createPeWithPartialTlsCallback } from "../fixtures/pe-tls-file.js";
 import type { MockFile } from "../helpers/mock-file.js";
 
@@ -155,4 +155,30 @@ void test("keeps a partial TLS callback list marked across lazy remounts", async
   await expect(summary).toContainText("1 callback (incomplete list)");
   await toggleInspectionSection(summary);
   await expect(body.getByRole("cell", { name: "0x00001100", exact: true })).toBeVisible();
+});
+
+void test("shows directory warnings without opening empty directory tabs", async ({ page }) => {
+  await page.goto("/");
+  const bytes = createPePlusWithSection();
+  const view = new DataView(bytes.buffer);
+  // First three PE32+ directories at optional header +112: EXPORT, IMPORT, RESOURCE.
+  // The first two RVAs are beyond the image; the resource RVA stays zero with a nonzero size.
+  view.setUint32(0xc8, bytes.length * 16, true);
+  view.setUint32(0xcc, 40, true);
+  view.setUint32(0xd0, bytes.length * 16, true);
+  view.setUint32(0xd4, 20, true);
+  view.setUint32(0xdc, 16, true);
+  await page.setInputFiles("#fileInput", {
+    name: "unreadable-directories.bin",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from(bytes)
+  });
+
+  await openInspectionSection(page, "Data directories");
+  await expect(page.locator(".peDataDirectoryStatus--unverified")).toHaveCount(3);
+  await expect(page.getByText("Import warnings", { exact: true })).toBeVisible();
+  await expect(page.getByText("Export warnings", { exact: true })).toBeVisible();
+  await expect(page.getByText("Resource warnings", { exact: true })).toBeVisible();
+  await expect(page.locator('[data-pe-lazy-section="imports"], ' +
+    '[data-pe-lazy-section="exports"], [data-pe-lazy-section="resources"]')).toHaveCount(0);
 });

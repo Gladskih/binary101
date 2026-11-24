@@ -36,6 +36,7 @@ import {
 } from "./direct-iat-references.js";
 import { renderImportFunctionTable } from "./import-function-table.js";
 import { renderDelayImportAddressFields } from "./delay-import-addresses.js";
+import { renderPeDiagnostics } from "./diagnostics.js";
 
 export { renderImportLinking } from "./import-linking-section.js";
 
@@ -55,7 +56,7 @@ const renderImportsContent = (pe: PeWindowsParseResult, out: string[]): void => 
   );
   out.push(`<div class="smallNote">Each IMAGE_IMPORT_DESCRIPTOR names one DLL and points to two tables: OriginalFirstThunk normally gives the lookup names, while FirstThunk gives the runtime IAT slots that the loader patches.</div>`);
   if (pe.imports.warning) {
-    out.push(`<div class="smallNote" style="color:var(--warn-fg)">${escapeHtml(pe.imports.warning)}</div>`);
+    out.push(renderPeDiagnostics("Import warnings", [pe.imports.warning]));
   }
   pe.imports.entries.forEach((mod, index) => {
     const dll = escapeHtml(mod.dll || "(unknown DLL)");

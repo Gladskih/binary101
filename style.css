@@ -1402,6 +1402,9 @@ table .isaTable__count {
 .peDataDirectoryStatus--absent {
   background: var(--muted)
 }
+.peDataDirectoryStatus--unverified {
+  box-shadow: inset 0 0 0 2px var(--warning-text,#b45309)
+}
 table[data-sortable] .sortableTableHeader + .sortableTableHeader,
 table[data-sortable] tbody > tr > * + * {
   border-left: 1px solid var(--border)

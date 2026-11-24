@@ -18,6 +18,7 @@ import { createExportTableModel } from "./export-table.js";
 import type { TypeLibraryExportMatch } from
   "../../analyzers/pe/resources/type-library-export-links.js";
 import { renderAutoPagedSortableTable } from "../paged-sortable-table.js";
+import { renderPeDiagnostics } from "./diagnostics.js";
 
 type PeExportSection = NonNullable<PeWindowsParseResult["exports"]>;
 type PeTlsSection = NonNullable<PeWindowsParseResult["tls"]>;
@@ -147,9 +148,15 @@ export function renderExports(
   out.push(
     renderPeSectionStart(
       "Export directory",
-      `${ex.entries.length} EAT slot${ex.entries.length === 1 ? "" : "s"} read`
+      ex.headerRead === false ? "Header unavailable"
+        : `${ex.entries.length} EAT slot${ex.entries.length === 1 ? "" : "s"} read`
     )
   );
+  if (ex.issues?.length) out.push(renderPeDiagnostics("Export warnings", ex.issues));
+  if (ex.headerRead === false) {
+    out.push(renderPeSectionEnd());
+    return;
+  }
   out.push(`<dl>`);
   out.push(renderDefinitionRow("Name", escapeHtml(ex.dllName || ""), "Exported DLL name recorded by the linker."));
   out.push(renderDefinitionRow("OrdinalBase", String(ex.Base), "Base value added to zero-based export address table indices to form ordinals."));
@@ -160,11 +167,6 @@ export function renderExports(
   out.push(renderDefinitionRow("Name pointers", String(ex.NumberOfNames),
     "Declared number of export name pointers. Multiple names can refer to the same slot."));
   out.push(`</dl>`);
-  if (ex.issues?.length) {
-    out.push(`<ul class="smallNote">`);
-    ex.issues.forEach(issue => out.push(`<li>${escapeHtml(issue)}</li>`));
-    out.push(`</ul>`);
-  }
   if (ex.entries?.length) {
     out.push(renderAutoPagedSortableTable(createExportTableModel(ex.entries, typeLibraryMatches)));
   }

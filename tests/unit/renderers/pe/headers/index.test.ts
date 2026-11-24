@@ -22,6 +22,7 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
     { index: 1, name: "IMPORT", rva: 0x1000, size: 0x10 },
     { index: 9, name: "TLS", rva: 0, size: 0 }
   ];
+  pe.rvaToOff = rva => rva - 0x1000;
   pe.sections = [
     createPeSection(".text", {
       virtualSize: 0x100,
@@ -94,7 +95,6 @@ void test("renderHeaders covers known/unknown branches and exact linker versions
   assert.ok(html.includes(`data-sort-value="16"`));
   assert.ok(html.includes(`<span title="16 bytes">16 B</span></td>`));
   assert.ok(html.includes("Modules and symbols"));
-  assert.ok(!html.includes("Import directory: modules and symbols"));
   assert.match(html, /<summary[^>]*><b>Section headers<\/b> - 2 sections<\/summary>/);
   assert.ok(html.includes("Signature"));
   assert.ok(html.includes("peChecksumValidateButton"));
