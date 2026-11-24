@@ -5,6 +5,7 @@ import { ELF_DYNAMIC_TAG, ELF_SECTION_FLAG, ELF_SECTION_TYPE } from "./abi-const
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt } from "./section-data.js";
 import { elfLoadMappingCovers } from "./range-coverage.js";
 import { ELF_DYNAMIC_TAG_DESCRIPTIONS } from "./dynamic-tags.js";
+import { elfVirtualDataRange, type ElfDataRange } from "./virtual-data.js";
 
 type DynamicDescription = {
   file: File; is64: boolean; programHeaders: ElfProgramHeader[]; sections: ElfSectionHeader[];
@@ -22,7 +23,7 @@ export const elfSingleDynamicTag = (entries: ElfDynamicEntry[], tag: number): bi
 
 export const elfDynamicStringRange = (
   image: DynamicDescription, entries: ElfDynamicEntry[], issues?: string[]
-): { offset: number; size: number } | null => {
+): ElfDataRange | null => {
   const address = elfSingleDynamicTag(entries, ELF_DYNAMIC_TAG.STRTAB);
   const size = elfSingleDynamicTag(entries, ELF_DYNAMIC_TAG.STRSZ);
   if (address === null || size === null) {
@@ -30,16 +31,16 @@ export const elfDynamicStringRange = (
     return null;
   }
   if (address === undefined || size === undefined) return null;
-  const range = elfVirtualRange(image.programHeaders, address, size, image.file.size);
+  const range = elfVirtualDataRange(image.programHeaders, address, size, image.file.size);
   if (range && !hasCompressedSectionAt(image.sections, ELF_SECTION_TYPE.STRTAB, range.offset)) return range;
   issues?.push(range ? "DT_STRTAB points into a compressed string table." :
-    "DT_STRTAB does not map into a PT_LOAD segment for the full DT_STRSZ range.");
+    "DT_STRTAB does not map to file-backed PT_LOAD data for the full DT_STRSZ range.");
   return null;
 };
 
 export const elfRuntimeStringsForSectionSymbols = (
   image: DynamicDescription, entries: ElfDynamicEntry[], symbolOffset: number
-): { offset: number; size: number } | null => {
+): ElfDataRange | null => {
   if (!findElfDynamicSegment(image.programHeaders)) return null;
   const address = elfSingleDynamicTag(entries, ELF_DYNAMIC_TAG.SYMTAB);
   if (address === null) return null;
@@ -109,7 +110,10 @@ const checkStringSection = (
     issues.push(`DT_STRSZ (${size} bytes) disagrees with linked string section #${section.index} sh_size (${section.size} bytes).`);
   }
   const range = elfDynamicStringRange(image, entries);
-  if (range && BigInt(range.offset) !== section.offset) {
+  if (!range) return;
+  if (range.fragments) {
+    issues.push(`DT_STRTAB uses split file ranges and disagrees with linked string section #${section.index}.`);
+  } else if (BigInt(range.offset) !== section.offset) {
     issues.push(`DT_STRTAB maps to a different file offset than linked string section #${section.index}.`);
   }
 };

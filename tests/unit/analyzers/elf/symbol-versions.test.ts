@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseElfSymbolVersions } from "../../../../analyzers/elf/symbol-versions.js";
 import { elfVersionFixture } from "../../../fixtures/elf-versions.js";
+import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 
 void test("decodes version definitions, requirements and hidden indices", async () => {
   const fixture = elfVersionFixture();
@@ -12,6 +13,30 @@ void test("decodes version definitions, requirements and hidden indices", async 
       { index: 3, flags: 0, hash: 0, name: "LIB_2" }
     ] }], symbols: [0, 0x8002], issues: []
   });
+});
+
+void test("dynamically located version records read names from a fragmented DT_STRTAB", async () => {
+  const fixture = elfVersionFixture();
+  const template = dynamicRelocationFixture().elf.programHeaders[0]!;
+  const strings = fixture.elf.sections[1]!;
+  const cut = strings.offset + 4n; // Split the first version name, LIB_1.
+  const remaining = strings.size - 4n;
+  fixture.bytes.copyWithin(320, Number(cut), Number(strings.offset + strings.size));
+  fixture.elf.programHeaders = [{ ...template, filesz: cut, memsz: cut },
+    { ...template, index: 1, offset: 320n, vaddr: template.vaddr + cut, filesz: remaining, memsz: remaining }];
+  fixture.elf.sections = [];
+  const entries = [
+    { tag: 5, value: template.vaddr + strings.offset }, { tag: 10, value: strings.size },
+    { tag: 0x6ffffffc, value: template.vaddr + 64n }, { tag: 0x6ffffffd, value: 1n },
+    { tag: 0x6ffffffe, value: template.vaddr + 128n }, { tag: 0x6fffffff, value: 1n }
+  ];
+
+  const result = await parseElfSymbolVersions(fixture.file(), fixture.elf, entries, 2);
+
+  assert.deepEqual(result?.issues, []);
+  assert.deepEqual(result?.definitions[0]?.names, ["LIB_1"]);
+  assert.equal(result?.requirements[0]?.file, "libsample.so");
+  assert.equal(result?.requirements[0]?.versions[0]?.name, "LIB_2");
 });
 
 for (const count of [1n, 2n]) {

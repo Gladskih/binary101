@@ -24,6 +24,7 @@ import { createElfDynamicSymbolNameReader, readElfDynamicSymbolRecords,
   "./dynamic-symbol-records.js";
 import { ELF_SECTION_COMPRESSED, hasCompressedSectionAt, openElfSectionData,
   type ElfSectionEncoding } from "./section-data.js";
+import { elfVirtualDataRange } from "./virtual-data.js";
 
 // gABI p_type/sh_type and d_tag definitions:
 // https://gabi.xinuos.com/elf/03-sheader.html
@@ -171,7 +172,7 @@ const parseDynsymFromDynamicTags = async (opts: DynamicSymbolInput & { issues: s
 Promise<ElfDynamicSymbolTables | null> => {
   const symtab = await locateDynamicSymbolTable(opts, tags, entries, hashes);
   if (!symtab) return null;
-  const strtab = elfVirtualRange(opts.programHeaders, tags.strtabVaddr, tags.strsz, opts.file.size);
+  const strtab = elfVirtualDataRange(opts.programHeaders, tags.strtabVaddr, tags.strsz, opts.file.size);
   if (!strtab) {
     opts.issues.push("DT_STRTAB is outside a file-backed PT_LOAD range.");
     return null;

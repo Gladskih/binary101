@@ -111,7 +111,7 @@ void test("parseElfDynamicInfo falls back to linked strings when DT_STRTAB doesn
   });
   assert.ok(info);
   assert.deepEqual(info.needed, ["libc.so.6"]);
-  assert.ok(info.issues.some(issue => issue.includes("does not map into a PT_LOAD segment")));
+  assert.ok(info.issues.some(issue => issue.includes("does not map to file-backed PT_LOAD data")));
 });
 const dynamicStringsFixture = (text = "\0libtest.so\0") => {
   const bytes = new Uint8Array(128);

@@ -1,4 +1,5 @@
 import type { FileRangeReader } from "../file-range-reader.js";
+import { openElfDataRange, type ElfDataRange } from "./virtual-data.js";
 
 type StringTableRange = { offset: number; size: number };
 type StringBytesObserver = (bytes: Uint8Array) => void;
@@ -62,16 +63,18 @@ const readTableString = async (
 };
 
 export const createElfStringTableReader = (
-  reader: FileRangeReader, strings: StringTableRange | null, issues: string[],
+  reader: FileRangeReader, strings: ElfDataRange | null, issues: string[],
   observeBytes?: StringBytesObserver
 ): ((offset: number) => Promise<string | null>) => {
   // Share in-flight reads too: DT_NEEDED can reference the same name concurrently.
   const cache = new Map<number, Promise<string | null>>();
   let validated: Promise<boolean> | undefined;
+  const storage = strings && openElfDataRange(reader, strings);
+  const source = storage?.reader ?? reader;
   return async offset => {
-    validated ??= validateStringTable(reader, strings, issues);
-    if (!await validated || !strings) return null;
-    if (!cache.has(offset)) cache.set(offset, readTableString(reader, strings, offset, issues, observeBytes));
+    validated ??= validateStringTable(source, storage, issues);
+    if (!await validated || !storage) return null;
+    if (!cache.has(offset)) cache.set(offset, readTableString(source, storage, offset, issues, observeBytes));
     return cache.get(offset)!;
   };
 };

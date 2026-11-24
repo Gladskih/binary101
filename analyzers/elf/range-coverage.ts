@@ -75,3 +75,40 @@ export const elfLoadMappingCovers = (
   const mapping = elfLoadFileSpan(headers, address, size);
   return mapping?.offset === offset && mapping.size === size;
 };
+
+type FileFragment = { offset: bigint; size: bigint };
+
+const collectLoadFragments = (ordered: (Range & { offset: bigint })[], address: bigint) => {
+  const fragments: FileFragment[] = [];
+  let covered = address;
+  for (const load of ordered) {
+    if (load.start > covered) return null;
+    const offset = load.offset + covered - load.start;
+    const previous = fragments.at(-1);
+    const adjacent = previous && previous.offset + previous.size === offset;
+    if (previous && load.start < covered && !adjacent) return null;
+    if (load.end <= covered) continue;
+    if (adjacent) previous.size += load.end - covered;
+    else fragments.push({ offset, size: load.end - covered });
+    covered = load.end;
+  }
+  return { fragments, covered };
+};
+
+// Runtime pointers describe virtual bytes (gABI 8.3). Adjacent loads can
+// supply those bytes from different file offsets, in virtual address order.
+// https://gabi.xinuos.com/elf/08-dynamic.html#dynamic-section
+export const elfLoadFileFragments = (headers: ElfProgramHeader[], address: bigint, size: bigint):
+FileFragment[] | null => {
+  if (address < 0n || size <= 0n) return null;
+  const end = address + size;
+  const ordered = headers.filter(load => fileBackedLoad(load) && load.filesz > 0n &&
+    load.vaddr < end && load.vaddr + load.filesz > address)
+    .map(load => {
+      const loadEnd = load.vaddr + load.filesz;
+      return { start: load.vaddr, end: loadEnd < end ? loadEnd : end, offset: load.offset };
+    })
+    .sort((left, right) => Number(left.start - right.start));
+  const mapping = collectLoadFragments(ordered, address);
+  return mapping?.covered === end ? mapping.fragments : null;
+};

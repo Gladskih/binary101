@@ -4,12 +4,13 @@ import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
 import { ELF_SECTION_COMPRESSED } from "./section-data.js";
 import { ELF_SECTION_FLAG } from "./abi-constants.js";
+import { elfVirtualDataRange, type ElfDataRange } from "./virtual-data.js";
 
 export interface ElfVersionTable {
   offset: number;
   size: number;
   count: number;
-  strings: { offset: number; size: number } | null;
+  strings: ElfDataRange | null;
 }
 
 // LSB 10.7 and glibc elf/elf.h: section types and corresponding dynamic tags.
@@ -93,10 +94,10 @@ const sectionVersionSymbolCount = (
 
 const dynamicVersionStrings = (
   elf: ElfParseResult, entries: ElfDynamicEntry[]
-): { offset: number; size: number } | null => {
+): ElfDataRange | null => {
   const address = entries.find(item => item.tag === 5)?.value;
   const size = entries.find(item => item.tag === 10)?.value;
-  return address != null && size != null ? elfVirtualRange(elf.programHeaders, address, size, elf.fileSize) : null;
+  return address != null && size != null ? elfVirtualDataRange(elf.programHeaders, address, size, elf.fileSize) : null;
 };
 
 const dynamicVersionTable = (

@@ -5,9 +5,10 @@ import { createElfStringTableReader } from "./string-table.js";
 import { createElfDynsymBindingValidator } from "./dynamic-symbol-validation.js";
 import { type createElfGnuHashSymbolValidator, ELF_GNU_HASH_SEED, extendElfGnuHash } from "./hash-symbols.js";
 import { type createElfSysvHashSymbolValidator, extendElfSysvHash } from "./sysv-hash.js";
+import type { ElfDataRange } from "./virtual-data.js";
 
-export type ElfDynamicSymbolRange = {
-  offset: number; size: number; reader?: FileRangeReader; storedOffset?: number;
+export type ElfDynamicSymbolRange = ElfDataRange & {
+  reader?: FileRangeReader; storedOffset?: number;
   section?: ElfSectionHeader; truncated?: boolean;
 };
 export type ElfDynamicSymbolTables = {
