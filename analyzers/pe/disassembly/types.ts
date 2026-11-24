@@ -64,6 +64,7 @@ export interface PeInstructionSetReport {
   codeStringReferences: PeCodeStringReference[];
   apiStringReferences: PeApiStringReference[];
   instructionSets: PeInstructionSetUsage[];
+  unpackedCode?: { name: string; entrypointRva: number };
   issues: string[];
 }
 
@@ -140,6 +141,13 @@ export interface PeEntrypointDisassemblyProgress {
   pendingBlockCount: number;
 }
 
+export interface PeUnpackedCode {
+  name: string;
+  /** RVA of both the start of the decoded buffer and its first instruction. */
+  rvaStart: number;
+  data: Uint8Array;
+}
+
 export interface AnalyzePeInstructionSetOptions {
   coffMachine: number;
   is64Bit: boolean;
@@ -159,6 +167,7 @@ export interface AnalyzePeInstructionSetOptions {
   /** Validated instruction sites; these may be inside functions. */
   instructionHintRvas?: number[];
   extraEntrypoints?: Array<{ source: string; rvas: number[] }>;
+  unpackedCode?: PeUnpackedCode;
   rvaToOff: RvaToOffset;
   sections: PeSection[];
   yieldEveryInstructions?: number;

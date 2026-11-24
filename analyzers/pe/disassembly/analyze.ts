@@ -1,7 +1,8 @@
 "use strict";
 import { createPeCodeExclusionIndex } from "./code-exclusions.js";
 import type { FileRangeReader } from "../../file-range-reader.js";
-import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport } from "./types.js";
+import type { AnalyzePeInstructionSetOptions, PeInstructionSetProgress, PeInstructionSetReport,
+  PeUnpackedCode } from "./types.js";
 import { disassembleControlFlowForInstructionSets } from "../../x86/disassembly-control-flow.js";
 import { isIcedX86Module, type IcedX86Module } from "../../x86/disassembly-iced.js";
 import { IMAGE_FILE_MACHINE_AMD64, IMAGE_FILE_MACHINE_I386,
@@ -10,7 +11,7 @@ import { analyzePeAarch64InstructionSets } from "./aarch64.js";
 import { getCanonicalPeMachine } from "../machine.js";
 import { createX86InstructionSetUsageTracker } from "../../x86/instruction-set-usage.js";
 import {
-  collectPeDisassemblySamples,
+  collectPeInstructionSamples,
   type PeDisassemblySample,
   resolvePeDisassemblyEntrypoints
 } from "./sampling.js";
@@ -30,6 +31,7 @@ type PeInstructionSetDecodeRun = {
   bitness: 32 | 64;
   imageBase: bigint;
   sampledSections: PeDisassemblySample[];
+  unpackedCode: PeUnpackedCode | undefined;
   resolvedEntrypoints: number[];
   directIatSlotRvas: Set<number>;
   yieldEveryInstructions: number;
@@ -109,8 +111,8 @@ export async function analyzePeInstructionSets(
   const directIatSlotRvas = collectRequestedDirectIatSlots(opts, issues);
   const crossedData = createPeCodeExclusionIndex({ ...opts,
     imageBase: opts.imageBase >= 0n ? opts.imageBase : 0n });
-  const resolvedEntrypoints = resolvePeDisassemblyEntrypoints(opts, issues, crossedData);
-  if (!resolvedEntrypoints.length) return emptyReport(0);
+  const fileEntrypoints = resolvePeDisassemblyEntrypoints(opts, issues, crossedData);
+  if (!fileEntrypoints.length && !opts.unpackedCode) return emptyReport(0);
   if (opts.signal?.aborted) {
     issues.push("Disassembly cancelled.");
     return emptyReport(0);
@@ -119,16 +121,9 @@ export async function analyzePeInstructionSets(
   if (opts.imageBase < 0n) {
     issues.push("ImageBase is negative; instruction pointers may be approximate.");
   }
-  const sampledSections = await collectPeDisassemblySamples(reader, opts, resolvedEntrypoints);
-  if (sampledSections.length === 0 && resolvedEntrypoints.every(rva => opts.rvaToOff(rva) == null)) {
-    issues.push("No section headers available to locate code bytes.");
-    return emptyReport(0);
-  }
-  const bytesSampled = sampledSections.reduce((sum, entry) => sum + entry.data.length, 0);
-  if (bytesSampled === 0) {
-    issues.push("No bytes available in selected section(s) for disassembly.");
-    return emptyReport(0);
-  }
+  const samples = await collectPeInstructionSamples(reader, opts, fileEntrypoints, issues);
+  if (!samples) return emptyReport(0);
+  const { bytesSampled, unpackedCode } = samples;
   reportProgress(opts, {
     stage: "loading",
     bytesSampled,
@@ -157,11 +152,9 @@ export async function analyzePeInstructionSets(
     iced,
     bitness,
     imageBase,
-    sampledSections,
-    resolvedEntrypoints,
+    ...samples,
     directIatSlotRvas,
     yieldEveryInstructions,
-    bytesSampled,
     issues,
     opts
   });
@@ -176,6 +169,9 @@ export async function analyzePeInstructionSets(
     apiStringReferences: decoded.apiStringReferences,
     instructionSets: decoded.instructionSets,
     specialInstructions: decoded.specialInstructions,
+    ...(unpackedCode ? {
+      unpackedCode: { name: unpackedCode.name, entrypointRva: unpackedCode.rvaStart }
+    } : {}),
     issues
   };
 }
@@ -184,6 +180,10 @@ const decodePeInstructionSetUsage = async (
   run: PeInstructionSetDecodeRun
 ): Promise<PeInstructionSetDecodeResult> => {
   const { iced, bitness, imageBase, sampledSections, resolvedEntrypoints } = run;
+  const unpackedStart = imageBase + BigInt(run.unpackedCode?.rvaStart ?? 0);
+  const unpackedEnd = unpackedStart + BigInt(run.unpackedCode?.data.length ?? 0);
+  const isUnpacked = (address: bigint): boolean =>
+    run.unpackedCode != null && address >= unpackedStart && address < unpackedEnd;
   const instructionSetUsage = createX86InstructionSetUsageTracker(iced.CpuidFeature);
   const specialInstructions = createPeSpecialInstructionCollector(iced, imageBase);
   const directIatReferences = createDirectIatReferenceCounter(
@@ -205,29 +205,37 @@ const decodePeInstructionSetUsage = async (
     rvaToOff: run.opts.rvaToOff
   });
   let bytesDecoded = 0; let instructionCount = 0; let invalidInstructionCount = 0;
-  reportProgress(run.opts, {
-    stage: "decoding",
+  const updateProgress = (stage: "decoding" | "done"): void => reportProgress(run.opts, {
+    stage,
     bytesSampled: run.bytesSampled,
     bytesDecoded,
     instructionCount,
     invalidInstructionCount,
     knownFeatureCounts: instructionSetUsage.knownFeatureCounts()
   });
+  updateProgress("decoding");
   try {
+    const isNoReturn = createPeNoReturnCallPredicate(iced, { ...run.opts, imageBase },
+      sampledSections, run.crossedData);
     const result = await disassembleControlFlowForInstructionSets({
       iced,
       bitness,
       imageBase,
-      sections: sampledSections,
+      sections: run.unpackedCode ? [...sampledSections, run.unpackedCode] : sampledSections,
       entrypoints: resolvedEntrypoints,
       yieldEveryInstructions: run.yieldEveryInstructions,
       featureCounts: instructionSetUsage.featureCounts,
       issues: run.issues,
-      crossedData: run.crossedData,
-      isNoReturnCall: createPeNoReturnCallPredicate(iced,
-        { ...run.opts, imageBase }, sampledSections, run.crossedData),
+      crossedData: run.unpackedCode
+        ? (address, size) => isUnpacked(address) ? null : run.crossedData(address, size)
+        : run.crossedData,
+      isNoReturnCall: run.unpackedCode
+        ? instruction => !isUnpacked(instruction.ip) && isNoReturn(instruction)
+        : isNoReturn,
       ...(run.opts.signal ? { signal: run.opts.signal } : {}),
       onInstruction: instruction => {
+        // File references and their preview links require file-backed instruction bytes.
+        if (isUnpacked(instruction.ip)) return;
         specialInstructions.record(instruction);
         directIatReferences.record(instruction);
         codeStringReferences.record(instruction);
@@ -237,14 +245,7 @@ const decodePeInstructionSetUsage = async (
         bytesDecoded = snapshot.bytesDecoded;
         instructionCount = snapshot.instructionCount;
         invalidInstructionCount = snapshot.invalidInstructionCount;
-        reportProgress(run.opts, {
-          stage: "decoding",
-          bytesSampled: run.bytesSampled,
-          bytesDecoded,
-          instructionCount,
-          invalidInstructionCount,
-          knownFeatureCounts: instructionSetUsage.knownFeatureCounts()
-        });
+        updateProgress("decoding");
         await yieldToEventLoop();
       }
     });
@@ -254,14 +255,7 @@ const decodePeInstructionSetUsage = async (
   } catch (err) {
     run.issues.push(`Disassembly failed (${String(err)})`);
   }
-  reportProgress(run.opts, {
-    stage: "done",
-    bytesSampled: run.bytesSampled,
-    bytesDecoded,
-    instructionCount,
-    invalidInstructionCount,
-    knownFeatureCounts: instructionSetUsage.knownFeatureCounts()
-  });
+  updateProgress("done");
   const apiReferences = await apiStringReferences.references(run.reader);
   return {
     bytesDecoded,

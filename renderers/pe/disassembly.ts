@@ -1,6 +1,6 @@
 "use strict";
 
-import { formatHumanSize } from "../../binary-utils.js";
+import { formatHumanSize, hex } from "../../binary-utils.js";
 import { renderInstructionSetAction } from "../instruction-set-action.js";
 import { renderCollectionStart, renderCollectionEnd, renderCountedCollection } from "../counted-collection.js";
 import { escapeHtml } from "../../html-utils.js";
@@ -107,6 +107,11 @@ const renderInstructionSetsContent = (pe: PeWindowsParseResult, out: string[]): 
     `${formatHumanSize(disasm.bytesDecoded)} / ${formatHumanSize(disasm.bytesSampled)}. ` +
     `Invalid decodes: ${disasm.invalidInstructionCount}.</div>`
   );
+  if (disasm.unpackedCode) {
+    const { name, entrypointRva } = disasm.unpackedCode;
+    out.push(`<div class="smallNote">Includes unpacked ${escapeHtml(name)} code seeded at ` +
+      `RVA ${hex(entrypointRva, 8)}.</div>`);
+  }
   out.push(
     `<div class="smallNote dim">Note: this is a static, control-flow guided sample ` +
     `of reachable code paths; it is not a full disassembly and may miss code behind ` +

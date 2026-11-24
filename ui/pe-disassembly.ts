@@ -14,6 +14,8 @@ import {
   type PeInstructionSetReport
 } from "../analyzers/pe/disassembly/index.js";
 import { PE32_PLUS_OPTIONAL_HEADER_MAGIC } from "../analyzers/pe/optional-header/magic.js";
+import { collectPeUnpackedCode } from "../analyzers/pe/disassembly/unpacked-code.js";
+import { createRvaToOffsetMapper } from "../analyzers/pe/sections/rva-mapper.js";
 import { collectPeDisassemblySeeds } from "./pe-disassembly-seeds.js";
 
 type AnalyzePeInstructionSets = (
@@ -148,12 +150,16 @@ export const createPeDisassemblyController = (
       const windowsPe = isPeWindowsParseResult(pe) ? pe : null;
       const windowsOpt = windowsPe?.opt ?? null;
       const seeds = await collectPeDisassemblySeeds(file, pe);
+      const unpacked = collectPeUnpackedCode(windowsPe);
+      const recovered = unpacked ? windowsPe?.recoveredEntrypoint : undefined;
+      const headerRvaLimit = recovered?.flatRvaLimit ?? windowsOpt?.SizeOfHeaders;
 
       const report = await analyze(reader, {
         coffMachine: seeds.canonicalMachine,
         is64Bit: windowsOpt?.Magic === PE32_PLUS_OPTIONAL_HEADER_MAGIC,
-        imageBase: windowsOpt?.ImageBase ?? 0n,
-        entrypointRva: seeds.entrypointRva,
+        imageBase: unpacked?.imageBase ?? windowsOpt?.ImageBase ?? 0n,
+        entrypointRva: recovered?.rva ?? seeds.entrypointRva,
+        ...(unpacked ? { unpackedCode: unpacked.code } : {}),
         ...(windowsPe ? { imports: windowsPe.imports, delayImports: windowsPe.delayImports } : {}),
         exportRvas: seeds.exportRvas,
         dataRvas: seeds.dataRvas,
@@ -164,8 +170,9 @@ export const createPeDisassemblyController = (
         tlsCallbackRvas: seeds.tlsCallbackRvas,
         instructionHintRvas: seeds.instructionHintRvas,
         ...(seeds.extraEntrypoints.length ? { extraEntrypoints: seeds.extraEntrypoints } : {}),
-        ...(windowsOpt ? { headerRvaLimit: windowsOpt.SizeOfHeaders } : {}),
-        rvaToOff: pe.rvaToOff,
+        ...(headerRvaLimit == null ? {} : { headerRvaLimit }),
+        rvaToOff: recovered?.flatRvaLimit == null ? pe.rvaToOff
+          : createRvaToOffsetMapper([], file.size, recovered.flatRvaLimit, 0),
         sections: pe.sections,
         yieldEveryInstructions: 1024,
         signal: localAbortController.signal,

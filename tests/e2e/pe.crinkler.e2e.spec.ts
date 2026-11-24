@@ -23,6 +23,17 @@ test("Crinkler retains the PE header and mounts the decoded report", async ({ pa
   await expect(section.getByRole("table")).toHaveCount(0);
 });
 
+test("Crinkler ISA analysis adds the verified unpacked output to the original file sample",
+  async ({ page }) => {
+    await page.goto("/");
+    await page.setInputFiles("#fileInput", upload(CRINKLER_30_TINY));
+    await openInspectionSection(page, "Instruction-set, imports and strings analysis");
+    await page.locator("#peInstructionSetsAnalyzeButton").click();
+    await expect(page.getByText("Includes unpacked Crinkler code seeded at RVA 0x00020000."))
+      .toBeVisible();
+    await expect(page.getByText(/Disassembly sample \(32-bit\)/)).toBeVisible();
+  });
+
 test("Crinkler model tables scroll and retain readable columns at 200% in both themes",
   async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

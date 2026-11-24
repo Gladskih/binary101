@@ -7,6 +7,7 @@ import { isRvaField } from "../layout/rva-limits.js";
 import type { PeSection } from "../types.js";
 import type { AnalyzePeInstructionSetOptions } from "./types.js";
 import { createPeCodeExclusionIndex } from "./code-exclusions.js";
+import { selectPeUnpackedCode } from "./unpacked-code.js";
 
 const IMAGE_SCN_CNT_CODE = 0x00000020; // Microsoft PE format: IMAGE_SCN_CNT_CODE.
 const IMAGE_SCN_MEM_EXECUTE = 0x20000000; // Microsoft PE format: IMAGE_SCN_MEM_EXECUTE.
@@ -214,3 +215,25 @@ const loadMappedEntrypointBytes = async (
     data: await readMappedRvaBytes(reader, rva, end - start, opts.rvaToOff)
   };
 };
+
+export async function collectPeInstructionSamples(
+  reader: FileRangeReader, opts: AnalyzePeInstructionSetOptions,
+  fileEntrypoints: number[], issues: string[]
+) {
+  const sampledSections = await collectPeDisassemblySamples(reader, opts, fileEntrypoints);
+  const unpackedCode = selectPeUnpackedCode(opts.unpackedCode, sampledSections, issues);
+  if (!unpackedCode && !fileEntrypoints.length) return null;
+  if (!unpackedCode && sampledSections.length === 0 &&
+      fileEntrypoints.every(rva => opts.rvaToOff(rva) == null)) {
+    issues.push("No section headers available to locate code bytes.");
+    return null;
+  }
+  const bytesSampled = sampledSections.reduce(
+    (sum, entry) => sum + entry.data.length, unpackedCode?.data.length ?? 0);
+  if (bytesSampled === 0) {
+    issues.push("No bytes available in selected section(s) for disassembly.");
+    return null;
+  }
+  return { sampledSections, unpackedCode, bytesSampled,
+    resolvedEntrypoints: unpackedCode ? [...fileEntrypoints, unpackedCode.rvaStart] : fileEntrypoints };
+}
