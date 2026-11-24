@@ -22,7 +22,7 @@ const ph = (overrides: Partial<ElfProgramHeader>): ElfProgramHeader =>
   }) as unknown as ElfProgramHeader;
 
 void test("vaddrToFileOffset maps vaddr into PT_LOAD file offsets", () => {
-  const programHeaders = [ph({ offset: 0x200n, vaddr: 0x4000n, filesz: 0x100n })];
+  const programHeaders = [ph({ offset: 0x200n, vaddr: 0x4000n, filesz: 0x100n, memsz: 0x100n })];
   assert.equal(vaddrToFileOffset(programHeaders, 0x4000n), 0x200n);
   assert.equal(vaddrToFileOffset(programHeaders, 0x4010n), 0x210n);
   assert.equal(vaddrToFileOffset(programHeaders, 0x40ffn), 0x2ffn);

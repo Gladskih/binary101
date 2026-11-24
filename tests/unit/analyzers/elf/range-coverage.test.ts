@@ -4,7 +4,7 @@ import { elfRangesCover } from "../../../../analyzers/elf/range-coverage.js";
 
 for (const [name, spans, start, end, covered] of [
   ["empty range", [], 2n, 2n, true],
-  ["inverted range", [], 3n, 2n, false],
+  ["inverted range", [[1n, 8n]], 3n, 2n, false],
   ["empty mapping", [], 2n, 3n, false],
   ["missing beginning", [[3n, 8n]], 2n, 8n, false],
   ["adjacent unordered spans", [[4n, 8n], [1n, 4n]], 2n, 8n, true],

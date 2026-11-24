@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
-import { elfFileRange, elfVirtualRange, readElfRelocationString } from
+import { elfFileRange, elfVirtualExtent, elfVirtualRange, readElfRelocationString } from
   "../../../../analyzers/elf/relocation-reader.js";
+import { elfLoadMappingCovers } from "../../../../analyzers/elf/range-coverage.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 
 void test("file and virtual ranges validate their entire extent including memory tails", () => {
@@ -21,6 +22,72 @@ void test("file and virtual ranges validate their entire extent including memory
   assert.equal(elfVirtualRange(fixture.elf.programHeaders, 0x1000n, -1n, 1024), null);
   fixture.elf.programHeaders[0]!.memsz = 1n;
   assert.equal(elfVirtualRange(fixture.elf.programHeaders, 0x1000n, 1n, 1024), null);
+});
+
+for (const [name, delta, offsetDelta, extent, covered] of [
+  ["adjacent", 0n, 0n, 514, true], ["same translation overlap", -1n, -1n, 514, true],
+  ["virtual gap", 1n, 1n, 2, false], ["different translation", 0n, 1n, 2, false],
+  ["conflicting overlap", -1n, 0n, 1, false]
+] as const) {
+  void test(`uses the same file-backed coverage for validation and reading with ${name}`, () => {
+    const { elf } = dynamicRelocationFixture();
+    const first = { ...elf.programHeaders[0]!, filesz: 512n, memsz: 512n };
+    const second = { ...first, index: 1, offset: 512n + offsetDelta, vaddr: first.vaddr + 512n + delta,
+      filesz: 512n - delta, memsz: 512n - delta };
+    const headers = [second, first];
+    const start = first.vaddr + 510n;
+
+    assert.equal(elfLoadMappingCovers(headers, 510n, start, 4n), covered);
+    assert.deepEqual(elfVirtualRange(headers, start, 4n, elf.fileSize), covered ? { offset: 510, size: 4 } : null);
+    assert.deepEqual(elfVirtualExtent(headers, start, elf.fileSize), { offset: 510, size: extent });
+  });
+}
+
+void test("rejects directly ambiguous virtual bytes and caps variable-length reads at EOF", () => {
+  const { elf } = dynamicRelocationFixture();
+  const load = elf.programHeaders[0]!;
+
+  assert.equal(elfVirtualRange([load, { ...load, offset: 1n }], load.vaddr, 1n, elf.fileSize), null);
+  assert.equal(elfVirtualExtent([load, { ...load, offset: 1n }], load.vaddr, elf.fileSize), null);
+  assert.deepEqual(elfVirtualExtent([load], load.vaddr + 409n, 411), { offset: 409, size: 2 });
+  assert.equal(elfVirtualRange([load], load.vaddr + 409n, 3n, 411), null);
+  assert.equal(elfVirtualExtent([load], load.vaddr + 411n, 411), null);
+  assert.deepEqual(elfVirtualRange([load], load.vaddr + load.filesz, 0n, elf.fileSize),
+    { offset: elf.fileSize, size: 0 });
+  assert.equal(elfVirtualRange([load], load.vaddr + load.filesz + 1n, 0n, elf.fileSize), null);
+  assert.equal(elfLoadMappingCovers([load], load.filesz, load.vaddr + load.filesz, 0n), true);
+  assert.equal(elfLoadMappingCovers([load], 0n, load.vaddr + load.filesz, 0n), false);
+});
+
+void test("empty ranges require a valid PT_LOAD anchor at the requested address", () => {
+  const { elf } = dynamicRelocationFixture();
+  const load = { ...elf.programHeaders[0]!, offset: 16n, filesz: 32n, memsz: 32n };
+
+  assert.deepEqual(elfVirtualRange([load], load.vaddr, 0n, elf.fileSize), { offset: 16, size: 0 });
+  assert.equal(elfVirtualRange([load], load.vaddr - 1n, 0n, elf.fileSize), null);
+  assert.equal(elfVirtualRange([load], load.vaddr + load.filesz + 1n, 0n, elf.fileSize), null);
+  assert.equal(elfVirtualRange([{ ...load, type: 4 }], load.vaddr, 0n, elf.fileSize), null);
+});
+
+void test("a different translation ending at the start does not conflict with file-backed bytes", () => {
+  const { elf } = dynamicRelocationFixture();
+  const head = { ...elf.programHeaders[0]!, offset: 0n, vaddr: 0n, filesz: 32n, memsz: 32n };
+  const next = { ...head, offset: 64n, vaddr: 32n };
+
+  assert.deepEqual(elfVirtualRange([head, next], 0n, 1n, elf.fileSize), { offset: 0, size: 1 });
+  assert.deepEqual(elfVirtualRange([head, next], 32n, 1n, elf.fileSize), { offset: 64, size: 1 });
+  assert.equal(elfVirtualRange([{ ...head, vaddr: -1n }], -1n, 1n, elf.fileSize), null);
+});
+
+void test("clips at the earliest conflicting translation regardless of program header order", () => {
+  const { elf } = dynamicRelocationFixture();
+  const load = elf.programHeaders[0]!;
+  const early = { ...load, offset: 500n, vaddr: load.vaddr + 100n, filesz: 4n, memsz: 4n };
+  const late = { ...early, vaddr: load.vaddr + 200n };
+
+  assert.deepEqual(elfVirtualExtent([early, late, load], load.vaddr, elf.fileSize), { offset: 0, size: 100 });
+  assert.deepEqual(elfVirtualRange([late, early, load], load.vaddr, 100n, elf.fileSize), { offset: 0, size: 100 });
+  assert.equal(elfLoadMappingCovers([load], 1n, load.vaddr, 20n), false);
 });
 
 void test("symbol names are bounded, terminated and decoded", async () => {

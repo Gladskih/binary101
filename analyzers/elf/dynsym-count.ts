@@ -1,65 +1,30 @@
-"use strict";
-
+import { createFileRangeReader, DEFAULT_FILE_READ_WINDOW_BYTES, type FileRangeReader } from "../file-range-reader.js";
 import type { ElfProgramHeader } from "./types.js";
-import { vaddrToFileOffset } from "./vaddr-to-file-offset.js";
-
-const PT_LOAD = 1;
-
-const toSafeIndex = (value: bigint, label: string, issues: string[]): number | null => {
-  const num = Number(value);
-  if (!Number.isSafeInteger(num) || num < 0) {
-    issues.push(`${label} (${value.toString()}) is too large to index into the file.`);
-    return null;
-  }
-  return num;
-};
-
-const findLoadSegmentContainingVaddr = (
-  programHeaders: ElfProgramHeader[],
-  vaddr: bigint
-): ElfProgramHeader | null => {
-  for (const ph of programHeaders) {
-    if (ph.type !== PT_LOAD || ph.filesz <= 0n) continue;
-    const end = ph.vaddr + ph.filesz;
-    if (vaddr >= ph.vaddr && vaddr < end) return ph;
-  }
-  return null;
-};
+import { elfVirtualExtent } from "./relocation-reader.js";
 
 const locateHashTable = (
-  programHeaders: ElfProgramHeader[],
+  file: File, programHeaders: ElfProgramHeader[],
   hashVaddr: bigint,
   label: string,
   issues: string[]
-): { fileOffset: number; availableBytes: number } | null => {
-  const hashOffset = vaddrToFileOffset(programHeaders, hashVaddr);
-  if (hashOffset == null) {
-    issues.push(`${label} does not map into a PT_LOAD segment.`);
-    return null;
-  }
-  const fileOffset = toSafeIndex(hashOffset, `${label} file offset`, issues);
-  if (fileOffset == null) return null;
-  const segment = findLoadSegmentContainingVaddr(programHeaders, hashVaddr);
-  if (!segment) {
-    issues.push(`${label} does not map into a file-backed PT_LOAD segment.`);
-    return null;
-  }
-  const availableBytes = toSafeIndex(segment.offset + segment.filesz - hashOffset, `${label} size`, issues);
-  if (availableBytes == null || availableBytes <= 0) return null;
-  return { fileOffset, availableBytes };
+): { offset: number; size: number } | null => {
+  const range = elfVirtualExtent(programHeaders, hashVaddr, file.size);
+  if (!range) issues.push(`${label} does not map into file-backed PT_LOAD data.`);
+  return range;
 };
 
-const readSliceView = async (
-  file: File,
-  offset: number,
-  length: number
-): Promise<DataView | null> => {
-  if (length <= 0 || offset < 0 || offset >= file.size) return null;
-  const end = Math.min(file.size, offset + length);
-  if (end <= offset) return null;
-  const bytes = new Uint8Array(await file.slice(offset, end).arrayBuffer());
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-};
+async function* hashWords(
+  reader: FileRangeReader, offset: number, count: number, littleEndian: boolean
+): AsyncGenerator<number> {
+  const size = count * 4;
+  for (let position = 0; position < size;) {
+    const length = Math.min(size - position, DEFAULT_FILE_READ_WINDOW_BYTES);
+    const view = await reader.read(offset + position, length);
+    if (view.byteLength !== length) return;
+    for (let index = 0; index < length; index += 4) yield view.getUint32(index, littleEndian);
+    position += length;
+  }
+}
 
 export async function readDynsymCountFromSysvHash(opts: {
   file: File;
@@ -68,14 +33,14 @@ export async function readDynsymCountFromSysvHash(opts: {
   littleEndian: boolean;
   issues: string[];
 }): Promise<number | null> {
-  const location = locateHashTable(opts.programHeaders, opts.hashVaddr, "DT_HASH", opts.issues);
+  const location = locateHashTable(opts.file, opts.programHeaders, opts.hashVaddr, "DT_HASH", opts.issues);
   if (!location) return null;
-  if (location.availableBytes < 8) {
+  if (location.size < 8) {
     opts.issues.push("DT_HASH table header is truncated.");
     return null;
   }
-  const header = await readSliceView(opts.file, location.fileOffset, 8);
-  if (!header || header.byteLength < 8) {
+  const header = await createFileRangeReader(opts.file, location.offset, location.size).read(0, 8);
+  if (header.byteLength < 8) {
     opts.issues.push("DT_HASH table header is truncated.");
     return null;
   }
@@ -91,15 +56,16 @@ export async function readDynsymCountFromGnuHash(opts: {
   littleEndian: boolean;
   issues: string[];
 }): Promise<number | null> {
-  const location = locateHashTable(opts.programHeaders, opts.hashVaddr, "DT_GNU_HASH", opts.issues);
+  const location = locateHashTable(opts.file, opts.programHeaders, opts.hashVaddr, "DT_GNU_HASH", opts.issues);
   if (!location) return null;
-  if (location.availableBytes < 16) {
+  if (location.size < 16) {
     opts.issues.push("DT_GNU_HASH table header is truncated.");
     return null;
   }
 
-  const header = await readSliceView(opts.file, location.fileOffset, 16);
-  if (!header || header.byteLength < 16) {
+  const reader = createFileRangeReader(opts.file, location.offset, location.size);
+  const header = await reader.read(0, 16);
+  if (header.byteLength < 16) {
     opts.issues.push("DT_GNU_HASH table header is truncated.");
     return null;
   }
@@ -117,22 +83,21 @@ export async function readDynsymCountFromGnuHash(opts: {
     opts.issues.push("DT_GNU_HASH dimensions are too large to index.");
     return null;
   }
-  if (chainBase > location.availableBytes) {
+  if (chainBase > location.size) {
     opts.issues.push("DT_GNU_HASH buckets are truncated.");
     return null;
   }
   if (nbuckets === 0) return null;
 
-  const buckets = await readSliceView(opts.file, location.fileOffset + bucketsOffset, bucketBytes);
-  if (!buckets || buckets.byteLength < bucketBytes) {
+  let maxBucket = 0;
+  let observedBuckets = 0;
+  for await (const bucket of hashWords(reader, bucketsOffset, nbuckets, opts.littleEndian)) {
+    maxBucket = Math.max(maxBucket, bucket);
+    observedBuckets += 1;
+  }
+  if (observedBuckets !== nbuckets) {
     opts.issues.push("DT_GNU_HASH buckets are truncated.");
     return null;
-  }
-
-  let maxBucket = 0;
-  for (let index = 0; index < nbuckets; index += 1) {
-    const bucket = buckets.getUint32(index * 4, opts.littleEndian);
-    if (bucket > maxBucket) maxBucket = bucket;
   }
   // GNU ld records symoffset=1 even when the table contains no hashed symbols.
   // https://gnu.googlesource.com/binutils-gdb/+/4d9e2e53b9f93b0ae33ba948ae3d2825b3424441/bfd/elflink.c#7563
@@ -144,22 +109,16 @@ export async function readDynsymCountFromGnuHash(opts: {
 
   const chainStartIndex = maxBucket - symoffset;
   const chainOffset = chainBase + chainStartIndex * 4;
-  if (!Number.isSafeInteger(chainOffset) || chainOffset >= location.availableBytes) {
+  if (!Number.isSafeInteger(chainOffset) || chainOffset >= location.size) {
     opts.issues.push("DT_GNU_HASH chain table is truncated.");
     return null;
   }
 
-  const chainBytes = location.availableBytes - chainOffset;
-  const chains = await readSliceView(opts.file, location.fileOffset + chainOffset, chainBytes);
-  if (!chains || chains.byteLength < 4) {
-    opts.issues.push("DT_GNU_HASH chain table is truncated.");
-    return null;
-  }
-
-  const chainCount = Math.floor(chains.byteLength / 4);
-  for (let index = 0; index < chainCount; index += 1) {
-    const chainValue = chains.getUint32(index * 4, opts.littleEndian);
-    if ((chainValue & 1) !== 0) return maxBucket + index + 1;
+  let count = maxBucket;
+  const chainCount = Math.floor((location.size - chainOffset) / 4);
+  for await (const chainValue of hashWords(reader, chainOffset, chainCount, opts.littleEndian)) {
+    count += 1;
+    if ((chainValue & 1) !== 0) return count;
   }
 
   opts.issues.push("DT_GNU_HASH chain table is truncated.");

@@ -3,9 +3,14 @@ import { test } from "node:test";
 import { collectElfCrelDynamicTable } from "../../../../analyzers/elf/relocation-crel-table.js";
 import { dynamicRelocationFixture } from "../../../fixtures/elf-dynamic-relocations.js";
 
-void test("DT_CREL is bounded by the containing file-backed segment", () => {
+void test("DT_CREL can use adjacent file-backed segments with the same translation", () => {
   const fixture = dynamicRelocationFixture();
   const issues: string[] = [];
+  const load = fixture.elf.programHeaders[0]!;
+  fixture.elf.programHeaders.push({ ...load, index: 1, offset: 68n, vaddr: load.vaddr + 68n,
+    filesz: load.filesz - 68n, memsz: load.memsz - 68n });
+  load.filesz = 68n;
+  load.memsz = 68n;
   // LLVM experimental DT_CREL = 0x40000026, no size tag.
   fixture.tags.set(0x40000026, 0x1040n);
   const table = collectElfCrelDynamicTable(fixture.elf, fixture.tags, issues);

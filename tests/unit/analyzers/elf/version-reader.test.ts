@@ -52,11 +52,12 @@ void test("reports missing string-table boundary terminators", async () => {
   assert.match(issues.join(" "), /must end with NUL/);
 });
 
-void test("locates version records and strings through dynamic tags", () => {
+void test("locates version records and strings across adjacent loads through dynamic tags", () => {
   const fixture = elfVersionFixture();
   fixture.elf.sections = [];
-  fixture.elf.programHeaders = [{ type: 1, typeName: "LOAD", index: 0, offset: 0n,
-    vaddr: 4096n, paddr: 0n, filesz: 1024n, memsz: 1024n, flags: 4, flagNames: [], align: 1n }];
+  const load = { type: 1, typeName: "LOAD", index: 0, offset: 0n,
+    vaddr: 4096n, paddr: 0n, filesz: 72n, memsz: 72n, flags: 4, flagNames: [], align: 1n };
+  fixture.elf.programHeaders = [load, { ...load, index: 1, offset: 72n, vaddr: 4168n, filesz: 952n, memsz: 952n }];
   const issues: string[] = [];
   assert.deepEqual(locateElfVersionTable(fixture.elf, [
     { tag: 0x6ffffffc, value: 4160n }, { tag: 0x6ffffffd, value: 1n },

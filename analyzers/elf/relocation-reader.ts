@@ -1,6 +1,6 @@
 import type { FileRangeReader } from "../file-range-reader.js";
 import type { ElfProgramHeader } from "./types.js";
-import { ELF_SEGMENT_TYPE } from "./abi-constants.js";
+import { elfLoadFileSpan } from "./range-coverage.js";
 import { DEFAULT_FILE_READ_WINDOW_BYTES } from "../file-range-reader.js";
 
 // ELF gABI, Relocation entries and Program loading:
@@ -16,10 +16,17 @@ export const elfFileRange = (
 export const elfVirtualRange = (
   headers: ElfProgramHeader[], address: bigint, size: bigint, fileSize: number
 ): { offset: number; size: number } | null => {
-  if (address < 0n || size < 0n) return null;
-  const segment = headers.find(header => header.type === ELF_SEGMENT_TYPE.LOAD && header.filesz <= header.memsz &&
-    address >= header.vaddr && address + size <= header.vaddr + header.filesz);
-  return segment ? elfFileRange(segment.offset + address - segment.vaddr, size, fileSize) : null;
+  const mapping = elfLoadFileSpan(headers, address, size);
+  return mapping?.size === size ? elfFileRange(mapping.offset, size, fileSize) : null;
+};
+
+export const elfVirtualExtent = (
+  headers: ElfProgramHeader[], address: bigint, fileSize: number
+): { offset: number; size: number } | null => {
+  const mapping = elfLoadFileSpan(headers, address);
+  if (!mapping || mapping.offset >= BigInt(fileSize)) return null;
+  return elfFileRange(mapping.offset, mapping.size, fileSize) ??
+    elfFileRange(mapping.offset, BigInt(fileSize) - mapping.offset, fileSize);
 };
 
 export const readElfRelocationString = async (

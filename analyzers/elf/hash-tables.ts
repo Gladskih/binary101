@@ -2,7 +2,7 @@ import { createFileRangeReader } from "../file-range-reader.js";
 import type { ElfParseResult } from "./types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
 import type { ElfHashSource, ElfHashTable } from "./hash-types.js";
-import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
+import { elfFileRange, elfVirtualExtent, elfVirtualRange } from "./relocation-reader.js";
 import { selectElfBinaryLayout } from "./binary-layout.js";
 import { readElfHashTable } from "./hash-reader.js";
 import type { ElfDynamicSymbolRange } from "./dynamic-symbol-records.js";
@@ -27,10 +27,7 @@ const hashSources = (elf: ElfParseResult, entries: ElfDynamicEntry[]): ElfHashSo
     }
     const address = entries.find(item => item.tag === tag)?.value;
     if (address == null) continue;
-    const segment = elf.programHeaders.find(item => item.type === 1 &&
-      address >= item.vaddr && address < item.vaddr + item.filesz);
-    const range = segment ? elfVirtualRange(elf.programHeaders, address,
-      segment.vaddr + segment.filesz - address, elf.fileSize) : null;
+    const range = elfVirtualExtent(elf.programHeaders, address, elf.fileSize);
     sources.push({ kind, ...(range ?? { offset: 0, size: 0 }) });
   }
   return sources;

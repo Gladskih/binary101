@@ -204,12 +204,13 @@ const sectionless = (kind: "sysv" | "gnu") => {
   const source = fixture(kind);
   source.elf.sections = [];
   source.elf.programHeaders = [{ index: 0, type: 1, typeName: "LOAD", offset: 64n,
-    vaddr: 4096n, paddr: 4096n, filesz: 36n, memsz: 64n, flags: 4,
-    flagNames: [], align: 4n }];
+    vaddr: 4096n, paddr: 4096n, filesz: 12n, memsz: 12n, flags: 4,
+    flagNames: [], align: 4n }, { index: 1, type: 1, typeName: "LOAD", offset: 76n,
+    vaddr: 4108n, paddr: 4108n, filesz: 24n, memsz: 52n, flags: 4, flagNames: [], align: 4n }];
   return source;
 };
 
-void test("finds both hash formats through dynamic virtual addresses", async () => {
+void test("decodes both hash formats across file-backed loads through dynamic virtual addresses", async () => {
   const sysv = sectionless("sysv");
   assert.deepEqual((await parseElfHashTables(sysv.file(), sysv.elf,
     [{ tag: 4, value: 4096n }]))[0], {

@@ -25,6 +25,36 @@ const runtimeFixture = async () => {
     parse: async () => expectDefined(await parseElf(new File([bytes], file.name))) };
 };
 
+for (const type of [3, 11]) { // SHT_STRTAB and SHT_DYNSYM, gABI 3.3.
+  void test(`decodes a sectionless dynamic table of type ${type} across PT_LOAD boundaries`, async () => {
+    const fixture = await runtimeFixture();
+    const table = expectDefined(fixture.elf.sections.find(section => section.type === type &&
+      (section.flags & 2n) !== 0n));
+    const load = expectDefined(fixture.elf.programHeaders.find(segment => segment.type === 1));
+    const spare = expectDefined(fixture.elf.programHeaders.find(segment => segment.type === 4));
+    const split = table.offset + table.size / 2n;
+    const second = fixture.programHeader(spare.index);
+    const first = fixture.programHeader(load.index);
+    const remainder = load.filesz - split;
+    // Replace PT_NOTE with the second load and keep one file-to-virtual translation.
+    fixture.view.setUint32(second, 1, true);
+    fixture.view.setBigUint64(second + 8, split, true);
+    fixture.view.setBigUint64(second + 16, load.vaddr + split, true);
+    fixture.view.setBigUint64(second + 32, remainder, true);
+    fixture.view.setBigUint64(second + 40, remainder, true);
+    fixture.view.setBigUint64(first + 32, split, true);
+    fixture.view.setBigUint64(first + 40, split, true);
+    fixture.stripSections();
+
+    const parsed = await fixture.parse();
+
+    assert.equal(parsed.dynamic?.consistencyIssues, undefined);
+    assert.deepEqual(parsed.dynamic?.needed, fixture.expected.needed);
+    assert.equal(parsed.dynSymbols?.importSymbols[0]?.name, fixture.expected.importSymbol);
+    assert.equal(parsed.dynSymbols?.exportSymbols[0]?.name, fixture.expected.exportSymbol);
+  });
+}
+
 for (const mode of ["with sections", "without sections"]) {
   for (const [stride, warning] of [
     [24n, null], [null, /missing required DT_SYMENT/], [8n, /DT_SYMENT.*8.*24/]

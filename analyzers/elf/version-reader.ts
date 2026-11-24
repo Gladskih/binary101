@@ -1,5 +1,5 @@
 import type { FileRangeReader } from "../file-range-reader.js";
-import { elfFileRange, elfVirtualRange } from "./relocation-reader.js";
+import { elfFileRange, elfVirtualExtent, elfVirtualRange } from "./relocation-reader.js";
 import type { ElfParseResult, ElfSectionHeader } from "./types.js";
 import type { ElfDynamicEntry } from "./dynamic-entries.js";
 import { ELF_SECTION_COMPRESSED } from "./section-data.js";
@@ -126,10 +126,8 @@ const dynamicVersionCount = (
 const dynamicVersionRange = (
   elf: ElfParseResult, address: bigint, size: bigint | null
 ): { offset: number; size: number } | null => {
-  const segment = elf.programHeaders.find(item => item.type === 1 &&
-    address >= item.vaddr && address < item.vaddr + item.filesz);
-  return segment ? elfVirtualRange(elf.programHeaders, address,
-    size ?? segment.vaddr + segment.filesz - address, elf.fileSize) : null;
+  return size === null ? elfVirtualExtent(elf.programHeaders, address, elf.fileSize) :
+    elfVirtualRange(elf.programHeaders, address, size, elf.fileSize);
 };
 
 export const readVersionBytes = async (

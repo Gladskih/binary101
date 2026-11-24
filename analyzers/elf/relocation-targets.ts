@@ -82,7 +82,7 @@ const virtualTarget = (
   }
   const section = elf.sections.find(item => allocatedSection(item) && !tlsZeroFill(item) &&
     offset >= item.addr && end <= item.addr + item.size);
-  const range = loads.length === 1 ? elfVirtualRange(loads, offset, width, elf.fileSize) : null;
+  const range = elfVirtualRange(loads, offset, width, elf.fileSize);
   return { sectionIndex: section?.index ?? null,
     sectionOffset: section ? offset - section.addr : null,
     fileOffset: range ? BigInt(range.offset) : null };
