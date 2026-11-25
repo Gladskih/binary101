@@ -24,7 +24,7 @@ void test("hashes every algorithm for a real empty file", async ({ page }) => {
   await expect(page.locator("#fileNameDetail")).toHaveText("empty.bin");
   await expect(page.locator("#fileSizeDetail")).toHaveText("0 B (0 bytes)");
   await expect(page.locator("#fileSourceDetail .opt")).toHaveText([
-    "Selection", "Paste", "Drop", "Navigation"
+    "Selection", "Paste", "Drop", "Navigation", "Example"
   ]);
   await expect(page.locator("#fileSourceDetail .opt.sel")).toHaveText("Selection");
   await expect(page.locator("#fileObjectDetail .opt.sel")).toHaveText("File");

@@ -13,7 +13,7 @@ type SelectionFixtureWindow = Window & {
   __binary101DispatchPaste?: (payload: PayloadKind) => void;
   __binary101InstallDirectoryPicker?: (payload: PayloadKind) => void;
 };
-const sourceOptions = ["Selection", "Paste", "Drop", "Navigation"];
+const sourceOptions = ["Selection", "Paste", "Drop", "Navigation", "Example"];
 const objectOptions = ["File", "Directory", "Collection"];
 const uploadFile = (name: string, text: string) => ({
   name,

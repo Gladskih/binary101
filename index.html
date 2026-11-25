@@ -66,6 +66,13 @@
     </div>
 
     <div class="appHeader__actions" id="fileActions">
+      <button type="button" class="secondaryButton" id="galleryToolbarButton"
+        aria-haspopup="dialog" hidden>
+        <span class="fileActionLabel">Browse examples</span>
+        <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M8 3h7l5 5v10H8Zm7 0v5h5M4 7v14h12"/>
+        </svg>
+      </button>
       <button type="button" class="secondaryButton" id="fileHashesButton" title="File hashes">
         <span class="fileActionLabel">File hashes</span>
         <svg class="fileActionIcon" aria-hidden="true" viewBox="0 0 24 24">
@@ -103,8 +110,32 @@
       </span>
       </button>
       <p class="selectionPrivacy">Files stay in your browser.</p>
+      <section id="galleryLanding" class="exampleGalleryLanding" aria-labelledby="galleryLandingTitle"
+        hidden>
+        <h2 id="galleryLandingTitle">Examples</h2>
+        <ul class="exampleGalleryLanding__examples" role="list"></ul>
+        <p class="exampleGallery__status" role="status" aria-atomic="true"></p>
+      </section>
     </div>
     <input id="fileInput" type="file" multiple hidden>
+
+    <dialog id="exampleGallery" class="exampleGallery" aria-labelledby="exampleGalleryTitle">
+      <div class="exampleGallery__header">
+        <div>
+          <h2 id="exampleGalleryTitle">Examples</h2>
+          <p class="exampleGallery__status" role="status" aria-atomic="true"></p>
+        </div>
+        <form method="dialog">
+          <button type="submit" class="secondaryButton" autofocus>Close</button>
+        </form>
+      </div>
+      <div class="tableWrap">
+        <table class="table exampleGallery__table">
+          <thead><tr><th scope="col">Open example</th><th scope="col">What to inspect</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </dialog>
 
     <section id="resultsSection">
       <article id="directoryInfoCard" hidden>

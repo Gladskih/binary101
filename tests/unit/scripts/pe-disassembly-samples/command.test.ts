@@ -39,6 +39,19 @@ void test("createVisualStudioStep quotes shell parts without spaces", () => {
   assert.match(step.display ?? "", /"cl\.exe" "\/nologo"/);
 });
 
+for (const [argument, quotedArgument] of [
+  ["/Fo:C:\\output folder\\", String.raw`"/Fo:C:\output folder\\"`],
+  ["/Fo:C:\\output folder\\\\", String.raw`"/Fo:C:\output folder\\\\"`]
+] as const) {
+  void test(`createVisualStudioStep preserves trailing backslashes in ${argument}`, () => {
+    const step = createVisualStudioStep("compile", createVisualStudio(), "x64", [
+      ["cl.exe", argument, "/O2"]
+    ]);
+
+    assert.ok(step.display?.endsWith(`${quotedArgument} "/O2"`));
+  });
+}
+
 for (const unsafePart of ["bad%PATH%", "bad!value", "bad\nvalue", "bad\"value"]) {
   void test(`createVisualStudioStep rejects unsafe shell part ${JSON.stringify(unsafePart)}`, () => {
     assert.throws(

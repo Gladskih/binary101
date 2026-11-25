@@ -13,7 +13,9 @@ const quoteWindowsShellPart = (value: string): string => {
   if (!value || /[\0\r\n"%!]/u.test(value)) {
     throw new Error("Visual Studio command contains a character unsafe for cmd.exe.");
   }
-  return `"${value}"`;
+  // Double trailing backslashes so the native argument parser sees a closing quote.
+  // https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
+  return `"${value.replace(/\\+$/u, "$&$&")}"`;
 };
 
 const toWindowsShellCommandLine = (command: string[]): string =>

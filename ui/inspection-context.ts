@@ -1,6 +1,6 @@
 "use strict";
 
-type InspectionSource = "selection" | "paste" | "drop" | "navigation";
+type InspectionSource = "selection" | "paste" | "drop" | "navigation" | "example";
 type DirectInspectionSource = Exclude<InspectionSource, "navigation">;
 type TransferInspectionSource = Extract<DirectInspectionSource, "paste" | "drop">;
 type InspectionObject = "file" | "directory" | "collection";
@@ -23,7 +23,8 @@ const inspectionSourceLabels: Readonly<Record<InspectionSource, string>> = {
   selection: "Selection",
   paste: "Paste",
   drop: "Drop",
-  navigation: "Navigation"
+  navigation: "Navigation",
+  example: "Example"
 };
 
 const inspectionObjectLabels: Readonly<Record<InspectionObject, string>> = {

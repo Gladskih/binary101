@@ -6,6 +6,10 @@
 
 [binary101](https://gladskih.github.io/binary101/) is a browser-based binary file analyzer inspired by [regex101](https://regex101.com/), the Unix `file` utility, and VirusTotal. It began as a general-purpose format inspector and has grown especially deep support for executables. It presents structures, offsets and decoded values alongside explanations, statistics and previews. Files are processed locally, without uploads.
 
+Choose a file under **Examples** on the start screen to inspect a built-in sample.
+The site fetches the selected sample on demand and runs the same local analysis as for an opened file.
+See [how to build the gallery samples](samples/gallery/README.md) for a local preview.
+
 ## Highlights
 
 - **Instruction-set analysis.** Count instructions by x86/x86-64 and AArch64 ISA extension using control-flow-guided disassembly of PE and ELF files. Check what `-march` or a change in compiler flags actually produced, inspect SIMD usage, or compare the instruction mix of different builds and libraries.

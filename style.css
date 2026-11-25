@@ -4,6 +4,7 @@
 @import url("./renderers/elf/dynamic-entries.css");
 @import url("./renderers/elf/import-linkage.css");
 @import url("./ui/clipboard-choice.css");
+@import url("./ui/example-gallery.css");
 :root {
   --font-size-base: 14px;
 

@@ -1,0 +1,96 @@
+.exampleGalleryLanding {
+  margin-block-start: 1.25rem;
+  padding: .875rem 1rem .375rem;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-card);
+}
+
+.exampleGalleryLanding h2 {
+  margin: 0 0 .625rem;
+  font-size: 1rem;
+}
+
+.exampleGalleryLanding__examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .375rem;
+  margin: 0 0 .25rem;
+  padding: 0;
+  list-style: none;
+}
+
+body:not(.hasInspection) #galleryToolbarButton,
+.hasInspection #galleryLanding {
+  display: none;
+}
+
+.exampleGallery {
+  inline-size: min(42rem, calc(100% - 2rem));
+  max-block-size: calc(100% - 2rem);
+  padding: 1rem;
+  overflow: auto;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--workspace-control-border);
+  border-radius: var(--radius-card);
+}
+
+.exampleGallery::backdrop {
+  background: rgb(0 0 0 / 50%);
+}
+
+.exampleGallery[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.exampleGallery .tableWrap {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.exampleGallery__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-block-end: .5rem;
+}
+
+.exampleGallery__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.exampleGallery__status {
+  min-block-size: 1.45em;
+  margin: 0;
+  color: var(--muted);
+}
+
+.exampleGallery .exampleGallery__table :is(th, td) {
+  padding-block: .25rem;
+  font-family: inherit;
+}
+
+:is(.exampleGalleryLanding, .exampleGallery__table) .tableButton {
+  min-block-size: 2rem;
+  overflow-wrap: normal;
+  white-space: normal;
+  text-align: start;
+}
+
+:is(.exampleGalleryLanding, .exampleGallery__table) .tableButton:hover {
+  color: var(--text);
+  background: var(--workspace-subtle);
+}
+
+:is(.exampleGalleryLanding, .exampleGallery__table) .tableButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+:is(.exampleGalleryLanding, .exampleGallery__table) .tableButton[aria-disabled="true"] {
+  cursor: wait;
+}

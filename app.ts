@@ -30,9 +30,9 @@ import { attachPeFileIconGuard, renderPeFileIcon } from "./ui/pe-file-icon.js";
 import { createSwfBodyAnalysis } from "./ui/swf-analysis.js";
 import { createInspectionWorkspace } from "./ui/inspection-workspace.js";
 import { attachFilePanelControls } from "./ui/file-panel.js";
+import { attachExampleGallery } from "./ui/example-gallery.js";
 const getElement = (id: string) => document.getElementById(id)!;
-const dropZoneElement = getElement("dropZone") as HTMLElement,
-  fileInputElement = getElement("fileInput") as HTMLInputElement,
+const fileInputElement = getElement("fileInput") as HTMLInputElement,
   statusElement = getElement("statusMessage") as HTMLElement,
   fileInfoCardElement = getElement("fileInfoCard") as HTMLElement,
   fileNameDetailElement = getElement("fileNameDetail") as HTMLElement,
@@ -95,9 +95,14 @@ const fileActionClickHandler = createFileActionClickHandler({
   getParseResult: getCurrentParseResult, getFile: getCurrentFile, setStatusMessage
 });
 const cancelActiveAnalysis = (): void => {
-  fileParser.cancel();
-  [peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly, swfBodyAnalysis]
-    .forEach(panel => panel.cancel());
+  cancelExample();
+  [fileParser, peDisassembly, peEntrypointDisassembly, peOverlayScan, elfDisassembly,
+    swfBodyAnalysis].forEach(panel => panel.cancel());
+};
+const clearAnalysisReport = (): void => {
+  analysisTermElement.hidden = true;
+  analysisValueElement.hidden = true;
+  analysisValueElement.innerHTML = "";
 };
 const resetFileInspectionView = (): void => {
   fileInspectionGeneration += 1;
@@ -110,9 +115,7 @@ const resetFileInspectionView = (): void => {
   setFileSubtypeLabel(fileSubtypeTermElement, fileSubtypeDetailElement, currentParseResult);
   setPreviewUrl(null);
   fileInfoCardElement.hidden = true;
-  analysisTermElement.hidden = true;
-  analysisValueElement.hidden = true;
-  analysisValueElement.innerHTML = "";
+  clearAnalysisReport();
   fileAnalysisDurationDetailElement.textContent = "";
   resetHashDisplay(...hashControls);
   getElement("hashStatus").textContent = "";
@@ -150,11 +153,12 @@ const directoryInspection: DirectoryInspectionController = createDirectoryInspec
   openFile: inspectionNavigation.openFile,
   openDirectory: inspectionNavigation.openDirectory
 });
+const cancelExample = attachExampleGallery(document, inspectionNavigation.openFile);
 inspectionNavigation.initialize();
 attachSelectionInputs({
   chooseClipboardEntries,
   directoryInspection,
-  dropZoneElement,
+  dropZoneElement: getElement("dropZone"),
   fileInputElement,
   openFile: inspectionNavigation.openFile,
   setStatusMessage
@@ -251,9 +255,7 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
   try {
     setPreviewUrl(null);
     fileInfoCardElement.hidden = true;
-    analysisTermElement.hidden = true;
-    analysisValueElement.hidden = true;
-    analysisValueElement.innerHTML = "";
+    clearAnalysisReport();
     inspectionWorkspace.begin(context);
     setStatusMessage("Detecting file type...");
     const typeLabel = await detectBinaryType(file);
@@ -290,9 +292,7 @@ async function showFileInfo(file: File, context: Parameters<typeof fileInspectio
       `Unable to read file: ${error instanceof Error && error.message ? error.message : String(error)}`
     );
     fileAnalysisDurationDetailElement.textContent = "";
-    analysisTermElement.hidden = true;
-    analysisValueElement.hidden = true;
-    analysisValueElement.innerHTML = "";
+    clearAnalysisReport();
   } finally {
     if (fileInspectionGeneration === currentGeneration) fileParser.finish();
   }
