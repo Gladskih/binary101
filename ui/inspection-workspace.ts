@@ -22,7 +22,7 @@ const isShortReport = (analysis: HTMLElement, sections: WorkspaceSection[]): boo
 
 class InspectionWorkspace {
   private sections: WorkspaceSection[] = [];
-  private selected = "hashes";
+  private selected = "analysis";
   private analysisComplete = false;
   private initialSectionPending = true;
   private readonly scrollPositions = new Map<string, WorkspaceScrollPosition>();
@@ -36,7 +36,7 @@ class InspectionWorkspace {
   private readonly reflow: ReturnType<typeof createWorkspaceReflow>;
   private result: ParseForUiResult | null = null;
   private readonly search: ReportSearch;
-  private previousSection = "hashes";
+  private previousSection = "analysis";
   private history: InspectionNavigationController | null = null;
   constructor(private readonly root: Document) {
     const appTitle = root.title;
@@ -73,8 +73,8 @@ class InspectionWorkspace {
     this.changeSelection(available ? key! : this.initialSection());
   }
   begin(context: InspectionContext): void {
-    this.selected = "hashes";
-    this.previousSection = "hashes";
+    this.selected = this.history?.currentSectionKey() === "hashes" ? "hashes" : "analysis";
+    this.previousSection = this.selected;
     this.analysisComplete = false;
     this.initialSectionPending = true;
     this.scrollPositions.clear();
@@ -111,15 +111,17 @@ class InspectionWorkspace {
     renderWorkspaceNavigation(this.navigation, this.sections);
     this.element("workspaceUnsupported").hidden = !this.analysisComplete || this.sections.length > 0;
     this.select(["hashes", "search"].includes(this.selected) ||
-      this.sections.some(section => section.key === this.selected) ? this.selected : "hashes");
+      this.sections.some(section => section.key === this.selected) ?
+      this.selected : this.initialSection());
     this.syncLayout();
   }
   private initialSection(): string {
-    return initialWorkspaceSection(this.sections, this.result?.analyzer);
+    return this.analysisComplete ?
+      initialWorkspaceSection(this.sections, this.result?.analyzer) : "analysis";
   }
   private select(key: string): void {
     const section = this.sections.find(item => item.key === key);
-    if (!section && !["hashes", "search"].includes(key)) return;
+    if (!section && !["hashes", "search", "analysis"].includes(key)) return;
     if (this.selected !== key) {
       this.scrollPositions.set(this.selected, {
         page: window.scrollY, top: this.viewport.scrollTop, left: this.viewport.scrollLeft
@@ -167,7 +169,7 @@ class InspectionWorkspace {
     return true;
   }
   private changeSelection(key: string): boolean {
-    this.initialSectionPending = false;
+    this.initialSectionPending = key === "analysis";
     if (key === this.selected) return false;
     this.pendingScroll = key;
     this.select(key);
@@ -194,7 +196,8 @@ class InspectionWorkspace {
     if (this.selected !== "search") this.previousSection = this.selected;
     const query = this.filter.value.trim();
     this.search.update(query);
-    this.activate(query ? "search" : this.previousSection);
+    const previous = this.previousSection === "analysis" ? this.initialSection() : this.previousSection;
+    this.activate(query ? "search" : previous);
   }
   private restoreScroll(key: string): void {
     requestAnimationFrame(() => {

@@ -49,7 +49,11 @@ test("finishing a scan preserves a file tool opened while analysis was pending",
   await page.goto("/");
   await inspectMedia(page);
   await expect(page.locator("#fileAnalysisProgress")).toBeVisible();
-  await page.locator("#fileHashesButton").click();
+  await expect(page.locator("#workspaceTitle")).toHaveText("Analysis");
+  await expect(page.locator("#workspaceHashes")).toBeHidden();
+  await page.locator("#fileHashesButton").press("Enter");
+  await expect(page.locator("#workspaceHashes")).toBeVisible();
+  await expect(page.locator("#workspaceViewport")).toBeFocused();
 
   release();
 

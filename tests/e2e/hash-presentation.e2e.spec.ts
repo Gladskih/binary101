@@ -61,6 +61,8 @@ test("a hashes-only report has no empty navigation column", async ({ page }) => 
   await page.setInputFiles("#fileInput", { name: "small.txt", mimeType: "text/plain", buffer: Buffer.from("abc") });
   await expect(page.locator("#sha512Value")).toHaveText(/^[a-f0-9]{128}$/);
 
+  await expect(page.locator("#workspaceHashes")).toBeVisible();
+  await expect(page.locator("#workspaceUnsupported")).toBeVisible();
   await expect(page.locator(".workspaceSidebar")).toBeHidden();
   expect((await page.locator("#workspaceContent").boundingBox())!.x).toBe(0);
 });
