@@ -21,6 +21,7 @@ import { parseElfAttributes } from "./attributes.js";
 import { parseElfMips } from "./mips.js";
 import { parseElfTlsInfo } from "./tls.js";
 import { parseElfUnwind } from "./unwind.js";
+import { parseElfSFrame } from "./sframe.js";
 import { parseElfLsda } from "./lsda.js";
 import { readElfNativeAotGc } from "./native-aot-gc.js";
 import { parseElfArmEhabi } from "./arm-ehabi.js";
@@ -104,6 +105,7 @@ export const parseElfMetadata = async (file: File, result: ElfParseResult,
   if (prepared) retainMetadata(result, "dwarf", await analyzeElfDwarf(file, result.sections,
     result.is64 ? "elf64" : "elf32", result.littleEndian, result.issues, result, result.relocations, prepared));
   retainMetadata(result, "unwind", await parseElfUnwind(file, result));
+  retainMetadata(result, "sframe", await parseElfSFrame(file, result));
   retainMetadata(result, "lsdas", await parseElfLsda(file, result, await readElfNativeAotGc(file, result)));
   result.sanitizerEvidence = analyzeElfSanitizers(result);
   retainMetadata(result, "importLinkage", analyzeElfImportLinkage(result));

@@ -13,6 +13,7 @@ import { createElfImportLinkageModel } from "./import-linkage.js";
 import { createElfNotesTableModel } from "./notes.js";
 import { createElfSymbolTableModel } from "./symbol-tables.js";
 import { createElfUnwindTableModel, elfUnwindTableId } from "./unwind.js";
+import { getElfSFrameTableModel } from "./sframe.js";
 import { createElfHashTableModel } from "./hash-tables.js";
 import { createElfAttributeTableModel } from "./attributes.js";
 import { createElfMipsOptionModel } from "./mips.js";
@@ -43,7 +44,7 @@ const getCoreTable = (elf: ElfParseResult, tableId: string): PagedSortableTableM
 
 type TableResolver = (elf: ElfParseResult, tableId: string) => PagedSortableTableModel | null;
 const tableResolvers: TableResolver[] = [
-  getArmTable, getCoreTable, getElfMiniDebugTable, getElfRelocationRecordsModel,
+  getArmTable, getCoreTable, getElfMiniDebugTable, getElfRelocationRecordsModel, getElfSFrameTableModel,
   (elf, id) => {
     const index = elf.mips?.findIndex((_, index) => id === `elf-mips-options-${index}`) ?? -1;
     return index >= 0 ? createElfMipsOptionModel(elf.mips![index]!, index) : null;

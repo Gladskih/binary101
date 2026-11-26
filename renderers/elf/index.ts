@@ -6,6 +6,7 @@ import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
 import { renderElfUnwind } from "./unwind.js";
+import { renderElfSFrame } from "./sframe.js";
 import { renderElfHashTables } from "./hash-tables.js";
 import { renderElfAttributes } from "./attributes.js";
 import { renderElfMips } from "./mips.js";
@@ -58,6 +59,7 @@ const SECTION_HINTS: Record<string, string> = {
   ".rel.dyn": "Relocations applied at load time (implicit addends).",
   ".eh_frame": "Unwind info for stack unwinding (exceptions/backtraces).",
   ".eh_frame_hdr": "Index into .eh_frame to accelerate unwinding.",
+  ".sframe": "GNU SFrame stack trace metadata.",
   ".init": "Initialization code (legacy).",
   ".fini": "Finalization code (legacy).",
   ".init_array": "Array of constructors (function pointers) run at startup.",
@@ -247,6 +249,7 @@ export function renderElf(elf: ElfReport | null): string {
   renderElfSymbolTables(elf, out);
   renderElfSectionGroups(elf, out);
   renderElfUnwind(elf, out);
+  renderElfSFrame(elf, out);
   renderElfLsda(elf, out);
   renderElfArmEhabi(elf, out);
   renderElfHashTables(elf, out);

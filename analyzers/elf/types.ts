@@ -15,6 +15,7 @@ import type { ElfSymbolTable } from "./symbol-tables.js";
 import type { ElfGnuProperty } from "./gnu-properties.js";
 import type { ElfSectionGroup } from "./section-groups.js";
 import type { ElfUnwindSection } from "./unwind-types.js";
+import type { ElfSFrame } from "./sframe-types.js";
 import type { ElfHashTable } from "./hash-types.js";
 import type { GoBuildInfo } from "./go-build-info.js";
 import type { EmbeddedResourceAnalysis } from "../embedded-resources/types.js";
@@ -111,6 +112,7 @@ export interface ElfParseResult {
   symbolTables?: ElfSymbolTable[];
   sectionGroups?: ElfSectionGroup[];
   unwind?: ElfUnwindSection[];
+  sframe?: ElfSFrame[];
   hashTables?: ElfHashTable[];
   tls?: ElfTlsInfo;
   notes?: ElfNotesInfo;

@@ -157,6 +157,7 @@ export const createElfDisassemblyController = (
           entrypointVaddr: elf.header.entry,
           programHeaders: elf.programHeaders,
           nativeAot: elf.nativeAot ?? null,
+          ...(elf.sframe ? { sframe: elf.sframe } : {}),
           sections: elf.sections,
           yieldEveryInstructions: 1024,
           signal: localAbortController.signal,

@@ -1,7 +1,7 @@
 "use strict";
 
 import type { ElfOptionEntry } from "./types.js";
-import { ELF_SECTION_TYPE } from "./abi-constants.js";
+import { ELF_SECTION_TYPE, ELF_SEGMENT_TYPE } from "./abi-constants.js";
 
 export const decodeOption = (value: number, options: ElfOptionEntry[]): string | null =>
   options.find(entry => entry[0] === value)?.[1] || null;
@@ -67,12 +67,13 @@ export const PROGRAM_TYPES: ElfOptionEntry[] = [
   [0x6474e552, "GNU_RELRO", "Memory range intended to become read-only after relocations."],
   // GNU segment extension defined in glibc <elf.h>.
   // https://sourceware.org/git/?p=glibc.git;a=blob;f=elf/elf.h
-  [0x6474e553, "PT_GNU_PROPERTY", "GNU property note exposed to the loader."]
+  [0x6474e553, "PT_GNU_PROPERTY", "GNU property note exposed to the loader."],
+  [ELF_SEGMENT_TYPE.GNU_SFRAME, "PT_GNU_SFRAME", "GNU SFrame stack trace metadata."]
 ];
 
 export const SECTION_TYPES: ElfOptionEntry[] = [
   [0, "SHT_NULL", "Unused."],
-  [1, "SHT_PROGBITS", "Program-defined contents."],
+  [ELF_SECTION_TYPE.PROGBITS, "SHT_PROGBITS", "Program-defined contents."],
   [2, "SHT_SYMTAB", "Linker symbol table."],
   [3, "SHT_STRTAB", "String table."],
   [4, "SHT_RELA", "Relocation entries with addends."],
@@ -90,6 +91,7 @@ export const SECTION_TYPES: ElfOptionEntry[] = [
   [17, "SHT_GROUP", "Group flags and the list of member section indices."],
   [18, "SHT_SYMTAB_SHNDX", "Extended section indices for an associated symbol table."],
   [ELF_SECTION_TYPE.RELR, "SHT_RELR", "Packed relative relocations."],
+  [ELF_SECTION_TYPE.GNU_SFRAME, "SHT_GNU_SFRAME", "GNU SFrame stack trace metadata."],
   [0x6ffffff6, "GNU_HASH", "GNU-style hash table."],
   [0x6ffffff7, "GNU_LIBLIST", "Prelink library list."],
   [0x6ffffffd, "GNU_VERDEF", "Version definitions."],

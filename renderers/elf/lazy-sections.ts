@@ -11,6 +11,7 @@ import { renderElfSymbolVersions } from "./symbol-versions.js";
 import { renderElfSymbolTables } from "./symbol-tables.js";
 import { renderElfSectionGroups } from "./section-groups.js";
 import { elfUnwindTitle, renderElfUnwind } from "./unwind.js";
+import { elfSFrameTitle, renderElfSFrame } from "./sframe.js";
 import { elfLsdaTitle, renderElfLsda } from "./lsda.js";
 import { renderElfArmEhabi } from "./arm-ehabi.js";
 import { renderElfHashTables } from "./hash-tables.js";
@@ -70,6 +71,8 @@ const addTables = (elf: ElfParseResult, add: AddSection): void => {
   elf.unwind?.forEach((section, index) => add(`unwind-${index}`,
     elfUnwindTitle(section, section.sectionIndex == null ? undefined : names.get(section.sectionIndex)),
     renderElfUnwind, index));
+  elf.sframe?.forEach((table, index) => add(`sframe-${index}`,
+    elfSFrameTitle(table), renderElfSFrame, index));
   if (elf.lsdas?.length) add("lsda", elfLsdaTitle(elf.lsdas), renderElfLsda);
   addArchitecture(elf, add);
 };

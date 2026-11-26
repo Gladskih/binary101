@@ -46,6 +46,7 @@ export const collectElfInstructionSetSeeds = async (
     file,
     programHeaders: opts.programHeaders,
     nativeAot: opts.nativeAot ?? null,
+    ...(opts.sframe ? { sframe: opts.sframe } : {}),
     sections: opts.sections,
     is64: opts.is64Bit,
     littleEndian: opts.littleEndian,

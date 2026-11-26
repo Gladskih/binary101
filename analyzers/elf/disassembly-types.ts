@@ -10,6 +10,7 @@ import type { FeatureRequirements } from "llvm-aarch64-disasm";
 import type { Aarch64SpecialInstructionFinding } from "../aarch64/special-instructions.js";
 import type { ElfImportLinkage } from "./import-linkage.js";
 import type { ElfImportCodeEvidence } from "./import-linkage-code.js";
+import type { ElfSFrame } from "./sframe-types.js";
 
 export interface ElfInstructionSetUsage {
   aarch64Predicates?: FeatureRequirements["predicates"];
@@ -65,6 +66,7 @@ export interface AnalyzeElfInstructionSetOptions {
   programHeaders: ElfProgramHeader[];
   sections: ElfSectionHeader[];
   nativeAot?: NativeAotMetadata | null;
+  sframe?: ElfSFrame[];
   yieldEveryInstructions?: number;
   signal?: AbortSignal;
   onProgress?: (progress: ElfInstructionSetProgress) => void;
