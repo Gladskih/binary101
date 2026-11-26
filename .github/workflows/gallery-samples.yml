@@ -107,6 +107,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             lld llvm ffmpeg python3-reportlab python3-pil nsis 7zip xorriso
+          llvm_bin="$(llvm-config --bindir)"
+          test -x "$llvm_bin/llvm-lipo"
+          echo "$llvm_bin" >> "$GITHUB_PATH"
 
       - name: Install pinned UPX for this runner
         run: |
