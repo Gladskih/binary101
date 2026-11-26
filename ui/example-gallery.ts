@@ -1,21 +1,5 @@
 import type { InspectionContext } from "./inspection-context.js";
-
-const descriptions = [
-  ["hello-msvc-x64.exe", "PE · C / MSVC", "x86-64, static CRT, imports and unwind records"],
-  ["hello-masm-x86.exe", "PE · x86 assembly", "32-bit entry point, Win32 imports, no CRT"],
-  ["hello-go-x64.exe", "PE · Go", "x86-64, Go build information and function table"],
-  ["HelloCSharp.dll", "PE · C#", "CLR metadata, assembly references and managed methods"],
-  ["hello-gcc-x64.elf", "ELF · C / GCC", "x86-64 PIE, dynamic linking, relocations and DWARF"],
-  ["hello-go-arm64.elf", "ELF · Go", "AArch64, static linking and Go runtime metadata"],
-  ["hello.wasm", "WebAssembly", "Host function import, exports, linear memory and data"],
-  ["hello-samples.zip", "ZIP", "Stored and Deflate entries, sizes and extraction"],
-  ["hello.sqlite", "SQLite", "Database header, table, index and schema records"],
-  ["test-pattern.png", "PNG", "Lossless RGB image, chunk order and pixel dimensions"],
-  ["test-pattern.jpg", "JPEG", "Baseline image, frame markers and quantization tables"],
-  ["test-pattern.gif", "GIF", "Animation frames, palette and loop metadata"],
-  ["hello.pdf", "PDF", "Cross-reference table, trailer and document information"],
-  ["test-pattern.webm", "WebM", "VP8 video, Opus audio, keyframes and track metadata"]
-] as const;
+import { exampleGroups } from "./example-catalog.js";
 
 type FileOpener = (file: File, context: InspectionContext) => Promise<void>;
 
@@ -90,6 +74,37 @@ const bindGalleryDialog = (
   }
 };
 
+const appendWelcomeGroup = (parent: HTMLElement, caption: string): HTMLUListElement => {
+  const document = parent.ownerDocument;
+  const group = parent.appendChild(document.createElement("div"));
+  group.appendChild(document.createElement("h3")).textContent = caption;
+  const list = group.appendChild(document.createElement("ul"));
+  list.className = "exampleGalleryLanding__examples";
+  list.setAttribute("role", "list");
+  return list;
+};
+
+const populateGallery = (
+  groups: HTMLElement, body: HTMLTableSectionElement, assets: Record<string, string>,
+  welcome: ReturnType<typeof createSamplePicker>, modal: ReturnType<typeof createSamplePicker>
+): void => {
+  for (const [caption, samples] of exampleGroups) {
+    const entries = samples.flatMap(([name, label, description]) => {
+      const url = assets[`../generated/gallery/${name}`];
+      return url ? [{ name, label, description, url }] : [];
+    });
+    if (!entries.length) continue;
+    const list = appendWelcomeGroup(groups, caption);
+    for (const { name, label, description, url } of entries) {
+      const row = body.insertRow();
+      appendSampleButton(row.insertCell(), label, button => modal.select(url, name, button));
+      row.insertCell().textContent = description;
+      appendSampleButton(list.appendChild(groups.ownerDocument.createElement("li")), label,
+        button => welcome.select(url, name, button)).title = description;
+    }
+  }
+};
+
 export const attachExampleGallery = (
   document: Document,
   openFile: FileOpener,
@@ -100,7 +115,6 @@ export const attachExampleGallery = (
 ): (() => void) => {
   const dialog = document.querySelector<HTMLDialogElement>("#exampleGallery")!;
   const landing = document.getElementById("galleryLanding")!;
-  const list = landing.querySelector("ul")!;
   const body = dialog.querySelector("tbody")!;
   const inspect = (file: File): Promise<void> => openFile(file, { source: "example", object: "file" });
   const welcome = createSamplePicker(landing.querySelector<HTMLElement>("[role=status]")!, inspect);
@@ -108,15 +122,8 @@ export const attachExampleGallery = (
     dialog.close();
     await inspect(file);
   }, () => dialog.open);
-  for (const [name, label, description] of descriptions) {
-    const url = assets[`../generated/gallery/${name}`];
-    if (!url) continue;
-    const row = body.insertRow();
-    appendSampleButton(row.insertCell(), label, button => modal.select(url, name, button));
-    row.insertCell().textContent = description;
-    appendSampleButton(list.appendChild(document.createElement("li")), label,
-      button => welcome.select(url, name, button)).title = description;
-  }
+  populateGallery(landing.querySelector<HTMLElement>(".exampleGalleryLanding__groups")!, body,
+    assets, welcome, modal);
   if (body.rows.length) {
     landing.hidden = false;
     bindGalleryDialog(dialog, document.getElementById("galleryToolbarButton")!, modal.cancel);

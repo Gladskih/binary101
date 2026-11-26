@@ -5,6 +5,7 @@ $samples = [ordered]@{
     'assembly-masm-x86-link' = 'hello-masm-x86.exe'
     'go-windows-amd64-default' = 'hello-go-x64.exe'
     'csharp-framework-win-x64-release' = 'HelloCSharp.dll'
+    'csharp-nativeaot-win-x64-release' = 'hello-nativeaot.exe'
 }
 
 node --import tsx scripts/pe-disassembly-samples/index.ts `
@@ -28,3 +29,8 @@ $goRoot = go env GOROOT
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item -LiteralPath (Join-Path $goRoot 'LICENSE') `
     -Destination (Join-Path $output.FullName 'go-windows-license.txt')
+$dotnetRoot = Split-Path -Parent (Get-Command dotnet -CommandType Application).Source
+Copy-Item -LiteralPath (Join-Path $dotnetRoot 'LICENSE.txt') `
+    -Destination (Join-Path $output.FullName 'dotnet-license.txt')
+Copy-Item -LiteralPath (Join-Path $dotnetRoot 'ThirdPartyNotices.txt') `
+    -Destination (Join-Path $output.FullName 'dotnet-third-party-notices.txt')

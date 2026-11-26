@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { openInspectionSection } from "./inspection-navigation.js";
 
 test.skip(!process.env["CI"] && !existsSync("generated/gallery/hello-samples.zip"),
   "Build the gallery assets before running these tests locally.");
@@ -9,16 +10,27 @@ const examples = [
   ["PE · x86 assembly", "hello-masm-x86.exe", /PE/],
   ["PE · Go", "hello-go-x64.exe", /PE/],
   ["PE · C#", "HelloCSharp.dll", /PE/],
+  ["PE · NativeAOT", "hello-nativeaot.exe", /PE/],
+  ["PE · AArch64", "hello-arm64.dll", /PE/],
   ["ELF · C / GCC", "hello-gcc-x64.elf", /ELF/],
   ["ELF · Go", "hello-go-arm64.elf", /ELF/],
+  ["Mach-O · Universal", "hello-universal.o", /Mach-O/],
   ["WebAssembly", "hello.wasm", /WebAssembly/i],
+  ["UPX", "hello-upx.exe", /PE/],
+  ["Crinkler", "hello-crinkler.exe", /PE/],
+  ["Inno Setup", "hello-inno.exe", /PE/],
+  ["NSIS", "hello-nsis.exe", /PE/],
   ["ZIP", "hello-samples.zip", /ZIP/i],
+  ["7z · Solid", "hello-solid.7z", /7z/i],
+  ["ISO 9660 · Joliet", "hello-joliet.iso", /ISO/],
   ["SQLite", "hello.sqlite", /SQLite/i],
   ["PNG", "test-pattern.png", /PNG/],
-  ["JPEG", "test-pattern.jpg", /JPEG/],
+  ["JPEG · EXIF", "test-pattern.jpg", /JPEG/],
+  ["JPEG + RAR", "test-pattern-rar.jpg", /JPEG/],
   ["GIF", "test-pattern.gif", /GIF/],
   ["PDF", "hello.pdf", /PDF/],
-  ["WebM", "test-pattern.webm", /WebM/]
+  ["WebM", "test-pattern.webm", /WebM/],
+  ["MP4", "test-pattern.mp4", /MP4/i]
 ] as const;
 
 test("opens every generated example directly from the welcome screen", async ({ page }) => {
@@ -42,6 +54,45 @@ test("opens every generated example directly from the welcome screen", async ({ 
   expect(binaryRequests).toHaveLength(examples.length);
 });
 
+const featuredReports = [
+  ["PE · NativeAOT", /NativeAOT metadata/],
+  ["Mach-O · Universal", /Slice 0: x86-64.*Slice 1: ARM64/s],
+  ["UPX", /UPX executable packer - verified/],
+  ["Crinkler", /Crinkler executable packer - verified/],
+  ["NSIS", /NSIS installer - verified/],
+  ["7z · Solid", /Compression folders \(1\)/],
+  ["ISO 9660 · Joliet", /Joliet/],
+  ["JPEG · EXIF", /Generated test pattern/],
+  ["JPEG + RAR", /Embedded RAR archive detected/],
+  ["MP4", /Top-level boxes/]
+] as const;
+
+for (const [name, evidence] of featuredReports) {
+  test(`${name} reaches its specialized report`, async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator("#analysisValue")).toContainText(evidence);
+  });
+}
+
+test("the AArch64 example exercises CRC32 and AES instruction analysis", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "PE · AArch64", exact: true }).click();
+  await openInspectionSection(page, "Instruction sets");
+  await page.locator("#peInstructionSetsAnalyzeButton").click();
+  const requirements = page.locator("#peAarch64Requirements");
+  await expect(requirements).toContainText("FEAT_CRC32");
+  await expect(requirements).toContainText("FEAT_AES");
+});
+
+test("the Inno Setup example exposes its validated embedded engine", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Inno Setup", exact: true }).click();
+  await openInspectionSection(page, "Inno Setup installer");
+  await expect(page.getByText("Decoded LZMA and reversed Inno x86 call filter")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download embedded setup engine" })).toBeVisible();
+});
+
 test("browses examples while inspecting a file", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "PNG", exact: true }).click();
@@ -54,7 +105,7 @@ test("browses examples while inspecting a file", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(browse).toBeFocused();
   await browse.click();
-  await gallery.getByRole("button", { name: "JPEG", exact: true }).click();
+  await gallery.getByRole("button", { name: "JPEG · EXIF", exact: true }).click();
   await expect(page.locator("#fileNameDetail")).toHaveText("test-pattern.jpg");
 });
 
@@ -136,16 +187,17 @@ for (const colorScheme of ["light", "dark"] as const) {
     await page.goto("/");
     const gallery = page.getByRole("region", { name: "Examples" });
     await gallery.getByRole("button", { name: examples[0][0], exact: true }).focus();
+    const lastExample = examples.at(-1)!;
     for (const [label] of examples.slice(1)) {
       await page.keyboard.press("Tab");
       await expect(gallery.getByRole("button", { name: label, exact: true })).toBeFocused();
     }
-    const list = gallery.getByRole("list");
-    expect(await list.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
-    await expect(gallery.getByRole("button", { name: "WebM" })).toBeInViewport();
+    const overflows = await gallery.getByRole("list").evaluateAll(elements =>
+      elements.map(element => element.scrollWidth - element.clientWidth));
+    expect(overflows).toEqual([0, 0, 0, 0]);
+    await expect(gallery.getByRole("button", { name: lastExample[0], exact: true })).toBeInViewport();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#fileNameDetail")).toHaveText("test-pattern.webm");
-    await expect(page.locator("#analysisValue")).toContainText(/VP8/);
-    await expect(page.locator("#analysisValue")).toContainText(/Opus/i);
+    await expect(page.locator("#fileNameDetail")).toHaveText(lastExample[1]);
+    await expect(page.locator("#analysisValue")).toContainText(/MP4/i);
   });
 }

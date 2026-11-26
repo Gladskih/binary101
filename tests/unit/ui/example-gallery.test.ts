@@ -25,7 +25,8 @@ class Dialog extends EventTarget {
 interface SampleContainer {
   ownerDocument: { createElement: (tag: string) => Button | SampleContainer };
   textContent: string;
-  appendChild(button: Button): Button;
+  appendChild<Child extends Button | SampleContainer>(child: Child): Child;
+  setAttribute(name: string, value: string): void;
 }
 
 const mountGallery = (assets: Record<string, string>) => {
@@ -35,23 +36,32 @@ const mountGallery = (assets: Record<string, string>) => {
   const modalStatus = { textContent: "" };
   const buttons: Button[] = [];
   const modalButtons: Button[] = [];
+  const headings: SampleContainer[] = [];
   const opened: Parameters<Parameters<typeof attachExampleGallery>[1]>[] = [];
   const parent = (children: Button[]): SampleContainer => ({
     ownerDocument,
     textContent: "",
-    appendChild: (button: Button) => { children.push(button); return button; }
+    appendChild: child => {
+      if (child instanceof Button) children.push(child);
+      return child;
+    },
+    setAttribute: () => undefined
   });
-  const list = { appendChild: (item: ReturnType<typeof parent>) => item };
-  const landing = { hidden: true, querySelector: (selector: string) =>
-    selector === "ul" ? list : status };
   const body = {
     rows: modalButtons,
     insertRow: () => ({ insertCell: () => parent(modalButtons) })
   };
   const panel = Object.assign(dialog, { querySelector: (selector: string) =>
     selector === "tbody" ? body : modalStatus });
-  const ownerDocument = { createElement: (tag: string) =>
-    tag === "li" ? parent(buttons) : new Button() };
+  const ownerDocument = { createElement: (tag: string) => {
+    if (tag === "button") return new Button();
+    const element = parent(buttons);
+    if (tag === "h3") headings.push(element);
+    return element;
+  } };
+  const groups = parent(buttons);
+  const landing = { hidden: true, querySelector: (selector: string) =>
+    selector === ".exampleGalleryLanding__groups" ? groups : status };
   // This fixture supplies the DOM methods used by the gallery, with real EventTarget listeners.
   const document: unknown = {
     querySelector: () => panel,
@@ -61,7 +71,7 @@ const mountGallery = (assets: Record<string, string>) => {
   const cancel = attachExampleGallery(document as Document, async (...args) => {
     opened.push(args);
   }, assets);
-  return { launch, landing, dialog, status, modalStatus, buttons, modalButtons, opened, cancel };
+  return { launch, landing, dialog, status, modalStatus, buttons, modalButtons, headings, opened, cancel };
 };
 
 const wasmAsset = { "../generated/gallery/hello.wasm": "/assets/fixture.wasm" };
@@ -72,6 +82,7 @@ void test("keeps the gallery hidden when there are no generated examples", () =>
   assert.equal(gallery.landing.hidden, true);
   assert.equal(gallery.launch.hidden, true);
   assert.deepEqual(gallery.buttons, []);
+  assert.deepEqual(gallery.headings, []);
 });
 
 void test("loads one available example as an inspector File", async context => {
@@ -84,6 +95,7 @@ void test("loads one available example as an inspector File", async context => {
   assert.equal(gallery.dialog.open, false);
   assert.equal(fetch.mock.callCount(), 0);
   assert.equal(sample?.textContent, "WebAssembly");
+  assert.deepEqual(gallery.headings.map(heading => heading.textContent), ["Executables and objects"]);
 
   sample?.click();
   await setImmediate();

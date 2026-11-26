@@ -31,11 +31,13 @@ def build_media(output):
     source = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
               "-i", "testsrc2=size=320x180:rate=12"]
     run([*source, "-frames:v", "1", "-pix_fmt", "rgb24", output / "test-pattern.png"], check=True)
-    run([*source, "-frames:v", "1", "-q:v", "3", output / "test-pattern.jpg"], check=True)
     run([*source, "-filter_complex_threads", "1", "-filter_complex",
          "fps=8,trim=duration=2,split[frames][colors];[colors]palettegen[palette];"
          "[frames][palette]paletteuse", "-loop", "0", output / "test-pattern.gif"], check=True)
-    run([*source, "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2",
+    video = [*source, "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2"]
+    run([*video,
          "-c:v", "libvpx", "-crf", "32", "-b:v", "0", "-g", "12", "-c:a", "libopus",
          "-metadata", "title=Binary101 test pattern", output / "test-pattern.webm"], check=True)
+    run([*video, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart",
+         "-metadata", "title=Binary101 test pattern", output / "test-pattern.mp4"], check=True)
     build_pdf(output / "hello.pdf")

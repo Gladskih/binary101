@@ -24,8 +24,8 @@ jobs:
         env:
           SAMPLE_HASH: >-
             ${{ hashFiles('.github/workflows/gallery-samples.yml',
-              'scripts/build-gallery-*', 'scripts/gallery_media.py',
-              'scripts/pe-disassembly-samples/**', 'samples/gallery/*.c',
+              'scripts/build-gallery-*', 'scripts/gallery*',
+              'scripts/pe-disassembly-samples/**', 'samples/gallery/**',
               'samples/pe-disassembly/c/hello.c', 'samples/pe-disassembly/go/hello.go',
               'samples/pe-disassembly/assembly/hello-masm-x86.asm',
               'samples/pe-disassembly/csharp/**') }}
@@ -70,6 +70,14 @@ jobs:
         shell: pwsh
         run: ./scripts/build-gallery-pe.ps1
 
+      - name: Build Inno Setup example
+        shell: pwsh
+        run: ./scripts/build-gallery-inno.ps1
+
+      - name: Build Crinkler example
+        shell: pwsh
+        run: ./scripts/build-gallery-crinkler.ps1
+
       - name: Upload PE examples for assembly
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -97,7 +105,21 @@ jobs:
       - name: Install example build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends lld ffmpeg python3-reportlab
+          sudo apt-get install -y --no-install-recommends \
+            lld llvm ffmpeg python3-reportlab python3-pil nsis 7zip xorriso
+
+      - name: Install pinned UPX for this runner
+        run: |
+          upx_release=upx-5.1.0-amd64_linux
+          upx_dir="$(mktemp -d)"
+          cd "$upx_dir"
+          curl --fail --silent --show-error --location \
+            "https://github.com/upx/upx/releases/download/v5.1.0/$upx_release.tar.xz" \
+            --output "$upx_release.tar.xz"
+          echo "946b7269d0f7fcc1c5da0f771ea7fe9c0fed3534cf41d285980830019b4bc95e  $upx_release.tar.xz" \
+            | sha256sum --check
+          tar -xf "$upx_release.tar.xz"
+          echo "$upx_dir/$upx_release" >> "$GITHUB_PATH"
 
       - name: Build ELF, WebAssembly, archives and media examples
         run: /usr/bin/python3 scripts/build-gallery-linux.py

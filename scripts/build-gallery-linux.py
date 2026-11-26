@@ -6,6 +6,8 @@ import sqlite3
 import subprocess
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from gallery_formats import build_extra_formats
+from gallery_jpeg import build_jpeg
 from gallery_media import build_media
 
 
@@ -34,7 +36,8 @@ def main():
                    check=True)
     go_root = Path(subprocess.check_output(["go", "env", "GOROOT"], text=True).strip())
     copyfile(go_root / "LICENSE", output / "go-linux-license.txt")
-    wasm_source = root / "samples/gallery/hello-wasm.c"
+    gallery_source = root / "samples/gallery"
+    wasm_source = gallery_source / "hello-wasm.c"
     wasm = output / "hello.wasm"
     subprocess.run(["clang", "--target=wasm32", "-O2", "-nostdlib", "-Wl,--no-entry",
                     "-Wl,--export-memory", "-Wl,--export=greet", "-o", wasm, wasm_source],
@@ -44,6 +47,8 @@ def main():
         archive.write(wasm, wasm.name)
     build_sqlite(output / "hello.sqlite")
     build_media(output)
+    build_jpeg(output, gallery_source / "hello.txt")
+    build_extra_formats(gallery_source, output)
 
 
 if __name__ == "__main__":
