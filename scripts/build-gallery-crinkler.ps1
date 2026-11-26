@@ -12,13 +12,16 @@ $sdk = Get-ChildItem -Path "${env:ProgramFiles(x86)}/Windows Kits/10/Lib/*/um/x8
 if (-not (Test-Path -LiteralPath $linker) -or -not $sdk) {
     throw 'Crinkler or the x86 Windows SDK import library is missing.'
 }
+$user32 = Join-Path $sdk.DirectoryName 'user32.lib'
+if (-not (Test-Path -LiteralPath $user32)) { throw 'The x86 Windows SDK user32.lib is missing.' }
 $object = Join-Path $tools.FullName 'hello-crinkler.obj'
 clang --target=i686-pc-windows-msvc -c samples/gallery/hello-crinkler.s -o $object
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $output = New-Item -ItemType Directory -Path generated/gallery -Force
 # The COFF symbol is _start. Crinkler looks it up by its undecorated name.
-& $linker '/ENTRY:start' '/SUBSYSTEM:WINDOWS' '/COMPMODE:FAST' '/HASHTRIES:1' `
-    "/OUT:$($output.FullName)\hello-crinkler.exe" $object $sdk.FullName
+# Crinkler's import stub uses MessageBoxA from user32.
+& $linker '/ENTRY:start' '/SUBSYSTEM:WINDOWS' '/NODEFAULTLIB' '/COMPMODE:FAST' '/HASHTRIES:1' `
+    '/ORDERTRIES:0' "/OUT:$($output.FullName)\hello-crinkler.exe" $object $sdk.FullName $user32
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item -LiteralPath (Join-Path $tools.FullName 'crinkler30b/LICENSE.txt') `
     -Destination (Join-Path $output.FullName 'crinkler-license.txt')
