@@ -34,9 +34,9 @@ void test("readRevisions reads table sections and trailer", async () => {
 
 void test("readRevisions reports errors for out-of-bounds offsets", async () => {
   const issues: string[] = [];
-  const result = await readRevisions(open("short"), 100, issues);
+  const result = await readRevisions(open("short"), 5, issues);
   assert.deepEqual(result.revisions, []);
-  assert.ok(issues.some(msg => msg.includes("outside the file")));
+  assert.deepEqual(issues, ["Cross-reference offset 5 points outside the file."]);
 });
 
 void test("readRevisions keeps raw entries above /Size out of the object index", async () => {
@@ -73,7 +73,67 @@ void test("readRevisions stops at a cyclic supplemental offset", async () => {
     0, issues);
   assert.equal(revisions.length, 1);
   assert.equal(revisions[0]?.supplement, undefined);
-  assert.match(issues.join("\n"), /cycle at \/XRefStm/);
+  assert.deepEqual(issues, ["Cross-reference cycle at /XRefStm offset 0."]);
+});
+
+const update = (trailer: string): { text: string; offset: number } => {
+  const base = tableText + "\n";
+  return { text: base + "xref\n0 1\n0000000000 65535 f \ntrailer\n" + trailer, offset: base.length };
+};
+
+void test("a malformed supplemental offset cannot uncover entries from an earlier revision", async () => {
+  const { text, offset } = update("<< /Size 2 /Prev 0 /XRefStm -1 >>");
+  const issues: string[] = [];
+  const result = await readRevisions(open(text), offset, issues);
+  assert.equal(result.revisions.length, 1);
+  assert.equal(result.index.has(1), false);
+  assert.deepEqual(issues, ["Invalid /XRefStm byte offset in trailer."]);
+});
+
+void test("an unreadable supplemental stream stops revision lookup", async () => {
+  const { text, offset } = update("<< /Size 2 /Prev 0 /XRefStm 1 >>");
+  const issues: string[] = [];
+  const result = await readRevisions(open(text), offset, issues);
+  assert.equal(result.revisions.length, 1);
+  assert.equal(result.index.has(1), false);
+  assert.deepEqual(issues, ["Unable to read /XRefStm at offset 1."]);
+});
+
+void test("older entries cannot exceed the latest trailer Size", async () => {
+  const { text, offset } = update("<< /Size 1 /Prev 0 >>");
+  const issues: string[] = [];
+  const result = await readRevisions(open(text), offset, issues);
+  assert.equal(result.revisions.length, 2);
+  assert.equal(result.index.has(1), false);
+  assert.deepEqual(issues, []);
+});
+
+void test("a complete chain at the revision limit has no truncation warning", async () => {
+  const { text, offset } = withPreviousSections(32);
+  const issues: string[] = [];
+  const result = await readRevisions(open(text), offset, issues);
+  assert.equal(result.revisions.length, 32);
+  assert.deepEqual(issues, []);
+});
+
+const hybridWithLargePreviousSection = (): { file: File; offset: number } => {
+  const base = "xref\n0 99998\n" + "0000000000 65535 f \n".repeat(99_998) +
+    "trailer\n<< /Size 99998 >>\n";
+  const supplement = "100001 0 obj\n<< /Type /XRef /Size 100002 /Index [99998 2] /W [1 1 1] /Length 6 >>" +
+    "\nstream\n" + "\0".repeat(6) + "\nendstream\nendobj\n";
+  const update = "xref\n100000 1\n0000000000 65535 f \ntrailer\n" +
+    "<< /Size 100002 /Prev 0 /XRefStm " + base.length + " >>";
+  return { file: new File([base, supplement, update], "large-hybrid.pdf"), offset: base.length + supplement.length };
+};
+
+void test("primary tables and hybrid streams both consume the revision chain's entry budget", async () => {
+  const { file, offset } = hybridWithLargePreviousSection();
+  const issues: string[] = [];
+  const result = await readRevisions(createFileRangeReader(file, 0, file.size), offset, issues);
+  assert.equal(result.revisions[0]?.supplement?.entries?.length, 2);
+  assert.equal(result.revisions[1]?.primary.entries, null);
+  assert.equal(result.index.size, 3);
+  assert.deepEqual(issues, ["Cross-reference table at 0: xref entry limit reached."]);
 });
 
 for (const [original, replacement, message] of [

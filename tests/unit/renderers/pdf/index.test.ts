@@ -7,9 +7,18 @@ import { renderPdf } from "../../../../renderers/pdf/index.js";
 import { createPdfMissingStartxref } from "../../../fixtures/pdf-fixtures.js";
 import { createHybridPdf, createRevisionPdf, createStreamPdf } from "../../../fixtures/pdf-modern.js";
 
-const reportDocument = (pdf: PdfParseResult) => new DOMParser({
-  onError: (_level, message) => assert.fail(message)
-}).parseFromString("<section>" + renderPdf(pdf) + "</section>", "text/html");
+const reportDocument = (pdf: PdfParseResult) => {
+  const report = new DOMParser({ onError: (_level, message) => assert.fail(message) })
+    .parseFromString("<section>" + renderPdf(pdf) + "</section>", "text/html");
+  // The browser displays text between sections, and can move stray table text outside its table.
+  for (const tag of ["section", "dl", "div", "table", "thead", "tbody", "tr", "ul"]) {
+    for (const node of Array.from(report.getElementsByTagName(tag))) {
+      assert.deepEqual(Array.from(node.childNodes).filter(child => child.nodeType === 3)
+        .map(child => child.textContent?.trim()).filter(Boolean), [], "Stray text in " + tag);
+    }
+  }
+  return report;
+};
 
 const fullReport: PdfParseResult = {
   size: 512,
@@ -110,12 +119,13 @@ void test("PDF xref counters are attached to their own numeric columns and secti
 });
 
 void test("PDF report renders a hybrid reference stream alongside its tables", async () => {
-  const html = renderPdf(await parsePdf(createHybridPdf(false)));
-  assert.match(html, /Supplemental stream \(6 0 R\)/);
-  assert.match(html, /<th scope="col" class="peNumeric">Compressed<\/th>/);
-  assert.match(html, /Declared page count/);
-  assert.match(html, /Proof of \(nested\) strings/);
-  assert.doesNotMatch(html, /Warnings/);
+  const report = reportDocument(await parsePdf(createHybridPdf(false)));
+  const xref = report.getElementsByTagName("table")[0]!;
+  const rows = xref.getElementsByTagName("tbody")[0]!.getElementsByTagName("tr");
+  assert.deepEqual(Array.from(rows, row => row.getElementsByTagName("th")[0]?.textContent),
+    ["Table", "Supplemental stream (6 0 R)", "Table"]);
+  assert.match(report.documentElement?.textContent ?? "", /Declared page count.*Proof of \(nested\) strings/);
+  assert.doesNotMatch(report.documentElement?.textContent ?? "", /Warnings/);
 });
 
 void test("PDF report shows unavailable xref counts and escaped warnings", async () => {
@@ -161,6 +171,9 @@ void test("PDF report distinguishes missing metadata and unavailable xref counts
 });
 
 void test("PDF report with no parsed structure renders its footer warning", async () => {
-  assert.match(renderPdf(await parsePdf(createPdfMissingStartxref())), /invalid startxref offset/);
+  const report = reportDocument(await parsePdf(createPdfMissingStartxref()));
+  assert.deepEqual(Array.from(report.getElementsByTagName("h4"), node => node.textContent), ["Warnings"]);
+  assert.equal(report.getElementsByTagName("table").length, 0);
+  assert.match(report.getElementsByTagName("li")[0]?.textContent ?? "", /invalid startxref offset/);
   assert.equal(renderPdf(null), "");
 });

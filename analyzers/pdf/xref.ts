@@ -41,17 +41,19 @@ const readSupplement = async (
   return stream;
 };
 
-const addEntries = (
-  index: Map<number, PdfXrefEntry>, section: PdfXref, objectNumberLimit: number
-): void => {
+const indexSection = (
+  index: Map<number, PdfXrefEntry>, { entries, trailer }: PdfXref, objectNumberLimit: number
+): number => {
+  if (!entries) return 0;
   // ISO 32000-2, 7.5.5: ignore entries beyond the object numbers declared by /Size.
-  const limit = Math.min(objectNumberLimit, section.trailer?.size ?? Infinity);
+  const limit = Math.min(objectNumberLimit, trailer?.size ?? Infinity);
   // Newest entries win, including free entries and unknown types that resolve to null.
-  for (const entry of section.entries ?? []) {
+  for (const entry of entries) {
     if (entry.objectNumber < limit && !index.has(entry.objectNumber)) {
       index.set(entry.objectNumber, entry);
     }
   }
+  return entries.length;
 };
 
 const supplementOffset = (primary: PdfXref): number | null =>
@@ -77,15 +79,17 @@ const readRevision = async (
 const indexRevision = (
   index: Map<number, PdfXrefEntry>, { primary, supplement }: PdfRevision, size: number
 ): number => {
-  addEntries(index, primary, size);
+  const count = indexSection(index, primary, size);
   // ISO 32000-1, 7.5.8.4: consult /XRefStm for entries absent from this table.
-  if (supplement) addEntries(index, supplement, size);
-  return (primary.entries?.length ?? 0) + (supplement?.entries?.length ?? 0);
+  return count + (supplement ? indexSection(index, supplement, size) : 0);
 };
+
+const declaresSupplement = ({ kind, trailer }: PdfXref): boolean =>
+  kind === "table" && !!trailer?.fields.some(({ key, value }) => key === "XRefStm" && value !== "null");
 
 const previousOffset = ({ primary, supplement }: PdfRevision): number | null => {
   // Unknown entries in a newer section can hide older objects. Stop at that boundary.
-  if (!primary.entries || (supplementOffset(primary) != null && !supplement?.entries)) return null;
+  if (!primary.entries || (declaresSupplement(primary) && !supplement?.entries)) return null;
   return primary.trailer?.prev ?? null;
 };
 

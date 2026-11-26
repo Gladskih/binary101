@@ -101,3 +101,64 @@ void test("embedded file index coalesces references with different PDF whitespac
   assert.deepEqual(pdf.embeddedFiles[0]?.sources, ["Catalog /AF"]);
   assert.deepEqual(pdf.issues, []);
 });
+
+void test("explicit PDF null entries do not create attachment indexes or warnings", async () => {
+  const pdf = await parsePdf(createPdfObjects([
+    "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles null >> /AF null >>",
+    "<< /Type /Pages /Count 0 /Kids [] >>"
+  ]));
+  assert.deepEqual(pdf.embeddedFiles, []);
+  assert.deepEqual(pdf.issues, []);
+});
+
+for (const [catalogEntry, object, warning] of [
+  ["/Names /Invalid", "<< >>", "Catalog /Names is not a dictionary or indirect reference."],
+  ["/AF [null 4 0 R /Invalid]", "<< >>", "File specification is not a dictionary or indirect reference."],
+  ["/AF [3 0 R]", "<< /EF /Invalid >>", "File specification /EF is not a dictionary or indirect reference."]
+] as const) {
+  void test("marks malformed attachment structures without publishing file records", async () => {
+    const pdf = await parsePdf(createPdfObjects([
+      "<< /Type /Catalog /Pages 2 0 R " + catalogEntry + " >>",
+      "<< /Type /Pages /Count 0 /Kids [] >>", object
+    ]));
+    assert.deepEqual(pdf.embeddedFiles, []);
+    assert.ok(pdf.issues.includes(warning));
+  });
+}
+
+void test("falls back to F and keeps optional malformed stream parameters unavailable", async () => {
+  const pdf = await parsePdf(associatedFile("<< /F (legacy) /EF << /F 3 0 R >> >>",
+    "<< /Type null /Length 0 /Params /Invalid >>\nstream\n\nendstream"));
+  assert.equal(pdf.embeddedFiles[0]?.name, "legacy");
+  assert.equal(pdf.embeddedFiles[0]?.decodedSize, null);
+  assert.deepEqual(pdf.issues, ["Embedded file /Params is not a dictionary or indirect reference."]);
+});
+
+const nestedNameTree = (levels: number): File => createPdfObjects([
+  "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>",
+  "<< /Type /Pages /Count 0 /Kids [] >>",
+  ...Array.from({ length: levels - 1 }, (_, index) => "<< /Kids [" + (index + 4) + " 0 R] >>"),
+  "<< /Names [(attachment) << /EF << /F " + (levels + 3) + " 0 R >> >>] >>",
+  "<< /Length 0 >>\nstream\n\nendstream"
+]);
+
+void test("deep name trees stop at the traversal limit with one warning", async () => {
+  const permitted = await parsePdf(nestedNameTree(32));
+  const limited = await parsePdf(nestedNameTree(33));
+  assert.equal(permitted.embeddedFiles[0]?.name, "attachment");
+  assert.deepEqual(permitted.issues, []);
+  assert.deepEqual(limited.embeddedFiles, []);
+  assert.deepEqual(limited.issues, ["Embedded file inspection limit reached."]);
+});
+
+void test("wide name trees stop at the number of visited nodes", async () => {
+  const entries = Array.from({ length: 512 }, (_, index) => String(index + 4) + " 0 R");
+  const pdf = await parsePdf(createPdfObjects([
+    "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 3 0 R >> >>",
+    "<< /Type /Pages /Count 0 /Kids [] >>",
+    "<< /Kids [" + entries.join(" ") + "] >>",
+    ...entries.map(() => "<< /Names [] >>")
+  ]));
+  assert.deepEqual(pdf.embeddedFiles, []);
+  assert.deepEqual(pdf.issues, ["Embedded file inspection limit reached."]);
+});

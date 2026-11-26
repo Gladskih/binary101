@@ -7,7 +7,8 @@ import {
   parseCatalogDictionary,
   parseInfoDictionary,
   parsePagesDictionary,
-  parseTrailerDictionary
+  parseTrailerDictionary,
+  readPdfTextString
 } from "../../../../analyzers/pdf/dictionary.js";
 import { readDictionary } from "../../../../analyzers/pdf/syntax.js";
 import { expectDefined } from "../../../helpers/expect-defined.js";
@@ -98,7 +99,18 @@ void test("malformed trailer fields produce unavailable offsets and references",
   const trailer = parseTrailerDictionary(dictionary, issues);
   assert.deepEqual([trailer.size, trailer.rootRef, trailer.id, trailer.prev,
     trailer.xrefStreamOffset, trailer.encrypt], Array(6).fill(null));
-  assert.match(issues.join("\n"), /\/Prev.*\n.*\/XRefStm/);
+  assert.deepEqual(issues, ["Invalid /Prev byte offset in trailer.", "Invalid /XRefStm byte offset in trailer."]);
+});
+
+void test("only complete Unicode markers override PDFDocEncoding", () => {
+  // PDF 1.7 Reference, Appendix D.2: 8B, 9E and A0 map to per mille, z caron and euro.
+  for (const [token, value] of [
+    ["<>", ""], ["<8B9EA0>", "\u2030\u017e\u20ac"], ["<FE41>", "\u00feA"], ["<41FF>", "A\u00ff"],
+    ["<EFBB41>", "\u00ef\u00bbA"], ["<EF41BF>", "\u00efA\u00bf"], ["<41BBBF>", "A\u00bb\u00bf"],
+    ["<4141BF>", "AA\u00bf"]
+  ]) {
+    assert.equal(readPdfTextString(token), value);
+  }
 });
 
 for (const input of ["<< /X (unterminated >>", "<< /X [1 >>", "<< /X <88Z> >>",

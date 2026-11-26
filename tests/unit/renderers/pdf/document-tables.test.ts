@@ -7,9 +7,17 @@ import {
 } from "../../../../renderers/pdf/document-tables.js";
 import { createPdfWithEmbeddedFile } from "../../../fixtures/pdf-document-structure.js";
 
-const document = (html: string) => new DOMParser({
-  onError: (_level, message) => assert.fail(message)
-}).parseFromString("<section>" + html + "</section>", "text/html");
+const document = (html: string) => {
+  const document = new DOMParser({ onError: (_level, message) => assert.fail(message) })
+    .parseFromString("<section>" + html + "</section>", "text/html");
+  for (const tag of ["thead", "tbody"]) {
+    for (const node of Array.from(document.getElementsByTagName(tag))) {
+      assert.deepEqual(Array.from(node.childNodes, child => child.nodeName),
+        Array.from(node.getElementsByTagName("tr"), () => "tr"));
+    }
+  }
+  return document;
+};
 
 void test("trailer and catalog classify familiar fields and preserve unfamiliar fields as text", () => {
   const fields = [{ key: "Root", value: "4 0 R" }, { key: "PageMode", value: "/UseNone" },
@@ -56,4 +64,34 @@ void test("uses unknown placeholders for unavailable geometry and unnamed embedd
     }]);
   const rows = Array.from(document(html).getElementsByTagName("tbody"), node => node.textContent);
   assert.deepEqual(rows, ["110 0 R\u2014\u2014\u2014", "Unknown\u2014\u201423 0 R\u20140\u2014\u2014Catalog /AF"]);
+});
+
+for (const [render, keys] of [
+  // ISO 32000-2, Tables 15 and 17.
+  [renderTrailerFields, ["Size", "Root", "Info", "ID", "Prev", "XRefStm", "Encrypt",
+    "Type", "W", "Index", "Length", "Filter", "DecodeParms"]],
+  // ISO 32000-2, Table 29.
+  [renderCatalogFields, ["Type", "Pages", "PageMode", "PageLayout", "Names", "Outlines",
+    "Metadata", "AcroForm", "Lang", "OpenAction", "AF", "Version", "ViewerPreferences",
+    "StructTreeRoot", "MarkInfo"]]
+] as const) {
+  void test("explains each supported dictionary key in its own row", () => {
+    const report = document(render(keys.map(key => ({ key, value: "null" }))));
+    const rows = Array.from(report.getElementsByTagName("tbody")[0]!.getElementsByTagName("tr"));
+    assert.deepEqual(rows.map(row => row.getElementsByTagName("th")[0]?.textContent),
+      keys.map(key => "/" + key));
+    for (const row of rows) {
+      const cells = row.getElementsByTagName("td");
+      assert.equal(cells[0]?.textContent, "null");
+      assert.match(cells[1]?.textContent ?? "", /^[A-Z].+\.$/);
+    }
+  });
+}
+
+void test("shows unavailable media and crop dimensions independently when scaling overflows", () => {
+  const page = { ref: { objectNumber: 10, generation: 0 }, mediaBox: [0, 0, 2, 1] as [number, number, number, number],
+    cropBox: [0, 0, 1, 2] as [number, number, number, number], rotation: 0, userUnit: Number.MAX_VALUE };
+  const report = document(renderPageTable({ raw: "", count: 1, entries: [page] }));
+  assert.deepEqual(Array.from(report.getElementsByTagName("td"), cell => cell.textContent),
+    ["10 0 R", "\u2014", "\u2014", "0"]);
 });

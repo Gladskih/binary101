@@ -58,3 +58,12 @@ for (const token of ["", "0 5 R", "1 65536 R", "1 9007199254740992 R", "1 R", "3
     assert.equal(readReference(token), null);
   });
 }
+
+void test("applies the same nesting budget to dictionaries and arrays", () => {
+  const nested = (opening: string, closing: string, depth: number) =>
+    "<< /Root " + opening.repeat(depth) + "0" + closing.repeat(depth) + " >>";
+  assert.ok(readDictionary(nested("[", "]", 63)));
+  assert.equal(readDictionary(nested("[", "]", 64)), null);
+  assert.ok(readDictionary(nested("<< /X ", " >>", 63)));
+  assert.equal(readDictionary(nested("<< /X ", " >>", 64)), null);
+});

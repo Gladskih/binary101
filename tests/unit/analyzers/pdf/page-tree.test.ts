@@ -63,3 +63,20 @@ void test("page count comparison stops when the object inspection budget is exha
   assert.equal(result.pages?.entries.length, 1023);
   assert.deepEqual(result.issues, ["Page tree node limit reached."]);
 });
+
+const nestedPageTree = (depth: number): File => createPdfObjects([
+  "<< /Type /Catalog /Pages 2 0 R >>",
+  "<< /Type /Pages /Count 1 /MediaBox [0 0 1 1] /Kids [3 0 R] >>",
+  ...Array.from({ length: depth - 1 }, (_, index) =>
+    "<< /Type /Pages /Count 1 /Parent " + (index + 2) + " 0 R /Kids [" + (index + 4) + " 0 R] >>"),
+  "<< /Type /Page /Parent " + (depth + 1) + " 0 R >>"
+]);
+
+void test("page tree refuses a descendant beyond its depth budget", async () => {
+  const allowed = await parsePdf(nestedPageTree(63));
+  const limited = await parsePdf(nestedPageTree(64));
+  assert.equal(allowed.pages?.entries.length, 1);
+  assert.deepEqual(allowed.issues, []);
+  assert.deepEqual(limited.pages?.entries, []);
+  assert.deepEqual(limited.issues, ["Page tree depth limit reached."]);
+});

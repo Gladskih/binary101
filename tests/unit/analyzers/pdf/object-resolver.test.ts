@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { deflateSync } from "node:zlib";
 import { createFileRangeReader } from "../../../../analyzers/file-range-reader.js";
 import { createObjectResolver } from "../../../../analyzers/pdf/object-resolver.js";
 import type { PdfXrefEntry } from "../../../../analyzers/pdf/types.js";
@@ -67,4 +68,89 @@ void test("a stream dictionary cannot come from a compressed object slot", async
   const subject = compressedResolver(rootText, childText);
   assert.equal(await subject.resolve.streamDictionary(child, "Test"), null);
   assert.deepEqual(subject.issues, ["Test 7 0 R: stream must be a direct xref entry."]);
+});
+
+const directResolver = (text: string, offset = 0) => {
+  const file = new File([text], "direct.pdf");
+  const index = new Map<number, PdfXrefEntry>([
+    [4, { kind: "direct", objectNumber: 4, generation: 0, offset }]
+  ]);
+  const issues: string[] = [];
+  return { resolve: createObjectResolver(createFileRangeReader(file, 0, file.size), index, null, issues), issues };
+};
+
+void test("requires endobj at the dictionary boundary and accepts it at EOF", async () => {
+  const valid = directResolver("4 0 obj " + rootText + " endobj");
+  const invalid = directResolver("4 0 obj " + rootText + " x endobj");
+  assert.equal((await valid.resolve.dictionary(root, "Catalog"))?.raw, rootText);
+  assert.equal(await invalid.resolve.dictionary(root, "Catalog"), null);
+  assert.deepEqual(invalid.issues, ["Catalog 4 0 R: dictionary does not terminate with endobj."]);
+});
+
+void test("rejects a direct object offset equal to the input length", async () => {
+  const subject = directResolver("text", 4);
+  assert.equal(await subject.resolve.dictionary(root, "Catalog"), null);
+  assert.deepEqual(subject.issues, ["Catalog 4 0 R: offset is outside the file."]);
+});
+
+void test("requires a stream marker immediately after dictionary trivia", async () => {
+  const subject = directResolver("4 0 obj " + rootText + " x stream\n");
+  assert.equal(await subject.resolve.streamDictionary(root, "Stream"), null);
+  assert.deepEqual(subject.issues, ["Stream 4 0 R: expected a stream."]);
+});
+
+const budgetedResolver = (sizes: number[]) => {
+  const parts: BlobPart[] = [];
+  const entries = new Map<number, PdfXrefEntry>();
+  const payloads = new Set<number>();
+  let offset = 0;
+  sizes.forEach((size, index) => {
+    const objectNumber = index + 1;
+    const streamNumber = objectNumber + 10;
+    const directory = objectNumber + " 0 99 " + rootText.length + "\n";
+    const decoded = Buffer.alloc(size, 32);
+    decoded.write(directory + rootText, "ascii");
+    const data = deflateSync(decoded);
+    const header = streamNumber + " 0 obj\n<< /Type /ObjStm /N 2 /First " + directory.length +
+      " /Length " + data.length + " /Filter /FlateDecode >>\nstream\n";
+    const suffix = "\nendstream\nendobj\n";
+    parts.push(header, data, suffix);
+    payloads.add(offset + header.length);
+    entries.set(objectNumber, { kind: "compressed", objectNumber, streamObject: streamNumber, index: 0 });
+    entries.set(streamNumber, { kind: "direct", objectNumber: streamNumber, generation: 0, offset });
+    offset += header.length + data.length + suffix.length;
+  });
+  const file = new File(parts, "decoded-budget.pdf");
+  const issues: string[] = [];
+  const reader = createFileRangeReader(file, 0, file.size);
+  let payloadReads = 0;
+  const watched = { ...reader, readBytes: (offset: number, length: number) => {
+    if (payloads.has(offset)) payloadReads += 1;
+    return reader.readBytes(offset, length);
+  } };
+  return { resolve: createObjectResolver(watched, entries, null, issues), issues,
+    payloadReads: () => payloadReads };
+};
+
+void test("charges decoded bytes cumulatively and accepts the exact aggregate budget", async () => {
+  // Four structural streams of 8 MiB fill the per-document 32 MiB cache.
+  const size = 8 * 1024 * 1024;
+  const subject = budgetedResolver([size, size, size, size, 128]);
+  for (const objectNumber of [1, 2, 3, 4]) {
+    assert.equal((await subject.resolve.dictionary({ objectNumber, generation: 0 }, "Test"))?.raw, rootText);
+  }
+  assert.equal(await subject.resolve.dictionary({ objectNumber: 5, generation: 0 }, "Test"), null);
+  assert.equal(subject.payloadReads(), 4);
+  assert.deepEqual(subject.issues, ["Test 5 0 R: decoded object stream budget reached."]);
+});
+
+void test("a decoded stream that crosses the aggregate budget is rejected", async () => {
+  const size = 8 * 1024 * 1024;
+  const subject = budgetedResolver([size, size, size, size - 1, 128]);
+  for (const objectNumber of [1, 2, 3, 4]) {
+    assert.equal((await subject.resolve.dictionary({ objectNumber, generation: 0 }, "Test"))?.raw, rootText);
+  }
+  assert.equal(await subject.resolve.dictionary({ objectNumber: 5, generation: 0 }, "Test"), null);
+  assert.equal(subject.payloadReads(), 5);
+  assert.deepEqual(subject.issues, ["Test 5 0 R: decoded object stream budget reached."]);
 });
