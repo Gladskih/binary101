@@ -1,137 +1,111 @@
-"use strict";
-import { extractDictionary, parseTrailerDictionary } from "./dictionary.js";
-import type { PdfXref, PdfXrefTable } from "./types.js";
+import type { FileRangeReader } from "../file-range-reader.js";
+import { readIndirectDictionary, readPdfText } from "./object.js";
+import { parseXrefStream } from "./xref-stream.js";
+import { parseXrefTable, xrefKeyword } from "./xref-table.js";
+import type { PdfRevision, PdfXref, PdfXrefEntry } from "./types.js";
 
-const skipWhitespace = (text: string, position: number): number => {
-  let pos = position;
-  while (pos < text.length) {
-    const ch = text.charAt(pos);
-    if (!ch || !/\s/.test(ch)) break;
-    pos += 1;
-  }
-  return pos;
-};
+// These budgets bound storage and seeks across the entire revision chain.
+const ENTRY_LIMIT = 100_000;
+const REVISION_LIMIT = 32;
+// A classic xref row uses 20 bytes (ISO 32000-2, 7.5.4). Leave room for subsection
+// headers and the trailer in addition to the rows.
+const TABLE_WINDOW = 4 * 1024 * 1024;
 
-const parseXrefTable = (text: string, startOffset: number, issues: string[]): PdfXrefTable | null => {
-  let pos = skipWhitespace(text, startOffset);
-  if (!text.startsWith("xref", pos)) return null;
-  pos += 4;
-  const tableBody = text.slice(pos);
-  const trailerIndex = tableBody.indexOf("trailer");
-  if (trailerIndex === -1) {
-    issues.push("xref table found without trailer.");
+const readXref = async (
+  reader: FileRangeReader, offset: number, budget: number, issues: string[]
+): Promise<PdfXref | null> => {
+  if (offset < 0 || offset >= reader.size) {
+    issues.push("Cross-reference offset " + offset + " points outside the file.");
     return null;
   }
-  const lines = tableBody.slice(0, trailerIndex).split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const sections: PdfXrefTable["sections"] = [];
-  const entries: PdfXrefTable["entries"] = [];
-  let lineIndex = 0;
-  while (lineIndex < lines.length) {
-    const headerLine = lines[lineIndex];
-    if (!headerLine) {
-      issues.push("xref subsection header line is missing.");
-      break;
-    }
-    const headerParts = headerLine.split(/\s+/);
-    const [startText, countText] = headerParts;
-    if (headerParts.length < 2 || !startText || !countText) {
-      issues.push("xref subsection header is malformed.");
-      break;
-    }
-    const startObj = Number.parseInt(startText, 10);
-    const count = Number.parseInt(countText, 10);
-    if (Number.isNaN(startObj) || Number.isNaN(count)) {
-      issues.push("xref subsection uses non-numeric bounds.");
-      break;
-    }
-    lineIndex += 1;
-    sections.push({ start: startObj, count });
-    for (let i = 0; i < count; i += 1) {
-      if (lineIndex >= lines.length) {
-        issues.push("xref subsection truncated before expected entry count.");
-        break;
-      }
-      const entryLine = lines[lineIndex];
-      if (!entryLine) {
-        issues.push(`xref entry ${startObj + i} is missing.`);
-        lineIndex += 1;
-        continue;
-      }
-      const entryMatch = entryLine.match(/^(\d{10})\s+(\d{5})\s+([fn])/);
-      if (!entryMatch) {
-        issues.push(`xref entry ${startObj + i} is malformed.`);
-        lineIndex += 1;
-        continue;
-      }
-      const offsetText = entryMatch[1];
-      const generationText = entryMatch[2];
-      const flag = entryMatch[3];
-      if (!offsetText || !generationText || !flag) {
-        issues.push(`xref entry ${startObj + i} is incomplete.`);
-        lineIndex += 1;
-        continue;
-      }
-      const objectNumber = startObj + i;
-      entries.push({
-        objectNumber,
-        offset: Number.parseInt(offsetText, 10),
-        generation: Number.parseInt(generationText, 10),
-        inUse: flag === "n"
-      });
-      lineIndex += 1;
-      if (entries.length >= 20000) {
-        issues.push("xref entry limit reached; further entries are omitted.");
-        return { kind: "table", startOffset, sections, entries, trailerText: null };
-      }
-    }
+  if (xrefKeyword.test(await readPdfText(reader, offset, 5))) {
+    return parseXrefTable(await readPdfText(reader, offset, TABLE_WINDOW), offset, budget, issues);
   }
-  const trailerText = tableBody.slice(trailerIndex + "trailer".length).trimStart();
-  return { kind: "table", startOffset, sections, entries, trailerText };
+  const object = await readIndirectDictionary(reader, offset);
+  const stream = object && await parseXrefStream(reader, object, offset, budget, issues);
+  if (!stream) issues.push("Unable to read cross-reference information at offset " + offset + ".");
+  return stream;
 };
 
-const parseXrefStream = (text: string, startOffset: number, issues: string[]): PdfXref | null => {
-  const pos = skipWhitespace(text, startOffset);
-  const objectMatch = text.slice(pos, pos + 64).match(/(\d+)\s+(\d+)\s+obj/);
-  if (!objectMatch) return null;
-  const objectNumberText = objectMatch[1];
-  const generationText = objectMatch[2];
-  if (!objectNumberText || !generationText) return null;
-  const dict = extractDictionary(text, pos);
-  if (!dict || dict.indexOf("/XRef") === -1) return null;
-  issues.push("Cross-reference stream detected; detailed entries are not decoded yet.");
-  return {
-    kind: "stream",
-    startOffset,
-    objectNumber: Number.parseInt(objectNumberText, 10),
-    generation: Number.parseInt(generationText, 10),
-    trailer: parseTrailerDictionary(dict)
-  };
-};
-
-const parseXref = (text: string, startOffset: number | null, issues: string[]): PdfXref | null => {
-  if (startOffset == null || Number.isNaN(startOffset)) return null;
-  if (startOffset < 0 || startOffset >= text.length) {
-    issues.push("startxref offset points outside the file.");
+const readSupplement = async (
+  reader: FileRangeReader, offset: number, budget: number, visited: Set<number>, issues: string[]
+): Promise<PdfXref | null> => {
+  if (visited.has(offset)) {
+    issues.push("Cross-reference cycle at /XRefStm offset " + offset + ".");
     return null;
   }
-  const table = parseXrefTable(text, startOffset, issues);
-  if (table) {
-    const trailer = parseTrailerDictionary(table.trailerText || "");
-    return { ...table, trailer };
+  visited.add(offset);
+  const object = await readIndirectDictionary(reader, offset);
+  const stream = object && await parseXrefStream(reader, object, offset, budget, issues);
+  if (!stream) issues.push("Unable to read /XRefStm at offset " + offset + ".");
+  return stream;
+};
+
+const addEntries = (
+  index: Map<number, PdfXrefEntry>, section: PdfXref, objectNumberLimit: number
+): void => {
+  // ISO 32000-2, 7.5.5: ignore entries beyond the object numbers declared by /Size.
+  const limit = Math.min(objectNumberLimit, section.trailer?.size ?? Infinity);
+  // Newest entries win, including free entries and unknown types that resolve to null.
+  for (const entry of section.entries ?? []) {
+    if (entry.objectNumber < limit && !index.has(entry.objectNumber)) {
+      index.set(entry.objectNumber, entry);
+    }
   }
-  const stream = parseXrefStream(text, startOffset, issues);
-  if (stream) return stream;
-  issues.push("Unable to read cross-reference information at startxref offset.");
-  return null;
 };
 
-const buildOffsetMap = (xref: PdfXref | null): Map<number, number> | null => {
-  if (!xref || xref.kind !== "table") return null;
-  const map = new Map<number, number>();
-  xref.entries
-    .filter(entry => entry.inUse)
-    .forEach(entry => map.set(entry.objectNumber, entry.offset));
-  return map;
+const supplementOffset = (primary: PdfXref): number | null =>
+  primary.kind === "table" ? primary.trailer?.xrefStreamOffset ?? null : null;
+
+const readRevision = async (
+  reader: FileRangeReader, offset: number, budget: number, visited: Set<number>, issues: string[]
+): Promise<PdfRevision | null> => {
+  if (visited.has(offset)) {
+    issues.push("Cross-reference cycle at /Prev offset " + offset + ".");
+    return null;
+  }
+  visited.add(offset);
+  const primary = await readXref(reader, offset, budget, issues);
+  if (!primary) return null;
+  const extraOffset = supplementOffset(primary);
+  if (extraOffset == null || !primary.entries) return { primary };
+  const supplement = await readSupplement(reader, extraOffset,
+    budget - primary.entries.length, visited, issues);
+  return supplement ? { primary, supplement } : { primary };
 };
 
-export { buildOffsetMap, parseXref };
+const indexRevision = (
+  index: Map<number, PdfXrefEntry>, { primary, supplement }: PdfRevision, size: number
+): number => {
+  addEntries(index, primary, size);
+  // ISO 32000-1, 7.5.8.4: consult /XRefStm for entries absent from this table.
+  if (supplement) addEntries(index, supplement, size);
+  return (primary.entries?.length ?? 0) + (supplement?.entries?.length ?? 0);
+};
+
+const previousOffset = ({ primary, supplement }: PdfRevision): number | null => {
+  // Unknown entries in a newer section can hide older objects. Stop at that boundary.
+  if (!primary.entries || (supplementOffset(primary) != null && !supplement?.entries)) return null;
+  return primary.trailer?.prev ?? null;
+};
+
+export const readRevisions = async (
+  reader: FileRangeReader, start: number | null, issues: string[]
+): Promise<{ revisions: PdfRevision[]; index: ReadonlyMap<number, PdfXrefEntry> }> => {
+  const revisions: PdfRevision[] = [];
+  const index = new Map<number, PdfXrefEntry>();
+  const visited = new Set<number>();
+  let offset = start;
+  let budget = ENTRY_LIMIT;
+  while (offset != null && revisions.length < REVISION_LIMIT) {
+    const revision = await readRevision(reader, offset, budget, visited, issues);
+    if (!revision) break;
+    revisions.push(revision);
+    budget -= indexRevision(index, revision, revisions[0]!.primary.trailer?.size ?? Infinity);
+    offset = previousOffset(revision);
+  }
+  if (offset != null && revisions.length === REVISION_LIMIT) {
+    issues.push("Cross-reference revision limit reached.");
+  }
+  return { revisions, index };
+};

@@ -143,7 +143,7 @@ void test("parseForUi keeps malformed FB2 files visible with warnings", async ()
 void test("parseForUi parses PDF cross-reference data", async () => {
   await assertParsed(createPdfFile(), "pdf", pdf => {
     assert.ok(pdf.header);
-    assert.ok(pdf.xref);
+    assert.equal(pdf.revisions[0]?.primary.kind, "table");
     assert.ok(Array.isArray(pdf.issues));
   });
 });

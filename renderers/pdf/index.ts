@@ -1,216 +1,81 @@
-"use strict";
-
-import { escapeHtml, renderDefinitionRow } from "../../html-utils.js";
+import { escapeHtmlText, renderDefinitionRow } from "../../html-utils.js";
 import { formatHumanSize } from "../../binary-utils.js";
 import type {
-  PdfCatalog,
-  PdfInfoDictionary,
-  PdfParseResult,
-  PdfPages,
-  PdfTrailer,
+  PdfCatalog, PdfIndirectRef, PdfInfoDictionary, PdfPages, PdfParseResult, PdfRevision, PdfTrailer,
   PdfXref
 } from "../../analyzers/pdf/types.js";
+import { renderCatalogFields, renderEmbeddedFileTable, renderPageTable, renderTrailerFields } from "./document-tables.js";
 
-function renderIssues(issues: string[] | null | undefined): string {
-  if (!issues || issues.length === 0) return "";
-  const items = issues.map(issue => `<li>${escapeHtml(issue)}</li>`).join("");
-  return `<h4>Warnings</h4><ul class="issueList">${items}</ul>`;
-}
+const reference = (ref: PdfIndirectRef): string =>
+  String(ref.objectNumber) + " " + ref.generation + " R";
 
-function renderCrossReference(xref: PdfXref | null): string {
-  if (!xref) return "";
-  if (xref.kind === "stream") {
-    return (
-      "<h4>Cross-reference</h4>" +
-      "<p>Found cross-reference stream; entry decoding is not implemented yet.</p>" +
-      "<dl>" +
-      renderDefinitionRow("Object", `${xref.objectNumber} ${xref.generation} R`) +
-      (xref.trailer && xref.trailer.size
-        ? renderDefinitionRow("Declared objects", String(xref.trailer.size))
-        : "") +
-      "</dl>"
-    );
-  }
-  const entryCount = xref.entries ? xref.entries.length : 0;
-  const subsectionCount = xref.sections ? xref.sections.length : 0;
-  const freeEntries = xref.entries ? xref.entries.filter(e => !e.inUse).length : 0;
-  const rows = (xref.sections || [])
-    .map((section, idx) => {
-      const start = section.start != null ? section.start : "?";
-      const count = section.count != null ? section.count : "?";
-      return `<tr><td>${idx}</td><td>${start}</td><td>${count}</td></tr>`;
-    })
-    .join("");
-  const tableHtml = subsectionCount
-    ? '<table class="byteView"><thead><tr><th>#</th><th>Start</th><th>Count</th></tr></thead>' +
-      `<tbody>${rows}</tbody></table>`
-    : "<p>No subsections recorded.</p>";
-  return (
-    "<h4>Cross-reference</h4>" +
-    "<dl>" +
-    renderDefinitionRow("Entries parsed", String(entryCount)) +
-    renderDefinitionRow("Free entries", String(freeEntries)) +
-    renderDefinitionRow("Subsections", String(subsectionCount)) +
-    "</dl>" +
-    tableHtml
-  );
-}
+const numericCell = (text: number | string): string => '<td class="peNumeric">' + text + "</td>";
 
-function renderTrailer(trailer: PdfTrailer | null): string {
+const renderXrefRow = (xref: PdfXref, label: string): string => {
+  const counts = { direct: 0, compressed: 0, free: 0, unknown: 0 };
+  for (const entry of xref.entries ?? []) counts[entry.kind] += 1;
+  const cells = Object.values(counts).map(count => numericCell(xref.entries ? count : "—"));
+  const object = xref.kind === "stream" ? " (" + reference(xref.object) + ")" : "";
+  return "<tr><th scope=\"row\">" + label + object + "</th>" + numericCell(xref.offset) +
+    numericCell(xref.sections.length || "—") + cells.join("") + "</tr>";
+};
+
+const renderCrossReference = (revisions: PdfRevision[]): string => {
+  if (!revisions.length) return "";
+  const columns = ["File offset", "Subsections", "Uncompressed", "Compressed", "Free", "Unknown type"];
+  const headers = columns.map(label => '<th scope="col" class="peNumeric">' + label + "</th>");
+  const rows = revisions.map(({ primary, supplement }) =>
+    renderXrefRow(primary, primary.kind === "stream" ? "Stream" : "Table") +
+    (supplement ? renderXrefRow(supplement, "Supplemental stream") : "")).join("");
+  return '<h4>Cross-reference</h4><div class="tableWrap"><table class="table">' +
+    '<thead><tr><th scope="col">Section</th>' + headers.join("") +
+    "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+};
+
+const renderTrailer = (trailer: PdfTrailer | null): string => {
   if (!trailer) return "";
-  const parts: string[] = [];
-  parts.push("<h4>Trailer</h4><dl>");
-  parts.push(
-    renderDefinitionRow(
-      "Declared objects",
-      trailer.size != null ? String(trailer.size) : "Unknown"
-    )
-  );
-  parts.push(
-    renderDefinitionRow(
-      "Root",
-      trailer.rootRef
-        ? `${trailer.rootRef.objectNumber} ${trailer.rootRef.generation} R`
-        : "Missing",
-      "Root (catalog) object reference declared by the trailer."
-    )
-  );
-  parts.push(
-    renderDefinitionRow(
-      "Info",
-      trailer.infoRef
-        ? `${trailer.infoRef.objectNumber} ${trailer.infoRef.generation} R`
-        : "Missing",
-      "Document information dictionary reference if present."
-    )
-  );
-  if (trailer.id && trailer.id.length === 2) {
-    parts.push(
-      renderDefinitionRow(
-        "ID",
-        `${escapeHtml(trailer.id[0])} / ${escapeHtml(trailer.id[1])}`
-      )
-    );
-  }
-  if (trailer.raw) {
-    parts.push(
-      renderDefinitionRow(
-        "Raw dictionary",
-        `<code>${escapeHtml(trailer.raw)}</code>`
-      )
-    );
-  }
-  parts.push("</dl>");
-  return parts.join("");
-}
+  return "<h4>Trailer</h4>" + renderTrailerFields(trailer.fields) + "<dl>" +
+    renderDefinitionRow("Raw dictionary", "<code>" + escapeHtmlText(trailer.raw) + "</code>") + "</dl>";
+};
 
-function renderInfo(info: PdfInfoDictionary | null): string {
+const renderInfo = (info: PdfInfoDictionary | null): string => {
   if (!info) return "";
   const rows = [
-    ["Title", info.title],
-    ["Author", info.author],
-    ["Subject", info.subject],
-    ["Keywords", info.keywords],
-    ["Creator", info.creator],
-    ["Producer", info.producer],
-    ["Created", info.creationDate],
-    ["Modified", info.modDate]
-  ]
-    .filter(([, value]) => value != null)
-    .map(
-      ([label, value]) =>
-        `<tr><td>${label}</td><td>${escapeHtml(String(value))}</td></tr>`
-    )
-    .join("");
+    ["Title", info.title], ["Author", info.author], ["Subject", info.subject],
+    ["Keywords", info.keywords], ["Creator", info.creator], ["Producer", info.producer],
+    ["Created", info.creationDate], ["Modified", info.modDate]
+  ].filter(([, value]) => value != null).map(([label, value]) =>
+    "<tr><th scope=\"row\">" + label + "</th><td>" + escapeHtmlText(value) + "</td></tr>"
+  ).join("");
   if (!rows) return "";
-  return (
-    "<h4>Document information</h4>" +
-    '<table class="byteView">' +
-    "<thead><tr><th>Field</th><th>Value</th></tr></thead>" +
-    `<tbody>${rows}</tbody></table>`
-  );
-}
+  return '<h4>Document information</h4><div class="tableWrap"><table class="table">' +
+    '<thead><tr><th scope="col">Field</th><th scope="col">Value</th></tr></thead>' +
+    "<tbody>" + rows + "</tbody></table></div>";
+};
 
-function renderCatalog(catalog: PdfCatalog | null, pages: PdfPages | null): string {
+const renderCatalog = (catalog: PdfCatalog | null, pages: PdfPages | null): string => {
   if (!catalog) return "";
-  const rows: string[] = [];
-  rows.push(
-    renderDefinitionRow(
-      "Pages",
-      catalog.pagesRef
-        ? `${catalog.pagesRef.objectNumber} ${catalog.pagesRef.generation} R`
-        : "Missing"
-    )
-  );
-  if (pages && pages.count != null) {
-    rows.push(
-      renderDefinitionRow(
-        "Page count",
-        String(pages.count),
-        "Declared /Count from the Pages tree root."
-      )
-    );
-  }
-  if (catalog.namesRef) {
-    rows.push(
-      renderDefinitionRow(
-        "Names",
-        `${catalog.namesRef.objectNumber} ${catalog.namesRef.generation} R`
-      )
-    );
-  }
-  if (catalog.outlinesRef) {
-    rows.push(
-      renderDefinitionRow(
-        "Outlines",
-        `${catalog.outlinesRef.objectNumber} ${catalog.outlinesRef.generation} R`
-      )
-    );
-  }
-  rows.push(
-    renderDefinitionRow(
-      "Raw catalog",
-      catalog.raw ? `<code>${escapeHtml(catalog.raw)}</code>` : "Unavailable"
-    )
-  );
-  return "<h4>Catalog</h4><dl>" + rows.join("") + "</dl>";
-}
+  const count = pages?.count == null ? "" : renderDefinitionRow("Declared page count",
+    String(pages.count), "/Count from the page tree root.");
+  return "<h4>Catalog</h4>" + renderCatalogFields(catalog.fields) + "<dl>" + count +
+    renderDefinitionRow("Raw catalog", "<code>" + escapeHtmlText(catalog.raw) + "</code>") + "</dl>";
+};
 
-export function renderPdf(pdf: PdfParseResult | null): string {
+const renderIssues = (issues: string[]): string => {
+  if (!issues.length) return "";
+  const items = issues.map(issue => "<li>" + escapeHtmlText(issue) + "</li>").join("");
+  return '<h4>Warnings</h4><ul class="issueList">' + items + "</ul>";
+};
+
+export const renderPdf = (pdf: PdfParseResult | null): string => {
   if (!pdf) return "";
-  const parts: string[] = [];
-  parts.push("<h3>PDF structure</h3>");
-  parts.push("<dl>");
-  parts.push(
-    renderDefinitionRow("File size", escapeHtml(formatHumanSize(pdf.size)))
-  );
-  parts.push(
-    renderDefinitionRow(
-      "Header",
-      pdf.header && pdf.header.headerLine
-        ? escapeHtml(pdf.header.headerLine)
-        : "Missing"
-    )
-  );
-  parts.push(
-    renderDefinitionRow(
-      "Version",
-      pdf.header && pdf.header.version ? pdf.header.version : "Unknown"
-    )
-  );
-  parts.push(
-    renderDefinitionRow(
-      "startxref",
-      pdf.startxref != null ? String(pdf.startxref) : "Not found",
-      "Offset (from start of file) where xref lookup begins."
-    )
-  );
-  parts.push(renderDefinitionRow("Cross-reference type", pdf.xref ? pdf.xref.kind : "Unknown"));
-  parts.push("</dl>");
-  parts.push(renderCrossReference(pdf.xref));
-  parts.push(renderTrailer(pdf.trailer));
-  parts.push(renderCatalog(pdf.catalog, pdf.pages));
-  parts.push(renderInfo(pdf.info));
-  parts.push(renderIssues(pdf.issues));
-  return parts.join("");
-}
+  return "<h3>PDF structure</h3><dl>" +
+    renderDefinitionRow("File size", escapeHtmlText(formatHumanSize(pdf.size))) +
+    renderDefinitionRow("Header", escapeHtmlText(pdf.header.headerLine || "Missing")) +
+    renderDefinitionRow("Version", pdf.header.version ?? "Unknown") +
+    renderDefinitionRow("startxref", pdf.startxref == null ? "Missing" : String(pdf.startxref),
+      "Byte offset recorded after the final startxref keyword.") +
+    "</dl>" + renderCrossReference(pdf.revisions) + renderTrailer(pdf.revisions[0]?.primary.trailer ?? null) +
+    renderCatalog(pdf.catalog, pdf.pages) + renderPageTable(pdf.pages) + renderEmbeddedFileTable(pdf.embeddedFiles) +
+    renderInfo(pdf.info) + renderIssues(pdf.issues);
+};

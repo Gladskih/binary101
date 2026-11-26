@@ -1,39 +1,26 @@
-"use strict";
+import { unsigned } from "./syntax.js";
 import type { PdfHeader } from "./types.js";
 
-const parseHeader = (text: string, issues: string[]): PdfHeader => {
-  const firstLineEnd = text.indexOf("\n");
-  const headerLine =
-    firstLineEnd !== -1 ? text.slice(0, firstLineEnd).trimEnd() : text.trimEnd();
-  const match = headerLine.match(/^%PDF-([0-9]+\.[0-9]+)/);
-  if (!match) {
-    issues.push("Missing or malformed %PDF- header.");
-    return { headerLine, version: null };
-  }
-  const binaryMarker = text.slice(0, 256).match(/%[^\n]{4,}/);
-  const version = match[1] || null;
-  const marker = binaryMarker?.[0] ?? null;
-  return { headerLine, version, binaryMarker: marker };
+export const parseHeader = (text: string, issues: string[]): PdfHeader => {
+  const [line = "", comment] = text.split(/\r\n?|\n/, 2);
+  const headerLine = line.trimEnd();
+  const version = /^%PDF-(\d+\.\d+)$/.exec(headerLine)?.[1] ?? null;
+  if (!version) issues.push("Missing or malformed %PDF- header.");
+  // ISO 32000-2, 7.5.2: binary PDFs mark the header with four or more high bytes.
+  const binaryMarker = comment && /^%[\x80-\xff]{4}/.test(comment) ? comment : null;
+  return { headerLine, version, binaryMarker };
 };
 
-const parseStartxref = (text: string, issues: string[]): number | null => {
-  const idx = text.lastIndexOf("startxref");
-  if (idx === -1) {
-    issues.push("startxref marker not found.");
+export const parseStartxref = (text: string, issues: string[]): number | null => {
+  // ISO 32000-2, 7.5.5: startxref, the offset and %%EOF occupy consecutive lines.
+  let end = -1;
+  for (const marker of text.matchAll(/(?:^|\r\n|[\r\n])%%EOF[\t ]*(?=[\r\n]|$)/g)) end = marker.index;
+  if (end < 0) {
+    issues.push("Final %%EOF marker and startxref offset could not be located.");
     return null;
   }
-  const tail = text.slice(idx);
-  const match = tail.match(/startxref\s+([0-9]+)/);
-  if (!match) {
-    issues.push("startxref present but offset is unreadable.");
-    return null;
-  }
-  const offsetText = match[1];
-  if (!offsetText) {
-    issues.push("startxref present but offset text is missing.");
-    return null;
-  }
-  return Number.parseInt(offsetText, 10);
+  const footer = /(?:^|[\r\n])startxref[\t ]*(?:\r\n?|\n)[\t ]*(\d+)[\t ]*$/.exec(text.slice(0, end));
+  const offset = unsigned(footer?.[1]);
+  if (offset == null) issues.push("Missing or invalid startxref offset before %%EOF.");
+  return offset;
 };
-
-export { parseHeader, parseStartxref };

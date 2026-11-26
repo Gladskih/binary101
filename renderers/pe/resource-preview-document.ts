@@ -4,9 +4,9 @@ import { escapeHtmlText } from "../../html-utils.js";
 
 const renderPdf = (document: Extract<ResourceEmbeddedDocument, { format: "PDF" }>): string => {
     const pdf = document.analysis!;
-    const fields = [["Version", pdf.header.version], ["Pages", pdf.pages?.count],
+    const fields = [["Version", pdf.header.version], ["Declared pages", pdf.pages?.count],
       ["Title", pdf.info?.title], ["Author", pdf.info?.author], ["Producer", pdf.info?.producer],
-      ["Cross-reference", pdf.xref?.kind]];
+      ["Cross-reference", pdf.revisions[0]?.primary.kind]];
     return `<table class="table"><tbody>${fields.map(([key, value]) => `<tr>` +
       `<th scope="row">${key}</th><td>${escapeHtmlText(value ?? "—")}</td></tr>`).join("")}` +
       `</tbody></table>`;

@@ -29,7 +29,7 @@
 
 ## P2 - Depth For Supported Formats
 
-- Deepen PDF beyond the current surface pass: xref streams, object streams, incremental updates, encryption dictionaries, page tree, embedded files, and stream-level structure.
+- Extend PDF analysis to encryption dictionaries, file attachment annotations, and general stream structure.
 - Add nested object labeling inside containers and archives so users can immediately see likely inner file types.
 - Add "analyze embedded file" actions for archive entries and other nested objects, not just "download/extract".
 - Support recursive navigation across nested structures where this is safe and understandable: archive entry -> inner document -> inner media/resource.
