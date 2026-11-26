@@ -16,7 +16,8 @@ $object = Join-Path $tools.FullName 'hello-crinkler.obj'
 clang --target=i686-pc-windows-msvc -c samples/gallery/hello-crinkler.s -o $object
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $output = New-Item -ItemType Directory -Path generated/gallery -Force
-& $linker '/ENTRY:_start' '/SUBSYSTEM:WINDOWS' '/COMPMODE:FAST' '/HASHTRIES:1' `
+# The COFF symbol is _start. Crinkler looks it up by its undecorated name.
+& $linker '/ENTRY:start' '/SUBSYSTEM:WINDOWS' '/COMPMODE:FAST' '/HASHTRIES:1' `
     "/OUT:$($output.FullName)\hello-crinkler.exe" $object $sdk.FullName
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item -LiteralPath (Join-Path $tools.FullName 'crinkler30b/LICENSE.txt') `
